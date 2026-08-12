@@ -85,3 +85,7 @@ set_target_properties(wix-custom PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 )
 target_link_libraries(wix-custom PRIVATE Msi)
+if(MSVC)
+  # __VA_OPT__ in wix-custom.cpp requires MSVC's conforming preprocessor.
+  target_compile_options(wix-custom PRIVATE /Zc:preprocessor)
+endif()
