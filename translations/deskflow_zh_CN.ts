@@ -143,47 +143,47 @@ p, li { white-space: pre-wrap; }
     <name>ClientConfigDialog</name>
     <message>
         <source>Client Configuration</source>
-        <translation type="unfinished">客户端配置</translation>
+        <translation>客户端配置</translation>
     </message>
     <message>
         <source>Use server&apos;s keyboard language on this computer</source>
-        <translation type="unfinished">在此计算机上使用服务器的键盘语言</translation>
+        <translation>在此计算机上使用服务器的键盘语言</translation>
     </message>
     <message>
         <source>Scroll Modifiers</source>
-        <translation type="unfinished">滚动修饰符</translation>
+        <translation>滚动修饰键</translation>
     </message>
     <message>
         <source>Invert</source>
-        <translation type="unfinished">倒置</translation>
+        <translation>反向</translation>
     </message>
     <message>
         <source>Horizontal Scroll</source>
-        <translation type="unfinished">水平滚动</translation>
+        <translation>水平滚动</translation>
     </message>
     <message>
         <source>Vertical Scroll</source>
-        <translation type="unfinished">垂直滚动</translation>
+        <translation>垂直滚动</translation>
     </message>
     <message>
         <source>Scale</source>
-        <translation type="unfinished">规模</translation>
+        <translation>缩放比例</translation>
     </message>
     <message>
         <source>Close and save changes</source>
-        <translation type="unfinished">关闭并保存更改</translation>
+        <translation>关闭并保存更改</translation>
     </message>
     <message>
         <source>Close and forget changes</source>
-        <translation type="unfinished">关闭并忘记更改</translation>
+        <translation>关闭并丢弃更改</translation>
     </message>
     <message>
         <source>Reset to stored values</source>
-        <translation type="unfinished">重置为存储值</translation>
+        <translation>恢复为已保存的值</translation>
     </message>
     <message>
         <source>Reset to default values</source>
-        <translation type="unfinished">重置为默认值</translation>
+        <translation>恢复默认值</translation>
     </message>
 </context>
 <context>
@@ -348,7 +348,7 @@ Do you want to connect to the server?
     </message>
     <message>
         <source>invalid certificate, generating a new one</source>
-        <translation type="unfinished">证书无效，正在生成新证书</translation>
+        <translation>证书无效，正在生成新证书</translation>
     </message>
     <message>
         <source>A new version v%1 is available</source>
@@ -412,7 +412,7 @@ Do you want to connect to the server?
     </message>
     <message>
         <source>Using IP: </source>
-        <translation type="unfinished">使用IP地址： </translation>
+        <translation>正在使用 IP 地址：</translation>
     </message>
     <message>
         <source>&lt;p&gt;If connecting via the hostname fails, try %1&lt;/p&gt;</source>
@@ -429,8 +429,8 @@ Do you want to connect to the server?
     <message>
         <source>
 A bound IP is now invalid, you may need to restart the server.</source>
-        <translation type="unfinished">
-绑定的IP地址现在无效，您可能需要重启服务器。</translation>
+        <translation>
+绑定的 IP 地址现已失效，您可能需要重启服务器。</translation>
     </message>
     <message>
         <source>%1 is starting...</source>
@@ -578,23 +578,23 @@ Valid names:
     </message>
     <message>
         <source>Suggested IP: </source>
-        <translation type="unfinished">建议 IP： </translation>
+        <translation>建议的 IP 地址：</translation>
     </message>
     <message>
         <source>The Core executable could not be successfully started, although it does exist. Please check if you have sufficient permissions to run this program.</source>
-        <translation type="unfinished">Core 可执行文件虽然存在，但无法成功启动。请检查您是否拥有运行此程序的足够权限。</translation>
+        <translation>核心程序虽然存在，但无法启动。请检查您是否有足够权限运行此程序。</translation>
     </message>
     <message>
         <source>&amp;Configure Client</source>
-        <translation type="unfinished">配置客户端(&amp;C)</translation>
+        <translation>配置客户端(&amp;C)</translation>
     </message>
     <message>
         <source>Connect to:</source>
-        <translation type="unfinished">连接到：</translation>
+        <translation>连接到：</translation>
     </message>
     <message>
         <source>&lt;html&gt;Hostname or IP address of the server computer.&lt;br/&gt;May contain a comma seperated list.&lt;/html&gt;</source>
-        <translation type="unfinished">&lt;html&gt;服务器计算机的主机名或 IP 地址。&lt;br/&gt;可以包含以逗号分隔的列表。&lt;/html&gt;</translation>
+        <translation>&lt;html&gt;服务器计算机的主机名或 IP 地址。&lt;br/&gt;可以填写以逗号分隔的多个地址。&lt;/html&gt;</translation>
     </message>
 </context>
 <context>
@@ -651,7 +651,7 @@ Valid names:
     </message>
     <message>
         <source>&lt;p&gt;Great, the %1 server is now running.&lt;/p&gt;&lt;p&gt;Now you can connect your client computers to this server. You should see a prompt here on the server when a new client tries to connect.&lt;/p&gt;</source>
-        <translation type="unfinished">&lt;p&gt;太好了，服务器 %1 已在运行。&lt;/p&gt;&lt;p&gt;现在您可以将客户端计算机连接到此服务器。当新客户端尝试连接时，您会在服务器端看到提示。&lt;/p&gt;</translation>
+        <translation>&lt;p&gt;很好，%1 服务器现已运行。&lt;/p&gt;&lt;p&gt;现在可以将客户端计算机连接到此服务器。新客户端尝试连接时，服务器端会显示提示。&lt;/p&gt;</translation>
     </message>
     <message>
         <source>&lt;p&gt;%1 is now connected!&lt;/p&gt;</source>
@@ -683,7 +683,7 @@ Valid names:
     </message>
     <message>
         <source>&lt;p&gt;A Client with your name is already connected to the server.&lt;/p&gt;Please ensure that you&apos;re using a unique name and that only a single instance of the client process is running.&lt;/p&gt;</source>
-        <translation type="unfinished">&lt;p&gt;一个同名的客户端已连接到服务器。&lt;/p&gt;请确保您使用的名称唯一，且只有一个客户端进程实例在运行。&lt;/p&gt;</translation>
+        <translation>&lt;p&gt;已有同名客户端连接到服务器。&lt;/p&gt;请使用唯一名称，并确保只运行一个客户端进程实例。&lt;/p&gt;</translation>
     </message>
     <message>
         <source>&lt;p&gt;Please try to connect to the server using the server IP address instead of the hostname. &lt;/p&gt;&lt;p&gt;If that doesn&apos;t work, please check your TLS and firewall settings.&lt;/p&gt;</source>
@@ -707,7 +707,7 @@ Valid names:
     </message>
     <message>
         <source>A new client called &apos;%1&apos; has been accepted. You&apos;ll need to add it to your server&apos;s screen layout.</source>
-        <translation type="unfinished">已接受名为“%1”的新客户端。您需要将其添加到服务器的屏幕布局中。</translation>
+        <translation>已接受名为“%1”的新客户端。请将其添加到服务器的屏幕布局中。</translation>
     </message>
     <message>
         <source>Ignore</source>
@@ -767,26 +767,26 @@ Valid names:
     </message>
     <message>
         <source>&lt;p&gt;There was a problem finding the %1 background service (daemon).&lt;/p&gt;&lt;p&gt;The background service makes %1 work with UAC prompts and the login screen.&lt;/p&gt;&lt;p&gt;If don&apos;t want to use the background service and intentionally stopped it, you can prevent it&apos;s use by disabling this feature.&lt;/p&gt;&lt;p&gt;If you did not stop the background service intentionally, there may be a problem with it. Please retry or try restarting the %1 service from the Windows services program.&lt;/p&gt;</source>
-        <translation type="unfinished">&lt;p&gt;查找 %1 后台服务（守护进程）时出现问题。&lt;/p&gt;&lt;p&gt;%1 需后台服务来与 UAC 提示和登录屏幕配合工作。&lt;/p&gt;&lt;p&gt;如果您不想使用后台服务并已将其停止，可以通过禁用此功能来阻止使用它。&lt;/p&gt;&lt;p&gt;如果您并非有意停止后台服务，则可能存在问题。请重试，或尝试从 Windows 服务程序中重启 %1 服务。&lt;/p&gt;</translation>
+        <translation>&lt;p&gt;找不到 %1 后台服务（守护进程）。&lt;/p&gt;&lt;p&gt;%1 依靠此服务在 UAC 提示和登录屏幕中工作。&lt;/p&gt;&lt;p&gt;如果您已主动停止服务且不打算使用它，可以禁用此功能。&lt;/p&gt;&lt;p&gt;如果服务并非有意停止，请重试，或在 Windows“服务”中重启 %1 服务。&lt;/p&gt;</translation>
     </message>
     <message>
         <source>failed to read key from certificate file: %1</source>
         <extracomment>%1 will be replaced by the certificate path</extracomment>
-        <translation type="unfinished">无法从证书文件中读取密钥：%1</translation>
+        <translation>无法从证书文件中读取密钥：%1</translation>
     </message>
     <message>
         <source>failed to parse certificate file: %1</source>
         <extracomment>%1 will be replaced by the certificate path</extracomment>
-        <translation type="unfinished">解析证书文件失败：%1</translation>
+        <translation>解析证书文件失败：%1</translation>
     </message>
     <message>
         <source>key detected is the incorrect size</source>
-        <translation type="unfinished">检测到的密钥大小不正确</translation>
+        <translation>检测到的密钥长度不正确</translation>
     </message>
     <message>
         <source>failed to read RSA key from certificate file: %1</source>
         <extracomment>%1 will be replaced by the certificate path</extracomment>
-        <translation type="unfinished">无法从证书文件中读取 RSA 密钥：%1</translation>
+        <translation>无法从证书文件中读取 RSA 密钥：%1</translation>
     </message>
     <message>
         <source>%1 is already running</source>
@@ -897,7 +897,7 @@ Valid names:
     </message>
     <message>
         <source>XTest for Xinerama</source>
-        <translation type="unfinished">用于 Xinerama 的 XTest</translation>
+        <translation>用于 Xinerama 的 XTest</translation>
     </message>
     <message>
         <source>Aliases</source>
@@ -939,19 +939,19 @@ Valid names:
     <name>SearchWidget</name>
     <message>
         <source>Search</source>
-        <translation type="unfinished">搜索</translation>
+        <translation>搜索</translation>
     </message>
     <message>
         <source>Find next</source>
-        <translation type="unfinished">查找下一个</translation>
+        <translation>查找下一个</translation>
     </message>
     <message>
         <source>Find previous</source>
-        <translation type="unfinished">查找上一个</translation>
+        <translation>查找上一个</translation>
     </message>
     <message>
         <source>Find...</source>
-        <translation type="unfinished">寻找...</translation>
+        <translation>查找…</translation>
     </message>
 </context>
 <context>
@@ -1143,7 +1143,7 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Enable lock to computer at startup</source>
-        <translation type="unfinished">启动时启用锁定到计算机</translation>
+        <translation>启动时将光标锁定在本机</translation>
     </message>
 </context>
 <context>
@@ -1286,7 +1286,7 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Always run as system (work at login screen and UAC)</source>
-        <translation type="unfinished">始终以系统身份运行 (在登录屏幕和 UAC 下工作)</translation>
+        <translation>始终以系统身份运行（支持登录屏幕和 UAC）</translation>
     </message>
     <message>
         <source>Force a language to be used for the GUI.</source>
@@ -1354,11 +1354,11 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Automatic</source>
-        <translation type="unfinished">自动的</translation>
+        <translation>自动</translation>
     </message>
     <message>
         <source>Include version in the window title</source>
-        <translation type="unfinished">在窗口标题中包含版本信息</translation>
+        <translation>在窗口标题中显示版本</translation>
     </message>
 </context>
 <context>
