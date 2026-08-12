@@ -1,9 +1,11 @@
 # Phase 1 产品基础报告
 
-- 当前结论：`IN_PROGRESS`（候选双平台通过，等待阶段标签复验）
-- 候选实现提交：`ead6acbd56506b92e1b755471dd7a105845fd63f`
+- 当前结论：`IN_PROGRESS`（已修复候选测试与 CI 结果语义，等待 `-02` 标签复验）
+- 功能基线提交：`ead6acbd56506b92e1b755471dd7a105845fd63f`
+- 当前修复提交：`99c98f500`（含 `300a3c68a`）
 - 当前集成 run：[31618176846](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/31618176846)
-- 目标标签：`relaydesk-phase1-20260813-01`
+- 首次标签：`relaydesk-phase1-20260813-01`（run `31619248628`，保留失败证据）
+- 目标复验标签：`relaydesk-phase1-20260813-02`
 - 产物性质：unsigned 内部包；签名凭据不是构建、测试和打包前置条件。
 
 ## 已集成范围
@@ -32,13 +34,16 @@
 
 较早的 runs `31615988933`、`31616655023` 和 `31617153832` 在 Windows/macOS 同一位置失败：整仓定义 `QT_NO_KEYWORDS`，而 `ResumeStoreTests` 使用了 `private slots:`。独立 probe 起初未启用该定义，因此曾产生本地假绿。`1ff1a2a09` 将唯一违规点改为 `private Q_SLOTS:`；随后 probe 在等价定义下完成全量编译和 `15/15 PASS`。
 
-候选 run `31618176846` 最终为 `PASS`：Windows x64 与 macOS arm64 均完成 configure、build、package、CTest、SHA-256 收集与 artifact 上传，开发资料诊断也通过。
+候选 run `31618176846` 的 Windows x64 与 macOS arm64 均完成 configure、build、package、CTest 日志收集与 artifact 上传，但进一步审阅原始 CTest 日志发现两平台的 `TransferSenderTests` 均失败。旧 workflow 因 `continue-on-error` 保留诊断后没有恢复测试退出状态，导致 job conclusion 错误显示为 success；本报告不把该 run 记作测试 `PASS`。
+
+首次标签 run `31619248628` 暴露了两个独立问题。Windows 在源码配置前下载 `vcpkg.exe` 时收到 WinHTTP `0x2F78`，属于依赖服务器瞬断；同一 SHA 的前一 run 已完成 Windows 全流程。macOS 完成构建和打包，但 `TransferSenderTests` 的同大小覆写用例依赖文件系统自动推进 mtime，APFS 可在同一时间粒度内保留原 mtime，因而未触发预期快照变化。`300a3c68a` 在两个 mutation 用例中显式设置不同 mtime，并在 Windows/MinGW 连续运行 20 次通过。`99c98f500` 保留 `continue-on-error` 以便始终上传诊断，同时在 artifact 上传后恢复 package/CTest 的真实失败状态，避免 job 假绿。失败的 `-01` 标签未删除或改写；修复由 `-02` 标签重新验证。
 
 ## 阶段完成条件
 
 - [x] Phase 1 功能以独立小提交合入并推送 `product/relaydesk-v1`。
 - [x] 当前可用本地 Qt 测试通过。
-- [ ] 创建并推送 `relaydesk-phase1-20260813-01`。
+- [x] 创建并推送 `relaydesk-phase1-20260813-01`；失败证据保留且未改写。
+- [ ] 创建并推送 `relaydesk-phase1-20260813-02`。
 - [ ] 标签 run 的 Windows x64 与 macOS arm64 构建、CTest、打包均通过。
 - [ ] 下载两平台 artifact，复算 SHA-256 并把结果写回本报告。
 
