@@ -42,6 +42,7 @@ jobs:
             arch: amd64
             qt-version: 6.10.1
             vcpkg-triplet: x64-windows-release
+            package_variant: unsigned
             config-args: >-
               -G Ninja
               -DCMAKE_JOB_POOLS=relaydesk_link_pool=1
@@ -51,6 +52,7 @@ jobs:
             arch: arm64
             qt-version: 6.10.1
             vcpkg-triplet: ""
+            package_variant: adhoc
             config-args: >-
               -G Ninja
               -DCMAKE_OSX_ARCHITECTURES=arm64
@@ -114,6 +116,20 @@ jobs:
           cmake --build build --config Release --target package --parallel 8
           cmake --build build --config Release --target package_source --parallel 8
 
+      - name: Stage deployed macOS app bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          stage="$GITHUB_WORKSPACE/build/relaydesk-package-stage/$GITHUB_SHA"
+          cmake -E rm -rf "$stage"
+          cmake --install build --config Release --prefix "$stage"
+          apps=("$stage"/*.app)
+          if [[ "${#apps[@]}" -ne 1 || ! -d "${apps[0]}" ]]; then
+            echo "Expected exactly one deployed app bundle in $stage" >&2
+            exit 1
+          fi
+          echo "RELAYDESK_EXPLICIT_APP=${apps[0]}" >> "$GITHUB_ENV"
+
       - name: Run tests and keep diagnostics
         id: tests
         if: always()
@@ -128,12 +144,18 @@ jobs:
         if: always()
         continue-on-error: true
         shell: bash
-        run: >-
-          python product/scripts/collect-ci-artifacts.py
-          --build-dir build
-          --out-dir dist/${{ matrix.target.name }}
-          --platform ${{ matrix.target.name }}
-          --commit ${{ github.sha }}
+        run: |
+          args=(
+            --build-dir build
+            --out-dir dist/${{ matrix.target.name }}
+            --platform ${{ matrix.target.name }}
+            --commit ${{ github.sha }}
+            --package-variant ${{ matrix.target.package_variant }}
+          )
+          if [[ -n "${RELAYDESK_EXPLICIT_APP:-}" ]]; then
+            args+=(--app-bundle "$RELAYDESK_EXPLICIT_APP")
+          fi
+          python product/scripts/collect-ci-artifacts.py "${args[@]}"
 
       - name: Write job summary
         if: always()

@@ -47,6 +47,14 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("~/Library/RelayDesk", readme)
         self.assertIn("Downloads/RelayDesk", readme)
 
+    def test_existing_actions_workflow_collects_deployed_adhoc_app(self) -> None:
+        workflow = (ROOT / ".github/workflows/relaydesk-build.yml").read_text(encoding="utf-8")
+
+        self.assertIn("Stage deployed macOS app bundle", workflow)
+        self.assertIn("package_variant: adhoc", workflow)
+        self.assertIn("--app-bundle", workflow)
+        self.assertNotIn("required checks", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
