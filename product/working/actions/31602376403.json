@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "repository": "blacknewnew1989/DeskflowPlus",
+  "workflow": ".github/workflows/relaydesk-build.yml",
+  "runId": 31602376403,
+  "runUrl": "https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/31602376403",
+  "branch": "product/relaydesk-v1",
+  "commit": "808a3307b07422e7ea8c60af46148ce68af13649",
+  "completedAt": "2026-08-12T13:45:30Z",
+  "jobs": [
+    {
+      "id": 94132944796,
+      "name": "Development materials diagnostic",
+      "runner": "ubuntu-latest",
+      "conclusion": "success"
+    },
+    {
+      "id": 94132944904,
+      "name": "windows-x64",
+      "runner": "windows-2022",
+      "architecture": "x64",
+      "toolchain": "MSVC 2022, Windows SDK 10.0.26100, Qt 6.10.1",
+      "conclusion": "success",
+      "tests": {
+        "status": "PASS",
+        "passed": 27,
+        "failed": 0,
+        "total": 27,
+        "durationSeconds": 1.19
+      }
+    },
+    {
+      "id": 94132945030,
+      "name": "macos-arm64",
+      "runner": "macos-15",
+      "architecture": "arm64",
+      "toolchain": "Xcode 16.4, macOS SDK 15.5, Qt 6.10.1",
+      "conclusion": "success",
+      "tests": {
+        "status": "PASS",
+        "passed": 28,
+        "failed": 0,
+        "total": 28,
+        "durationSeconds": 3.68
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 9143920988,
+      "name": "relaydesk-windows-x64-808a3307b07422e7ea8c60af46148ce68af13649",
+      "size": 32046359,
+      "zipSha256": "99abc150ebbab36294f2771034d6aad6a2914f167de615276be932b1e6970d74",
+      "localZip": "dist/actions/31602376403/relaydesk-windows-x64-808a3307b.zip",
+      "files": [
+        {
+          "name": "deskflow-relaydesk-808a3307b07422e7ea8c60af46148ce68af13649-win-x64-portable.7z",
+          "size": 12851423,
+          "sha256": "208e93bee5f1080cd8e43369a87fcee1fa18c097e50f4d5e5fa5a4d62c830722"
+        },
+        {
+          "name": "deskflow-relaydesk-808a3307b07422e7ea8c60af46148ce68af13649-win-x64.msi",
+          "size": 15784493,
+          "sha256": "a2325ce33ae9f9e83e6f22392c7de40435d1c9807be63cf5d1dad7fc74389fb1"
+        },
+        {
+          "name": "RelayDesk-1.26.0.9999-Source-portable.7z",
+          "size": 1541408,
+          "sha256": "e589559e3c1211cb28fd8c047bcc44e7f2d5f7d6ffdc4646ed2935d605b4bc9d"
+        },
+        {
+          "name": "RelayDesk-1.26.0.9999-Source-portable.zip",
+          "size": 2668315,
+          "sha256": "b326cd783c5197921a31c7e3021009302d05fa48d8991bdf4544d8ce4cdcc22a"
+        }
+      ]
+    },
+    {
+      "id": 9143801915,
+      "name": "relaydesk-macos-arm64-808a3307b07422e7ea8c60af46148ce68af13649",
+      "size": 38235413,
+      "zipSha256": "12e9763ec66d89ad73691db522e916abe019f6ca5fa68f634685c5973e895b45",
+      "localZip": "dist/actions/31602376403/relaydesk-macos-arm64-808a3307b.zip",
+      "files": [
+        {
+          "name": "RelayDesk-macos-arm64-unsigned-808a3307.app.zip",
+          "size": 6085110,
+          "sha256": "7a0655c8e68ef8a290d0e73dd99b4bf664117afb87f8db6fd102525f2275c9a0"
+        },
+        {
+          "name": "deskflow-relaydesk-808a3307b07422e7ea8c60af46148ce68af13649-macos-arm64.dmg",
+          "size": 28372516,
+          "sha256": "0e068a53af783bc7030c941f93950e8ea5e704fc45bef866c96a4a0221b7b812"
+        },
+        {
+          "name": "deskflow-1.26.0.9999-Source.tar.bz2",
+          "size": 1272374,
+          "sha256": "7b455d1bf2e23c3790ec55555ee14eba3ae029257d18c8f5fd7759c812806a34"
+        },
+        {
+          "name": "deskflow-1.26.0.9999-Source.tar.gz",
+          "size": 1480891,
+          "sha256": "1f1c9442efafcabdcbd860279297f0f17b185b01b65be20f1c97e8213cd619e3"
+        },
+        {
+          "name": "deskflow-1.26.0.9999-Source.tar.xz",
+          "size": 1147824,
+          "sha256": "9714c64cccb9ad167e6dfed4dc0eb41f90587d514be8cdb500b5256ba53c6a4e"
+        }
+      ]
+    }
+  ],
+  "phaseTag": {
+    "name": "relaydesk-phase0-20260812-01",
+    "runId": 31602699800,
+    "runUrl": "https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/31602699800",
+    "status": "PASS",
+    "windowsArtifactId": 9144025951,
+    "windowsZipSha256": "e97b274486a61909b89791bf85d576b534e532a3830929d1c0d5acfc672041dd",
+    "macosArtifactId": 9143920156,
+    "macosZipSha256": "cc73b5d9226dc973348be64a9fa0470a7d88be00af84996b4b272aa87121bda5"
+  },
+  "notRun": [
+    "Physical Windows-to-macOS keyboard, mouse, scroll, and text clipboard interoperability",
+    "macOS Accessibility, Input Monitoring, and Local Network permission flow",
+    "Clean-machine launch and installation of the unsigned Windows and macOS packages",
+    "Production code signing, notarization, and Gatekeeper/SmartScreen reputation checks"
+  ]
+}
