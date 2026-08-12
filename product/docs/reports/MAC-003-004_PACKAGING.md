@@ -7,6 +7,8 @@
 | Integration baseline | `cdb3b6cab8c1d8aa9223a7154797bfc696c69259` |
 | MAC-003 bundle/DMG commit | `bca26fd3f46bab2a088f2ab628b77193687a0cb6` |
 | MAC-004 signing/notarization commit | `b879d2e576020200380ed3edc85a39076c194f18` |
+| BSD shell compatibility commit | `7506786fc16ff265efff9567f82553c54ba92f4a` |
+| Existing Actions integration commit | `d0d6773d5e67ffc7cab347d9c11fd35b68ee0ce4` |
 | Branch | `agent/a6/macos-packaging` |
 | Date | 2026-08-13 |
 
@@ -21,6 +23,9 @@
   Developer ID or notarization credentials does not fail an internal build.
 - `cmake --install` creates a separately staged, deployed `.app`; artifact
   collection archives this app rather than an undeployed build-tree bundle.
+- The existing `relaydesk-build.yml` stages the deployed macOS app and passes
+  the `adhoc` package variant to artifact collection; no second workflow is
+  introduced.
 - The DMG and app ZIP signature state is recorded in
   `artifact-manifest.json` as `packageVariant`, `signed`, and `notarized`.
 - The packaged README states that upgrade and uninstall do not delete
@@ -61,7 +66,7 @@ notarization must also pass `stapler validate` and Gatekeeper assessment.
 | ID | Platform | Actual | Result |
 |---|---|---|---|
 | MAC-PKG-STATIC-01 | Windows 11 | branding validator: 12 values / 8 consumers | PASS |
-| MAC-PKG-STATIC-02 | Windows 11 | Python packaging tests: 7 passed | PASS |
+| MAC-PKG-STATIC-02 | Windows 11 | Python packaging tests: 8 passed | PASS |
 | MAC-PKG-STATIC-03 | Windows 11 | Bash syntax for build/package scripts | PASS |
 | MAC-PKG-STATIC-04 | Windows 11 | no-credential plan: `adhoc/not-requested` | PASS |
 | MAC-PKG-STATIC-05 | Windows 11 | Developer ID plan: `signed/not-requested` | PASS |
@@ -70,6 +75,7 @@ notarization must also pass `stapler validate` and Gatekeeper assessment.
 | MAC-PKG-CMAKE-01 | Windows 11 | generated ad-hoc install contains `-codesign=-` and no hardened runtime | PASS |
 | MAC-PKG-CMAKE-02 | Windows 11 | generated Developer ID install contains identity and hardened runtime | PASS |
 | MAC-PKG-CMAKE-03 | Windows 11 | signed CMake variant without identity rejected | PASS |
+| MAC-PKG-WORKFLOW-01 | Windows 11 | existing workflow YAML parsed; staged App and `adhoc` collector contract present | PASS |
 
 ## Not run in this session
 
