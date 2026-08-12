@@ -40,6 +40,8 @@ private:
   void browseCertificatePath();
   void browseLogPath();
   void setLogToFile(bool logToFile);
+  bool saveStartAtLogin();
+  void loadStartAtLogin();
   void accept() override;
   void showEvent(QShowEvent *event) override;
   bool isClientMode() const;

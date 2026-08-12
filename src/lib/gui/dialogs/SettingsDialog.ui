@@ -67,6 +67,13 @@
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="cbStartAtLogin">
+            <property name="text">
+             <string>Start with system</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QCheckBox" name="cbPreventSleep">
             <property name="text">
              <string>Prevent this computer from going to sleep</string>
