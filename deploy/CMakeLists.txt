@@ -37,6 +37,9 @@ endif()
 
 # The product package name is separate from Deskflow's internal CMake target ID.
 set(CPACK_PACKAGE_FILE_NAME "${RELAYDESK_PACKAGE_ID}-${PACKAGE_VERSION_LABEL}-${OS_STRING}")
+if(DEFINED RELAYDESK_PACKAGE_VARIANT AND NOT "${RELAYDESK_PACKAGE_VARIANT}" STREQUAL "")
+  string(APPEND CPACK_PACKAGE_FILE_NAME "-${RELAYDESK_PACKAGE_VARIANT}")
+endif()
 message(STATUS "Package Basename: ${CPACK_PACKAGE_FILE_NAME}")
 
 include(CPack)
