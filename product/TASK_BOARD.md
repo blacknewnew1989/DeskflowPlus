@@ -6,20 +6,16 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 依赖 |
 |---|---|---|---|
-| UI-009 | 历史详情、打开目录与显式重试意图 | A3 | UI-007, HIST-001 |
-| TEST-005 | Windows/macOS 安装升级卸载回归 | A7 | WIN-003, MAC-003 |
 | REL-001/002 | 发布候选、安装说明与最终验收清单 | A0/A7 | Phase 4 packages |
 
 ## In Progress
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
-| UI-005..008 | 拖放、offer、传输中心、速度/ETA/通知 | A3/A6 | 代理提交均已完成或联编中，等待 A0 逐切片集成 |
-| CONFLICT-001/002 | 并发安全冲突策略 | A6 | `c65ad8639`、`dd02e0aec` 已推送，等待集成 |
-| RESUME-005 | partial cleanup policy | A6 | `70ce521e3`、`6263ec456` 已推送，等待集成 |
-| WIN-001..004 | Windows 诊断、开机启动、打包、可选签名 | A4 | 各代理分支真实 Windows 验证完成，等待集成 |
-| MAC-001/002 | macOS 权限探针与设置跳转 | A5 | 从最新产品分支开发中 |
-| TEST-004 | 中断/恢复/暂停/取消/重启组合矩阵 | A6 | 从现有 transfer core 开发中 |
+| PHASE2-CI | 文件传输内核阶段标签双平台验证 | A0 | `relaydesk-phase2-20260813-01` 待创建 |
+| COMP-002 | pairing/trust runtime composition | A6 | 基于 COMP-001 实现真实 UDP 配对与 trust commit |
+| COMP-003 | transfer UI intent runtime adapter | A3 | 集中接通 send/offer/control/history intents |
+| TEST-005 | Windows 安装升级卸载回归 | A7 | 原生临时目标验证中；macOS clean-install 待 runner |
 
 ## Blocked
 
@@ -71,8 +67,15 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | CTRL-001 | pause/resume/cancel state machine | A6 | `97e7b4aad`; Qt Test PASS |
 | HIST-001 | bounded atomic transfer history | A6 | `3063ae589`; Qt Test PASS |
 | CI-001 | 唯一非门禁 Windows/macOS build workflow | A0/A7 | tag run `31621226862`; Windows 60/60、macOS 61/61、打包上传 PASS |
-| TEST-002/003 | 10 GiB logical bounded-memory 与输入优先级/I/O ownership probe | A6 | `5da597dc3`、`e2c68fb9b`; full harness 18/18 PASS，待集成 |
+| TEST-002/003 | 10 GiB logical bounded-memory 与输入优先级/I/O ownership probe | A6 | `bdbe3cd78`、`09eb2f2ad`; current-tree targets PASS |
 | PHASE1-REL | Phase 1 双平台 CI、草稿 Release 与本地 SHA 复验 | A0 | tag `relaydesk-phase1-20260813-04`; run `31623677270`; App/DMG/MSI/7Z 三重摘要一致 |
+| UI-005..009 | 拖放发送、Incoming Offer、传输中心、进度/通知、历史动作 | A3/A6 | `9c4ba0f25` through `88551dfb8`; current-tree Qt tests PASS |
+| CONFLICT-001/002 | 并发安全冲突策略 | A6 | `c86275888`, `915721e22`; current-tree Qt Test PASS |
+| RESUME-005 | explicit partial cleanup policy | A6 | `cb86ecdfb`, `104c13bea`; current-tree Qt Test PASS |
+| TEST-004 | 确定性中断/恢复组合矩阵 | A6 | `2989e86e1`; 9 Qt cases / current-tree target PASS |
+| WIN-001..004 | Windows diagnostics/startup/product packages/optional signing | A4/A7 | `b1db63680` through `22d27754d`; native probes and packaging suites PASS |
+| MAC-001..004 | macOS permission probes/product packages/optional notarization | A5/A6 | `588cbb395` through `74634f3c1`; cross-platform Actions + contract tests PASS |
+| COMP-001 | runtime audit and discovery composition | A6 | `a06575dc1`, `ac0e9d74a`; real UDP loopback PASS |
 
 ## 规则
 

@@ -22,7 +22,7 @@
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
 - Last product implementation commit: `ead6acbd56506b92e1b755471dd7a105845fd63f`
-- Current integration commit: `e9b05deb24` (Phase 2/3 UI and reliability plus Windows/macOS platform work integrated)
+- Current implementation commit: `ac0e9d74a` (Phase 2/3 UI and reliability, Windows/macOS platform work, and discovery runtime integrated)
 - Last verified stage tag: `relaydesk-phase1-20260813-04` (`2fe393ef298721f469dc3932c5f9f999bf13df56`)
 
 ## 自动执行状态
@@ -49,7 +49,7 @@
 |---|---|---|---|
 | 0 仓库/基线 | PASS | A0/A1/A4/A5/A7 | tag `relaydesk-phase0-20260812-01`, run `31602699800` |
 | 1 产品基础 | PASS | A2/A3/A0 | tag `relaydesk-phase1-20260813-04`; run `31623677270`; local Release asset SHA verification PASS |
-| 2 文件传输 | IN_PROGRESS | A2/A6 | protocol, manifest, TLS, offer, sender, receiver, paging and backpressure integrated |
+| 2 文件传输 | IN_PROGRESS | A2/A6/A0 | core implementation and local tests PASS; `relaydesk-phase2-20260813-01` tag verification pending |
 | 3 可靠性/UI | IN_PROGRESS | A3/A6/A7 | resume/checkpoint/control/history integrated; conflict and transfer UI active |
 | 4 平台/发布 | IN_PROGRESS | A4/A5/A7 | baseline unsigned packages exist; platform diagnostics/productized RC remain |
 | 5 增强 | NOT_STARTED | A3/A4/A5 | 按价值推进 |
