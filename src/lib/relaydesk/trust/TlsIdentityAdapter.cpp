@@ -6,10 +6,13 @@
 
 #include "relaydesk/trust/TlsIdentityAdapter.h"
 
+#include <QFile>
 #include <QFileInfo>
 #include <QList>
 #include <QSslCertificate>
+#include <QSslConfiguration>
 #include <QSslKey>
+#include <QSslSocket>
 
 namespace deskflow::relaydesk {
 namespace {
@@ -69,6 +72,48 @@ TlsIdentitySnapshot TlsIdentityAdapter::inspect(const QString &certificatePath, 
       .fingerprintSha256 = certificate.digest(QCryptographicHash::Sha256),
       .publicKeyBits = key.length(),
   };
+}
+
+std::optional<QSslConfiguration>
+TlsIdentityAdapter::loadConfiguration(const QString &certificatePath, QString *diagnostic)
+{
+  if (diagnostic != nullptr) {
+    diagnostic->clear();
+  }
+  const TlsIdentitySnapshot identity = inspect(certificatePath);
+  if (!identity.ok()) {
+    if (diagnostic != nullptr) {
+      *diagnostic = identity.diagnostic;
+    }
+    return std::nullopt;
+  }
+
+  QFile pem(certificatePath);
+  if (!pem.open(QIODevice::ReadOnly)) {
+    if (diagnostic != nullptr) {
+      *diagnostic = QStringLiteral("Deskflow TLS identity could not be opened: %1").arg(pem.errorString());
+    }
+    return std::nullopt;
+  }
+  const QByteArray contents = pem.readAll();
+  const QList<QSslCertificate> certificates = QSslCertificate::fromData(contents, QSsl::Pem);
+  const QSslKey privateKey(contents, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
+  if (privateKey.isNull()) {
+    if (diagnostic != nullptr) {
+      *diagnostic = QStringLiteral("Deskflow combined PEM does not contain an RSA private key");
+    }
+    return std::nullopt;
+  }
+
+  QSslConfiguration configuration = QSslConfiguration::defaultConfiguration();
+  configuration.setLocalCertificateChain(certificates);
+  configuration.setPrivateKey(privateKey);
+  configuration.setProtocol(QSsl::TlsV1_2OrLater);
+  // Both file peers present the shared Deskflow identity. CA failures for the
+  // expected self-signed deployment are handled by the transport, then the
+  // exact paired fingerprint is enforced before RDFT frames are released.
+  configuration.setPeerVerifyMode(QSslSocket::VerifyPeer);
+  return configuration;
 }
 
 } // namespace deskflow::relaydesk
