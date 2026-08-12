@@ -6,6 +6,8 @@ add_library(relaydesk_transfer STATIC
   ControlMessageCodec.h
   FrameCodec.cpp
   FrameCodec.h
+  PathPolicy.cpp
+  PathPolicy.h
   Protocol.h
 )
 

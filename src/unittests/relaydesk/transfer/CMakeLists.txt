@@ -14,3 +14,10 @@ create_test(
   SOURCE FrameCodecTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
 )
+
+create_test(
+  NAME RelayDeskPathPolicyTests
+  DEPENDS relaydesk_transfer
+  SOURCE PathPolicyTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
