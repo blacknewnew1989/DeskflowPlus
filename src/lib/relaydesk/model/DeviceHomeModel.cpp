@@ -60,7 +60,7 @@ QString statusText(DevicePresence presence)
 QList<int> allDataRoles()
 {
   QList<int> roles{Qt::DisplayRole};
-  for (int role = DeviceHomeModel::DeviceIdRole; role <= DeviceHomeModel::PairActionTextRole; ++role)
+  for (int role = DeviceHomeModel::DeviceIdRole; role <= DeviceHomeModel::CanSendItemsRole; ++role)
     roles.append(role);
   return roles;
 }
@@ -144,6 +144,9 @@ QVariant DeviceHomeModel::data(const QModelIndex &index, int role) const
     return i18n::translate(
         device.presence == DevicePresence::TrustViolation ? Text::PairingActionPairAgain : Text::PairingActionStart
     );
+  case CanSendItemsRole:
+    return !isLocal(device.id) && device.trusted && device.presence == DevicePresence::Online &&
+           device.capabilities.fileV1;
   default:
     return {};
   }
@@ -177,6 +180,7 @@ QHash<int, QByteArray> DeviceHomeModel::roleNames() const
       {LastSeenUtcRole, "lastSeenUtc"},
       {CanStartPairingRole, "canStartPairing"},
       {PairActionTextRole, "pairActionText"},
+      {CanSendItemsRole, "canSendItems"},
   };
 }
 
@@ -242,6 +246,12 @@ std::optional<DeviceSnapshot> DeviceHomeModel::snapshot(const DeviceId &deviceId
   if (row < 0)
     return std::nullopt;
   return m_devices.at(row);
+}
+
+bool DeviceHomeModel::canSendItems(const DeviceId &deviceId) const
+{
+  const auto row = indexOf(deviceId);
+  return row >= 0 && data(index(row, 0), CanSendItemsRole).toBool();
 }
 
 bool DeviceHomeModel::isLocal(const DeviceId &deviceId) const

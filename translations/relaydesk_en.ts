@@ -18,11 +18,17 @@
     <message><source>devices.status.trust_violation</source><translation>Trust changed</translation></message>
     <message><source>devices.status.transfer_busy</source><translation>File transfer in progress</translation></message>
     <message><source>devices.action.send_file</source><translation>Send files</translation></message>
+    <message><source>devices.action.send_folder</source><translation>Send folder</translation></message>
     <message><source>devices.action.more</source><translation>More</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Auto arrange</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Reset layout</translation></message>
     <message><source>devices.drop.send_here</source><translation>Drop files here to send</translation></message>
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n item</numerusform><numerusform>%n items</numerusform></translation></message>
+    <message><source>devices.send.select_device</source><translation>Select a device first</translation></message>
+    <message><source>devices.send.unavailable</source><translation>Files can be sent only to a trusted device that is online</translation></message>
+    <message><source>devices.send.local_only</source><translation>Choose files or folders stored on this device</translation></message>
+    <message><source>devices.send.empty</source><translation>Choose at least one file or folder</translation></message>
+    <message><source>devices.send.unreadable</source><translation>One or more selected items cannot be read</translation></message>
     <message><source>pairing.title</source><translation>Pair device</translation></message>
     <message><source>pairing.code.prompt</source><translation>Enter the six-digit code</translation></message>
     <message><source>pairing.state.ready</source><translation>Ready to pair</translation></message>

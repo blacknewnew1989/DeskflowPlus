@@ -14,6 +14,7 @@ target_link_libraries(
   relaydesk_widgets
   PUBLIC
     relaydesk_device_model
+    relaydesk_transfer
     Qt6::Core
     Qt6::Widgets
 )

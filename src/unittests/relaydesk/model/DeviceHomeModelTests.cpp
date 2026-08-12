@@ -74,6 +74,7 @@ private Q_SLOTS:
   void preservesTrustedDevicesWhenTheyGoOffline();
   void replacingLocalDeviceDoesNotLeaveASecondLocalRow();
   void exposesPairingEntryOnlyForDiscoveredUntrustedPeers();
+  void allowsSendingOnlyToTrustedOnlineFilePeers();
 };
 
 void DeviceHomeModelTests::exposesStableRolesAndCardData()
@@ -279,6 +280,28 @@ void DeviceHomeModelTests::exposesPairingEntryOnlyForDiscoveredUntrustedPeers()
   const auto violationIndex = model.index(model.indexOf(peer.id), 0);
   QVERIFY(model.data(violationIndex, DeviceHomeModel::CanStartPairingRole).toBool());
   QCOMPARE(model.data(violationIndex, DeviceHomeModel::PairActionTextRole).toString(), QStringLiteral("Pair again"));
+}
+
+void DeviceHomeModelTests::allowsSendingOnlyToTrustedOnlineFilePeers()
+{
+  DeviceHomeModel model;
+  auto peer =
+      makeSnapshot("80000000-0000-0000-0000-000000000001", QStringLiteral("Peer"), DevicePresence::Online, true);
+  model.upsertRemoteDevice(peer);
+  QVERIFY(model.canSendItems(peer.id));
+  QVERIFY(model.data(model.index(0, 0), DeviceHomeModel::CanSendItemsRole).toBool());
+
+  peer.trusted = false;
+  model.upsertRemoteDevice(peer);
+  QVERIFY(!model.canSendItems(peer.id));
+  peer.trusted = true;
+  peer.presence = DevicePresence::Offline;
+  model.upsertRemoteDevice(peer);
+  QVERIFY(!model.canSendItems(peer.id));
+  peer.presence = DevicePresence::Online;
+  peer.capabilities.fileV1 = false;
+  model.upsertRemoteDevice(peer);
+  QVERIFY(!model.canSendItems(peer.id));
 }
 
 QTEST_MAIN(DeviceHomeModelTests)

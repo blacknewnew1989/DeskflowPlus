@@ -12,12 +12,17 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QFile>
 #include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QMimeData>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QToolButton>
 
@@ -67,6 +72,9 @@ private Q_SLOTS:
   void confirmsAndCancelsFromPairingPanel();
   void rendersExpiredPairingState();
   void rendersPermissionGuidanceAndKeyboardAction();
+  void choosesFilesAndFolderAndPublishesImmutableIntent();
+  void rejectsInvalidOrIneligibleSendItems();
+  void acceptsLocalUrlDropOnlyForEligiblePeer();
 };
 
 void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
@@ -281,6 +289,159 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
       },
   }));
   QVERIFY(!banner->isVisible());
+}
+
+void DevicesDockTests::choosesFilesAndFolderAndPublishesImmutableIntent()
+{
+  qRegisterMetaType<DeviceSnapshot>();
+  qRegisterMetaType<::relaydesk::transfer::SendOptions>();
+  Fixture fixture;
+  auto peer = peerSnapshot(DevicePresence::Online, true);
+  fixture.devices.upsertRemoteDevice(peer);
+  fixture.dock.resize(420, 700);
+  fixture.dock.show();
+
+  auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *sendFiles = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskSendFilesButton"));
+  auto *sendFolder = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskSendFolderButton"));
+  QVERIFY(list != nullptr);
+  QVERIFY(sendFiles != nullptr);
+  QVERIFY(sendFolder != nullptr);
+  list->setCurrentIndex(fixture.devices.index(0, 0));
+  QTRY_VERIFY(sendFiles->isEnabled());
+  QVERIFY(sendFiles->focusPolicy() != Qt::NoFocus);
+  QCOMPARE(sendFiles->accessibleName(), QStringLiteral("Send files"));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto firstPath = directory.filePath(QStringLiteral("first.txt"));
+  const auto secondPath = directory.filePath(QStringLiteral("second.bin"));
+  QFile first(firstPath);
+  QFile second(secondPath);
+  QVERIFY(first.open(QIODevice::WriteOnly));
+  QVERIFY(second.open(QIODevice::WriteOnly));
+  first.close();
+  second.close();
+  const QList<QUrl> files{QUrl::fromLocalFile(firstPath), QUrl::fromLocalFile(secondPath)};
+  fixture.dock.setFileChooser([files](QWidget &) { return files; });
+  fixture.dock.setFolderChooser([path = directory.path()](QWidget &) {
+    return QList<QUrl>{QUrl::fromLocalFile(path)};
+  });
+
+  QSignalSpy requested(&fixture.dock, &DevicesDock::sendItemsRequested);
+  sendFiles->setFocus();
+  QTest::keyClick(sendFiles, Qt::Key_Space);
+  QCOMPARE(requested.count(), 1);
+  auto arguments = requested.takeFirst();
+  QCOMPARE(arguments.at(0).metaType(), QMetaType::fromType<DeviceSnapshot>());
+  const auto *emittedPeer = static_cast<const DeviceSnapshot *>(arguments.at(0).constData());
+  QVERIFY(emittedPeer != nullptr);
+  QCOMPARE(emittedPeer->id, peer.id);
+  QCOMPARE(emittedPeer->presence, DevicePresence::Online);
+  QCOMPARE(arguments.at(1).value<QList<QUrl>>(), files);
+  QCOMPARE(
+      arguments.at(2).value<::relaydesk::transfer::SendOptions>().conflictPolicy,
+      ::relaydesk::transfer::ConflictPolicy::AutoRename
+  );
+
+  peer.presence = DevicePresence::Offline;
+  fixture.devices.upsertRemoteDevice(peer);
+  QCOMPARE(emittedPeer->presence, DevicePresence::Online);
+  QVERIFY(!sendFiles->isEnabled());
+
+  peer.presence = DevicePresence::Online;
+  fixture.devices.upsertRemoteDevice(peer);
+  list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
+  QTRY_VERIFY(sendFolder->isEnabled());
+  QTest::mouseClick(sendFolder, Qt::LeftButton);
+  QCOMPARE(requested.count(), 1);
+  arguments = requested.takeFirst();
+  QCOMPARE(arguments.at(1).value<QList<QUrl>>(), QList<QUrl>{QUrl::fromLocalFile(directory.path())});
+}
+
+void DevicesDockTests::rejectsInvalidOrIneligibleSendItems()
+{
+  Fixture fixture;
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  auto peer = peerSnapshot(DevicePresence::Online, true);
+  fixture.devices.upsertRemoteDevice(peer);
+  fixture.dock.show();
+  auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *sendFiles = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskSendFilesButton"));
+  auto *feedback = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskSendFeedback"));
+  QVERIFY(list != nullptr);
+  QVERIFY(sendFiles != nullptr);
+  QVERIFY(feedback != nullptr);
+  list->setCurrentIndex(fixture.devices.index(0, 0));
+
+  QSignalSpy rejected(&fixture.dock, &DevicesDock::sendItemsRejected);
+  fixture.dock.setFileChooser([](QWidget &) { return QList<QUrl>{}; });
+  QTest::mouseClick(sendFiles, Qt::LeftButton);
+  QCOMPARE(rejected.count(), 1);
+  QCOMPARE(feedback->text(), QStringLiteral("Choose at least one file or folder"));
+
+  fixture.dock.setFileChooser([](QWidget &) {
+    return QList<QUrl>{QUrl(QStringLiteral("https://example.invalid/file.txt"))};
+  });
+  QTest::mouseClick(sendFiles, Qt::LeftButton);
+  QCOMPARE(rejected.count(), 2);
+  QCOMPARE(feedback->text(), QStringLiteral("Choose files or folders stored on this device"));
+
+  fixture.dock.setFileChooser([missing = directory.filePath(QStringLiteral("missing-file.txt"))](QWidget &) {
+    return QList<QUrl>{QUrl::fromLocalFile(missing)};
+  });
+  QTest::mouseClick(sendFiles, Qt::LeftButton);
+  QCOMPARE(rejected.count(), 3);
+  QCOMPARE(feedback->text(), QStringLiteral("One or more selected items cannot be read"));
+
+  peer.trusted = false;
+  fixture.devices.upsertRemoteDevice(peer);
+  QTRY_VERIFY(!sendFiles->isEnabled());
+}
+
+void DevicesDockTests::acceptsLocalUrlDropOnlyForEligiblePeer()
+{
+  qRegisterMetaType<DeviceSnapshot>();
+  qRegisterMetaType<::relaydesk::transfer::SendOptions>();
+  Fixture fixture;
+  auto peer = peerSnapshot(DevicePresence::Online, true);
+  fixture.devices.upsertRemoteDevice(peer);
+  fixture.dock.resize(420, 700);
+  fixture.dock.show();
+  QCoreApplication::processEvents();
+
+  auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  QVERIFY(list != nullptr);
+  const auto target = fixture.devices.index(fixture.devices.indexOf(peer.id), 0);
+  const auto position = list->visualRect(target).center();
+  QVERIFY(list->visualRect(target).isValid());
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto filePath = directory.filePath(QStringLiteral("drop.txt"));
+  QFile file(filePath);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.close();
+  const QList<QUrl> urls{QUrl::fromLocalFile(filePath)};
+  QMimeData mime;
+  mime.setUrls(urls);
+  QSignalSpy requested(&fixture.dock, &DevicesDock::sendItemsRequested);
+
+  QDragEnterEvent enter(position, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+  QCoreApplication::sendEvent(list->viewport(), &enter);
+  QVERIFY(enter.isAccepted());
+  QDropEvent drop(QPointF(position), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+  QCoreApplication::sendEvent(list->viewport(), &drop);
+  QVERIFY(drop.isAccepted());
+  QCOMPARE(requested.count(), 1);
+  QCOMPARE(requested.takeFirst().at(1).value<QList<QUrl>>(), urls);
+
+  peer.capabilities.fileV1 = false;
+  fixture.devices.upsertRemoteDevice(peer);
+  QDragEnterEvent rejectedEnter(position, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+  QCoreApplication::sendEvent(list->viewport(), &rejectedEnter);
+  QVERIFY(!rejectedEnter.isAccepted());
 }
 
 QTEST_MAIN(DevicesDockTests)

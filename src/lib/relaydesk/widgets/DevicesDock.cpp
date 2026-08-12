@@ -13,7 +13,13 @@
 
 #include <QAbstractItemModel>
 #include <QApplication>
+#include <QDragEnterEvent>
+#include <QDragLeaveEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QEvent>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFontDatabase>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -22,6 +28,7 @@
 #include <QLineEdit>
 #include <QListView>
 #include <QLocale>
+#include <QMimeData>
 #include <QPainter>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -30,6 +37,8 @@
 #include <QStyledItemDelegate>
 #include <QToolButton>
 #include <QVBoxLayout>
+
+#include <utility>
 
 namespace deskflow::relaydesk::widgets {
 namespace {
@@ -96,22 +105,24 @@ public:
     }
 
     const auto pairable = index.data(model::DeviceHomeModel::CanStartPairingRole).toBool();
-    const auto pairText = pairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString() : QString();
-    const auto pairWidth = pairable ? detailMetrics.horizontalAdvance(pairText) + 12 : 0;
+    const auto sendable = index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
+    const auto actionText = pairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
+                                     : sendable ? i18n::translate(Text::DevicesActionSendFile) : QString();
+    const auto actionWidth = actionText.isEmpty() ? 0 : detailMetrics.horizontalAdvance(actionText) + 12;
     const QRect detailRect(
-        content.left(), content.bottom() - detailMetrics.height(), content.width() - pairWidth, detailMetrics.height()
+        content.left(), content.bottom() - detailMetrics.height(), content.width() - actionWidth, detailMetrics.height()
     );
     painter->setPen(option.palette.color(foregroundRole));
     painter->drawText(
         detailRect, Qt::AlignLeft | Qt::AlignVCenter,
         detailMetrics.elidedText(status, Qt::ElideRight, detailRect.width())
     );
-    if (pairable) {
+    if (!actionText.isEmpty()) {
       painter->setPen(option.palette.color(
           option.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Link
       ));
-      const QRect pairRect(content.right() - pairWidth, detailRect.top(), pairWidth, detailRect.height());
-      painter->drawText(pairRect, Qt::AlignRight | Qt::AlignVCenter, pairText);
+      const QRect actionRect(content.right() - actionWidth, detailRect.top(), actionWidth, detailRect.height());
+      painter->drawText(actionRect, Qt::AlignRight | Qt::AlignVCenter, actionText);
     }
     painter->restore();
   }
@@ -127,6 +138,26 @@ QString groupedSas(const QString &sas)
   return sas.size() == 6 ? sas.left(3) + QStringLiteral(" ") + sas.mid(3) : sas;
 }
 
+QList<QUrl> chooseLocalFiles(QWidget &parent)
+{
+  QList<QUrl> urls;
+  const auto paths = QFileDialog::getOpenFileNames(
+      &parent, i18n::translate(Text::DevicesActionSendFile)
+  );
+  urls.reserve(paths.size());
+  for (const auto &path : paths)
+    urls.push_back(QUrl::fromLocalFile(path));
+  return urls;
+}
+
+QList<QUrl> chooseLocalFolder(QWidget &parent)
+{
+  const auto path = QFileDialog::getExistingDirectory(
+      &parent, i18n::translate(Text::DevicesActionSendFolder)
+  );
+  return path.isEmpty() ? QList<QUrl>{} : QList<QUrl>{QUrl::fromLocalFile(path)};
+}
+
 } // namespace
 
 DevicesDock::DevicesDock(
@@ -138,10 +169,13 @@ DevicesDock::DevicesDock(
       m_pairing(pairing),
       m_permissions(permissions)
 {
+  m_fileChooser = chooseLocalFiles;
+  m_folderChooser = chooseLocalFolder;
   setObjectName(QStringLiteral("relaydeskDevicesDock"));
   setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
   setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
   setMinimumWidth(300);
+  setAcceptDrops(true);
 
   auto *body = new QWidget(this);
   auto *layout = new QVBoxLayout(body);
@@ -184,11 +218,31 @@ DevicesDock::DevicesDock(
   m_deviceList->setUniformItemSizes(true);
   m_deviceList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_deviceList->setFrameShape(QFrame::NoFrame);
+  m_deviceList->setAcceptDrops(true);
+  m_deviceList->setDragDropMode(QAbstractItemView::DropOnly);
+  m_deviceList->setDefaultDropAction(Qt::CopyAction);
+  m_deviceList->viewport()->setAcceptDrops(true);
+  m_deviceList->viewport()->installEventFilter(this);
   layout->addWidget(m_deviceList, 1);
 
   m_pairButton = new QPushButton(body);
   m_pairButton->setObjectName(QStringLiteral("relaydeskPairSelectedButton"));
   layout->addWidget(m_pairButton);
+
+  auto *sendActions = new QHBoxLayout();
+  m_sendFilesButton = new QPushButton(body);
+  m_sendFilesButton->setObjectName(QStringLiteral("relaydeskSendFilesButton"));
+  m_sendFolderButton = new QPushButton(body);
+  m_sendFolderButton->setObjectName(QStringLiteral("relaydeskSendFolderButton"));
+  sendActions->addWidget(m_sendFilesButton);
+  sendActions->addWidget(m_sendFolderButton);
+  layout->addLayout(sendActions);
+
+  m_sendFeedback = new QLabel(body);
+  m_sendFeedback->setObjectName(QStringLiteral("relaydeskSendFeedback"));
+  m_sendFeedback->setWordWrap(true);
+  m_sendFeedback->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
+  layout->addWidget(m_sendFeedback);
 
   m_pairingPanel = new QFrame(body);
   m_pairingPanel->setObjectName(QStringLiteral("relaydeskPairingPanel"));
@@ -276,6 +330,8 @@ DevicesDock::DevicesDock(
   connect(m_deviceList->selectionModel(), &QItemSelectionModel::selectionChanged, this, &DevicesDock::updateSelection);
   connect(m_deviceList, &QListView::activated, this, &DevicesDock::requestPairing);
   connect(m_pairButton, &QPushButton::clicked, this, [this]() { requestPairing(m_deviceList->currentIndex()); });
+  connect(m_sendFilesButton, &QPushButton::clicked, this, [this]() { chooseAndSend(false); });
+  connect(m_sendFolderButton, &QPushButton::clicked, this, [this]() { chooseAndSend(true); });
 
   connect(&m_pairing, &model::PairingWizardModel::changed, this, &DevicesDock::updatePairingPanel);
   connect(&m_permissions, &model::PermissionStatusModel::snapshotChanged, this, &DevicesDock::updatePermissionBanner);
@@ -295,6 +351,7 @@ DevicesDock::DevicesDock(
   updateText();
   updateEmptyState();
   updateSelection();
+  showSendFeedback({});
   updatePairingPanel();
   updatePermissionBanner();
 }
@@ -314,6 +371,16 @@ model::PermissionStatusModel &DevicesDock::permissionModel() const
   return m_permissions;
 }
 
+void DevicesDock::setFileChooser(ItemChooser chooser)
+{
+  m_fileChooser = std::move(chooser);
+}
+
+void DevicesDock::setFolderChooser(ItemChooser chooser)
+{
+  m_folderChooser = std::move(chooser);
+}
+
 void DevicesDock::changeEvent(QEvent *event)
 {
   QDockWidget::changeEvent(event);
@@ -323,6 +390,102 @@ void DevicesDock::changeEvent(QEvent *event)
     updatePairingPanel();
     updatePermissionBanner();
     m_deviceList->viewport()->update();
+  }
+}
+
+bool DevicesDock::eventFilter(QObject *watched, QEvent *event)
+{
+  if (watched != m_deviceList->viewport())
+    return QDockWidget::eventFilter(watched, event);
+
+  switch (event->type()) {
+  case QEvent::DragEnter: {
+    auto *drag = static_cast<QDragEnterEvent *>(event);
+    const auto index = m_deviceList->indexAt(drag->position().toPoint());
+    const auto items = drag->mimeData()->hasUrls() ? drag->mimeData()->urls() : QList<QUrl>{};
+    if (updateDropTarget(index, items)) {
+      drag->setDropAction(Qt::CopyAction);
+      drag->accept();
+    } else {
+      drag->ignore();
+    }
+    return true;
+  }
+  case QEvent::DragMove: {
+    auto *drag = static_cast<QDragMoveEvent *>(event);
+    const auto index = m_deviceList->indexAt(drag->position().toPoint());
+    const auto items = drag->mimeData()->hasUrls() ? drag->mimeData()->urls() : QList<QUrl>{};
+    if (updateDropTarget(index, items)) {
+      drag->setDropAction(Qt::CopyAction);
+      drag->accept();
+    } else {
+      drag->ignore();
+    }
+    return true;
+  }
+  case QEvent::DragLeave:
+    clearDropTarget();
+    static_cast<QDragLeaveEvent *>(event)->accept();
+    return true;
+  case QEvent::Drop: {
+    auto *drop = static_cast<QDropEvent *>(event);
+    const auto index = m_deviceList->indexAt(drop->position().toPoint());
+    const auto items = drop->mimeData()->hasUrls() ? drop->mimeData()->urls() : QList<QUrl>{};
+    const auto published = publishSendIntent(index, items);
+    m_dropTargetIndex = QPersistentModelIndex{};
+    if (published) {
+      showSendFeedback({});
+      drop->setDropAction(Qt::CopyAction);
+      drop->accept();
+    } else {
+      drop->ignore();
+    }
+    return true;
+  }
+  default:
+    return QDockWidget::eventFilter(watched, event);
+  }
+}
+
+void DevicesDock::dragEnterEvent(QDragEnterEvent *event)
+{
+  const auto items = event->mimeData()->hasUrls() ? event->mimeData()->urls() : QList<QUrl>{};
+  if (updateDropTarget(targetIndexAt(event->position().toPoint()), items)) {
+    event->setDropAction(Qt::CopyAction);
+    event->accept();
+  } else {
+    event->ignore();
+  }
+}
+
+void DevicesDock::dragMoveEvent(QDragMoveEvent *event)
+{
+  const auto items = event->mimeData()->hasUrls() ? event->mimeData()->urls() : QList<QUrl>{};
+  if (updateDropTarget(targetIndexAt(event->position().toPoint()), items)) {
+    event->setDropAction(Qt::CopyAction);
+    event->accept();
+  } else {
+    event->ignore();
+  }
+}
+
+void DevicesDock::dragLeaveEvent(QDragLeaveEvent *event)
+{
+  clearDropTarget();
+  event->accept();
+}
+
+void DevicesDock::dropEvent(QDropEvent *event)
+{
+  const auto items = event->mimeData()->hasUrls() ? event->mimeData()->urls() : QList<QUrl>{};
+  const auto published = publishSendIntent(targetIndexAt(event->position().toPoint()), items);
+  m_dropTargetIndex = QPersistentModelIndex{};
+  if (published) {
+    showSendFeedback({});
+    event->setDropAction(Qt::CopyAction);
+    event->accept();
+  } else {
+    event->ignore();
   }
 }
 
@@ -338,6 +501,11 @@ void DevicesDock::updateText()
   m_cancelPairingButton->setText(m_pairing.cancelActionText());
   m_fingerprintToggle->setText(m_pairing.fingerprintLabel());
   m_openPermissionSettingsButton->setText(m_permissions.openSettingsActionText());
+  m_sendFilesButton->setText(i18n::translate(Text::DevicesActionSendFile));
+  m_sendFilesButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFile));
+  m_sendFolderButton->setText(i18n::translate(Text::DevicesActionSendFolder));
+  m_sendFolderButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFolder));
+  m_sendFeedback->setAccessibleName(i18n::translate(Text::DevicesActionSendFile));
 }
 
 void DevicesDock::updateEmptyState()
@@ -360,6 +528,118 @@ void DevicesDock::updateSelection()
       pairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
                : i18n::translate(Text::PairingActionStart)
   );
+  const auto sendable = index.isValid() && index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
+  m_sendFilesButton->setVisible(m_devices.rowCount() != 0);
+  m_sendFolderButton->setVisible(m_devices.rowCount() != 0);
+  m_sendFilesButton->setEnabled(sendable);
+  m_sendFolderButton->setEnabled(sendable);
+}
+
+void DevicesDock::chooseAndSend(bool folder)
+{
+  const auto &chooser = folder ? m_folderChooser : m_fileChooser;
+  const auto index = m_deviceList->currentIndex();
+  if (!index.isValid()) {
+    showSendFeedback(i18n::translate(Text::DevicesSendSelectDevice));
+    Q_EMIT sendItemsRejected(m_sendFeedback->text());
+    return;
+  }
+  if (!sendTarget(index).has_value()) {
+    showSendFeedback(i18n::translate(Text::DevicesSendUnavailable));
+    Q_EMIT sendItemsRejected(m_sendFeedback->text());
+    return;
+  }
+  if (!chooser) {
+    showSendFeedback(i18n::translate(Text::DevicesSendEmpty));
+    Q_EMIT sendItemsRejected(m_sendFeedback->text());
+    return;
+  }
+  (void)publishSendIntent(index, chooser(*this));
+}
+
+QModelIndex DevicesDock::targetIndexAt(const QPoint &position) const
+{
+  return m_deviceList->indexAt(m_deviceList->viewport()->mapFrom(this, position));
+}
+
+std::optional<DeviceSnapshot> DevicesDock::sendTarget(const QModelIndex &index) const
+{
+  if (!index.isValid() || !index.data(model::DeviceHomeModel::CanSendItemsRole).toBool())
+    return std::nullopt;
+  const auto id = DeviceId::fromString(index.data(model::DeviceHomeModel::DeviceIdRole).toString());
+  return id.has_value() ? m_devices.snapshot(*id) : std::nullopt;
+}
+
+QString DevicesDock::validateLocalItems(const QList<QUrl> &items) const
+{
+  if (items.isEmpty())
+    return i18n::translate(Text::DevicesSendEmpty);
+
+  for (const auto &url : items) {
+    if (!url.isValid() || !url.isLocalFile() || url.toLocalFile().isEmpty())
+      return i18n::translate(Text::DevicesSendLocalOnly);
+    const QFileInfo info(url.toLocalFile());
+    if (!info.exists() || !info.isReadable() || (!info.isFile() && !info.isDir()))
+      return i18n::translate(Text::DevicesSendUnreadable);
+  }
+  return {};
+}
+
+bool DevicesDock::updateDropTarget(const QModelIndex &index, const QList<QUrl> &items)
+{
+  if (!sendTarget(index).has_value()) {
+    m_dropTargetIndex = QPersistentModelIndex{};
+    showSendFeedback(i18n::translate(Text::DevicesSendUnavailable));
+    return false;
+  }
+  const auto error = validateLocalItems(items);
+  if (!error.isEmpty()) {
+    m_dropTargetIndex = QPersistentModelIndex{};
+    showSendFeedback(error);
+    return false;
+  }
+
+  m_dropTargetIndex = index;
+  m_deviceList->setCurrentIndex(index);
+  showSendFeedback(
+      i18n::translatePlural(Text::DevicesDropItems, items.size()) + QStringLiteral(" · ")
+      + i18n::translate(Text::DevicesDropSendHere)
+  );
+  return true;
+}
+
+void DevicesDock::clearDropTarget()
+{
+  m_dropTargetIndex = QPersistentModelIndex{};
+  showSendFeedback({});
+}
+
+void DevicesDock::showSendFeedback(const QString &message)
+{
+  m_sendFeedback->setText(message);
+  m_sendFeedback->setAccessibleDescription(message);
+  m_sendFeedback->setVisible(!message.isEmpty());
+}
+
+bool DevicesDock::publishSendIntent(const QModelIndex &index, const QList<QUrl> &items)
+{
+  const auto peer = sendTarget(index);
+  if (!peer.has_value()) {
+    showSendFeedback(index.isValid() ? i18n::translate(Text::DevicesSendUnavailable)
+                                     : i18n::translate(Text::DevicesSendSelectDevice));
+    Q_EMIT sendItemsRejected(m_sendFeedback->text());
+    return false;
+  }
+  const auto error = validateLocalItems(items);
+  if (!error.isEmpty()) {
+    showSendFeedback(error);
+    Q_EMIT sendItemsRejected(error);
+    return false;
+  }
+
+  Q_EMIT sendItemsRequested(*peer, items, ::relaydesk::transfer::SendOptions{});
+  showSendFeedback({});
+  return true;
 }
 
 void DevicesDock::requestPairing(const QModelIndex &index)
