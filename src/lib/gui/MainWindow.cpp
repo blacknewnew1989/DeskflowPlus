@@ -35,6 +35,7 @@
 #include "relaydesk/model/PermissionStatusModel.h"
 #include "relaydesk/model/TransferCenterModel.h"
 #include "relaydesk/pairing/PairingStateMachine.h"
+#include "relaydesk/platform/MacPermissionProbe.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 
@@ -108,6 +109,22 @@ MainWindow::MainWindow()
   m_relayDeskPermissionModel = new deskflow::relaydesk::model::PermissionStatusModel(
       deskflow::relaydesk::buildPermissionPlatform(), this
   );
+#if defined(Q_OS_MACOS)
+  m_macPermissionProbe = new deskflow::relaydesk::MacPermissionProbe(this);
+  m_relayDeskPermissionModel->setSnapshot(m_macPermissionProbe->current());
+  connect(
+      m_macPermissionProbe, &deskflow::relaydesk::MacPermissionProbe::snapshotChanged,
+      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
+  );
+  connect(
+      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::openSettingsRequested,
+      m_macPermissionProbe, &deskflow::relaydesk::MacPermissionProbe::openSystemSettings
+  );
+  connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+    if (state == Qt::ApplicationActive)
+      m_macPermissionProbe->refresh();
+  });
+#endif
   m_devicesDock = new deskflow::relaydesk::widgets::DevicesDock(
       *m_relayDeskDeviceModel, *m_relayDeskPairingModel, *m_relayDeskPermissionModel, this
   );

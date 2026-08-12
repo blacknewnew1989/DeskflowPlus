@@ -127,6 +127,7 @@ target_link_libraries(
   ${target}
   common
   platform
+  relaydesk_macos_permissions
   relaydesk_trust
   relaydesk_widgets
   Qt6::Core
