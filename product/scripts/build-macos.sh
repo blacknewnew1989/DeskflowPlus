@@ -56,7 +56,7 @@ ARGS=(
 cmake "${ARGS[@]}"
 cmake --build "$BUILD_DIR" --config "$CONFIG" --parallel
 if [[ "$RUN_TESTS" == "true" ]]; then
-  ctest --test-dir "$BUILD_DIR" -C "$CONFIG" --output-on-failure
+  ctest --test-dir "$BUILD_DIR/src/unittests" -C "$CONFIG" --output-on-failure
 fi
 
 echo "BUILD_DIR=$BUILD_DIR"

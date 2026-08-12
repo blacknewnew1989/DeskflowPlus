@@ -85,7 +85,7 @@ if ($LASTEXITCODE -ne 0) { throw "CMake configure failed." }
 if ($LASTEXITCODE -ne 0) { throw "Build failed." }
 
 if ($RunTests) {
-    & ctest --test-dir $BuildDir -C $Configuration --output-on-failure
+    & ctest --test-dir (Join-Path $BuildDir "src/unittests") -C $Configuration --output-on-failure
     if ($LASTEXITCODE -ne 0) { throw "Tests failed." }
 }
 
