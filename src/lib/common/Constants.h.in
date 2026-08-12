@@ -15,6 +15,7 @@ const auto kDaemonIpcName = "@CMAKE_PROJECT_NAME@-daemon";
 const auto kRevFqdnName = "@CMAKE_PROJECT_REV_FQDN@";
 const auto kOrganizationDomain = "@RELAYDESK_ORGANIZATION_DOMAIN@";
 const auto kWindowsAppUserModelId = "@RELAYDESK_WINDOWS_APP_USER_MODEL_ID@";
+const auto kWindowsRunValueName = "@RELAYDESK_WINDOWS_RUN_VALUE_NAME@";
 const auto kDefaultReceiveFolder = "@RELAYDESK_DEFAULT_RECEIVE_FOLDER@";
 const auto kProductTranslationCatalog = "@RELAYDESK_TRANSLATION_CATALOG@";
 const auto kFileProtocolName = "@RELAYDESK_FILE_PROTOCOL@";

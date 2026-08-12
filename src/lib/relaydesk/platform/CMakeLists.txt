@@ -64,3 +64,19 @@ target_link_libraries(
 if(WIN32)
   target_link_libraries(relaydesk_windows_permissions PRIVATE iphlpapi ole32 oleaut32)
 endif()
+
+add_library(relaydesk_windows_start_at_login STATIC
+  WindowsStartAtLogin.cpp
+  WindowsStartAtLogin.h
+)
+target_include_directories(
+  relaydesk_windows_start_at_login
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+)
+target_link_libraries(
+  relaydesk_windows_start_at_login
+  PUBLIC Qt6::Core
+)
+if(WIN32)
+  target_link_libraries(relaydesk_windows_start_at_login PRIVATE advapi32)
+endif()
