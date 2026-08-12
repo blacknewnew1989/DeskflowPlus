@@ -115,6 +115,13 @@ MainWindow::MainWindow()
   m_relayDeskTransferModel = new deskflow::relaydesk::model::TransferCenterModel(this);
   m_transferCenterDock =
       new deskflow::relaydesk::widgets::TransferCenterDock(*m_relayDeskTransferModel, this);
+  connect(
+      m_relayDeskTransferModel, &deskflow::relaydesk::model::TransferCenterModel::notificationRequested, this,
+      [this](const ::relaydesk::transfer::TransferSnapshot &, const QString &title, const QString &message) {
+        if (QSystemTrayIcon::supportsMessages())
+          m_trayIcon->showMessage(title, message, QSystemTrayIcon::Information, 5000);
+      }
+  );
   addDockWidget(Qt::BottomDockWidgetArea, m_transferCenterDock);
   tabifyDockWidget(m_logDock, m_transferCenterDock);
   m_transferCenterDock->hide();

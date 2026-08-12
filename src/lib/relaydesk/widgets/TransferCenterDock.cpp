@@ -21,6 +21,7 @@
 #include <QPushButton>
 #include <QStyle>
 #include <QStyledItemDelegate>
+#include <QStringList>
 #include <QVBoxLayout>
 
 namespace deskflow::relaydesk::widgets {
@@ -81,20 +82,32 @@ public:
     progress.palette = option.palette;
     style->drawControl(QStyle::CE_ProgressBar, &progress, painter, panel.widget);
 
-    const auto detail = index.data(model::TransferCenterModel::ProgressTextRole).toString();
+    QStringList metrics{index.data(model::TransferCenterModel::ProgressTextRole).toString()};
+    const auto speed = index.data(model::TransferCenterModel::SpeedTextRole).toString();
+    const auto eta = index.data(model::TransferCenterModel::EtaTextRole).toString();
+    if (!speed.isEmpty())
+      metrics.append(speed);
+    if (!eta.isEmpty())
+      metrics.append(eta);
+    const auto detail = metrics.join(QStringLiteral(" · "));
     const auto path = index.data(model::TransferCenterModel::CurrentPathRole).toString();
     painter->setPen(option.palette.color(muted));
     painter->drawText(
         QRect(content.left(), progress.rect.bottom() + 5, content.width(), lineHeight), Qt::AlignLeft | Qt::AlignVCenter,
-        option.fontMetrics.elidedText(path.isEmpty() ? detail : detail + QStringLiteral(" · ") + path, Qt::ElideMiddle,
-                                      content.width())
+        option.fontMetrics.elidedText(detail, Qt::ElideRight, content.width())
     );
+    if (!path.isEmpty()) {
+      painter->drawText(
+          QRect(content.left(), progress.rect.bottom() + 5 + lineHeight + 2, content.width(), lineHeight),
+          Qt::AlignLeft | Qt::AlignVCenter, option.fontMetrics.elidedText(path, Qt::ElideMiddle, content.width())
+      );
+    }
     painter->restore();
   }
 
   QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &) const override
   {
-    return {380, option.fontMetrics.height() * 3 + 55};
+    return {380, option.fontMetrics.height() * 4 + 60};
   }
 };
 

@@ -107,7 +107,20 @@
     <message><source>transfer.error.unknown</source><translation>传输失败，请重试。</translation></message>
     <message><source>transfer.progress.bytes</source><translation>%1 / %2</translation></message>
     <message numerus="yes"><source>transfer.progress.items</source><translation><numerusform>已完成 %1 / %n 个项目</numerusform></translation></message>
+    <message><source>transfer.speed</source><translation>%1/秒</translation></message>
+    <message><source>transfer.speed.unknown</source><translation>速度暂不可用</translation></message>
+    <message><source>transfer.eta.unknown</source><translation>正在计算剩余时间</translation></message>
+    <message numerus="yes"><source>transfer.eta.seconds</source><translation><numerusform>剩余 %n 秒</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.eta.minutes</source><translation><numerusform>剩余 %n 分钟</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.eta.hours</source><translation><numerusform>剩余 %n 小时</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.eta.days</source><translation><numerusform>剩余 %n 天</numerusform></translation></message>
+    <message><source>transfer.eta.long</source><translation>剩余时间为 99 天或更久</translation></message>
     <message><source>transfer.accessible.summary</source><translation>%1，%2，%3，%4，%5</translation></message>
+    <message><source>transfer.notification.completed</source><translation>传输已完成</translation></message>
+    <message><source>transfer.notification.rejected</source><translation>传输已拒绝</translation></message>
+    <message><source>transfer.notification.canceled</source><translation>传输已取消</translation></message>
+    <message><source>transfer.notification.failed</source><translation>传输失败</translation></message>
+    <message><source>transfer.notification.body</source><translation>%1 · %2</translation></message>
     <message><source>transfer.incoming.wants_to_send</source><translation>%1 想发送</translation></message>
     <message><source>transfer.incoming.save_to</source><translation>保存到：%1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>冲突：自动重命名</translation></message>

@@ -8,9 +8,11 @@
 
 #include "relaydesk/i18n/ProductStrings.h"
 
+#include <QDateTime>
 #include <QLocale>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -20,6 +22,27 @@ namespace {
 
 using i18n::Text;
 using namespace ::relaydesk::transfer;
+
+inline constexpr qint64 kMinimumPublishIntervalMs = 200;
+inline constexpr qint64 kMinimumNotificationIntervalMs = 2000;
+inline constexpr auto kMaximumEta = std::chrono::hours(24 * 99);
+
+qint64 systemClockMs()
+{
+  return static_cast<qint64>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
+  );
+}
+
+qint64 elapsedMs(qint64 now, qint64 previous)
+{
+  if (now <= previous)
+    return 0;
+  const auto elapsed = static_cast<quint64>(now) - static_cast<quint64>(previous);
+  return elapsed > static_cast<quint64>(std::numeric_limits<qint64>::max())
+             ? std::numeric_limits<qint64>::max()
+             : static_cast<qint64>(elapsed);
+}
 
 QList<int> allDataRoles()
 {
@@ -120,14 +143,73 @@ QString progressText(const TransferSnapshot &snapshot)
   return bytes + QStringLiteral(" · ") + files;
 }
 
+QString speedText(const TransferSnapshot &snapshot);
+QString etaText(const TransferSnapshot &snapshot);
+
 QString accessibleSummary(const TransferSnapshot &snapshot)
 {
+  auto details = progressText(snapshot);
+  const auto speed = speedText(snapshot);
+  const auto eta = etaText(snapshot);
+  if (!speed.isEmpty())
+    details += QStringLiteral(", ") + speed;
+  if (!eta.isEmpty())
+    details += QStringLiteral(", ") + eta;
   return i18n::translate(Text::TransferAccessibleSummary)
       .arg(directionText(snapshot.direction))
       .arg(snapshot.displayName)
       .arg(snapshot.peerDisplayName)
       .arg(stateText(snapshot.state))
-      .arg(progressText(snapshot));
+      .arg(details);
+}
+
+QString speedText(const TransferSnapshot &snapshot)
+{
+  const auto active = snapshot.state == TransferState::Transferring || snapshot.state == TransferState::Resuming;
+  if (!active)
+    return {};
+  if (snapshot.progress.bytesPerSecond <= 0.0)
+    return i18n::translate(Text::TransferSpeedUnknown);
+  const auto rounded = std::min<double>(
+      snapshot.progress.bytesPerSecond, static_cast<double>(std::numeric_limits<qint64>::max() / 2)
+  );
+  return i18n::translate(Text::TransferSpeed).arg(QLocale().formattedDataSize(std::max<qint64>(1, qRound64(rounded))));
+}
+
+QString etaText(const TransferSnapshot &snapshot)
+{
+  const auto active = snapshot.state == TransferState::Transferring || snapshot.state == TransferState::Resuming;
+  if (!active)
+    return {};
+  if (!snapshot.progress.estimatedRemaining.has_value())
+    return i18n::translate(Text::TransferEtaUnknown);
+
+  const auto seconds = snapshot.progress.estimatedRemaining->count();
+  if (seconds >= std::chrono::duration_cast<std::chrono::seconds>(kMaximumEta).count())
+    return i18n::translate(Text::TransferEtaLong);
+  if (seconds < 60)
+    return i18n::translatePlural(Text::TransferEtaSeconds, static_cast<int>(seconds));
+  if (seconds < 3600)
+    return i18n::translatePlural(Text::TransferEtaMinutes, static_cast<int>((seconds + 59) / 60));
+  if (seconds < 86400)
+    return i18n::translatePlural(Text::TransferEtaHours, static_cast<int>((seconds + 3599) / 3600));
+  return i18n::translatePlural(Text::TransferEtaDays, static_cast<int>((seconds + 86399) / 86400));
+}
+
+QString notificationTitle(TransferState state)
+{
+  switch (state) {
+  case TransferState::Completed:
+    return i18n::translate(Text::TransferNotificationCompleted);
+  case TransferState::Rejected:
+    return i18n::translate(Text::TransferNotificationRejected);
+  case TransferState::Cancelled:
+    return i18n::translate(Text::TransferNotificationCanceled);
+  case TransferState::Failed:
+    return i18n::translate(Text::TransferNotificationFailed);
+  default:
+    return {};
+  }
 }
 
 TransferState historyState(HistoryStatus status)
@@ -152,8 +234,15 @@ TransferDirection historyDirection(HistoryDirection direction)
 
 } // namespace
 
-TransferCenterModel::TransferCenterModel(QObject *parent) : QAbstractListModel(parent)
+TransferCenterModel::TransferCenterModel(QObject *parent) : TransferCenterModel(systemClockMs, parent)
 {
+}
+
+TransferCenterModel::TransferCenterModel(Clock clock, QObject *parent)
+    : QAbstractListModel(parent), m_clock(clock ? std::move(clock) : Clock(systemClockMs))
+{
+  m_updateTimer.setSingleShot(true);
+  connect(&m_updateTimer, &QTimer::timeout, this, &TransferCenterModel::flushDueUpdates);
 }
 
 int TransferCenterModel::rowCount(const QModelIndex &parent) const
@@ -229,6 +318,10 @@ QVariant TransferCenterModel::data(const QModelIndex &index, int role) const
     return snapshot.createdUtc;
   case FinishedUtcRole:
     return snapshot.finishedUtc;
+  case SpeedTextRole:
+    return speedText(snapshot);
+  case EtaTextRole:
+    return etaText(snapshot);
   default:
     return {};
   }
@@ -262,13 +355,44 @@ QHash<int, QByteArray> TransferCenterModel::roleNames() const
       {IsHistoricalRole, "isHistorical"},
       {CreatedUtcRole, "createdUtc"},
       {FinishedUtcRole, "finishedUtc"},
+      {SpeedTextRole, "speedText"},
+      {EtaTextRole, "etaText"},
       {AccessibleSummaryRole, "accessibleSummary"},
   };
 }
 
 bool TransferCenterModel::upsertTransfer(const TransferSnapshot &snapshot)
 {
-  return validSnapshot(snapshot) && upsertEntry({snapshot, std::nullopt});
+  if (!validSnapshot(snapshot))
+    return false;
+
+  const auto &presented = snapshot;
+  const auto row = indexOf(snapshot.id);
+  const auto now = m_clock();
+  if (row < 0) {
+    const auto inserted = upsertEntry({presented, std::nullopt});
+    m_lastPublishedMs.insert(snapshot.id, now);
+    if (TransferControlStateMachine::isTerminal(presented.state))
+      enqueueTerminalNotification(presented);
+    return inserted;
+  }
+
+  const auto &current = m_entries.at(row).snapshot;
+  const auto lastPublished = m_lastPublishedMs.constFind(snapshot.id);
+  if (isProgressOnlyChange(current, presented) && lastPublished != m_lastPublishedMs.cend() &&
+      elapsedMs(now, lastPublished.value()) < kMinimumPublishIntervalMs) {
+    m_pendingEntries.insert(snapshot.id, Entry{presented, std::nullopt});
+    scheduleUpdateTimer();
+    return true;
+  }
+
+  m_pendingEntries.remove(snapshot.id);
+  const auto updated = upsertEntry({presented, std::nullopt});
+  m_lastPublishedMs.insert(snapshot.id, now);
+  if (TransferControlStateMachine::isTerminal(presented.state))
+    enqueueTerminalNotification(presented);
+  scheduleUpdateTimer();
+  return updated;
 }
 
 bool TransferCenterModel::removeTransfer(const TransferId &transferId)
@@ -279,11 +403,17 @@ bool TransferCenterModel::removeTransfer(const TransferId &transferId)
   beginRemoveRows(QModelIndex(), row, row);
   m_entries.removeAt(row);
   endRemoveRows();
+  m_pendingEntries.remove(transferId);
+  m_lastPublishedMs.remove(transferId);
+  scheduleUpdateTimer();
   return true;
 }
 
 void TransferCenterModel::setTransfers(const QList<TransferSnapshot> &snapshots)
 {
+  m_updateTimer.stop();
+  m_pendingNotifications.clear();
+  m_lastNotificationMs.reset();
   QList<Entry> entries;
   for (const auto &entry : std::as_const(m_entries)) {
     if (entry.history.has_value())
@@ -292,11 +422,12 @@ void TransferCenterModel::setTransfers(const QList<TransferSnapshot> &snapshots)
   for (const auto &snapshot : snapshots) {
     if (!validSnapshot(snapshot))
       continue;
+    const auto &presented = snapshot;
     const auto duplicate = std::find_if(entries.cbegin(), entries.cend(), [&snapshot](const auto &entry) {
       return entry.snapshot.id == snapshot.id;
     });
     if (duplicate == entries.cend())
-      entries.append({snapshot, std::nullopt});
+      entries.append({presented, std::nullopt});
   }
   beginResetModel();
   m_entries = std::move(entries);
@@ -304,6 +435,14 @@ void TransferCenterModel::setTransfers(const QList<TransferSnapshot> &snapshots)
     return compare(left, right) < 0;
   });
   endResetModel();
+  m_pendingEntries.clear();
+  m_lastPublishedMs.clear();
+  const auto now = m_clock();
+  for (const auto &entry : std::as_const(m_entries)) {
+    m_lastPublishedMs.insert(entry.snapshot.id, now);
+    if (TransferControlStateMachine::isTerminal(entry.snapshot.state))
+      m_notifiedTerminalIds.insert(entry.snapshot.id);
+  }
 }
 
 void TransferCenterModel::setHistoryRecords(const QList<TransferHistoryRecord> &records)
@@ -366,6 +505,30 @@ bool TransferCenterModel::requestCancel(const TransferId &transferId)
   return requestControl(transferId, CanCancelRole, &TransferCenterModel::cancelRequested);
 }
 
+void TransferCenterModel::flushDueUpdates()
+{
+  const auto now = m_clock();
+  const auto pendingIds = m_pendingEntries.keys();
+  for (const auto &id : pendingIds) {
+    const auto lastPublished = m_lastPublishedMs.constFind(id);
+    if (lastPublished != m_lastPublishedMs.cend() &&
+        elapsedMs(now, lastPublished.value()) < kMinimumPublishIntervalMs) {
+      continue;
+    }
+    const auto pendingIt = m_pendingEntries.find(id);
+    if (pendingIt == m_pendingEntries.end())
+      continue;
+    const auto pending = pendingIt.value();
+    m_pendingEntries.erase(pendingIt);
+    (void)upsertEntry(pending);
+    m_lastPublishedMs.insert(id, now);
+    if (TransferControlStateMachine::isTerminal(pending.snapshot.state))
+      enqueueTerminalNotification(pending.snapshot);
+  }
+  flushNotification();
+  scheduleUpdateTimer();
+}
+
 bool TransferCenterModel::validSnapshot(const TransferSnapshot &snapshot)
 {
   return !snapshot.id.isNull() && !snapshot.peerId.value().isNull() && !snapshot.displayName.isEmpty() &&
@@ -405,6 +568,23 @@ TransferCenterModel::Entry TransferCenterModel::fromHistory(const TransferHistor
       },
       .history = record,
   };
+}
+
+bool TransferCenterModel::isProgressOnlyChange(const TransferSnapshot &current, const TransferSnapshot &next) const
+{
+  auto currentWithoutProgress = current;
+  auto nextWithoutProgress = next;
+  currentWithoutProgress.progress.completedBytes = 0;
+  currentWithoutProgress.progress.completedFiles = 0;
+  currentWithoutProgress.progress.bytesPerSecond = 0.0;
+  currentWithoutProgress.progress.estimatedRemaining.reset();
+  nextWithoutProgress.progress.completedBytes = 0;
+  nextWithoutProgress.progress.completedFiles = 0;
+  nextWithoutProgress.progress.bytesPerSecond = 0.0;
+  nextWithoutProgress.progress.estimatedRemaining.reset();
+  currentWithoutProgress.currentRelativeDisplayPath.clear();
+  nextWithoutProgress.currentRelativeDisplayPath.clear();
+  return currentWithoutProgress == nextWithoutProgress;
 }
 
 int TransferCenterModel::insertionIndex(const Entry &entry, int ignoredIndex) const
@@ -466,6 +646,53 @@ bool TransferCenterModel::upsertEntry(Entry entry)
   const auto changedIndex = index(destination, 0);
   Q_EMIT dataChanged(changedIndex, changedIndex, allDataRoles());
   return true;
+}
+
+void TransferCenterModel::scheduleUpdateTimer()
+{
+  qint64 delay = std::numeric_limits<qint64>::max();
+  const auto now = m_clock();
+  for (auto it = m_pendingEntries.cbegin(); it != m_pendingEntries.cend(); ++it) {
+    delay = std::min(
+        delay, kMinimumPublishIntervalMs - elapsedMs(now, m_lastPublishedMs.value(it.key(), now))
+    );
+  }
+  if (!m_pendingNotifications.isEmpty() && m_lastNotificationMs.has_value())
+    delay = std::min(delay, kMinimumNotificationIntervalMs - elapsedMs(now, *m_lastNotificationMs));
+  if (delay == std::numeric_limits<qint64>::max()) {
+    m_updateTimer.stop();
+    return;
+  }
+  m_updateTimer.start(static_cast<int>(std::clamp<qint64>(delay, 1, std::numeric_limits<int>::max())));
+}
+
+void TransferCenterModel::enqueueTerminalNotification(const TransferSnapshot &snapshot)
+{
+  if (!TransferControlStateMachine::isTerminal(snapshot.state) || m_notifiedTerminalIds.contains(snapshot.id))
+    return;
+  m_notifiedTerminalIds.insert(snapshot.id);
+  const auto title = notificationTitle(snapshot.state);
+  if (title.isEmpty())
+    return;
+  m_pendingNotifications.append({
+      .snapshot = snapshot,
+      .title = title,
+      .message = i18n::translate(Text::TransferNotificationBody).arg(snapshot.displayName, snapshot.peerDisplayName),
+  });
+  flushNotification();
+  scheduleUpdateTimer();
+}
+
+void TransferCenterModel::flushNotification()
+{
+  if (m_pendingNotifications.isEmpty())
+    return;
+  const auto now = m_clock();
+  if (m_lastNotificationMs.has_value() && elapsedMs(now, *m_lastNotificationMs) < kMinimumNotificationIntervalMs)
+    return;
+  const auto notification = m_pendingNotifications.takeFirst();
+  m_lastNotificationMs = now;
+  Q_EMIT notificationRequested(notification.snapshot, notification.title, notification.message);
 }
 
 bool TransferCenterModel::requestControl(
