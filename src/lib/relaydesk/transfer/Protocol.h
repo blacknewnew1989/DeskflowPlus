@@ -73,6 +73,16 @@ enum class ConflictPolicy
   Ask,
 };
 
+enum class RejectReason : quint32
+{
+  UserDeclined = 1,
+  UnsupportedCapability = 2,
+  InsufficientSpace = 3,
+  InvalidManifest = 4,
+  Busy = 5,
+  PolicyDenied = 6,
+};
+
 struct TransferOffer
 {
   TransferId transferId;
@@ -99,6 +109,15 @@ struct TransferAccept
   [[nodiscard]] bool operator==(const TransferAccept &) const = default;
 };
 
+struct TransferReject
+{
+  TransferId transferId;
+  RejectReason reason = RejectReason::UserDeclined;
+  QString diagnostic;
+
+  [[nodiscard]] bool operator==(const TransferReject &) const = default;
+};
+
 struct ErrorMessage
 {
   quint64 code = 0;
@@ -110,7 +129,7 @@ struct ErrorMessage
   [[nodiscard]] bool operator==(const ErrorMessage &) const = default;
 };
 
-using ControlMessage = std::variant<TransferOffer, TransferAccept, ErrorMessage>;
+using ControlMessage = std::variant<TransferOffer, TransferAccept, TransferReject, ErrorMessage>;
 
 struct ProtocolLimits
 {
@@ -171,6 +190,9 @@ struct Frame
   }
   if (std::holds_alternative<TransferAccept>(message)) {
     return MessageType::TransferAccept;
+  }
+  if (std::holds_alternative<TransferReject>(message)) {
+    return MessageType::TransferReject;
   }
   return MessageType::Error;
 }

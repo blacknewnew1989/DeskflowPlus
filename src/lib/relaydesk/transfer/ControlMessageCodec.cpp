@@ -74,6 +74,20 @@ std::optional<ConflictPolicy> parseConflictPolicy(const QString &value)
   return std::nullopt;
 }
 
+bool isKnownRejectReason(RejectReason reason)
+{
+  switch (reason) {
+  case RejectReason::UserDeclined:
+  case RejectReason::UnsupportedCapability:
+  case RejectReason::InsufficientSpace:
+  case RejectReason::InvalidManifest:
+  case RejectReason::Busy:
+  case RejectReason::PolicyDenied:
+    return true;
+  }
+  return false;
+}
+
 bool validate(const TransferOffer &message, QString &error)
 {
   if (!isValidUuid(message.transferId)) {
@@ -102,6 +116,20 @@ bool validate(const TransferAccept &message, QString &error)
     error = QStringLiteral("logicalDestination must be non-empty and at most 4096 UTF-8 bytes");
   } else if (!isWireInteger(message.freeBytes)) {
     error = QStringLiteral("freeBytes exceeds the Qt CBOR integer range");
+  } else {
+    return true;
+  }
+  return false;
+}
+
+bool validate(const TransferReject &message, QString &error)
+{
+  if (!isValidUuid(message.transferId)) {
+    error = QStringLiteral("transferId must be a non-null UUID");
+  } else if (!isKnownRejectReason(message.reason)) {
+    error = QStringLiteral("reject reason is unsupported");
+  } else if (!isValidString(message.diagnostic, true)) {
+    error = QStringLiteral("diagnostic must be at most 4096 UTF-8 bytes");
   } else {
     return true;
   }
@@ -157,6 +185,17 @@ QByteArray encode(const TransferAccept &message)
   map.insert(key(3), QCborValue(message.logicalDestination));
   insertUnsigned(map, 4, message.freeBytes);
   map.insert(key(5), QCborValue(message.autoAccepted));
+  return QCborValue(map).toCbor();
+}
+
+QByteArray encode(const TransferReject &message)
+{
+  QCborMap map;
+  insertUuid(map, 1, message.transferId);
+  insertUnsigned(map, 2, static_cast<quint32>(message.reason));
+  if (!message.diagnostic.isEmpty()) {
+    map.insert(key(3), QCborValue(message.diagnostic));
+  }
   return QCborValue(map).toCbor();
 }
 
@@ -278,6 +317,25 @@ bool readString(const QCborMap &map, qint64 field, QString &output, ControlMessa
   return true;
 }
 
+bool readOptionalString(const QCborMap &map, qint64 field, QString &output, ControlMessageDecodeResult &failure)
+{
+  if (!map.contains(key(field))) {
+    output.clear();
+    return true;
+  }
+  const auto value = map.value(key(field));
+  if (!value.isString()) {
+    failure = invalidType(field, QStringLiteral("a UTF-8 text string"));
+    return false;
+  }
+  output = value.toString();
+  if (!isValidString(output)) {
+    failure = invalidValue(field, QStringLiteral("string must be non-empty and at most 4096 UTF-8 bytes"));
+    return false;
+  }
+  return true;
+}
+
 bool readBytes(
     const QCborMap &map, qint64 field, qsizetype expectedSize, QByteArray &output, ControlMessageDecodeResult &failure
 )
@@ -361,6 +419,25 @@ ControlMessageDecodeResult decodeTransferAccept(const QCborMap &map)
   return {.message = ControlMessage(std::move(message))};
 }
 
+ControlMessageDecodeResult decodeTransferReject(const QCborMap &map)
+{
+  TransferReject message;
+  quint64 encodedReason = 0;
+  ControlMessageDecodeResult failure;
+  if (!readUuid(map, 1, message.transferId, failure) || !readUnsigned(map, 2, encodedReason, failure) ||
+      !readOptionalString(map, 3, message.diagnostic, failure)) {
+    return failure;
+  }
+  if (encodedReason > std::numeric_limits<quint32>::max()) {
+    return invalidValue(2, QStringLiteral("reject reason exceeds uint32"));
+  }
+  message.reason = static_cast<RejectReason>(encodedReason);
+  if (!isKnownRejectReason(message.reason)) {
+    return invalidValue(2, QStringLiteral("unsupported reject reason"));
+  }
+  return {.message = ControlMessage(std::move(message))};
+}
+
 ControlMessageDecodeResult decodeProtocolError(const QCborMap &map)
 {
   ErrorMessage message;
@@ -430,7 +507,8 @@ ControlMessageCodec::decode(quint16 protocolVersion, MessageType type, const QBy
         QStringLiteral("unsupported RDFT protocol version %1").arg(protocolVersion)
     );
   }
-  if (type != MessageType::TransferOffer && type != MessageType::TransferAccept && type != MessageType::Error) {
+  if (type != MessageType::TransferOffer && type != MessageType::TransferAccept &&
+      type != MessageType::TransferReject && type != MessageType::Error) {
     return decodeError(
         ControlMessageError::UnsupportedMessageType,
         QStringLiteral("message type is not implemented by this control metadata codec")
@@ -463,6 +541,8 @@ ControlMessageCodec::decode(quint16 protocolVersion, MessageType type, const QBy
     return decodeTransferOffer(map);
   case MessageType::TransferAccept:
     return decodeTransferAccept(map);
+  case MessageType::TransferReject:
+    return decodeTransferReject(map);
   case MessageType::Error:
     return decodeProtocolError(map);
   default:

@@ -54,6 +54,8 @@ class ControlMessageCodecTests final : public QObject
 private Q_SLOTS:
   void offerRoundTrip();
   void acceptRoundTripPreservesUnicodePathMetadata();
+  void rejectRoundTripSupportsOptionalDiagnostic();
+  void rejectsUnknownRejectReason();
   void errorRoundTripPreservesOptionalIds();
   void rejectsUnsupportedVersion();
   void rejectsUnsupportedMessageType();
@@ -104,6 +106,35 @@ void ControlMessageCodecTests::acceptRoundTripPreservesUnicodePathMetadata()
   const auto *decoded = std::get_if<TransferAccept>(&*result.message);
   QVERIFY(decoded != nullptr);
   QVERIFY(*decoded == source);
+}
+
+void ControlMessageCodecTests::rejectRoundTripSupportsOptionalDiagnostic()
+{
+  const QList<TransferReject> messages = {
+      {.transferId = kTransferId, .reason = RejectReason::UserDeclined},
+      {.transferId = kTransferId,
+       .reason = RejectReason::UnsupportedCapability,
+       .diagnostic = QStringLiteral("folder.v1 is unavailable")},
+  };
+  for (const auto &source : messages) {
+    const auto result = roundTrip(ControlMessage(source));
+    QVERIFY2(result.ok(), qPrintable(result.diagnostic));
+    const auto *decoded = std::get_if<TransferReject>(&*result.message);
+    QVERIFY(decoded != nullptr);
+    QCOMPARE(*decoded, source);
+  }
+}
+
+void ControlMessageCodecTests::rejectsUnknownRejectReason()
+{
+  QCborMap map;
+  map.insert(QCborValue(1), QCborValue(kTransferId.toRfc4122()));
+  map.insert(QCborValue(2), QCborValue(99));
+
+  const auto result =
+      ControlMessageCodec::decode(kProtocolMajorVersion, MessageType::TransferReject, QCborValue(map).toCbor());
+
+  QCOMPARE(result.error, ControlMessageError::InvalidFieldValue);
 }
 
 void ControlMessageCodecTests::errorRoundTripPreservesOptionalIds()
