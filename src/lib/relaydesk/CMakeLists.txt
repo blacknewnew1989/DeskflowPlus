@@ -1,0 +1,4 @@
+# SPDX-FileCopyrightText: (C) 2026 RelayDesk Developers
+# SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+
+add_subdirectory(device)
