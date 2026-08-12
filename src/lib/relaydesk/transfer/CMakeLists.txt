@@ -4,6 +4,8 @@
 add_library(relaydesk_transfer STATIC
   ControlMessageCodec.cpp
   ControlMessageCodec.h
+  FrameCodec.cpp
+  FrameCodec.h
   Protocol.h
 )
 

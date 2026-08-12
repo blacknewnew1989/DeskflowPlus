@@ -20,6 +20,9 @@ inline constexpr qsizetype kUuidBytes = 16;
 inline constexpr qsizetype kSha256Bytes = 32;
 inline constexpr qsizetype kMaxControlStringUtf8Bytes = 4096;
 
+using TransferId = QUuid;
+using FileId = QUuid;
+
 enum class MessageType : quint16
 {
   Hello = 0x0001,
@@ -72,7 +75,7 @@ enum class ConflictPolicy
 
 struct TransferOffer
 {
-  QUuid transferId;
+  TransferId transferId;
   QString displayName;
   quint64 totalBytes = 0;
   quint64 fileCount = 0;
@@ -87,7 +90,7 @@ struct TransferOffer
 
 struct TransferAccept
 {
-  QUuid transferId;
+  TransferId transferId;
   ConflictPolicy effectiveConflictPolicy = ConflictPolicy::AutoRename;
   QString logicalDestination;
   quint64 freeBytes = 0;
@@ -101,13 +104,65 @@ struct ErrorMessage
   quint64 code = 0;
   QString diagnostic;
   bool retryable = false;
-  std::optional<QUuid> transferId;
-  std::optional<QUuid> fileId;
+  std::optional<TransferId> transferId;
+  std::optional<FileId> fileId;
 
   [[nodiscard]] bool operator==(const ErrorMessage &) const = default;
 };
 
 using ControlMessage = std::variant<TransferOffer, TransferAccept, ErrorMessage>;
+
+struct ProtocolLimits
+{
+  quint32 maxControlMetadataBytes = 1U * 1024U * 1024U;
+  quint64 maxDataPayloadBytes = 4ULL * 1024ULL * 1024ULL;
+  quint64 maxFrameBytes =
+      static_cast<quint64>(kFixedHeaderBytes) + static_cast<quint64>(maxControlMetadataBytes) + maxDataPayloadBytes;
+};
+
+struct Frame
+{
+  quint16 version = kProtocolMajorVersion;
+  MessageType type = MessageType::Heartbeat;
+  quint32 flags = 0;
+  quint64 streamId = 0;
+  QByteArray metadata;
+  QByteArray payload;
+
+  [[nodiscard]] bool operator==(const Frame &) const = default;
+};
+
+[[nodiscard]] inline bool isKnownMessageType(MessageType type) noexcept
+{
+  switch (type) {
+  case MessageType::Hello:
+  case MessageType::AuthResult:
+  case MessageType::Capabilities:
+  case MessageType::Heartbeat:
+  case MessageType::HeartbeatAck:
+  case MessageType::TransferOffer:
+  case MessageType::TransferAccept:
+  case MessageType::TransferReject:
+  case MessageType::ManifestPage:
+  case MessageType::ManifestComplete:
+  case MessageType::FileBegin:
+  case MessageType::FileChunk:
+  case MessageType::FileCheckpoint:
+  case MessageType::FileEnd:
+  case MessageType::FileResult:
+  case MessageType::TransferPause:
+  case MessageType::TransferResume:
+  case MessageType::TransferCancel:
+  case MessageType::TransferComplete:
+  case MessageType::TransferResult:
+  case MessageType::ResumeQuery:
+  case MessageType::ResumeResponse:
+  case MessageType::Error:
+  case MessageType::Goodbye:
+    return true;
+  }
+  return false;
+}
 
 [[nodiscard]] inline MessageType messageType(const ControlMessage &message) noexcept
 {
