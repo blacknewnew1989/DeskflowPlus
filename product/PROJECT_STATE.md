@@ -37,7 +37,7 @@
 | macOS build | PASS | phase tag run `31602699800`; arm64 build, DMG/App/source, CTest 28/28 |
 | GitHub Actions artifacts | PASS | Windows artifact `9144025951`; macOS artifact `9143920156`; 30-day retention |
 | Phase 1 implementation | PASS | brand/i18n/device/discovery/pairing/trust/reconnect/device UI and permission guidance integrated through `ead6acbd5` |
-| Current integration CI | IN_PROGRESS | `300a3c68a` makes APFS mutation tests deterministic; `99c98f500` makes post-upload CTest failures visible; Phase 1 `-02` verification pending |
+| Current integration CI | IN_PROGRESS | `300a3c68a` makes mutation tests deterministic; `99c98f500` exposes post-upload test failures; `d789fb0a6` retries transient dependency setup once; Phase 1 `-03` verification pending |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 

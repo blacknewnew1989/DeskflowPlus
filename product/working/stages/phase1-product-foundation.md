@@ -2,10 +2,11 @@
 
 - 当前结论：`IN_PROGRESS`（已修复候选测试与 CI 结果语义，等待 `-02` 标签复验）
 - 功能基线提交：`ead6acbd56506b92e1b755471dd7a105845fd63f`
-- 当前修复提交：`99c98f500`（含 `300a3c68a`）
+- 当前修复提交：`d789fb0a6`（含 `300a3c68a`、`99c98f500`）
 - 当前集成 run：[31618176846](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/31618176846)
 - 首次标签：`relaydesk-phase1-20260813-01`（run `31619248628`，保留失败证据）
-- 目标复验标签：`relaydesk-phase1-20260813-02`
+- 第二次标签：`relaydesk-phase1-20260813-02`（run `31620547696`，保留失败证据）
+- 目标复验标签：`relaydesk-phase1-20260813-03`
 - 产物性质：unsigned 内部包；签名凭据不是构建、测试和打包前置条件。
 
 ## 已集成范围
@@ -38,12 +39,15 @@
 
 首次标签 run `31619248628` 暴露了两个独立问题。Windows 在源码配置前下载 `vcpkg.exe` 时收到 WinHTTP `0x2F78`，属于依赖服务器瞬断；同一 SHA 的前一 run 已完成 Windows 全流程。macOS 完成构建和打包，但 `TransferSenderTests` 的同大小覆写用例依赖文件系统自动推进 mtime，APFS 可在同一时间粒度内保留原 mtime，因而未触发预期快照变化。`300a3c68a` 在两个 mutation 用例中显式设置不同 mtime，并在 Windows/MinGW 连续运行 20 次通过。`99c98f500` 保留 `continue-on-error` 以便始终上传诊断，同时在 artifact 上传后恢复 package/CTest 的真实失败状态，避免 job 假绿。失败的 `-01` 标签未删除或改写；修复由 `-02` 标签重新验证。
 
+第二次标签 run `31620547696` 中 macOS 完成 `61/61 PASS`、App/DMG/source 打包与 artifact 上传，证明 mutation 测试修复和 CI 失败恢复语义有效。Windows 再次在同一 `vcpkg.exe` URL 返回 WinHTTP `0x2F78`，仍未进入源码配置。`d789fb0a6` 因而为整个依赖安装增加恰好一次自动重试；成功的首次尝试不会重复执行，连续失败仍会让 job 失败。失败的 `-02` 标签同样保留且不改写。
+
 ## 阶段完成条件
 
 - [x] Phase 1 功能以独立小提交合入并推送 `product/relaydesk-v1`。
 - [x] 当前可用本地 Qt 测试通过。
 - [x] 创建并推送 `relaydesk-phase1-20260813-01`；失败证据保留且未改写。
-- [ ] 创建并推送 `relaydesk-phase1-20260813-02`。
+- [x] 创建并推送 `relaydesk-phase1-20260813-02`；macOS PASS、Windows 依赖下载失败的证据保留。
+- [ ] 创建并推送 `relaydesk-phase1-20260813-03`。
 - [ ] 标签 run 的 Windows x64 与 macOS arm64 构建、CTest、打包均通过。
 - [ ] 下载两平台 artifact，复算 SHA-256 并把结果写回本报告。
 
