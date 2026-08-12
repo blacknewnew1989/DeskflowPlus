@@ -11,6 +11,15 @@ set_property(CACHE RELAYDESK_MACOS_PACKAGE_VARIANT PROPERTY STRINGS adhoc signed
 if(NOT RELAYDESK_MACOS_PACKAGE_VARIANT MATCHES "^(adhoc|signed)$")
   message(FATAL_ERROR "RELAYDESK_MACOS_PACKAGE_VARIANT must be adhoc or signed")
 endif()
+set(RELAYDESK_MACOS_SIGNING_IDENTITY "" CACHE STRING "Developer ID Application identity for macOS packages")
+if(RELAYDESK_MACOS_PACKAGE_VARIANT STREQUAL "signed" AND
+   RELAYDESK_MACOS_SIGNING_IDENTITY STREQUAL "")
+  message(FATAL_ERROR "signed macOS packages require RELAYDESK_MACOS_SIGNING_IDENTITY")
+endif()
+if(RELAYDESK_MACOS_PACKAGE_VARIANT STREQUAL "adhoc" AND
+   NOT RELAYDESK_MACOS_SIGNING_IDENTITY STREQUAL "")
+  message(FATAL_ERROR "a signing identity requires RELAYDESK_MACOS_PACKAGE_VARIANT=signed")
+endif()
 set(OS_STRING "macos-${BUILD_ARCHITECTURE}-${RELAYDESK_MACOS_PACKAGE_VARIANT}")
 
 if (OSX_BUNDLE)
@@ -19,11 +28,26 @@ if (OSX_BUNDLE)
     "${CMAKE_CURRENT_BINARY_DIR}/generate_ds_store.applescript"
     @ONLY
   )
-  install(CODE "execute_process(COMMAND
-    ${DEPLOYQT}
-    \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\"
-    -timestamp -codesign=-
-  )")
+  if(RELAYDESK_MACOS_PACKAGE_VARIANT STREQUAL "signed")
+    set(RELAYDESK_MACDEPLOYQT_CODESIGN "${RELAYDESK_MACOS_SIGNING_IDENTITY}")
+    set(RELAYDESK_MACDEPLOYQT_HARDENED "\"-hardened-runtime\"")
+  else()
+    set(RELAYDESK_MACDEPLOYQT_CODESIGN "-")
+    set(RELAYDESK_MACDEPLOYQT_HARDENED "")
+  endif()
+  install(CODE "
+    execute_process(
+      COMMAND \"${DEPLOYQT}\"
+              \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\"
+              \"-timestamp\"
+              \"-codesign=${RELAYDESK_MACDEPLOYQT_CODESIGN}\"
+              ${RELAYDESK_MACDEPLOYQT_HARDENED}
+      RESULT_VARIABLE relaydesk_macdeployqt_result
+    )
+    if(NOT relaydesk_macdeployqt_result EQUAL 0)
+      message(FATAL_ERROR \"macdeployqt failed while deploying the RelayDesk app bundle\")
+    endif()
+  ")
   set(CPACK_PACKAGE_ICON "${MY_DIR}/dmg-volume.icns")
   set(CPACK_DMG_BACKGROUND_IMAGE "${MY_DIR}/dmg-background.tiff")
   set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/generate_ds_store.applescript")

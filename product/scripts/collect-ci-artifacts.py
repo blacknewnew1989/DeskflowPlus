@@ -55,13 +55,29 @@ def app_candidates(build: Path) -> list[Path]:
     )
 
 
+def app_archive_name(platform: str, variant: str, commit: str) -> str:
+    return f"RelayDesk-{platform}-{variant}-{commit[:8]}.app"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--platform", required=True)
     parser.add_argument("--commit", required=True)
+    parser.add_argument(
+        "--package-variant", choices=("unsigned", "adhoc", "signed"), default="unsigned"
+    )
+    parser.add_argument("--app-bundle", type=Path)
+    parser.add_argument("--signed", action="store_true")
+    parser.add_argument("--notarized", action="store_true")
     args = parser.parse_args()
+
+    if args.platform.startswith("macos"):
+        if (args.package_variant == "signed") != args.signed:
+            raise SystemExit("signed macOS package variant and --signed must be specified together")
+        if args.notarized and not args.signed:
+            raise SystemExit("a notarized macOS package must also be signed")
 
     build = args.build_dir.resolve()
     out = args.out_dir.resolve()
@@ -76,9 +92,17 @@ def main() -> int:
 
     # Always preserve a directly installable app bundle in addition to a DMG.
     if args.platform.startswith("macos"):
-        apps = app_candidates(build)
+        if args.app_bundle:
+            explicit_app = args.app_bundle.resolve()
+            if not explicit_app.is_dir() or explicit_app.suffix.lower() != ".app":
+                raise SystemExit(f"invalid explicit app bundle: {explicit_app}")
+            apps = [explicit_app]
+        else:
+            apps = app_candidates(build)
         if apps:
-            archive_base = out / f"RelayDesk-{args.platform}-unsigned-{args.commit[:8]}.app"
+            archive_base = out / app_archive_name(
+                args.platform, args.package_variant, args.commit
+            )
             archive = Path(
                 shutil.make_archive(
                     str(archive_base), "zip", root_dir=apps[0].parent, base_dir=apps[0].name
@@ -105,7 +129,9 @@ def main() -> int:
     manifest = {
         "platform": args.platform,
         "commit": args.commit,
-        "signed": False,
+        "signed": args.signed,
+        "notarized": args.notarized,
+        "packageVariant": args.package_variant,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "runnerOs": os.environ.get("RUNNER_OS", ""),
         "runnerArch": os.environ.get("RUNNER_ARCH", ""),
