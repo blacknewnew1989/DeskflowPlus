@@ -60,6 +60,34 @@ enum class PartialCleanupError
   ScanFailed,
 };
 
+enum class PartialCleanupChoice
+{
+  Keep,
+  Delete,
+};
+
+enum class PartialCleanupApplyError
+{
+  None,
+  NotListed,
+  ChangedSinceListing,
+  PartRemoveFailed,
+  StateRemoveFailed,
+};
+
+struct PartialCleanupApplyResult
+{
+  PartialCleanupApplyError error = PartialCleanupApplyError::None;
+  QString diagnostic;
+  qsizetype removedPartFiles = 0;
+  bool stateRemoved = false;
+
+  [[nodiscard]] bool ok() const noexcept
+  {
+    return error == PartialCleanupApplyError::None;
+  }
+};
+
 struct PartialCleanupListing
 {
   QList<ExpiredPartialTransfer> expired;
@@ -88,6 +116,10 @@ public:
   // Read-only worker API. Callers notify users from this listing, then make a
   // separate explicit keep/delete choice. No partial is removed here.
   [[nodiscard]] PartialCleanupListing listExpired(QDateTime nowUtc = QDateTime::currentDateTimeUtc()) const;
+  // Applies only a previously listed transfer snapshot. Keep is a no-op.
+  // Delete revalidates state and every part before any removal.
+  [[nodiscard]] PartialCleanupApplyResult
+  apply(const ExpiredPartialTransfer &listed, PartialCleanupChoice choice) const;
 
 private:
   const ResumeStore &m_store;

@@ -6,8 +6,10 @@
 #include "relaydesk/transfer/PathPolicy.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 
+#include <algorithm>
 #include <limits>
 #include <utility>
 
@@ -101,6 +103,93 @@ PartialCleanupListing PartialCleanupPolicy::listExpired(QDateTime nowUtc) const
     }
   }
   return listing;
+}
+
+PartialCleanupApplyResult
+PartialCleanupPolicy::apply(const ExpiredPartialTransfer &listed, PartialCleanupChoice choice) const
+{
+  if (choice == PartialCleanupChoice::Keep) {
+    return {};
+  }
+  if (listed.transferId.isNull() || listed.files.isEmpty()) {
+    return {
+        .error = PartialCleanupApplyError::NotListed,
+        .diagnostic = QStringLiteral("cleanup requires a listed transfer with managed partials"),
+    };
+  }
+  const auto loaded = m_store.load(listed.transferId);
+  if (loaded.error == ResumeStoreError::NotFound) {
+    // A completed prior cleanup is idempotent.
+    bool anyPartExists = false;
+    for (const auto &file : listed.files) {
+      anyPartExists = anyPartExists || QFileInfo::exists(file.partAbsolutePath);
+    }
+    return anyPartExists
+               ? PartialCleanupApplyResult{
+                     .error = PartialCleanupApplyError::ChangedSinceListing,
+                     .diagnostic = QStringLiteral("resume state disappeared while listed parts remain"),
+                 }
+               : PartialCleanupApplyResult{};
+  }
+  if (!loaded.ok() || loaded.state->updatedUtc.toUTC() != listed.updatedUtc.toUTC() ||
+      loaded.state->files.size() != listed.files.size()) {
+    return {
+        .error = PartialCleanupApplyError::ChangedSinceListing,
+        .diagnostic = QStringLiteral("resume state changed after partials were listed"),
+    };
+  }
+
+  QList<QString> verifiedPaths;
+  for (const ResumeFileState &stateFile : loaded.state->files) {
+    const auto listedFile = std::find_if(listed.files.cbegin(), listed.files.cend(), [&](const auto &candidate) {
+      return candidate.fileId == stateFile.fileId;
+    });
+    QString safePath;
+    const auto validated = PathPolicy::joinLexicallyUnderRoot(
+        m_settings.stagingRoot, stateFile.partRelativePath, safePath, m_settings.pathLimits
+    );
+    if (listedFile == listed.files.cend() || !validated.ok || safePath != listedFile->partAbsolutePath ||
+        stateFile.relativeProtocolPath != listedFile->relativeProtocolPath ||
+        stateFile.durableOffset != listedFile->durableOffset || stateFile.totalBytes != listedFile->totalBytes ||
+        !stateFile.partRelativePath.endsWith(QStringLiteral(".part"), Qt::CaseInsensitive)) {
+      return {
+          .error = PartialCleanupApplyError::ChangedSinceListing,
+          .diagnostic = QStringLiteral("resume file metadata changed after cleanup listing"),
+      };
+    }
+    QFileInfo info(safePath);
+    info.refresh();
+    if (!info.exists() || info.isSymLink() || !info.isFile() || info.size() < 0 ||
+        static_cast<quint64>(info.size()) != stateFile.durableOffset) {
+      return {
+          .error = PartialCleanupApplyError::ChangedSinceListing,
+          .diagnostic = QStringLiteral("staging file changed after cleanup listing"),
+      };
+    }
+    verifiedPaths.append(safePath);
+  }
+
+  PartialCleanupApplyResult result;
+  for (const QString &path : std::as_const(verifiedPaths)) {
+    if (!QFile::remove(path)) {
+      return {
+          .error = PartialCleanupApplyError::PartRemoveFailed,
+          .diagnostic = QStringLiteral("could not remove a selected staging partial"),
+          .removedPartFiles = result.removedPartFiles,
+      };
+    }
+    ++result.removedPartFiles;
+  }
+  const auto removedState = m_store.remove(listed.transferId);
+  if (!removedState.ok()) {
+    return {
+        .error = PartialCleanupApplyError::StateRemoveFailed,
+        .diagnostic = removedState.diagnostic,
+        .removedPartFiles = result.removedPartFiles,
+    };
+  }
+  result.stateRemoved = true;
+  return result;
 }
 
 } // namespace relaydesk::transfer

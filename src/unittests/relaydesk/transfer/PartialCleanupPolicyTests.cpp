@@ -53,6 +53,8 @@ private Q_SLOTS:
   void listsOnlyExpiredValidKnownPartials();
   void defaultRetentionIsSevenDays();
   void reportsCorruptMissingUnsafeAndMismatchedWithoutDeleting();
+  void explicitKeepAndDeleteAreSeparatedAndIdempotent();
+  void changedAfterListingIsNeverDeleted();
 };
 
 void PartialCleanupPolicyTests::listsOnlyExpiredValidKnownPartials()
@@ -112,6 +114,63 @@ void PartialCleanupPolicyTests::reportsCorruptMissingUnsafeAndMismatchedWithoutD
   QVERIFY(QFileInfo::exists(store.statePath(mismatched.transferId)));
   QVERIFY(QFileInfo::exists(corruptPath));
   QVERIFY(QFileInfo::exists(unknownPart));
+}
+
+void PartialCleanupPolicyTests::explicitKeepAndDeleteAreSeparatedAndIdempotent()
+{
+  QTemporaryDir directory;
+  const QString stagingRoot = directory.filePath(QStringLiteral("staging"));
+  ResumeStore store(directory.filePath(QStringLiteral("resume")));
+  auto state = stateAt(
+      QStringLiteral("selected/keep-or-delete.part"), 9, QDateTime::fromMSecsSinceEpoch(kNowMs, Qt::UTC).addDays(-8)
+  );
+  const QString partPath = QDir(stagingRoot).filePath(state.files[0].partRelativePath);
+  QVERIFY(writeBytes(partPath, 9));
+  QVERIFY(store.save(state).ok());
+  PartialCleanupPolicy policy(store, {.stagingRoot = stagingRoot});
+  const auto listed = policy.listExpired(QDateTime::fromMSecsSinceEpoch(kNowMs, Qt::UTC));
+  QCOMPARE(listed.expired.size(), 1);
+
+  const auto kept = policy.apply(listed.expired[0], PartialCleanupChoice::Keep);
+  QVERIFY(kept.ok());
+  QCOMPARE(kept.removedPartFiles, 0);
+  QVERIFY(QFileInfo::exists(partPath));
+  QVERIFY(QFileInfo::exists(store.statePath(state.transferId)));
+
+  const auto removed = policy.apply(listed.expired[0], PartialCleanupChoice::Delete);
+  QVERIFY2(removed.ok(), qPrintable(removed.diagnostic));
+  QCOMPARE(removed.removedPartFiles, 1);
+  QVERIFY(removed.stateRemoved);
+  QVERIFY(!QFileInfo::exists(partPath));
+  QVERIFY(!QFileInfo::exists(store.statePath(state.transferId)));
+
+  const auto repeated = policy.apply(listed.expired[0], PartialCleanupChoice::Delete);
+  QVERIFY(repeated.ok());
+  QCOMPARE(repeated.removedPartFiles, 0);
+}
+
+void PartialCleanupPolicyTests::changedAfterListingIsNeverDeleted()
+{
+  QTemporaryDir directory;
+  const QString stagingRoot = directory.filePath(QStringLiteral("staging"));
+  ResumeStore store(directory.filePath(QStringLiteral("resume")));
+  auto state = stateAt(QStringLiteral("changed.part"), 4, QDateTime::fromMSecsSinceEpoch(kNowMs, Qt::UTC).addDays(-8));
+  const QString partPath = QDir(stagingRoot).filePath(state.files[0].partRelativePath);
+  QVERIFY(writeBytes(partPath, 4));
+  QVERIFY(store.save(state).ok());
+  PartialCleanupPolicy policy(store, {.stagingRoot = stagingRoot});
+  const auto listed = policy.listExpired(QDateTime::fromMSecsSinceEpoch(kNowMs, Qt::UTC));
+  QCOMPARE(listed.expired.size(), 1);
+  QFile changed(partPath);
+  QVERIFY(changed.open(QIODevice::Append));
+  QCOMPARE(changed.write("x", 1), qint64{1});
+  changed.close();
+
+  const auto result = policy.apply(listed.expired[0], PartialCleanupChoice::Delete);
+
+  QCOMPARE(result.error, PartialCleanupApplyError::ChangedSinceListing);
+  QVERIFY(QFileInfo::exists(partPath));
+  QVERIFY(QFileInfo::exists(store.statePath(state.transferId)));
 }
 
 QTEST_MAIN(PartialCleanupPolicyTests)
