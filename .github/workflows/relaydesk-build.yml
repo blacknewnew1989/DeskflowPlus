@@ -146,3 +146,11 @@ jobs:
           path: dist/${{ matrix.target.name }}
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Report package or test failure
+        if: always() && (steps.package.outcome != 'success' || steps.tests.outcome != 'success')
+        shell: bash
+        run: |
+          echo "Package outcome: ${{ steps.package.outcome }}"
+          echo "Test outcome: ${{ steps.tests.outcome }}"
+          exit 1
