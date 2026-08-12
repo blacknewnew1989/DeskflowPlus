@@ -15,8 +15,10 @@
 #include "gui/Messages.h"
 #include "gui/TlsUtility.h"
 #include "gui/core/NetworkMonitor.h"
+#include "relaydesk/platform/WindowsStartAtLogin.h"
 
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -169,6 +171,10 @@ void SettingsDialog::updateText()
 
 void SettingsDialog::accept()
 {
+  if (!saveStartAtLogin()) {
+    return;
+  }
+
   Settings::setValue(Settings::Core::Port, ui->sbPort->value());
   Settings::setValue(Settings::Core::Interface, ui->comboInterface->currentData());
   Settings::setValue(Settings::Log::Level, ui->comboLogLevel->currentIndex());
@@ -213,6 +219,7 @@ void SettingsDialog::loadFromConfig()
   ui->cbGuiDebug->setChecked(Settings::value(Settings::Log::GuiDebug).toBool());
   ui->cbUseWlClipboard->setChecked(Settings::value(Settings::Core::UseWlClipboard).toBool());
   ui->cbShowVersion->setChecked(Settings::value(Settings::Gui::ShowVersionInTitle).toBool());
+  loadStartAtLogin();
 
   const auto processMode = Settings::value(Settings::Core::ProcessMode).value<Settings::ProcessMode>();
   ui->groupService->setChecked(processMode == Settings::ProcessMode::Service);
@@ -233,6 +240,70 @@ void SettingsDialog::loadFromConfig()
 
   qDebug() << "load from config done";
   updateControls();
+}
+
+void SettingsDialog::loadStartAtLogin()
+{
+#if defined(Q_OS_WIN)
+  auto registry = deskflow::relaydesk::makeNativeWindowsRunRegistry();
+  deskflow::relaydesk::WindowsStartAtLogin startAtLogin(
+      *registry, QString::fromLatin1(kWindowsRunValueName), QCoreApplication::applicationFilePath()
+  );
+  const auto snapshot = startAtLogin.query();
+  if (!snapshot.succeeded()) {
+    ui->cbStartAtLogin->setChecked(false);
+    ui->cbStartAtLogin->setEnabled(false);
+    ui->cbStartAtLogin->setToolTip(
+        tr("Start-at-login status could not be read (code %1, native %2). %3")
+            .arg(static_cast<int>(snapshot.errorCode))
+            .arg(snapshot.nativeError)
+            .arg(snapshot.diagnostic)
+    );
+    return;
+  }
+
+  ui->cbStartAtLogin->setChecked(snapshot.state != deskflow::relaydesk::StartAtLoginState::Disabled);
+  if (snapshot.state == deskflow::relaydesk::StartAtLoginState::Stale) {
+    ui->cbStartAtLogin->setToolTip(tr("The application path will be updated when preferences are saved."));
+  }
+#else
+  ui->cbStartAtLogin->setVisible(false);
+#endif
+}
+
+bool SettingsDialog::saveStartAtLogin()
+{
+#if defined(Q_OS_WIN)
+  if (!ui->cbStartAtLogin->isEnabled()) {
+    return true;
+  }
+
+  auto registry = deskflow::relaydesk::makeNativeWindowsRunRegistry();
+  deskflow::relaydesk::WindowsStartAtLogin startAtLogin(
+      *registry, QString::fromLatin1(kWindowsRunValueName), QCoreApplication::applicationFilePath()
+  );
+  const auto current = startAtLogin.query();
+  const bool enable = ui->cbStartAtLogin->isChecked();
+  const bool alreadyApplied =
+      current.succeeded() && ((enable && current.state == deskflow::relaydesk::StartAtLoginState::Enabled) ||
+                              (!enable && current.state == deskflow::relaydesk::StartAtLoginState::Disabled));
+  if (alreadyApplied) {
+    return true;
+  }
+
+  const auto result = startAtLogin.setEnabled(enable);
+  if (!result.succeeded()) {
+    QMessageBox::warning(
+        this, tr("Start at login"),
+        tr("The start-at-login setting could not be updated (code %1, native %2).\n%3")
+            .arg(static_cast<int>(result.errorCode))
+            .arg(result.nativeError)
+            .arg(result.diagnostic)
+    );
+    return false;
+  }
+#endif
+  return true;
 }
 
 void SettingsDialog::updateTlsControls()
@@ -307,6 +378,9 @@ void SettingsDialog::updateControls()
   ui->lineTlsCertPath->setEnabled(writable);
   ui->comboTlsKeyLength->setEnabled(writable);
   ui->cbCloseToTray->setEnabled(writable);
+  if (ui->cbStartAtLogin->isVisible()) {
+    ui->cbStartAtLogin->setEnabled(ui->cbStartAtLogin->isEnabled() && writable);
+  }
 
   // Portable mode only ever applies to Windows.
   // Daemon options should only be available on Windows when *not* in portable mode.

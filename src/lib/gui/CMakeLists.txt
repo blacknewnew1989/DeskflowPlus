@@ -129,6 +129,7 @@ target_link_libraries(
   platform
   relaydesk_macos_permissions
   relaydesk_trust
+  relaydesk_windows_start_at_login
   relaydesk_widgets
   Qt6::Core
   Qt6::Widgets

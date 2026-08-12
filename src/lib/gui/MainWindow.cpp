@@ -723,9 +723,13 @@ void MainWindow::serverConnectionConfigureClient(const QString &clientName)
 // End slots
 //////////////////////////////////////////////////////////////////////////////
 
-void MainWindow::open()
+void MainWindow::open(bool startInTray)
 {
-  Settings::value(Settings::Gui::Autohide).toBool() ? hide() : showAndActivate();
+  if (startInTray || Settings::value(Settings::Gui::Autohide).toBool()) {
+    hide();
+  } else {
+    showAndActivate();
+  }
 
   // if a critical error was shown just before the main window (i.e. on app
   // load), it will be hidden behind the main window. therefore we need to raise

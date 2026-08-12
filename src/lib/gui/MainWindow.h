@@ -98,7 +98,7 @@ public:
   {
     return m_coreProcess.mode();
   }
-  void open();
+  void open(bool startInTray = false);
   ServerConfig &serverConfig()
   {
     return m_serverConfig;
