@@ -58,6 +58,7 @@ class DaemonIpcClient;
 }
 
 namespace deskflow::relaydesk {
+class MacPermissionProbe;
 class PairingStateMachine;
 namespace model {
 class DeviceHomeModel;
@@ -219,6 +220,7 @@ private:
 
   LogDock *m_logDock;
   deskflow::relaydesk::PairingStateMachine *m_relayDeskPairingState = nullptr;
+  deskflow::relaydesk::MacPermissionProbe *m_macPermissionProbe = nullptr;
   deskflow::relaydesk::model::DeviceHomeModel *m_relayDeskDeviceModel = nullptr;
   deskflow::relaydesk::model::PairingWizardModel *m_relayDeskPairingModel = nullptr;
   deskflow::relaydesk::model::PermissionStatusModel *m_relayDeskPermissionModel = nullptr;

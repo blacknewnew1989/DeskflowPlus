@@ -7,3 +7,10 @@ create_test(
   SOURCE PermissionSnapshotTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/platform"
 )
+
+create_test(
+  NAME RelayDeskMacPermissionProbeTests
+  DEPENDS relaydesk_macos_permissions
+  SOURCE MacPermissionProbeTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/platform"
+)
