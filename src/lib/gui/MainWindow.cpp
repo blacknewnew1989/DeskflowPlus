@@ -30,6 +30,9 @@
 #include "gui/ipc/DaemonIpcClient.h"
 #include "gui/widgets/LogDock.h"
 #include "net/FingerprintDatabase.h"
+#include "relaydesk/app/DeviceDiscoveryRuntime.h"
+#include "relaydesk/device/DeviceIdentity.h"
+#include "relaydesk/discovery/DiscoverySettings.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
@@ -54,8 +57,10 @@
 #include <QRegularExpressionValidator>
 #include <QScreen>
 #include <QScrollBar>
+#include <QSysInfo>
 
 #include <memory>
+#include <utility>
 
 #if defined(Q_OS_MACOS)
 #include <ApplicationServices/ApplicationServices.h>
@@ -211,9 +216,15 @@ MainWindow::MainWindow()
       m_fingerprint = {QCryptographicHash::Sha256, TlsUtility::certFingerprint()};
     }
   }
+
+  setupRelayDeskDiscovery();
 }
 MainWindow::~MainWindow()
 {
+  if (m_relayDeskDiscovery) {
+    m_relayDeskDiscovery->stop();
+  }
+
   // Stop network monitoring
   if (m_networkMonitor) {
     m_networkMonitor->stopMonitoring();
@@ -221,6 +232,56 @@ MainWindow::~MainWindow()
 
   m_guiDupeChecker->close();
   m_coreProcess.cleanup();
+}
+
+void MainWindow::setupRelayDeskDiscovery()
+{
+  QSettings relayDeskSettings(Settings::settingsFile(), QSettings::IniFormat);
+  deskflow::relaydesk::DeviceIdentity identity(relayDeskSettings);
+  QString diagnostic;
+  const auto deviceId = identity.loadOrCreate(&diagnostic);
+  if (!deviceId.has_value()) {
+    qCritical().noquote() << "RelayDesk discovery disabled:" << diagnostic;
+    return;
+  }
+
+  deskflow::relaydesk::DiscoverySettingsStore settingsStore(relayDeskSettings);
+  const auto discoverySettings = settingsStore.load();
+  if (!discoverySettings.ok) {
+    qWarning().noquote() << "RelayDesk discovery settings ignored:" << discoverySettings.diagnostic;
+  }
+
+  const auto inputPortValue = Settings::value(Settings::Core::Port).toInt();
+  const auto inputPort = inputPortValue > 0 && inputPortValue <= 65535 ? static_cast<quint16>(inputPortValue) : 0;
+  deskflow::relaydesk::DeviceInfo localDevice{
+      .deviceId = *deviceId,
+      .displayName = Settings::value(Settings::Core::ComputerName).toString(),
+      .platform = QSysInfo::productType(),
+      .architecture = QSysInfo::currentCpuArchitecture(),
+      .appVersion = kVersion,
+      .inputPort = inputPort,
+      .capabilities = {
+          .input = true,
+          .clipboardText = true,
+          .clipboardImage = true,
+      },
+      .certificateFingerprintSha256 = m_fingerprint.data,
+  };
+
+  m_relayDeskDiscovery = new deskflow::relaydesk::DeviceDiscoveryRuntime(
+      std::move(localDevice), *m_relayDeskDeviceModel, {}, this
+  );
+  connect(
+      m_relayDeskDiscovery, &deskflow::relaydesk::DeviceDiscoveryRuntime::errorOccurred, this,
+      [](deskflow::relaydesk::DiscoveryServiceError error, const QString &message) {
+        qWarning().noquote() << "RelayDesk discovery error" << static_cast<int>(error) << ':' << message;
+      }
+  );
+
+  const auto enabled = discoverySettings.ok ? discoverySettings.settings.enabled : true;
+  if (enabled && !m_relayDeskDiscovery->start(&diagnostic)) {
+    qWarning().noquote() << "RelayDesk discovery could not start:" << diagnostic;
+  }
 }
 
 deskflow::relaydesk::model::DeviceHomeModel &MainWindow::relayDeskDeviceModel()
