@@ -126,3 +126,10 @@ create_test(
   SOURCE TransferProgressPublisherTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
 )
+
+create_test(
+  NAME RelayDeskLargeFileBoundedBenchmark
+  DEPENDS relaydesk_transfer
+  SOURCE LargeFileBoundedBenchmark.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
