@@ -47,3 +47,20 @@ target_link_libraries(
   relaydesk_macos_permissions
   PUBLIC relaydesk_platform_contract Qt6::Core
 )
+
+add_library(relaydesk_windows_permissions STATIC
+  WindowsFirewallProbe.cpp
+  WindowsFirewallProbe.h
+)
+find_package(Qt6 ${REQUIRED_QT_VERSION} REQUIRED COMPONENTS Concurrent)
+target_include_directories(
+  relaydesk_windows_permissions
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+)
+target_link_libraries(
+  relaydesk_windows_permissions
+  PUBLIC relaydesk_platform_contract Qt6::Core Qt6::Concurrent
+)
+if(WIN32)
+  target_link_libraries(relaydesk_windows_permissions PRIVATE iphlpapi ole32 oleaut32)
+endif()
