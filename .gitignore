@@ -10,6 +10,8 @@
 /tmp
 /vcpkg
 /vcpkg_installed
+/.tools
+/.relaydesk-toolchain-windows.ps1
 /.cache
 /.venv
 aqtinstall.log

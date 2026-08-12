@@ -22,11 +22,18 @@ if (Test-Path $EnvFile) { . $EnvFile }
 if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
     $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
     if (Test-Path $VsWhere) {
-        $VsPath = (& $VsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
-        $DevShell = Join-Path $VsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
-        if (Test-Path $DevShell) {
-            Import-Module $DevShell
-            Enter-VsDevShell -VsInstallPath $VsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64"
+        $VsPathResult = @(
+            & $VsWhere -latest -products * `
+                -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+                -property installationPath 2>$null
+        ) | Select-Object -First 1
+        if (-not [string]::IsNullOrWhiteSpace($VsPathResult)) {
+            $VsPath = $VsPathResult.Trim()
+            $DevShell = Join-Path $VsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+            if (Test-Path $DevShell) {
+                Import-Module $DevShell
+                Enter-VsDevShell -VsInstallPath $VsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64"
+            }
         }
     }
 }
@@ -36,7 +43,20 @@ foreach ($command in @("cmake", "ninja", "cl.exe")) {
         throw "$command is unavailable. A0 must use the GitHub Actions Windows runner."
     }
 }
-if (-not $env:RELAYDESK_QT_PREFIX -or -not (Test-Path (Join-Path $env:RELAYDESK_QT_PREFIX "lib\cmake\Qt6"))) {
+$QtRequired = @(
+    "lib\cmake\Qt6\Qt6Config.cmake",
+    "lib\cmake\Qt6Svg\Qt6SvgConfig.cmake",
+    "bin\lrelease.exe",
+    "plugins\platforms\qwindows.dll"
+)
+$QtReady = $env:RELAYDESK_QT_PREFIX
+foreach ($relative in $QtRequired) {
+    if (-not $env:RELAYDESK_QT_PREFIX -or -not (Test-Path (Join-Path $env:RELAYDESK_QT_PREFIX $relative))) {
+        $QtReady = $false
+        break
+    }
+}
+if (-not $QtReady) {
     throw "Qt is unavailable. A0 must use the GitHub Actions Windows runner."
 }
 

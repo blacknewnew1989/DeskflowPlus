@@ -20,7 +20,36 @@ function Has-Command([string]$Name) {
 function Refresh-ProcessPath {
     $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
     $user = [Environment]::GetEnvironmentVariable("Path", "User")
-    $env:Path = "$machine;$user;$env:Path"
+    $pythonUserScripts = $null
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        $pythonUserBase = (& python -c "import site; print(site.USER_BASE)" 2>$null).Trim()
+        if ($pythonUserBase) { $pythonUserScripts = Join-Path $pythonUserBase "Scripts" }
+    }
+    $env:Path = "$machine;$user;$pythonUserScripts;$env:USERPROFILE\.dotnet\tools;$env:Path"
+}
+
+function Get-VcToolsInstallPath([string]$VsWhere) {
+    if (-not (Test-Path $VsWhere)) { return $null }
+    $result = @(
+        & $VsWhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath 2>$null
+    ) | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($result)) { return $null }
+    return $result.Trim()
+}
+
+function Test-QtPrefix([string]$Prefix) {
+    $required = @(
+        "lib\cmake\Qt6\Qt6Config.cmake",
+        "lib\cmake\Qt6Svg\Qt6SvgConfig.cmake",
+        "bin\lrelease.exe",
+        "plugins\platforms\qwindows.dll"
+    )
+    foreach ($relative in $required) {
+        if (-not (Test-Path (Join-Path $Prefix $relative))) { return $false }
+    }
+    return $true
 }
 
 function Install-Winget([string]$Id, [string[]]$Extra = @()) {
@@ -49,15 +78,30 @@ foreach ($item in $Tools) {
     }
 }
 
+# Winget package paths are not always visible to the current process. Python's
+# self-contained CMake/Ninja wheels are a non-admin fallback before using CI.
+Refresh-ProcessPath
+if ((-not (Has-Command "cmake")) -or (-not (Has-Command "ninja"))) {
+    if (Has-Command "python") {
+        & python -m pip install --disable-pip-version-check --user cmake ninja
+        Refresh-ProcessPath
+    }
+}
+if ((-not (Has-Command "cmake")) -or (-not (Has-Command "ninja"))) {
+    $ActionsFallback = $true
+}
+
 $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-if (-not (Test-Path $VsWhere)) {
+$VsPath = Get-VcToolsInstallPath $VsWhere
+if (-not $VsPath) {
     $ok = Install-Winget "Microsoft.VisualStudio.2022.BuildTools" @(
         "--override",
         "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
     )
     if (-not $ok) { $ActionsFallback = $true }
+    $VsPath = Get-VcToolsInstallPath $VsWhere
 }
-if (-not (Test-Path $VsWhere)) { $ActionsFallback = $true }
+if (-not $VsPath) { $ActionsFallback = $true }
 
 $PythonExe = $null
 if (Has-Command "python") { $PythonExe = "python" }
@@ -65,41 +109,60 @@ elseif (Has-Command "py") { $PythonExe = "py" }
 
 $QtRoot = Join-Path $ToolsRoot "Qt"
 $QtPrefix = Join-Path $QtRoot "$QtVersion\msvc2022_64"
-if (-not (Test-Path (Join-Path $QtPrefix "lib\cmake\Qt6"))) {
-    if ($PythonExe -eq "py") {
+$QtStagingRoot = Join-Path $ToolsRoot "Qt-staging"
+$QtStagingPrefix = Join-Path $QtStagingRoot "$QtVersion\msvc2022_64"
+if (-not (Test-QtPrefix $QtPrefix)) {
+    if (Test-QtPrefix $QtStagingPrefix) {
+        $QtPrefix = $QtStagingPrefix
+    }
+    elseif ($PythonExe -eq "py") {
         & py -3 -m pip install --disable-pip-version-check --user aqtinstall
         if ($LASTEXITCODE -eq 0) {
-            & py -3 -m aqt install-qt windows desktop $QtVersion win64_msvc2022_64 -O $QtRoot
+            & py -3 -m aqt install-qt windows desktop $QtVersion win64_msvc2022_64 -O $QtStagingRoot
         }
     }
     elseif ($PythonExe -eq "python") {
         & python -m pip install --disable-pip-version-check --user aqtinstall
         if ($LASTEXITCODE -eq 0) {
-            & python -m aqt install-qt windows desktop $QtVersion win64_msvc2022_64 -O $QtRoot
+            & python -m aqt install-qt windows desktop $QtVersion win64_msvc2022_64 -O $QtStagingRoot
         }
     }
     else {
         $ActionsFallback = $true
     }
-    if (-not (Test-Path (Join-Path $QtPrefix "lib\cmake\Qt6"))) {
+    if (Test-QtPrefix $QtStagingPrefix) {
+        $QtPrefix = $QtStagingPrefix
+    }
+    else {
         $ActionsFallback = $true
     }
 }
 
 $VcpkgRoot = Join-Path $ToolsRoot "vcpkg"
-if (-not (Test-Path (Join-Path $VcpkgRoot ".git"))) {
-    if (Has-Command "git") {
-        & git clone --filter=blob:none https://github.com/microsoft/vcpkg.git $VcpkgRoot
-    }
-}
-if (Test-Path (Join-Path $VcpkgRoot ".git")) {
-    $IsShallow = (& git -C $VcpkgRoot rev-parse --is-shallow-repository 2>$null).Trim()
-    if ($IsShallow -eq "true") {
-        & git -C $VcpkgRoot fetch --unshallow --tags
-        if ($LASTEXITCODE -ne 0) { $ActionsFallback = $true }
-    }
-}
 $BootstrapVcpkg = Join-Path $VcpkgRoot "bootstrap-vcpkg.bat"
+if (-not (Test-Path $BootstrapVcpkg)) {
+    if ((Has-Command "git") -and (-not (Test-Path (Join-Path $VcpkgRoot ".git")))) {
+        for ($attempt = 1; $attempt -le 4; $attempt++) {
+            & git -c http.sslBackend=openssl -c http.version=HTTP/1.1 `
+                -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 `
+                clone --depth=1 --filter=blob:none https://github.com/microsoft/vcpkg.git $VcpkgRoot
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds (3 * $attempt)
+        }
+    }
+    elseif (Test-Path (Join-Path $VcpkgRoot ".git")) {
+        for ($attempt = 1; $attempt -le 4; $attempt++) {
+            & git -C $VcpkgRoot -c http.sslBackend=openssl -c http.version=HTTP/1.1 `
+                -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 `
+                fetch --depth=1 --filter=blob:none origin master
+            if ($LASTEXITCODE -eq 0) {
+                & git -C $VcpkgRoot checkout -B master FETCH_HEAD
+                break
+            }
+            Start-Sleep -Seconds (3 * $attempt)
+        }
+    }
+}
 if (Test-Path $BootstrapVcpkg) {
     & $BootstrapVcpkg -disableMetrics
     if ($LASTEXITCODE -ne 0) { $ActionsFallback = $true }
@@ -146,6 +209,7 @@ $Report = [ordered]@{
     cmake = if (Get-Command cmake -ErrorAction SilentlyContinue) { (Get-Command cmake).Source } else { $null }
     ninja = if (Get-Command ninja -ErrorAction SilentlyContinue) { (Get-Command ninja).Source } else { $null }
     vswhere = $VsWhere
+    vsInstallPath = $VsPath
     wixReady = $WixReady
     actionsFallback = $ActionsFallback
 }
