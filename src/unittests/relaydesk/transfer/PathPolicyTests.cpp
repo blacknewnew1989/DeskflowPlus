@@ -166,7 +166,8 @@ void PathPolicyTests::rejectsInvalidCharacters_data()
   QTest::addColumn<QString>("path");
   for (const QChar character : QStringLiteral("<>:\"|?*")) {
     const QString path = QStringLiteral("file%1name.txt").arg(character);
-    QTest::newRow(qPrintable(QStringLiteral("u+%1").arg(character.unicode(), 4, 16, QChar(u'0')))) << path;
+    QTest::newRow(qPrintable(QStringLiteral("u+%1").arg(static_cast<quint16>(character.unicode()), 4, 16, QChar(u'0'))))
+        << path;
   }
 }
 
