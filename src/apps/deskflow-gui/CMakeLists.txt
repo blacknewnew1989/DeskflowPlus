@@ -59,6 +59,7 @@ install(
 
 if(WIN32)
   set_target_properties(${target} PROPERTIES LINK_FLAGS "/NODEFAULTLIB:LIBCMT")
+  target_link_libraries(${target} Shell32)
 
   install(RUNTIME_DEPENDENCY_SET guiDeps
     PRE_EXCLUDE_REGEXES ${WIN32_PRE_EXCLUDE_REGEXES}
