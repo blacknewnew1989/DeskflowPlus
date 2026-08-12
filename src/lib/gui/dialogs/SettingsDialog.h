@@ -68,4 +68,5 @@ private:
   std::unique_ptr<Ui::SettingsDialog> ui;
   const IServerConfig &m_serverConfig;
   const CoreProcess &m_coreProcess;
+  bool m_startAtLoginAvailable = false;
 };

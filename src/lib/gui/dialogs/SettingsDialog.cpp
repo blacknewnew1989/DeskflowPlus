@@ -251,6 +251,7 @@ void SettingsDialog::loadStartAtLogin()
   );
   const auto snapshot = startAtLogin.query();
   if (!snapshot.succeeded()) {
+    m_startAtLoginAvailable = false;
     ui->cbStartAtLogin->setChecked(false);
     ui->cbStartAtLogin->setEnabled(false);
     ui->cbStartAtLogin->setToolTip(
@@ -262,6 +263,7 @@ void SettingsDialog::loadStartAtLogin()
     return;
   }
 
+  m_startAtLoginAvailable = true;
   ui->cbStartAtLogin->setChecked(snapshot.state != deskflow::relaydesk::StartAtLoginState::Disabled);
   if (snapshot.state == deskflow::relaydesk::StartAtLoginState::Stale) {
     ui->cbStartAtLogin->setToolTip(tr("The application path will be updated when preferences are saved."));
@@ -379,7 +381,7 @@ void SettingsDialog::updateControls()
   ui->comboTlsKeyLength->setEnabled(writable);
   ui->cbCloseToTray->setEnabled(writable);
   if (ui->cbStartAtLogin->isVisible()) {
-    ui->cbStartAtLogin->setEnabled(ui->cbStartAtLogin->isEnabled() && writable);
+    ui->cbStartAtLogin->setEnabled(m_startAtLoginAvailable && writable);
   }
 
   // Portable mode only ever applies to Windows.
