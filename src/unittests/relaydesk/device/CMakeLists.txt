@@ -7,3 +7,10 @@ create_test(
   SOURCE DeviceIdentityTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/device"
 )
+
+create_test(
+  NAME RelayDeskDeviceSnapshotTests
+  DEPENDS relaydesk_device
+  SOURCE DeviceSnapshotTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/device"
+)
