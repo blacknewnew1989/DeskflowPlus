@@ -10,6 +10,8 @@ add_library(relaydesk_device_model STATIC
   PairingWizardModel.h
   PermissionStatusModel.cpp
   PermissionStatusModel.h
+  TransferCenterModel.cpp
+  TransferCenterModel.h
 )
 
 target_include_directories(

@@ -80,16 +80,21 @@
     <message><source>permissions.message.macos_input_monitoring</source><translation>当 macOS 要求时，请允许输入监控以共享输入。</translation></message>
     <message><source>permissions.action.open_settings</source><translation>打开系统设置</translation></message>
     <message><source>transfer.title</source><translation>传输</translation></message>
+    <message><source>transfer.empty</source><translation>传输任务会显示在这里</translation></message>
+    <message><source>transfer.direction.sending</source><translation>正在发送</translation></message>
+    <message><source>transfer.direction.receiving</source><translation>正在接收</translation></message>
     <message><source>transfer.state.preparing</source><translation>正在准备</translation></message>
     <message><source>transfer.state.awaiting_confirmation</source><translation>等待对方确认</translation></message>
     <message><source>transfer.state.queued</source><translation>排队中</translation></message>
     <message><source>transfer.state.transferring</source><translation>正在传输</translation></message>
     <message><source>transfer.state.paused</source><translation>已暂停</translation></message>
     <message><source>transfer.state.interrupted</source><translation>连接中断，等待恢复</translation></message>
+    <message><source>transfer.state.resuming</source><translation>正在恢复</translation></message>
     <message><source>transfer.state.verifying</source><translation>正在校验</translation></message>
     <message><source>transfer.state.saving</source><translation>正在保存</translation></message>
     <message><source>transfer.state.completed</source><translation>已完成</translation></message>
     <message><source>transfer.state.rejected</source><translation>已拒绝</translation></message>
+    <message><source>transfer.state.canceling</source><translation>正在取消</translation></message>
     <message><source>transfer.state.canceled</source><translation>已取消</translation></message>
     <message><source>transfer.state.failed</source><translation>失败</translation></message>
     <message><source>transfer.action.pause</source><translation>暂停</translation></message>
@@ -106,6 +111,10 @@
     <message><source>transfer.error.unreadable</source><translation>一个或多个项目无法读取</translation></message>
     <message><source>transfer.error.connection_lost</source><translation>连接已中断</translation></message>
     <message><source>transfer.error.checksum_mismatch</source><translation>文件校验失败</translation></message>
+    <message><source>transfer.error.unknown</source><translation>传输失败，请重试。</translation></message>
+    <message><source>transfer.progress.bytes</source><translation>%1 / %2</translation></message>
+    <message numerus="yes"><source>transfer.progress.items</source><translation><numerusform>已完成 %1 / %n 个项目</numerusform></translation></message>
+    <message><source>transfer.accessible.summary</source><translation>%1，%2，%3，%4，%5</translation></message>
     <message><source>transfer.incoming.wants_to_send</source><translation>%1 想发送</translation></message>
     <message><source>transfer.incoming.save_to</source><translation>保存到：%1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>冲突：自动重命名</translation></message>

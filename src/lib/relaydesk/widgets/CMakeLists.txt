@@ -4,6 +4,8 @@
 add_library(relaydesk_widgets STATIC
   DevicesDock.cpp
   DevicesDock.h
+  TransferCenterDock.cpp
+  TransferCenterDock.h
 )
 
 target_include_directories(
