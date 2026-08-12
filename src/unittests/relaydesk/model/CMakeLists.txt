@@ -14,3 +14,10 @@ create_test(
   SOURCE PairingWizardModelTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/model"
 )
+
+create_test(
+  NAME RelayDeskPermissionStatusModelTests
+  DEPENDS relaydesk_device_model
+  SOURCE PermissionStatusModelTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/model"
+)

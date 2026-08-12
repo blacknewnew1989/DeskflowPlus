@@ -52,6 +52,27 @@
     <message><source>pairing.fingerprint.unavailable</source><translation>指纹不可用</translation></message>
     <message numerus="yes"><source>pairing.attempts_remaining</source><translation><numerusform>还可尝试 %n 次</numerusform></translation></message>
     <message><source>pairing.expires_at</source><translation>到期时间：%1</translation></message>
+    <message><source>permissions.banner.attention_title</source><translation>需要系统权限</translation></message>
+    <message><source>permissions.banner.unknown_title</source><translation>尚未检查系统权限</translation></message>
+    <message><source>permissions.kind.windows_firewall</source><translation>Windows 防火墙</translation></message>
+    <message><source>permissions.kind.windows_port</source><translation>本地网络端口</translation></message>
+    <message><source>permissions.kind.macos_local_network</source><translation>本地网络</translation></message>
+    <message><source>permissions.kind.macos_accessibility</source><translation>辅助功能</translation></message>
+    <message><source>permissions.kind.macos_input_monitoring</source><translation>输入监控</translation></message>
+    <message><source>permissions.status.unknown</source><translation>尚未检查</translation></message>
+    <message><source>permissions.status.not_required</source><translation>无需授权</translation></message>
+    <message><source>permissions.status.granted</source><translation>已允许</translation></message>
+    <message><source>permissions.status.denied</source><translation>已阻止</translation></message>
+    <message><source>permissions.status.needs_action</source><translation>需要操作</translation></message>
+    <message><source>permissions.message.unknown</source><translation>RelayDesk 尚未收到系统权限检测结果。</translation></message>
+    <message><source>permissions.message.probe_unavailable</source><translation>RelayDesk 无法检查此设置，请重试。</translation></message>
+    <message><source>permissions.message.review</source><translation>请检查此系统设置，以保持局域网设备连接正常。</translation></message>
+    <message><source>permissions.message.windows_firewall</source><translation>请允许 RelayDesk 通过专用网络上的 Windows 防火墙。</translation></message>
+    <message><source>permissions.message.windows_port</source><translation>RelayDesk 无法监听本地网络端口，请检查防火墙和端口设置。</translation></message>
+    <message><source>permissions.message.macos_local_network</source><translation>请允许本地网络访问，以便 RelayDesk 发现附近设备。</translation></message>
+    <message><source>permissions.message.macos_accessibility</source><translation>请允许辅助功能，以便 RelayDesk 控制键盘和指针输入。</translation></message>
+    <message><source>permissions.message.macos_input_monitoring</source><translation>当 macOS 要求时，请允许输入监控以共享输入。</translation></message>
+    <message><source>permissions.action.open_settings</source><translation>打开系统设置</translation></message>
     <message><source>transfer.title</source><translation>传输</translation></message>
     <message><source>transfer.state.preparing</source><translation>正在准备</translation></message>
     <message><source>transfer.state.awaiting_confirmation</source><translation>等待对方确认</translation></message>

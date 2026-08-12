@@ -32,6 +32,7 @@
 #include "net/FingerprintDatabase.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
+#include "relaydesk/model/PermissionStatusModel.h"
 #include "relaydesk/pairing/PairingStateMachine.h"
 #include "relaydesk/widgets/DevicesDock.h"
 
@@ -102,8 +103,11 @@ MainWindow::MainWindow()
   m_relayDeskDeviceModel = new deskflow::relaydesk::model::DeviceHomeModel(this);
   m_relayDeskPairingModel =
       new deskflow::relaydesk::model::PairingWizardModel(*m_relayDeskPairingState, this);
+  m_relayDeskPermissionModel = new deskflow::relaydesk::model::PermissionStatusModel(
+      deskflow::relaydesk::buildPermissionPlatform(), this
+  );
   m_devicesDock = new deskflow::relaydesk::widgets::DevicesDock(
-      *m_relayDeskDeviceModel, *m_relayDeskPairingModel, this
+      *m_relayDeskDeviceModel, *m_relayDeskPairingModel, *m_relayDeskPermissionModel, this
   );
   addDockWidget(Qt::RightDockWidgetArea, m_devicesDock);
 
@@ -195,6 +199,11 @@ deskflow::relaydesk::model::DeviceHomeModel &MainWindow::relayDeskDeviceModel()
 deskflow::relaydesk::model::PairingWizardModel &MainWindow::relayDeskPairingModel()
 {
   return *m_relayDeskPairingModel;
+}
+
+deskflow::relaydesk::model::PermissionStatusModel &MainWindow::relayDeskPermissionModel()
+{
+  return *m_relayDeskPermissionModel;
 }
 
 deskflow::relaydesk::widgets::DevicesDock &MainWindow::relayDeskDevicesDock()
