@@ -4,6 +4,8 @@
 add_library(relaydesk_device_model STATIC
   DeviceHomeModel.cpp
   DeviceHomeModel.h
+  IncomingOfferModel.cpp
+  IncomingOfferModel.h
   PairingWizardModel.cpp
   PairingWizardModel.h
   PermissionStatusModel.cpp
@@ -21,5 +23,6 @@ target_link_libraries(
     relaydesk_i18n
     relaydesk_pairing
     relaydesk_platform_contract
+    relaydesk_transfer
     Qt6::Core
 )

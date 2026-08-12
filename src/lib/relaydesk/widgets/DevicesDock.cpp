@@ -8,6 +8,7 @@
 
 #include "relaydesk/i18n/ProductStrings.h"
 #include "relaydesk/model/DeviceHomeModel.h"
+#include "relaydesk/model/IncomingOfferModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
 
@@ -244,6 +245,60 @@ DevicesDock::DevicesDock(
   m_sendFeedback->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
   layout->addWidget(m_sendFeedback);
 
+  m_incomingOfferPanel = new QFrame(body);
+  m_incomingOfferPanel->setObjectName(QStringLiteral("relaydeskIncomingOfferPanel"));
+  m_incomingOfferPanel->setFrameShape(QFrame::StyledPanel);
+  auto *incomingLayout = new QVBoxLayout(m_incomingOfferPanel);
+  incomingLayout->setContentsMargins(12, 12, 12, 12);
+  incomingLayout->setSpacing(6);
+  m_incomingOfferHeading = new QLabel(m_incomingOfferPanel);
+  m_incomingOfferHeading->setObjectName(QStringLiteral("relaydeskIncomingOfferHeading"));
+  m_incomingOfferHeading->setTextFormat(Qt::PlainText);
+  QFont incomingHeadingFont(m_incomingOfferHeading->font());
+  incomingHeadingFont.setWeight(QFont::DemiBold);
+  m_incomingOfferHeading->setFont(incomingHeadingFont);
+  incomingLayout->addWidget(m_incomingOfferHeading);
+  m_incomingOfferName = new QLabel(m_incomingOfferPanel);
+  m_incomingOfferName->setObjectName(QStringLiteral("relaydeskIncomingOfferName"));
+  m_incomingOfferName->setTextFormat(Qt::PlainText);
+  m_incomingOfferName->setWordWrap(true);
+  incomingLayout->addWidget(m_incomingOfferName);
+  m_incomingOfferSummary = new QLabel(m_incomingOfferPanel);
+  m_incomingOfferSummary->setObjectName(QStringLiteral("relaydeskIncomingOfferSummary"));
+  m_incomingOfferSummary->setTextFormat(Qt::PlainText);
+  incomingLayout->addWidget(m_incomingOfferSummary);
+  m_incomingOfferDestination = new QLabel(m_incomingOfferPanel);
+  m_incomingOfferDestination->setObjectName(QStringLiteral("relaydeskIncomingOfferDestination"));
+  m_incomingOfferDestination->setTextFormat(Qt::PlainText);
+  m_incomingOfferDestination->setWordWrap(true);
+  incomingLayout->addWidget(m_incomingOfferDestination);
+  m_incomingOfferConflict = new QLabel(m_incomingOfferPanel);
+  m_incomingOfferConflict->setObjectName(QStringLiteral("relaydeskIncomingOfferConflict"));
+  m_incomingOfferConflict->setTextFormat(Qt::PlainText);
+  incomingLayout->addWidget(m_incomingOfferConflict);
+  m_incomingOfferError = new QLabel(m_incomingOfferPanel);
+  m_incomingOfferError->setObjectName(QStringLiteral("relaydeskIncomingOfferError"));
+  m_incomingOfferError->setTextFormat(Qt::PlainText);
+  m_incomingOfferError->setWordWrap(true);
+  incomingLayout->addWidget(m_incomingOfferError);
+
+  auto *incomingActions = new QHBoxLayout();
+  m_rejectIncomingOfferButton = new QPushButton(m_incomingOfferPanel);
+  m_rejectIncomingOfferButton->setObjectName(QStringLiteral("relaydeskRejectIncomingOfferButton"));
+  m_changeIncomingOfferSettingsButton = new QPushButton(m_incomingOfferPanel);
+  m_changeIncomingOfferSettingsButton->setObjectName(QStringLiteral("relaydeskChangeIncomingOfferSettingsButton"));
+  m_acceptIncomingOfferButton = new QPushButton(m_incomingOfferPanel);
+  m_acceptIncomingOfferButton->setObjectName(QStringLiteral("relaydeskAcceptIncomingOfferButton"));
+  m_dismissIncomingOfferButton = new QPushButton(m_incomingOfferPanel);
+  m_dismissIncomingOfferButton->setObjectName(QStringLiteral("relaydeskDismissIncomingOfferButton"));
+  incomingActions->addWidget(m_rejectIncomingOfferButton);
+  incomingActions->addWidget(m_changeIncomingOfferSettingsButton);
+  incomingActions->addStretch();
+  incomingActions->addWidget(m_acceptIncomingOfferButton);
+  incomingActions->addWidget(m_dismissIncomingOfferButton);
+  incomingLayout->addLayout(incomingActions);
+  layout->addWidget(m_incomingOfferPanel);
+
   m_pairingPanel = new QFrame(body);
   m_pairingPanel->setObjectName(QStringLiteral("relaydeskPairingPanel"));
   m_pairingPanel->setFrameShape(QFrame::StyledPanel);
@@ -332,6 +387,21 @@ DevicesDock::DevicesDock(
   connect(m_pairButton, &QPushButton::clicked, this, [this]() { requestPairing(m_deviceList->currentIndex()); });
   connect(m_sendFilesButton, &QPushButton::clicked, this, [this]() { chooseAndSend(false); });
   connect(m_sendFolderButton, &QPushButton::clicked, this, [this]() { chooseAndSend(true); });
+  connect(m_acceptIncomingOfferButton, &QPushButton::clicked, this, [this]() {
+    if (m_incomingOffers != nullptr)
+      (void)m_incomingOffers->accept();
+  });
+  connect(m_rejectIncomingOfferButton, &QPushButton::clicked, this, [this]() {
+    if (m_incomingOffers != nullptr)
+      (void)m_incomingOffers->reject();
+  });
+  connect(m_changeIncomingOfferSettingsButton, &QPushButton::clicked, this, [this]() {
+    Q_EMIT incomingOfferSettingsRequested();
+  });
+  connect(m_dismissIncomingOfferButton, &QPushButton::clicked, this, [this]() {
+    if (m_incomingOffers != nullptr)
+      m_incomingOffers->dismiss();
+  });
 
   connect(&m_pairing, &model::PairingWizardModel::changed, this, &DevicesDock::updatePairingPanel);
   connect(&m_permissions, &model::PermissionStatusModel::snapshotChanged, this, &DevicesDock::updatePermissionBanner);
@@ -352,6 +422,7 @@ DevicesDock::DevicesDock(
   updateEmptyState();
   updateSelection();
   showSendFeedback({});
+  updateIncomingOfferPanel();
   updatePairingPanel();
   updatePermissionBanner();
 }
@@ -381,6 +452,23 @@ void DevicesDock::setFolderChooser(ItemChooser chooser)
   m_folderChooser = std::move(chooser);
 }
 
+void DevicesDock::setIncomingOfferModel(model::IncomingOfferModel *incomingOffers)
+{
+  if (m_incomingOffers == incomingOffers)
+    return;
+  if (m_incomingOffers != nullptr)
+    disconnect(m_incomingOffers, nullptr, this, nullptr);
+  m_incomingOffers = incomingOffers;
+  if (m_incomingOffers != nullptr) {
+    connect(m_incomingOffers, &model::IncomingOfferModel::changed, this, &DevicesDock::updateIncomingOfferPanel);
+    connect(m_incomingOffers, &QObject::destroyed, this, [this]() {
+      m_incomingOffers = nullptr;
+      updateIncomingOfferPanel();
+    });
+  }
+  updateIncomingOfferPanel();
+}
+
 void DevicesDock::changeEvent(QEvent *event)
 {
   QDockWidget::changeEvent(event);
@@ -389,6 +477,7 @@ void DevicesDock::changeEvent(QEvent *event)
     updateSelection();
     updatePairingPanel();
     updatePermissionBanner();
+    updateIncomingOfferPanel();
     m_deviceList->viewport()->update();
   }
 }
@@ -506,6 +595,14 @@ void DevicesDock::updateText()
   m_sendFolderButton->setText(i18n::translate(Text::DevicesActionSendFolder));
   m_sendFolderButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFolder));
   m_sendFeedback->setAccessibleName(i18n::translate(Text::DevicesActionSendFile));
+  m_acceptIncomingOfferButton->setText(i18n::translate(Text::TransferActionAccept));
+  m_acceptIncomingOfferButton->setAccessibleName(i18n::translate(Text::TransferActionAccept));
+  m_rejectIncomingOfferButton->setText(i18n::translate(Text::TransferActionReject));
+  m_rejectIncomingOfferButton->setAccessibleName(i18n::translate(Text::TransferActionReject));
+  m_changeIncomingOfferSettingsButton->setText(i18n::translate(Text::TransferActionChangeSettings));
+  m_changeIncomingOfferSettingsButton->setAccessibleName(i18n::translate(Text::TransferActionChangeSettings));
+  m_dismissIncomingOfferButton->setText(i18n::translate(Text::TransferActionDismiss));
+  m_dismissIncomingOfferButton->setAccessibleName(i18n::translate(Text::TransferActionDismiss));
 }
 
 void DevicesDock::updateEmptyState()
@@ -652,6 +749,34 @@ void DevicesDock::requestPairing(const QModelIndex &index)
   const auto peer = m_devices.snapshot(*id);
   if (peer.has_value())
     Q_EMIT pairingRequested(*peer);
+}
+
+void DevicesDock::updateIncomingOfferPanel()
+{
+  const auto visible = m_incomingOffers != nullptr && m_incomingOffers->visible();
+  m_incomingOfferPanel->setVisible(visible);
+  if (!visible)
+    return;
+
+  m_incomingOfferHeading->setText(m_incomingOffers->headingText());
+  m_incomingOfferName->setText(m_incomingOffers->offerName());
+  m_incomingOfferSummary->setText(m_incomingOffers->summaryText());
+  m_incomingOfferDestination->setText(m_incomingOffers->destinationText());
+  m_incomingOfferConflict->setText(m_incomingOffers->conflictText());
+  m_incomingOfferError->setText(m_incomingOffers->errorText());
+  m_incomingOfferError->setVisible(!m_incomingOffers->errorText().isEmpty());
+
+  const auto active = m_incomingOffers->active();
+  m_acceptIncomingOfferButton->setVisible(active && m_incomingOffers->peerTrusted());
+  m_acceptIncomingOfferButton->setEnabled(m_incomingOffers->canAccept());
+  m_rejectIncomingOfferButton->setVisible(active);
+  m_changeIncomingOfferSettingsButton->setVisible(active);
+  m_dismissIncomingOfferButton->setVisible(!active);
+
+  m_incomingOfferPanel->setAccessibleName(m_incomingOffers->headingText());
+  m_incomingOfferPanel->setAccessibleDescription(
+      m_incomingOffers->summaryText() + QStringLiteral(". ") + m_incomingOffers->destinationText()
+  );
 }
 
 void DevicesDock::updatePairingPanel()

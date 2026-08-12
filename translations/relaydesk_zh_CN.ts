@@ -99,6 +99,7 @@
     <message><source>transfer.action.open_folder</source><translation>打开目录</translation></message>
     <message><source>transfer.action.accept</source><translation>接收</translation></message>
     <message><source>transfer.action.reject</source><translation>拒绝</translation></message>
+    <message><source>transfer.action.dismiss</source><translation>关闭</translation></message>
     <message><source>transfer.action.change_settings</source><translation>更改设置</translation></message>
     <message><source>transfer.error.disk_full</source><translation>磁盘空间不足</translation></message>
     <message><source>transfer.error.unsafe_path</source><translation>接收路径不安全</translation></message>
@@ -109,6 +110,13 @@
     <message><source>transfer.incoming.save_to</source><translation>保存到：%1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>冲突：自动重命名</translation></message>
     <message><source>transfer.incoming.always_accept</source><translation>始终自动接收此设备的文件</translation></message>
+    <message><source>transfer.incoming.unknown_device</source><translation>未知设备</translation></message>
+    <message><source>transfer.incoming.pair_first</source><translation>请先配对此设备，再接收文件</translation></message>
+    <message><source>transfer.incoming.expired</source><translation>此传输请求已过期</translation></message>
+    <message><source>transfer.incoming.destination_unavailable</source><translation>请在设置中选择有效的接收文件夹</translation></message>
+    <message><source>transfer.incoming.invalid</source><translation>收到的传输请求无效</translation></message>
+    <message><source>transfer.incoming.busy</source><translation>另一个传输请求正在等待处理</translation></message>
+    <message><source>transfer.incoming.decision_unavailable</source><translation>目前无法接收此传输请求</translation></message>
     <message><source>settings.title</source><translation>设置</translation></message>
     <message><source>settings.general</source><translation>常规</translation></message>
     <message><source>settings.input</source><translation>键盘与鼠标</translation></message>

@@ -32,6 +32,7 @@ class QToolButton;
 
 namespace deskflow::relaydesk::model {
 class DeviceHomeModel;
+class IncomingOfferModel;
 class PairingWizardModel;
 class PermissionStatusModel;
 } // namespace deskflow::relaydesk::model
@@ -55,6 +56,7 @@ public:
   [[nodiscard]] model::PermissionStatusModel &permissionModel() const;
   void setFileChooser(ItemChooser chooser);
   void setFolderChooser(ItemChooser chooser);
+  void setIncomingOfferModel(model::IncomingOfferModel *incomingOffers);
 
 Q_SIGNALS:
   void pairingRequested(DeviceSnapshot peer);
@@ -62,6 +64,7 @@ Q_SIGNALS:
       DeviceSnapshot peer, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options
   );
   void sendItemsRejected(QString message);
+  void incomingOfferSettingsRequested();
 
 protected:
   void changeEvent(QEvent *event) override;
@@ -78,6 +81,7 @@ private:
   void requestPairing(const QModelIndex &index);
   void updatePairingPanel();
   void updatePermissionBanner();
+  void updateIncomingOfferPanel();
   void submitPairingCode();
   void chooseAndSend(bool folder);
   [[nodiscard]] QModelIndex targetIndexAt(const QPoint &position) const;
@@ -101,6 +105,17 @@ private:
   QPushButton *m_sendFilesButton = nullptr;
   QPushButton *m_sendFolderButton = nullptr;
   QLabel *m_sendFeedback = nullptr;
+  QFrame *m_incomingOfferPanel = nullptr;
+  QLabel *m_incomingOfferHeading = nullptr;
+  QLabel *m_incomingOfferName = nullptr;
+  QLabel *m_incomingOfferSummary = nullptr;
+  QLabel *m_incomingOfferDestination = nullptr;
+  QLabel *m_incomingOfferConflict = nullptr;
+  QLabel *m_incomingOfferError = nullptr;
+  QPushButton *m_acceptIncomingOfferButton = nullptr;
+  QPushButton *m_rejectIncomingOfferButton = nullptr;
+  QPushButton *m_changeIncomingOfferSettingsButton = nullptr;
+  QPushButton *m_dismissIncomingOfferButton = nullptr;
   QFrame *m_pairingPanel = nullptr;
   QLabel *m_pairingPeer = nullptr;
   QLabel *m_pairingState = nullptr;
@@ -118,6 +133,7 @@ private:
   ItemChooser m_fileChooser;
   ItemChooser m_folderChooser;
   QPersistentModelIndex m_dropTargetIndex;
+  model::IncomingOfferModel *m_incomingOffers = nullptr;
 };
 
 } // namespace deskflow::relaydesk::widgets
