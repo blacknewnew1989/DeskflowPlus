@@ -6,9 +6,12 @@ add_library(relaydesk_transfer STATIC
   ControlMessageCodec.h
   FrameCodec.cpp
   FrameCodec.h
+  ManifestBuilder.cpp
+  ManifestBuilder.h
   PathPolicy.cpp
   PathPolicy.h
   Protocol.h
+  TransferTypes.h
 )
 
 target_include_directories(relaydesk_transfer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
