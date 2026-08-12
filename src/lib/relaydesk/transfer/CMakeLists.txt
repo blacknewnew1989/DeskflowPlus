@@ -19,6 +19,8 @@ add_library(relaydesk_transfer STATIC
   PathPolicy.cpp
   PathPolicy.h
   Protocol.h
+  ResumeStore.cpp
+  ResumeStore.h
   SessionMessageCodec.cpp
   SessionMessageCodec.h
   TransferOfferStateMachine.cpp
