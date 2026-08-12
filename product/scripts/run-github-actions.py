@@ -19,6 +19,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 
 class CommandError(RuntimeError):
@@ -62,10 +63,31 @@ def git(repo: Path, *args: str, capture: bool = False, check: bool = True) -> st
     return run(["git", *args], repo, capture=capture, check=check)
 
 
-def list_runs(repo: Path, workflow: str) -> list[dict[str, Any]]:
+def origin_repository(repo: Path) -> str:
+    origin_url = git(repo, "remote", "get-url", "origin", capture=True)
+    parsed = urlparse(origin_url)
+    if parsed.scheme in {"http", "https"} and parsed.hostname == "github.com":
+        repository = parsed.path.strip("/")
+    elif origin_url.startswith("git@github.com:"):
+        repository = origin_url.removeprefix("git@github.com:")
+    else:
+        raise CommandError(f"unsupported GitHub origin URL: {origin_url}")
+    repository = repository.removesuffix(".git")
+    if repository.count("/") != 1 or not all(repository.split("/")):
+        raise CommandError(f"invalid GitHub origin repository: {origin_url}")
+    return repository
+
+
+def gh_repository_command(repository: str, *args: str) -> list[str]:
+    return ["gh", *args, "-R", repository]
+
+
+def list_runs(
+    repo: Path, workflow: str, repository: str
+) -> list[dict[str, Any]]:
     output = run(
-        [
-            "gh",
+        gh_repository_command(
+            repository,
             "run",
             "list",
             "--workflow",
@@ -77,7 +99,7 @@ def list_runs(repo: Path, workflow: str) -> list[dict[str, Any]]:
                 "databaseId,headSha,headBranch,displayTitle,status,conclusion,"
                 "createdAt,event,url"
             ),
-        ],
+        ),
         repo,
         capture=True,
     )
@@ -127,6 +149,7 @@ def latest_matching_run(
 def wait_for_run(
     repo: Path,
     workflow: str,
+    repository: str,
     ref: str,
     head_sha: str,
     timeout: int,
@@ -136,7 +159,7 @@ def wait_for_run(
     deadline = time.time() + timeout
     while time.time() < deadline:
         match = latest_matching_run(
-            list_runs(repo, workflow),
+            list_runs(repo, workflow, repository),
             ref=ref,
             head_sha=head_sha,
             excluded_ids=excluded_ids,
@@ -228,13 +251,14 @@ def main() -> int:
     repo = Path(
         git(args.repo.resolve(), "rev-parse", "--show-toplevel", capture=True)
     ).resolve()
+    repository = origin_repository(repo)
     run(["gh", "auth", "status"], repo)
     git(repo, "fetch", "origin", "--prune", "--tags")
     # ``^{commit}`` is required for annotated stage tags; GitHub headSha is the
     # commit SHA, not the annotated tag-object SHA.
     head_sha = git(repo, "rev-parse", f"{args.ref}^{{commit}}", capture=True)
 
-    before = list_runs(repo, args.workflow)
+    before = list_runs(repo, args.workflow, repository)
     before_ids = {int(item.get("databaseId") or 0) for item in before}
     if args.no_trigger:
         run_info = latest_matching_run(
@@ -242,6 +266,7 @@ def main() -> int:
         ) or wait_for_run(
             repo,
             args.workflow,
+            repository,
             args.ref,
             head_sha,
             args.timeout,
@@ -249,10 +274,16 @@ def main() -> int:
     else:
         # Always create a new workflow-dispatch run. Reusing an earlier run for
         # the same SHA can hide a newly changed workflow or transient failure.
-        run(["gh", "workflow", "run", args.workflow, "--ref", args.ref], repo)
+        run(
+            gh_repository_command(
+                repository, "workflow", "run", args.workflow, "--ref", args.ref
+            ),
+            repo,
+        )
         run_info = wait_for_run(
             repo,
             args.workflow,
+            repository,
             args.ref,
             head_sha,
             args.timeout,
@@ -261,7 +292,10 @@ def main() -> int:
 
     run_id = str(run_info["databaseId"])
     started_monitoring = dt.datetime.now(dt.timezone.utc)
-    watch = run_result(["gh", "run", "watch", run_id, "--exit-status"], repo)
+    watch = run_result(
+        gh_repository_command(repository, "run", "watch", run_id, "--exit-status"),
+        repo,
+    )
     if watch.stdout:
         print(watch.stdout, end="" if watch.stdout.endswith("\n") else "\n")
     if watch.stderr:
@@ -274,7 +308,10 @@ def main() -> int:
     )
     download_dir.mkdir(parents=True, exist_ok=True)
     download = run_result(
-        ["gh", "run", "download", run_id, "--dir", str(download_dir)], repo
+        gh_repository_command(
+            repository, "run", "download", run_id, "--dir", str(download_dir)
+        ),
+        repo,
     )
     artifact_files = checksum_downloads(download_dir)
 
@@ -283,7 +320,9 @@ def main() -> int:
     failed_log = report_dir / f"{run_id}-failed.log"
     if watch.returncode != 0:
         output = run(
-            ["gh", "run", "view", run_id, "--log-failed"],
+            gh_repository_command(
+                repository, "run", "view", run_id, "--log-failed"
+            ),
             repo,
             capture=True,
             check=False,
