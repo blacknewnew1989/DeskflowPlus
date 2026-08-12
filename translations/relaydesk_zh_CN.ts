@@ -102,6 +102,24 @@
     <message><source>transfer.action.cancel</source><translation>取消</translation></message>
     <message><source>transfer.action.retry</source><translation>重试</translation></message>
     <message><source>transfer.action.open_folder</source><translation>打开目录</translation></message>
+    <message><source>transfer.action.open_file</source><translation>打开文件</translation></message>
+    <message><source>transfer.action.details</source><translation>详情</translation></message>
+    <message><source>transfer.action.close</source><translation>关闭</translation></message>
+    <message><source>transfer.history.details_title</source><translation>传输详情</translation></message>
+    <message><source>transfer.history.name_label</source><translation>传输</translation></message>
+    <message><source>transfer.history.peer_label</source><translation>设备</translation></message>
+    <message><source>transfer.history.direction_label</source><translation>方向</translation></message>
+    <message><source>transfer.history.status_label</source><translation>状态</translation></message>
+    <message><source>transfer.history.items_label</source><translation>项目</translation></message>
+    <message><source>transfer.history.size_label</source><translation>大小</translation></message>
+    <message><source>transfer.history.started_label</source><translation>开始时间</translation></message>
+    <message><source>transfer.history.finished_label</source><translation>完成时间</translation></message>
+    <message><source>transfer.history.duration_label</source><translation>用时</translation></message>
+    <message><source>transfer.history.error_label</source><translation>错误</translation></message>
+    <message numerus="yes"><source>transfer.history.items</source><translation><numerusform>%1 个项目</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.history.duration_seconds</source><translation><numerusform>%1 秒</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.history.duration_minutes</source><translation><numerusform>%1 分钟</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.history.duration_hours</source><translation><numerusform>%1 小时</numerusform></translation></message>
     <message><source>transfer.action.accept</source><translation>接收</translation></message>
     <message><source>transfer.action.reject</source><translation>拒绝</translation></message>
     <message><source>transfer.action.dismiss</source><translation>关闭</translation></message>

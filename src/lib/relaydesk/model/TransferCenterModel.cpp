@@ -309,7 +309,7 @@ QVariant TransferCenterModel::data(const QModelIndex &index, int role) const
   case CanCancelRole:
     return !entry.history.has_value() && snapshot.canCancel;
   case CanRetryRole:
-    return !entry.history.has_value() && snapshot.canRetry;
+    return entry.history.has_value() ? entry.history->status == HistoryStatus::Failed : snapshot.canRetry;
   case IsTerminalRole:
     return TransferControlStateMachine::isTerminal(snapshot.state);
   case IsHistoricalRole:
@@ -322,6 +322,13 @@ QVariant TransferCenterModel::data(const QModelIndex &index, int role) const
     return speedText(snapshot);
   case EtaTextRole:
     return etaText(snapshot);
+  case HasHistoryDetailsRole:
+    return entry.history.has_value();
+  case CanOpenFolderRole:
+    return entry.history.has_value() && entry.history->status == HistoryStatus::Completed;
+  case CanOpenFileRole:
+    return entry.history.has_value() && entry.history->status == HistoryStatus::Completed &&
+           entry.history->fileCount == 1;
   default:
     return {};
   }
@@ -357,6 +364,9 @@ QHash<int, QByteArray> TransferCenterModel::roleNames() const
       {FinishedUtcRole, "finishedUtc"},
       {SpeedTextRole, "speedText"},
       {EtaTextRole, "etaText"},
+      {HasHistoryDetailsRole, "hasHistoryDetails"},
+      {CanOpenFolderRole, "canOpenFolder"},
+      {CanOpenFileRole, "canOpenFile"},
       {AccessibleSummaryRole, "accessibleSummary"},
   };
 }
@@ -508,6 +518,30 @@ bool TransferCenterModel::requestResume(const TransferId &transferId)
 bool TransferCenterModel::requestCancel(const TransferId &transferId)
 {
   return requestControl(transferId, CanCancelRole, &TransferCenterModel::cancelRequested);
+}
+
+bool TransferCenterModel::requestRetry(const TransferId &transferId)
+{
+  const auto row = indexOf(transferId);
+  if (row < 0 || !data(index(row, 0), CanRetryRole).toBool())
+    return false;
+
+  const auto &entry = m_entries.at(row);
+  if (entry.history.has_value())
+    Q_EMIT historyRetryRequested(*entry.history);
+  else
+    Q_EMIT retryRequested(entry.snapshot);
+  return true;
+}
+
+bool TransferCenterModel::requestOpenFolder(const TransferId &transferId)
+{
+  return requestHistoryAction(transferId, CanOpenFolderRole, &TransferCenterModel::openFolderRequested);
+}
+
+bool TransferCenterModel::requestOpenFile(const TransferId &transferId)
+{
+  return requestHistoryAction(transferId, CanOpenFileRole, &TransferCenterModel::openFileRequested);
 }
 
 void TransferCenterModel::flushDueUpdates()
@@ -708,6 +742,21 @@ bool TransferCenterModel::requestControl(
   if (row < 0 || !data(index(row, 0), allowedRole).toBool())
     return false;
   Q_EMIT(this->*signal)(m_entries.at(row).snapshot);
+  return true;
+}
+
+bool TransferCenterModel::requestHistoryAction(
+    const TransferId &transferId, Role allowedRole,
+    void (TransferCenterModel::*signal)(TransferHistoryRecord)
+)
+{
+  const auto row = indexOf(transferId);
+  if (row < 0 || !data(index(row, 0), allowedRole).toBool())
+    return false;
+  const auto &history = m_entries.at(row).history;
+  if (!history.has_value())
+    return false;
+  Q_EMIT(this->*signal)(*history);
   return true;
 }
 

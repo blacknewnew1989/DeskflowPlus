@@ -45,6 +45,7 @@ void ProductStringsTests::pluralFallbackUsesCount()
   QVERIFY(isPlural(Text::DevicesDropItems));
   QVERIFY(isPlural(Text::PairingAttemptsRemaining));
   QVERIFY(isPlural(Text::TransferEtaSeconds));
+  QVERIFY(isPlural(Text::TransferHistoryItems));
   QVERIFY(!isPlural(Text::DevicesTitle));
   QCOMPARE(translatePlural(Text::DevicesDropItems, 1), QStringLiteral("1 item"));
   QCOMPARE(translatePlural(Text::DevicesDropItems, 3), QStringLiteral("3 items"));
@@ -52,6 +53,8 @@ void ProductStringsTests::pluralFallbackUsesCount()
   QCOMPARE(translatePlural(Text::PairingAttemptsRemaining, 2), QStringLiteral("2 attempts remaining"));
   QCOMPARE(translatePlural(Text::TransferEtaSeconds, 1), QStringLiteral("1 second remaining"));
   QCOMPARE(translatePlural(Text::TransferEtaSeconds, 30), QStringLiteral("30 seconds remaining"));
+  QCOMPARE(translatePlural(Text::TransferHistoryItems, 1).arg(1), QStringLiteral("1 item"));
+  QCOMPARE(translatePlural(Text::TransferHistoryItems, 3).arg(3), QStringLiteral("3 items"));
 }
 
 QTEST_MAIN(ProductStringsTests)

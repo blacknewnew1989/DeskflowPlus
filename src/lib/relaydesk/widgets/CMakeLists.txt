@@ -6,6 +6,8 @@ add_library(relaydesk_widgets STATIC
   DevicesDock.h
   TransferCenterDock.cpp
   TransferCenterDock.h
+  TransferHistoryDetailsDialog.cpp
+  TransferHistoryDetailsDialog.h
 )
 
 target_include_directories(
