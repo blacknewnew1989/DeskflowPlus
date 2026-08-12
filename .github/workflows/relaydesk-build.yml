@@ -1,0 +1,137 @@
+name: RelayDesk Build and Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - product/relaydesk-v1
+      - "release/**"
+    tags:
+      - "relaydesk-phase*"
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relaydesk-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  materials-diagnostic:
+    name: Development materials diagnostic
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Validate development package
+        if: ${{ hashFiles('product/scripts/validate-package.py') != '' }}
+        run: python3 product/scripts/validate-package.py
+
+  package:
+    name: ${{ matrix.target.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: windows-x64
+            runs-on: windows-2022
+            arch: amd64
+            qt-version: 6.10.1
+            vcpkg-triplet: x64-windows-release
+            config-args: -G Ninja
+          - name: macos-arm64
+            runs-on: macos-15
+            arch: arm64
+            qt-version: 6.10.1
+            vcpkg-triplet: ""
+            config-args: >-
+              -G Ninja
+              -DCMAKE_OSX_ARCHITECTURES=arm64
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=14
+
+    runs-on: ${{ matrix.target.runs-on }}
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.target.arch }}
+
+      - name: Install upstream dependencies
+        id: deps
+        uses: ./.github/actions/install-dependencies
+        with:
+          qt-version: ${{ matrix.target.qt-version }}
+          vcpkg-triplet: ${{ matrix.target.vcpkg-triplet }}
+
+      - name: Configure
+        shell: bash
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DSKIP_BUILD_TESTS=ON
+          -DBUILD_TESTS=ON
+          -DBUILD_INSTALLER=ON
+          ${{ matrix.target.config-args }}
+          ${{ steps.deps.outputs.vcpkg-cmake-config }}
+          -DPACKAGE_VERSION_LABEL="relaydesk-${GITHUB_SHA::8}"
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release --parallel 8
+
+      - name: Package binary and source
+        id: package
+        shell: bash
+        run: cmake --build build --config Release --target package package_source --parallel 8
+
+      - name: Run tests and keep diagnostics
+        id: tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p dist/${{ matrix.target.name }}
+          set -o pipefail
+          ctest --test-dir build -C Release --output-on-failure 2>&1 | tee dist/${{ matrix.target.name }}/ctest.log
+
+      - name: Collect packages and SHA-256
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: >-
+          python product/scripts/collect-ci-artifacts.py
+          --build-dir build
+          --out-dir dist/${{ matrix.target.name }}
+          --platform ${{ matrix.target.name }}
+          --commit ${{ github.sha }}
+
+      - name: Write job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## ${{ matrix.target.name }}"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Package step: \`${{ steps.package.outcome }}\`"
+            echo "- Test step: \`${{ steps.tests.outcome }}\`"
+            echo "- Tests are diagnostic during development; this workflow is not a required check."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload platform artifact and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relaydesk-${{ matrix.target.name }}-${{ github.sha }}
+          path: dist/${{ matrix.target.name }}
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "discovery": {
+    "enabled": true,
+    "heartbeatSeconds": 5,
+    "offlineAfterSeconds": 15,
+    "maxDatagramBytes": 4096
+  },
+  "pairing": {
+    "codeLifetimeSeconds": 120,
+    "maxFailedAttempts": 5,
+    "initialBackoffSeconds": 2
+  },
+  "fileTransfer": {
+    "fallbackPort": 24801,
+    "chunkBytes": 1048576,
+    "minChunkBytes": 262144,
+    "maxChunkBytes": 4194304,
+    "maxMetadataBytes": 1048576,
+    "maxPayloadBytes": 4194304,
+    "maxConcurrentTransfers": 2,
+    "maxConcurrentFilesPerTransfer": 2,
+    "perPeerWriteQueueBytes": 16777216,
+    "globalQueuedPayloadBytes": 67108864,
+    "checkpointBytes": 8388608,
+    "checkpointSeconds": 1,
+    "maxManifestEntries": 100000,
+    "maxPathUtf8Bytes": 4096,
+    "maxPathDepth": 128,
+    "conflictPolicy": "auto-rename",
+    "incomingPolicy": "ask",
+    "partialRetentionDays": 7,
+    "historyRetentionDays": 90,
+    "historyMaxEntries": 1000,
+    "uiProgressHz": 5
+  }
+}

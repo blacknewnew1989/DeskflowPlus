@@ -1,0 +1,52 @@
+{
+  "packageName": "RelayDesk Codex Multi-Agent Development Package",
+  "packageVersion": "1.2.0",
+  "generatedAt": "2026-08-12T18:18:00+08:00",
+  "language": "zh-CN",
+  "temporaryProductCodename": "RelayDesk",
+  "upstream": {
+    "repository": "deskflow/deskflow",
+    "tag": "v1.26.0",
+    "commit": "760e3b9",
+    "sourceBundled": false
+  },
+  "targetPlatforms": [
+    "windows-x64",
+    "macos-arm64"
+  ],
+  "primaryStack": [
+    "C++20",
+    "Qt 6.7+",
+    "CMake 3.24+",
+    "OpenSSL 3+"
+  ],
+  "coreDeliverables": [
+    "Codex root AGENTS.md",
+    "automatic package location/unpack by Codex",
+    "one-line autonomous start prompt",
+    "full PRD with autonomous source acquisition, Git workflow, Windows/macOS build and packaging",
+    "A0-A7 multi-agent prompts",
+    "file-transfer protocol, CDDL and test vectors",
+    "Qt/C++ starter module",
+    "single autonomous current-repository bootstrap entrypoint",
+    "small-feature commit and stage push helpers",
+    "Windows/macOS setup, build and packaging scripts",
+    "single non-gating Windows/macOS GitHub Actions workflow",
+    "automatic Actions monitoring and artifact download helper",
+    "test, licensing, upstream-sync and final acceptance documentation",
+    "final acceptance checklist template"
+  ],
+  "licenseBoundary": {
+    "starterSpdx": "GPL-2.0-only WITH LicenseRef-OpenSSL-Exception",
+    "planningDocs": "project delivery material; verify repository policy when integrating"
+  },
+  "executionMode": "autonomous-current-github-repository",
+  "userResponsibility": "install final Windows/macOS packages, grant OS-required permissions, and execute final acceptance only",
+  "codexResponsibility": [
+    "locate and unpack the development package",
+    "acquire and import Deskflow source",
+    "initialize and synchronize Git branches/worktrees/remotes",
+    "prepare dependencies or use GitHub Actions runners",
+    "develop, test, commit, merge, push, tag, package, monitor and download artifacts"
+  ]
+}

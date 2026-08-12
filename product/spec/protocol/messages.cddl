@@ -1,0 +1,172 @@
+; RDFT v1 CBOR control message schema.
+; Map keys are integers to keep wire size small.
+; This file describes metadata maps; the fixed 32-byte frame header is outside CBOR.
+
+uuid = bytes .size 16
+sha256 = bytes .size 32
+timestamp-ms = uint
+device-id = uuid
+transfer-id = uuid
+file-id = uuid
+
+hello = {
+  1: device-id,
+  2: uuid,                 ; sessionId
+  3: tstr,                 ; appVersion
+  4: [+ uint],             ; supported major versions
+  5: sha256,               ; certificate fingerprint
+  6: timestamp-ms
+}
+
+auth-result = {
+  1: bool,
+  ? 2: uint,               ; error code
+  ? 3: tstr
+}
+
+capabilities = {
+  1: [+ tstr],
+  2: uint,                 ; preferred chunk bytes
+  3: uint,                 ; max payload bytes
+  4: uint,                 ; max concurrent transfers
+  5: uint,                 ; max concurrent files
+  6: uint,                 ; max manifest entries
+  7: [+ tstr]              ; conflict policies
+}
+
+heartbeat = {
+  1: uint,                 ; monotonic sequence
+  2: timestamp-ms
+}
+
+transfer-offer = {
+  1: transfer-id,
+  2: tstr,                 ; displayName
+  3: uint,                 ; totalBytes
+  4: uint,                 ; fileCount
+  5: uint,                 ; directoryCount
+  6: sha256,               ; manifestSha256
+  7: uint,                 ; manifestPageCount
+  8: tstr,                 ; requestedConflictPolicy
+  9: timestamp-ms
+}
+
+transfer-accept = {
+  1: transfer-id,
+  2: tstr,                 ; effective conflict policy
+  3: tstr,                 ; logical destination label, not trusted path
+  4: uint,                 ; free bytes snapshot
+  5: bool                  ; auto accepted
+}
+
+transfer-reject = {
+  1: transfer-id,
+  2: uint,                 ; RejectReason
+  ? 3: tstr
+}
+
+manifest-entry = {
+  1: file-id,
+  2: tstr,                 ; normalized relative path
+  3: uint,                 ; 0 file, 1 directory
+  4: uint,                 ; size
+  5: timestamp-ms,
+  ? 6: sha256,
+  ? 7: uint                ; flags
+}
+
+manifest-page = {
+  1: transfer-id,
+  2: uint,                 ; page index, zero-based
+  3: uint,                 ; page count
+  4: [* manifest-entry]
+}
+
+manifest-complete = {
+  1: transfer-id,
+  2: sha256
+}
+
+file-begin = {
+  1: transfer-id,
+  2: file-id,
+  3: uint,                 ; size
+  4: uint,                 ; start offset
+  5: uint,                 ; chunk bytes
+  6: sha256
+}
+
+file-chunk = {
+  1: transfer-id,
+  2: file-id,
+  3: uint,                 ; offset
+  4: uint                  ; sequence
+}
+
+file-checkpoint = {
+  1: transfer-id,
+  2: file-id,
+  3: uint                  ; durable offset
+}
+
+file-end = {
+  1: transfer-id,
+  2: file-id,
+  3: uint,
+  4: sha256
+}
+
+file-result = {
+  1: transfer-id,
+  2: file-id,
+  3: uint,                 ; FileResultCode
+  ? 4: tstr
+}
+
+transfer-command = {
+  1: transfer-id,
+  ? 2: uint,               ; reason
+  ? 3: bool                ; keep partial
+}
+
+transfer-complete = {
+  1: transfer-id,
+  2: uint,                 ; completed files
+  3: uint,                 ; skipped files
+  4: uint                  ; total bytes
+}
+
+transfer-result = {
+  1: transfer-id,
+  2: uint,
+  ? 3: tstr
+}
+
+resume-query = {
+  1: transfer-id,
+  2: sha256
+}
+
+resume-entry = {
+  1: file-id,
+  2: uint                  ; durable offset
+}
+
+resume-response = {
+  1: transfer-id,
+  2: sha256,
+  3: [* resume-entry]
+}
+
+error = {
+  1: uint,
+  2: tstr,
+  3: bool,
+  ? 4: transfer-id,
+  ? 5: file-id
+}
+
+goodbye = {
+  1: uint,
+  ? 2: tstr
+}

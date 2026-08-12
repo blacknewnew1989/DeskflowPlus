@@ -1,0 +1,11 @@
+# Ignore transient logs/evidence by default, but keep cross-session coordination files.
+*
+!.gitignore
+!README.md
+!bootstrap-report.md
+!stages/
+!stages/*.md
+!actions/
+!actions/*.json
+!handoffs/
+!handoffs/*.md

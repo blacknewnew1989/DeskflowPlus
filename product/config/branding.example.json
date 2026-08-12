@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "productCodeName": "RelayDesk",
+  "displayName": "RelayDesk",
+  "organizationName": "REPLACE_ME",
+  "organizationDomain": "example.invalid",
+  "website": "https://example.invalid/relaydesk",
+  "supportUrl": "https://example.invalid/relaydesk/support",
+  "sourceUrl": "REPLACE_WITH_PUBLIC_SOURCE_URL_BEFORE_DISTRIBUTION",
+  "windows": {
+    "appUserModelId": "Invalid.Example.RelayDesk",
+    "packageIdentityName": "Invalid.Example.RelayDesk",
+    "publisher": "CN=REPLACE_ME",
+    "installerDisplayName": "RelayDesk"
+  },
+  "macos": {
+    "bundleIdentifier": "invalid.example.relaydesk",
+    "teamIdentifier": "REPLACE_AT_SIGNING_TIME",
+    "localNetworkUsageDescription": "RelayDesk uses the local network to discover trusted computers and transfer input and files."
+  },
+  "paths": {
+    "defaultReceiveFolderName": "RelayDesk"
+  },
+  "assets": {
+    "iconSource": "assets/branding/icon.svg",
+    "license": "REPLACE_WITH_ASSET_LICENSE"
+  }
+}

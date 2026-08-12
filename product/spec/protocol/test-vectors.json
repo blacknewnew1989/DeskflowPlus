@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "fixedHeaderBytes": 32,
+  "vectors": [
+    {
+      "name": "heartbeat-empty",
+      "headerHex": "5244465400010004000000000000000000000000000000000000000000000000",
+      "metadataHex": "",
+      "payloadHex": "",
+      "expected": {
+        "version": 1,
+        "messageType": 4,
+        "flags": 0,
+        "metadataLength": 0,
+        "payloadLength": 0,
+        "streamId": 0
+      }
+    },
+    {
+      "name": "file-chunk-three-bytes-no-metadata",
+      "headerHex": "524446540001020100000001000000000000000000000003000000000000002a",
+      "metadataHex": "",
+      "payloadHex": "414243",
+      "expected": {
+        "version": 1,
+        "messageType": 513,
+        "flags": 1,
+        "metadataLength": 0,
+        "payloadLength": 3,
+        "streamId": 42,
+        "payloadUtf8": "ABC"
+      }
+    },
+    {
+      "name": "invalid-magic",
+      "headerHex": "0000000000010004000000000000000000000000000000000000000000000000",
+      "expectedError": "InvalidMagic"
+    },
+    {
+      "name": "unsupported-version",
+      "headerHex": "5244465400020004000000000000000000000000000000000000000000000000",
+      "expectedError": "UnsupportedVersion"
+    },
+    {
+      "name": "metadata-too-large-default",
+      "headerHex": "5244465400010004000000000010000100000000000000000000000000000000",
+      "expectedError": "MetadataTooLarge"
+    },
+    {
+      "name": "payload-too-large-default",
+      "headerHex": "5244465400010201000000000000000000000000004000010000000000000001",
+      "expectedError": "PayloadTooLarge"
+    }
+  ]
+}

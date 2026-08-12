@@ -1,0 +1,16 @@
+# Merge/adapt this only after A1 checks the exact v1.26.0 REUSE policy.
+#
+# Product Markdown files may already be covered by the upstream "**/*.md" MIT
+# annotation. New compiled source should normally carry an explicit SPDX header
+# rather than relying on this fragment.
+#
+# Example only:
+#
+# [[annotations]]
+# path = [
+#   "product/spec/**",
+#   "product/config/**",
+#   "product/templates/**"
+# ]
+# SPDX-FileCopyrightText = "RelayDesk Contributors"
+# SPDX-License-Identifier = "MIT"
