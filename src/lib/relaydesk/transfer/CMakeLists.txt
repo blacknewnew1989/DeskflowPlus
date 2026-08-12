@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 add_library(relaydesk_transfer STATIC
+  CapabilityCodec.cpp
+  CapabilityCodec.h
   ControlMessageCodec.cpp
   ControlMessageCodec.h
   FrameCodec.cpp

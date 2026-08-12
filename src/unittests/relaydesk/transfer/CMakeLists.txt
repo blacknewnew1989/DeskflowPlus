@@ -42,3 +42,10 @@ create_test(
   SOURCE SessionMessageCodecTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
 )
+
+create_test(
+  NAME RelayDeskCapabilityCodecTests
+  DEPENDS relaydesk_transfer
+  SOURCE CapabilityCodecTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
