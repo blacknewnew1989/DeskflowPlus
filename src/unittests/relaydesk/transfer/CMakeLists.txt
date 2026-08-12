@@ -140,3 +140,10 @@ create_test(
   SOURCE InputPriorityUnderTransferBenchmark.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
 )
+
+create_test(
+  NAME RelayDeskTransferRecoveryMatrixTests
+  DEPENDS relaydesk_transfer
+  SOURCE TransferRecoveryMatrixTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
