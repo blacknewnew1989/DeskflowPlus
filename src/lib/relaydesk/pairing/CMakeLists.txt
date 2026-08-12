@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 add_library(relaydesk_pairing STATIC
+  PairingMessageCodec.cpp
+  PairingMessageCodec.h
   PairingStateMachine.cpp
   PairingStateMachine.h
 )
