@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 add_library(relaydesk_discovery STATIC
+  AddressCandidateProvider.cpp
+  AddressCandidateProvider.h
   DiscoveryCodec.cpp
   DiscoveryCodec.h
   DiscoveryRegistry.cpp
