@@ -63,6 +63,7 @@ add_subdirectory(gui)
 add_subdirectory(legacytests)
 add_subdirectory(net)
 add_subdirectory(platform)
+add_subdirectory(relaydesk)
 add_subdirectory(server)
 
 #make sure to use CI only plugin on Unix
