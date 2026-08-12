@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
+#include "relaydesk/filetransport/FileTlsFrameSink.h"
 #include "relaydesk/filetransport/FileTlsTransport.h"
 
 #include "relaydesk/trust/TlsIdentityAdapter.h"
@@ -147,14 +148,17 @@ void FileTlsTransportTests::pinnedLoopbackAuthenticatesAndTransfersFrame()
   QVERIFY(serverConnection != nullptr);
   QCOMPARE(serverConnection->peerDeviceId(), std::optional<DeviceId>(clientId));
   QCOMPARE(client.connection()->peerDeviceId(), std::optional<DeviceId>(serverId));
+  QCOMPARE(client.connection()->writeHighWaterBytes(), settings.maxQueuedWriteBytes);
 
   const Frame heartbeat{.type = MessageType::Heartbeat, .streamId = 17};
-  QCOMPARE(client.connection()->sendFrame(heartbeat, &diagnostic), FileTlsError::None);
+  FileTlsFrameSink sink(*client.connection());
+  QCOMPARE(sink.queuedBytes(), client.connection()->queuedWriteBytes());
+  QCOMPARE(sink.submit(heartbeat).status, SenderFrameSinkStatus::Accepted);
   QTRY_VERIFY_WITH_TIMEOUT(received.has_value(), 2'000);
   QCOMPARE(*received, heartbeat);
 
   const Frame oversized{.type = MessageType::Heartbeat, .metadata = QByteArray(600, '\x2a')};
-  QCOMPARE(client.connection()->sendFrame(oversized), FileTlsError::WriteLimitExceeded);
+  QCOMPARE(sink.submit(oversized).status, SenderFrameSinkStatus::Backpressured);
 }
 
 void FileTlsTransportTests::untrustedLoopbackFailsClosed_data()
