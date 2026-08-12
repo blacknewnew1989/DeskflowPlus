@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "relaydesk/device/DeviceId.h"
 #include "relaydesk/transfer/Protocol.h"
 
 #include <QByteArray>
@@ -86,4 +87,27 @@ struct TransferManifest
   [[nodiscard]] bool operator==(const TransferManifest &) const = default;
 };
 
+struct SendOptions
+{
+  ConflictPolicy conflictPolicy = ConflictPolicy::AutoRename;
+
+  [[nodiscard]] bool operator==(const SendOptions &) const = default;
+};
+
+struct IncomingOffer
+{
+  deskflow::relaydesk::DeviceId peerDeviceId;
+  QString peerDisplayName;
+  // Preserve the validated wire offer consumed by TransferOfferStateMachine;
+  // UI callers must not rebuild protocol fields from a display-only summary.
+  TransferOffer offer;
+  bool peerTrusted = false;
+  bool mayAutoAccept = false;
+
+  [[nodiscard]] bool operator==(const IncomingOffer &) const = default;
+};
+
 } // namespace relaydesk::transfer
+
+Q_DECLARE_METATYPE(relaydesk::transfer::SendOptions)
+Q_DECLARE_METATYPE(relaydesk::transfer::IncomingOffer)

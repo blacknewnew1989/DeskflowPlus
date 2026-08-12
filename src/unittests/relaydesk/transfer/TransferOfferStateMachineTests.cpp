@@ -3,7 +3,11 @@
 
 #include "relaydesk/transfer/TransferOfferStateMachine.h"
 
+#include "relaydesk/transfer/TransferTypes.h"
+
 #include <QTest>
+
+#include <type_traits>
 
 using namespace relaydesk::transfer;
 
@@ -54,6 +58,7 @@ private Q_SLOTS:
   void enforcesNegotiatedFeaturesEntriesAndPolicies();
   void rejectsInvalidDestinationAndFreeSpace();
   void failIsTerminalUntilReset();
+  void exposesCopyableUiContract();
 };
 
 void TransferOfferStateMachineTests::outgoingOfferAcceptsMatchingResponse()
@@ -174,6 +179,27 @@ void TransferOfferStateMachineTests::failIsTerminalUntilReset()
   machine.reset();
   QVERIFY(!machine.snapshot().has_value());
   QVERIFY(machine.receiveIncoming(offer()).ok());
+}
+
+void TransferOfferStateMachineTests::exposesCopyableUiContract()
+{
+  static_assert(std::is_copy_constructible_v<SendOptions>);
+  static_assert(std::is_copy_constructible_v<IncomingOffer>);
+  QCOMPARE(SendOptions{}.conflictPolicy, ConflictPolicy::AutoRename);
+
+  const auto source = offer();
+  const IncomingOffer incoming{
+      .peerDeviceId = deskflow::relaydesk::DeviceId::generate(),
+      .peerDisplayName = QStringLiteral("Office Mac"),
+      .offer = source,
+      .peerTrusted = true,
+      .mayAutoAccept = false,
+  };
+  const IncomingOffer copy = incoming;
+  QCOMPARE(copy, incoming);
+  QCOMPARE(copy.offer, source);
+  QVERIFY(QMetaType::fromType<IncomingOffer>().isValid());
+  QVERIFY(QMetaType::fromType<SendOptions>().isValid());
 }
 
 QTEST_MAIN(TransferOfferStateMachineTests)
