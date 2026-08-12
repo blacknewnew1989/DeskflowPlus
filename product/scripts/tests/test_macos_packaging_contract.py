@@ -27,7 +27,7 @@ class MacosPackagingContractTests(unittest.TestCase):
         ):
             self.assertIn(required, script)
 
-        for forbidden in ("AC_PASSWORD", "APPLE_ID_PASSWORD", "--password"):
+        for forbidden in ("AC_PASSWORD", "APPLE_ID_PASSWORD", "--password", "-maxdepth"):
             self.assertNotIn(forbidden, script)
 
     def test_bundle_and_dmg_use_central_brand_and_signature_variant(self) -> None:

@@ -70,9 +70,9 @@ STAGE_DIR="$BUILD_DIR/relaydesk-package-stage/$FULL_SHA"
 cmake -E rm -rf "$STAGE_DIR"
 cmake --install "$BUILD_DIR" --config "$CONFIG" --prefix "$STAGE_DIR"
 APP_BUNDLES=()
-while IFS= read -r app_bundle; do
-  APP_BUNDLES+=("$app_bundle")
-done < <(find "$STAGE_DIR" -maxdepth 1 -type d -name "*.app" -print)
+for app_bundle in "$STAGE_DIR"/*.app; do
+  [[ -d "$app_bundle" ]] && APP_BUNDLES+=("$app_bundle")
+done
 if [[ "${#APP_BUNDLES[@]}" -ne 1 ]]; then
   echo "MACOS_APP_INVALID: expected one staged app bundle, found ${#APP_BUNDLES[@]}" >&2
   exit 1
@@ -89,9 +89,9 @@ else
 fi
 
 DMG_FILES=()
-while IFS= read -r dmg_file; do
-  DMG_FILES+=("$dmg_file")
-done < <(find "$BUILD_DIR" -maxdepth 1 -type f -name "relaydesk-*-macos-*-$PACKAGE_VARIANT.dmg" -print)
+for dmg_file in "$BUILD_DIR"/relaydesk-*-macos-*-$PACKAGE_VARIANT.dmg; do
+  [[ -f "$dmg_file" ]] && DMG_FILES+=("$dmg_file")
+done
 if [[ "${#DMG_FILES[@]}" -ne 1 ]]; then
   echo "MACOS_DMG_INVALID: expected one $PACKAGE_VARIANT DMG, found ${#DMG_FILES[@]}" >&2
   exit 1
