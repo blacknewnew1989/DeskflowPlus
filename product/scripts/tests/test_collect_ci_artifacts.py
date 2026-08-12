@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "collect-ci-artifacts.py"
@@ -34,6 +37,27 @@ class CollectCiArtifactsTests(unittest.TestCase):
             (build / "vcpkg_installed" / "RelayDesk.app").mkdir(parents=True)
 
             self.assertEqual(MODULE.app_candidates(build), [expected])
+
+    def test_signed_flag_is_recorded_in_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            build = root / "build"
+            out = root / "out"
+            build.mkdir()
+            (build / "relaydesk-1.26.0-win-x64-signed-portable.7z").write_bytes(b"signed-content")
+            arguments = [
+                str(SCRIPT),
+                "--build-dir", str(build),
+                "--out-dir", str(out),
+                "--platform", "windows-x64",
+                "--commit", "abc123",
+                "--signed",
+            ]
+            with patch.object(sys, "argv", arguments):
+                self.assertEqual(MODULE.main(), 0)
+
+            manifest = json.loads((out / "artifact-manifest.json").read_text(encoding="utf-8"))
+            self.assertTrue(manifest["signed"])
 
 
 if __name__ == "__main__":

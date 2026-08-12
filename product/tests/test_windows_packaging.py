@@ -23,6 +23,7 @@ class WindowsPackagingTests(unittest.TestCase):
 
     def test_internal_windows_packages_are_explicitly_unsigned(self) -> None:
         self.assertIn('set(RELAYDESK_PACKAGE_VARIANT "unsigned")', DEPLOY)
+        self.assertIn('RELAYDESK_PACKAGE_VARIANT MATCHES "^(signed|unsigned)$"', DEPLOY)
         self.assertIn('string(APPEND CPACK_PACKAGE_FILE_NAME "-${RELAYDESK_PACKAGE_VARIANT}")', ROOT_CPACK)
 
     def test_portable_marker_matches_product_settings_contract(self) -> None:

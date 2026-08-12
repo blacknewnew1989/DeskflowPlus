@@ -61,6 +61,7 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--platform", required=True)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--signed", action="store_true")
     args = parser.parse_args()
 
     build = args.build_dir.resolve()
@@ -105,7 +106,7 @@ def main() -> int:
     manifest = {
         "platform": args.platform,
         "commit": args.commit,
-        "signed": False,
+        "signed": args.signed,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "runnerOs": os.environ.get("RUNNER_OS", ""),
         "runnerArch": os.environ.get("RUNNER_ARCH", ""),

@@ -25,6 +25,15 @@ try {
     }
     if (-not $MissingMsiFailed) { throw "missing MSI was not rejected" }
 
+    Move-Item -LiteralPath (Join-Path $TestRoot "relaydesk-1.26.0-win-x64-unsigned-portable.7z") `
+        -Destination (Join-Path $TestRoot "relaydesk-1.26.0-win-x64-signed-portable.7z")
+    Move-Item -LiteralPath (Join-Path $TestRoot "quarantined.msi") `
+        -Destination (Join-Path $TestRoot "relaydesk-1.26.0-win-x64-signed.msi")
+    @{ platform = "windows-x64"; commit = "test"; signed = $true; files = @() } |
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $TestRoot "artifact-manifest.json") -Encoding UTF8
+    $SignedResult = Test-RelayDeskWindowsPackageArtifacts -OutDir $TestRoot -RequireMsi $true
+    if ($SignedResult.SignatureStatus -ne "signed") { throw "signed manifest was not honored" }
+
     Write-Host "WIN003_PACKAGE_CONTRACT_TEST=PASS"
 }
 finally {

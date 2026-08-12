@@ -16,7 +16,12 @@ configure_file(${MY_DIR}/cpack-options.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/cpac
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_CURRENT_BINARY_DIR}/cpack-options.cmake)
 
 set(OS_STRING "win-${BUILD_ARCHITECTURE}")
-set(RELAYDESK_PACKAGE_VARIANT "unsigned")
+if(NOT DEFINED RELAYDESK_PACKAGE_VARIANT OR "${RELAYDESK_PACKAGE_VARIANT}" STREQUAL "")
+  set(RELAYDESK_PACKAGE_VARIANT "unsigned")
+endif()
+if(NOT RELAYDESK_PACKAGE_VARIANT MATCHES "^(signed|unsigned)$")
+  message(FATAL_ERROR "RELAYDESK_PACKAGE_VARIANT must be signed or unsigned")
+endif()
 
 list(APPEND CPACK_GENERATOR "7Z")
 
