@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 #include "relaydesk/transfer/ManifestBuilder.h"
+#include "relaydesk/transfer/ManifestPageCodec.h"
 
-#include <QCborArray>
-#include <QCborMap>
-#include <QCborValue>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -53,43 +51,6 @@ ManifestEntryKind classifyEntry(const QFileInfo &info)
     return ManifestEntryKind::Directory;
   }
   return ManifestEntryKind::Special;
-}
-
-void insertInteger(QCborMap &map, qint64 key, quint64 value)
-{
-  map.insert(QCborValue(key), QCborValue(static_cast<qint64>(value)));
-}
-
-QCborMap canonicalEntryMap(const ManifestEntry &entry)
-{
-  QCborMap entryMap;
-  entryMap.insert(QCborValue(1), QCborValue(entry.id.toRfc4122()));
-  entryMap.insert(QCborValue(2), QCborValue(entry.relativeProtocolPath));
-  insertInteger(entryMap, 3, static_cast<quint8>(entry.type));
-  insertInteger(entryMap, 4, entry.size);
-  insertInteger(entryMap, 5, static_cast<quint64>(entry.modifiedUtc.toMSecsSinceEpoch()));
-  entryMap.insert(QCborValue(6), QCborValue(entry.sha256));
-  insertInteger(entryMap, 7, entry.flags);
-  return entryMap;
-}
-
-QByteArray canonicalEntryBytes(const ManifestEntry &entry)
-{
-  return QCborValue(canonicalEntryMap(entry)).toCbor(QCborValue::SortKeysInMaps);
-}
-
-QByteArray canonicalManifestBytes(const QList<ManifestEntry> &manifestEntries)
-{
-  QCborArray entries;
-  for (const ManifestEntry &entry : manifestEntries) {
-    entries.append(canonicalEntryMap(entry));
-  }
-  return QCborValue(entries).toCbor(QCborValue::SortKeysInMaps);
-}
-
-QByteArray canonicalManifestBytes(const ManifestEntry &entry)
-{
-  return canonicalManifestBytes(QList<ManifestEntry>{entry});
 }
 
 bool sourceSnapshotChanged(const QFileInfo &initial, const QFileInfo &final, quint64 bytesHashed)
@@ -381,8 +342,7 @@ ManifestBuilder::buildSingleFile(const SingleFileManifestRequest &request, const
   summary.totalBytes = expectedBytes;
   summary.fileCount = 1;
   summary.directoryCount = 0;
-  const QByteArray canonicalBytes = canonicalManifestBytes(entry);
-  summary.canonicalSha256 = QCryptographicHash::hash(QByteArrayView(canonicalBytes), QCryptographicHash::Sha256);
+  summary.canonicalSha256 = ManifestPageCodec::canonicalSha256({entry});
 
   SingleFileManifest manifest;
   manifest.canonicalSourcePath = canonicalSourcePath;
@@ -507,13 +467,13 @@ ManifestBuilder::buildTransfer(const TransferManifestRequest &request, const Man
       totalBytes += entry.size;
     }
 
-    const QByteArray encodedEntry = canonicalEntryBytes(entry);
-    if (static_cast<quint64>(encodedEntry.size()) > std::numeric_limits<quint64>::max() - encodedEntryBytes) {
+    const quint64 encodedEntrySize = ManifestPageCodec::canonicalEntrySize(entry);
+    if (encodedEntrySize == 0 || encodedEntrySize > std::numeric_limits<quint64>::max() - encodedEntryBytes) {
       return failTransfer(
           ManifestBuildError::ManifestMetadataTooLarge, QStringLiteral("manifest metadata size overflow")
       );
     }
-    encodedEntryBytes += static_cast<quint64>(encodedEntry.size());
+    encodedEntryBytes += encodedEntrySize;
     const quint64 encodedManifestBytes =
         encodedEntryBytes + static_cast<quint64>(cborArrayHeaderBytes(scannedEntries.size() + 1));
     if (encodedManifestBytes > options.maxMetadataBytes) {
@@ -616,14 +576,11 @@ ManifestBuilder::buildTransfer(const TransferManifestRequest &request, const Man
     }
   }
 
-  QList<ManifestEntry> canonicalEntries;
-  canonicalEntries.reserve(scannedEntries.size());
   TransferManifest manifest;
   manifest.entries.reserve(scannedEntries.size());
   quint64 fileCount = 0;
   quint64 directoryCount = 0;
   for (ScannedEntry &scanned : scannedEntries) {
-    canonicalEntries.append(scanned.prepared.entry);
     if (scanned.prepared.entry.type == ManifestEntryType::File) {
       ++fileCount;
     } else {
@@ -636,20 +593,13 @@ ManifestBuilder::buildTransfer(const TransferManifestRequest &request, const Man
   });
   manifest.warnings = std::move(warnings);
 
-  const QByteArray canonicalBytes = canonicalManifestBytes(canonicalEntries);
-  if (static_cast<quint64>(canonicalBytes.size()) > options.maxMetadataBytes) {
-    return failTransfer(
-        ManifestBuildError::ManifestMetadataTooLarge, QStringLiteral("canonical manifest metadata limit exceeded")
-    );
-  }
   manifest.summary.id = request.transferId;
   manifest.summary.displayName =
       request.displayName.isEmpty() ? manifest.entries.constFirst().entry.relativeProtocolPath : request.displayName;
   manifest.summary.totalBytes = totalBytes;
   manifest.summary.fileCount = fileCount;
   manifest.summary.directoryCount = directoryCount;
-  manifest.summary.canonicalSha256 =
-      QCryptographicHash::hash(QByteArrayView(canonicalBytes), QCryptographicHash::Sha256);
+  manifest.summary.canonicalSha256 = ManifestPageCodec::canonicalSha256(manifest.entries);
   return {.manifest = std::move(manifest)};
 }
 

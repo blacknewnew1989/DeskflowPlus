@@ -28,3 +28,10 @@ create_test(
   SOURCE ManifestBuilderTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
 )
+
+create_test(
+  NAME RelayDeskManifestPageCodecTests
+  DEPENDS relaydesk_transfer
+  SOURCE ManifestPageCodecTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
