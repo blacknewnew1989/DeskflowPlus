@@ -20,6 +20,8 @@ add_library(relaydesk_transfer STATIC
   ManifestPageCodec.h
   PathPolicy.cpp
   PathPolicy.h
+  PartialCleanupPolicy.cpp
+  PartialCleanupPolicy.h
   Protocol.h
   ResumeStore.cpp
   ResumeStore.h

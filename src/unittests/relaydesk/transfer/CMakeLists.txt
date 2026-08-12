@@ -30,6 +30,13 @@ create_test(
 )
 
 create_test(
+  NAME RelayDeskPartialCleanupPolicyTests
+  DEPENDS relaydesk_transfer
+  SOURCE PartialCleanupPolicyTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
+
+create_test(
   NAME RelayDeskManifestBuilderTests
   DEPENDS relaydesk_transfer
   SOURCE ManifestBuilderTests.cpp
