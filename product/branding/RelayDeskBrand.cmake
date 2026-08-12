@@ -9,6 +9,7 @@ set(RELAYDESK_ORGANIZATION_DOMAIN "relaydesk.local")
 set(RELAYDESK_BUNDLE_IDENTIFIER "local.relaydesk.desktop")
 set(RELAYDESK_WINDOWS_APP_USER_MODEL_ID "RelayDesk.Internal.Desktop")
 set(RELAYDESK_WINDOWS_WIX_UPGRADE_GUID "50C1FCAB-2BF8-447C-806D-A53C21C6A237")
+set(RELAYDESK_WINDOWS_RUN_VALUE_NAME "RelayDesk")
 set(RELAYDESK_PACKAGE_ID "relaydesk")
 
 # Upstream binary and protocol names stay stable to minimize Deskflow sync risk.

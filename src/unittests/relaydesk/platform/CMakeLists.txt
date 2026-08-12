@@ -7,3 +7,10 @@ create_test(
   SOURCE PermissionSnapshotTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/platform"
 )
+
+create_test(
+  NAME RelayDeskWindowsStartAtLoginTests
+  DEPENDS relaydesk_windows_start_at_login
+  SOURCE WindowsStartAtLoginTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/platform"
+)
