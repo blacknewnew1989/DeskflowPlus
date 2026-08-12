@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 RelayDesk Contributors
+# SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+
+create_test(
+  NAME RelayDeskControlMessageCodecTests
+  DEPENDS relaydesk_transfer
+  SOURCE ControlMessageCodecTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
