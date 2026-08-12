@@ -52,6 +52,7 @@ jobs:
               -G Ninja
               -DCMAKE_OSX_ARCHITECTURES=arm64
               -DCMAKE_OSX_DEPLOYMENT_TARGET=14
+              -DCMAKE_OSX_SYSROOT=${RELAYDESK_MACOS_SDK}
 
     runs-on: ${{ matrix.target.runs-on }}
     timeout-minutes: 60
@@ -73,6 +74,11 @@ jobs:
         with:
           qt-version: ${{ matrix.target.qt-version }}
           vcpkg-triplet: ${{ matrix.target.vcpkg-triplet }}
+
+      - name: Resolve macOS SDK
+        if: runner.os == 'macOS'
+        shell: bash
+        run: echo "RELAYDESK_MACOS_SDK=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
 
       - name: Configure
         shell: bash
