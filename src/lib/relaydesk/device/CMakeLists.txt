@@ -8,10 +8,11 @@ add_library(relaydesk_device STATIC
   DeviceIdentity.h
   DeviceInfo.cpp
   DeviceInfo.h
+  DeviceSnapshot.h
 )
 
 target_include_directories(
   relaydesk_device
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../.."
 )
-target_link_libraries(relaydesk_device PUBLIC Qt6::Core)
+target_link_libraries(relaydesk_device PUBLIC Qt6::Core Qt6::Network)
