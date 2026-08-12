@@ -29,12 +29,21 @@ QString createFile(
   if (file.write(contents) != contents.size()) {
     return {};
   }
-  if (!file.setFileTime(
+  if (!file.flush()) {
+    return {};
+  }
+  file.close();
+
+  // Set the timestamp after the writer is closed. On APFS, closing a writer
+  // after setFileTime can update mtime again when buffered data is committed.
+  QFile timestampFile(path);
+  if (!timestampFile.open(QIODevice::ReadOnly) ||
+      !timestampFile.setFileTime(
           QDateTime::fromMSecsSinceEpoch(modifiedAtMs, QTimeZone::UTC), QFileDevice::FileModificationTime
       )) {
     return {};
   }
-  file.close();
+  timestampFile.close();
   return path;
 }
 
