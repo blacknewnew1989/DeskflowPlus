@@ -104,6 +104,14 @@ void TransferProgressPublisherTests::handlesZeroUnknownTotalRollbackAndRegressio
   QCOMPARE(
       publisher.update(99, 0, TransferState::Transferring, at(2000)).error, ProgressPublishError::ProgressRegression
   );
+
+  TransferProgressPublisher zeroBytePublisher(initialSnapshot(0));
+  result = zeroBytePublisher.update(0, 1, TransferState::Completed, at(0));
+  QVERIFY(result.published());
+  QCOMPARE(result.snapshot->progress.completedBytes, quint64{0});
+  QCOMPARE(result.snapshot->progress.completedFiles, quint64{1});
+  QCOMPARE(result.snapshot->progress.bytesPerSecond, 0.0);
+  QVERIFY(!result.snapshot->progress.estimatedRemaining.has_value());
 }
 
 void TransferProgressPublisherTests::avoidsOverflowAtLargeTotals()
