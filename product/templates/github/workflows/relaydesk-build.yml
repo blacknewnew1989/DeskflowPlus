@@ -98,7 +98,9 @@ jobs:
       - name: Package binary and source
         id: package
         shell: bash
-        run: cmake --build build --config Release --target package package_source --parallel 8
+        run: |
+          cmake --build build --config Release --target package --parallel 8
+          cmake --build build --config Release --target package_source --parallel 8
 
       - name: Run tests and keep diagnostics
         id: tests
