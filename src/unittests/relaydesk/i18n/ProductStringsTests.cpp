@@ -49,3 +49,5 @@ void ProductStringsTests::pluralFallbackUsesCount()
 }
 
 QTEST_MAIN(ProductStringsTests)
+
+#include "ProductStringsTests.moc"
