@@ -42,6 +42,7 @@ class WindowsPackagingTests(unittest.TestCase):
     def test_wix_custom_action_has_stable_cross_toolchain_name(self) -> None:
         self.assertIn('PREFIX ""', DEPLOY)
         self.assertIn('message __VA_OPT__(, ) __VA_ARGS__', WIX_CUSTOM)
+        self.assertIn('target_compile_options(wix-custom PRIVATE /Zc:preprocessor)', DEPLOY)
 
     def test_installer_documents_preserved_external_data(self) -> None:
         self.assertIn('retained when this package is upgraded or uninstalled', DEPLOY)
