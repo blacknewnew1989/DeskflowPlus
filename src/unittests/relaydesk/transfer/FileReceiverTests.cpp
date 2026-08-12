@@ -3,6 +3,9 @@
 
 #include "relaydesk/transfer/FileReceiver.h"
 
+#include "relaydesk/transfer/ManifestBuilder.h"
+#include "relaydesk/transfer/TransferSender.h"
+
 #include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
@@ -108,6 +111,7 @@ private Q_SLOTS:
   void rejectsMissingCorruptAndMismatchedResumeState();
   void rejectsPartSizeMismatch();
   void modifiedPartFailsFinalIntegrity();
+  void senderReceiverRestartRoundTrip();
 };
 
 void FileReceiverTests::streamsPartThenAtomicallyCommits()
@@ -566,6 +570,139 @@ void FileReceiverTests::modifiedPartFailsFinalIntegrity()
   QCOMPARE(completed.error, FileReceiverError::HashMismatch);
   QVERIFY(QFileInfo::exists(partPath));
   QVERIFY(!QFileInfo::exists(fixture.directory.filePath(QStringLiteral("modified-part.bin"))));
+}
+
+void FileReceiverTests::senderReceiverRestartRoundTrip()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QByteArray contents(4096, '\0');
+  for (qsizetype index = 0; index < contents.size(); ++index) {
+    contents[index] = static_cast<char>(index % 239);
+  }
+  const QString sourcePath = directory.filePath(QStringLiteral("source-重启.bin"));
+  QVERIFY(writeFile(sourcePath, contents));
+  const TransferId transferId = QUuid::createUuid();
+  const FileId fileId = QUuid::createUuid();
+  const auto built = ManifestBuilder::buildSingleFile({
+      .sourcePath = sourcePath,
+      .relativeProtocolPath = QStringLiteral("received/重启.bin"),
+      .transferId = transferId,
+      .fileId = fileId,
+  });
+  QVERIFY2(built.ok(), qPrintable(built.diagnostic));
+  const SingleFileManifest manifest = *built.manifest;
+  const QString receiveRoot = directory.filePath(QStringLiteral("receive-root"));
+  ResumeStore store(directory.filePath(QStringLiteral("resume/active")));
+  std::optional<ResumeState> checkpointState;
+  constexpr quint64 durableOffset = 1024;
+
+  const auto senderRequest = [&](quint64 startOffset) {
+    return TransferSenderRequest{
+        .transferId = transferId,
+        .source =
+            {
+                .canonicalSourcePath = manifest.canonicalSourcePath,
+                .protocolCollisionKey = manifest.protocolCollisionKey,
+                .entry = manifest.entry,
+            },
+        .streamId = 41,
+        .chunkBytes = 256,
+        .startOffset = startOffset,
+    };
+  };
+
+  {
+    TransferSender initialSender(senderRequest(0));
+    FileReceiver initialReceiver;
+    const auto beginFrame = initialSender.nextFrame();
+    QVERIFY(beginFrame.ready());
+    const auto decodedBegin = FileMessageCodec::decode(beginFrame.frame->type, beginFrame.frame->metadata);
+    QVERIFY(decodedBegin.ok());
+    const auto begin = std::get<FileBeginMessage>(*decodedBegin.message);
+    QVERIFY(initialReceiver
+                .begin({
+                    .receiveRoot = receiveRoot,
+                    .entry = manifest.entry,
+                    .begin = begin,
+                    .manifestSha256 = manifest.summary.canonicalSha256,
+                })
+                .ok());
+    while (initialReceiver.snapshot().receivedBytes < durableOffset) {
+      const auto chunkFrame = initialSender.nextFrame();
+      QVERIFY(chunkFrame.ready());
+      QCOMPARE(chunkFrame.frame->type, MessageType::FileChunk);
+      const auto decodedChunk = FileMessageCodec::decode(chunkFrame.frame->type, chunkFrame.frame->metadata);
+      QVERIFY(decodedChunk.ok());
+      QVERIFY(initialReceiver.append(std::get<FileChunkMessage>(*decodedChunk.message), chunkFrame.frame->payload).ok()
+      );
+    }
+    QCOMPARE(initialReceiver.snapshot().receivedBytes, durableOffset);
+    checkpointState = ResumeState{
+        .transferId = transferId,
+        .peerDeviceId = deskflow::relaydesk::DeviceId::generate(),
+        .manifestSha256 = manifest.summary.canonicalSha256,
+        .direction = ResumeDirection::Receiving,
+        .files =
+            {
+                {
+                    .fileId = fileId,
+                    .relativeProtocolPath = initialReceiver.snapshot().relativeProtocolPath,
+                    .durableOffset = 0,
+                    .totalBytes = manifest.entry.size,
+                    .partRelativePath = initialReceiver.snapshot().partRelativePath,
+                },
+            },
+        .updatedUtc = QDateTime::currentDateTimeUtc(),
+    };
+    QVERIFY(initialReceiver.checkpoint(store, *checkpointState).ok());
+  }
+
+  const auto loaded = store.load(transferId);
+  QVERIFY2(loaded.ok(), qPrintable(loaded.diagnostic));
+  QCOMPARE(loaded.state->files.constFirst().durableOffset, durableOffset);
+  TransferSender restartedSender(senderRequest(durableOffset));
+  FileReceiver restartedReceiver;
+  bool began = false;
+  bool completed = false;
+  for (int iteration = 0; iteration < 100 && !restartedSender.finished(); ++iteration) {
+    const auto produced = restartedSender.nextFrame();
+    if (produced.status == SenderFrameStatus::Preparing) {
+      continue;
+    }
+    QVERIFY2(produced.ready(), qPrintable(produced.diagnostic));
+    const auto decoded = FileMessageCodec::decode(produced.frame->type, produced.frame->metadata);
+    QVERIFY2(decoded.ok(), qPrintable(decoded.diagnostic));
+    if (produced.frame->type == MessageType::FileBegin) {
+      auto request = FileReceiveRequest{
+          .receiveRoot = receiveRoot,
+          .entry = manifest.entry,
+          .begin = std::get<FileBeginMessage>(*decoded.message),
+          .manifestSha256 = manifest.summary.canonicalSha256,
+      };
+      const auto resumed = restartedReceiver.resume(request, *loaded.state);
+      QVERIFY2(resumed.ok(), qPrintable(resumed.diagnostic));
+      began = true;
+    } else if (produced.frame->type == MessageType::FileChunk) {
+      QVERIFY(began);
+      const auto appended =
+          restartedReceiver.append(std::get<FileChunkMessage>(*decoded.message), produced.frame->payload);
+      QVERIFY2(appended.ok(), qPrintable(appended.diagnostic));
+    } else if (produced.frame->type == MessageType::FileEnd) {
+      const auto finished = restartedReceiver.finish(std::get<FileEndMessage>(*decoded.message));
+      QVERIFY2(finished.ok(), qPrintable(finished.diagnostic));
+      completed = true;
+    } else {
+      QFAIL("sender produced an unexpected frame type");
+    }
+  }
+
+  QVERIFY(began);
+  QVERIFY(completed);
+  QVERIFY(restartedSender.finished());
+  QCOMPARE(restartedReceiver.snapshot().state, FileReceiverState::Completed);
+  QCOMPARE(readFile(restartedReceiver.snapshot().committedPath), contents);
+  QCOMPARE(sha256(readFile(restartedReceiver.snapshot().committedPath)), manifest.entry.sha256);
 }
 
 QTEST_MAIN(FileReceiverTests)
