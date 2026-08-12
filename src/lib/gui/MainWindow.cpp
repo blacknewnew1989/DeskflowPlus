@@ -33,8 +33,10 @@
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
+#include "relaydesk/model/TransferCenterModel.h"
 #include "relaydesk/pairing/PairingStateMachine.h"
 #include "relaydesk/widgets/DevicesDock.h"
+#include "relaydesk/widgets/TransferCenterDock.h"
 
 #include <QCloseEvent>
 #include <QDesktopServices>
@@ -110,6 +112,12 @@ MainWindow::MainWindow()
       *m_relayDeskDeviceModel, *m_relayDeskPairingModel, *m_relayDeskPermissionModel, this
   );
   addDockWidget(Qt::RightDockWidgetArea, m_devicesDock);
+  m_relayDeskTransferModel = new deskflow::relaydesk::model::TransferCenterModel(this);
+  m_transferCenterDock =
+      new deskflow::relaydesk::widgets::TransferCenterDock(*m_relayDeskTransferModel, this);
+  addDockWidget(Qt::BottomDockWidgetArea, m_transferCenterDock);
+  tabifyDockWidget(m_logDock, m_transferCenterDock);
+  m_transferCenterDock->hide();
 
   // Setup Actions
   m_actionAbout->setMenuRole(QAction::AboutRole);
@@ -206,9 +214,19 @@ deskflow::relaydesk::model::PermissionStatusModel &MainWindow::relayDeskPermissi
   return *m_relayDeskPermissionModel;
 }
 
+deskflow::relaydesk::model::TransferCenterModel &MainWindow::relayDeskTransferModel()
+{
+  return *m_relayDeskTransferModel;
+}
+
 deskflow::relaydesk::widgets::DevicesDock &MainWindow::relayDeskDevicesDock()
 {
   return *m_devicesDock;
+}
+
+deskflow::relaydesk::widgets::TransferCenterDock &MainWindow::relayDeskTransferCenterDock()
+{
+  return *m_transferCenterDock;
 }
 
 void MainWindow::restoreWindow()
@@ -731,6 +749,7 @@ void MainWindow::createMenuBar()
 
   m_menuView->addAction(m_logDock->toggleViewAction());
   m_menuView->addAction(m_devicesDock->toggleViewAction());
+  m_menuView->addAction(m_transferCenterDock->toggleViewAction());
 
   m_menuHelp->addAction(m_actionAbout);
   m_menuHelp->addAction(m_actionReportBug);

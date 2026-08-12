@@ -63,9 +63,11 @@ namespace model {
 class DeviceHomeModel;
 class PairingWizardModel;
 class PermissionStatusModel;
+class TransferCenterModel;
 } // namespace model
 namespace widgets {
 class DevicesDock;
+class TransferCenterDock;
 } // namespace widgets
 } // namespace deskflow::relaydesk
 
@@ -103,7 +105,9 @@ public:
   [[nodiscard]] deskflow::relaydesk::model::DeviceHomeModel &relayDeskDeviceModel();
   [[nodiscard]] deskflow::relaydesk::model::PairingWizardModel &relayDeskPairingModel();
   [[nodiscard]] deskflow::relaydesk::model::PermissionStatusModel &relayDeskPermissionModel();
+  [[nodiscard]] deskflow::relaydesk::model::TransferCenterModel &relayDeskTransferModel();
   [[nodiscard]] deskflow::relaydesk::widgets::DevicesDock &relayDeskDevicesDock();
+  [[nodiscard]] deskflow::relaydesk::widgets::TransferCenterDock &relayDeskTransferCenterDock();
 
   void hide();
 
@@ -222,7 +226,9 @@ private:
   deskflow::relaydesk::model::DeviceHomeModel *m_relayDeskDeviceModel = nullptr;
   deskflow::relaydesk::model::PairingWizardModel *m_relayDeskPairingModel = nullptr;
   deskflow::relaydesk::model::PermissionStatusModel *m_relayDeskPermissionModel = nullptr;
+  deskflow::relaydesk::model::TransferCenterModel *m_relayDeskTransferModel = nullptr;
   deskflow::relaydesk::widgets::DevicesDock *m_devicesDock = nullptr;
+  deskflow::relaydesk::widgets::TransferCenterDock *m_transferCenterDock = nullptr;
   QLabel *m_lblSecurityStatus = nullptr;
   QLabel *m_lblStatus = nullptr;
   QPushButton *m_btnFingerprint = nullptr;

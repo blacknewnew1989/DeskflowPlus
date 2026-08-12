@@ -74,16 +74,21 @@
     <message><source>permissions.message.macos_input_monitoring</source><translation>Allow Input Monitoring when macOS requires it for shared input.</translation></message>
     <message><source>permissions.action.open_settings</source><translation>Open settings</translation></message>
     <message><source>transfer.title</source><translation>Transfers</translation></message>
+    <message><source>transfer.empty</source><translation>Transfers will appear here</translation></message>
+    <message><source>transfer.direction.sending</source><translation>Sending</translation></message>
+    <message><source>transfer.direction.receiving</source><translation>Receiving</translation></message>
     <message><source>transfer.state.preparing</source><translation>Preparing</translation></message>
     <message><source>transfer.state.awaiting_confirmation</source><translation>Waiting for confirmation</translation></message>
     <message><source>transfer.state.queued</source><translation>Queued</translation></message>
     <message><source>transfer.state.transferring</source><translation>Transferring</translation></message>
     <message><source>transfer.state.paused</source><translation>Paused</translation></message>
     <message><source>transfer.state.interrupted</source><translation>Connection lost, waiting to resume</translation></message>
+    <message><source>transfer.state.resuming</source><translation>Resuming</translation></message>
     <message><source>transfer.state.verifying</source><translation>Verifying</translation></message>
     <message><source>transfer.state.saving</source><translation>Saving</translation></message>
     <message><source>transfer.state.completed</source><translation>Completed</translation></message>
     <message><source>transfer.state.rejected</source><translation>Rejected</translation></message>
+    <message><source>transfer.state.canceling</source><translation>Canceling</translation></message>
     <message><source>transfer.state.canceled</source><translation>Canceled</translation></message>
     <message><source>transfer.state.failed</source><translation>Failed</translation></message>
     <message><source>transfer.action.pause</source><translation>Pause</translation></message>
@@ -99,6 +104,10 @@
     <message><source>transfer.error.unreadable</source><translation>One or more items cannot be read</translation></message>
     <message><source>transfer.error.connection_lost</source><translation>Connection lost</translation></message>
     <message><source>transfer.error.checksum_mismatch</source><translation>File verification failed</translation></message>
+    <message><source>transfer.error.unknown</source><translation>Transfer failed. Try again.</translation></message>
+    <message><source>transfer.progress.bytes</source><translation>%1 of %2</translation></message>
+    <message numerus="yes"><source>transfer.progress.items</source><translation><numerusform>%1 of %n item</numerusform><numerusform>%1 of %n items</numerusform></translation></message>
+    <message><source>transfer.accessible.summary</source><translation>%1, %2, %3, %4, %5</translation></message>
     <message><source>transfer.incoming.wants_to_send</source><translation>%1 wants to send</translation></message>
     <message><source>transfer.incoming.save_to</source><translation>Save to: %1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>Conflict: auto rename</translation></message>
