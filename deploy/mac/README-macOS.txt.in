@@ -1,0 +1,33 @@
+SPDX-FileCopyrightText: 2026 RelayDesk Contributors
+SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+
+RelayDesk @CMAKE_PROJECT_VERSION@ for macOS
+============================================
+
+Bundle identifier: @RELAYDESK_BUNDLE_IDENTIFIER@
+Package signature variant: @RELAYDESK_MACOS_PACKAGE_VARIANT@
+
+Install
+-------
+Drag @CMAKE_PROJECT_PROPER_NAME@.app to Applications. Internal ad-hoc builds
+are not notarized and macOS may require Control-click > Open on first launch.
+Do not remove quarantine attributes manually.
+
+Upgrade
+-------
+Quit RelayDesk and replace the existing app in Applications. Keep the same
+bundle identifier and install path so macOS can associate existing privacy
+permissions with the upgraded application. macOS may still request renewed
+Accessibility, Input Monitoring, or Local Network permission after an update.
+
+Uninstall and retained data
+---------------------------
+Removing @CMAKE_PROJECT_PROPER_NAME@.app does not remove settings, trusted
+devices, transfer history, resumable partial-transfer state, logs, or received
+files. RelayDesk user settings are stored outside the app bundle under the
+user Library (the primary settings directory is ~/Library/RelayDesk), and
+received files remain in the selected destination such as Downloads/RelayDesk.
+
+Delete retained data only through an explicit RelayDesk reset/cleanup action or
+by following a separately reviewed manual cleanup procedure. Package uninstall
+and upgrade steps never delete user files automatically.

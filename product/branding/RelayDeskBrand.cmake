@@ -13,6 +13,13 @@ set(RELAYDESK_WINDOWS_RUN_VALUE_NAME "RelayDesk")
 set(RELAYDESK_WINDOWS_SERVICE_NAME "RelayDesk")
 set(RELAYDESK_PACKAGE_ID "relaydesk")
 
+# macOS bundle identity and resources. The current icon is an explicitly
+# centralized internal-build fallback until final trademarked artwork lands.
+set(RELAYDESK_MACOS_ICON_FILE "Deskflow.icns")
+set(RELAYDESK_MACOS_ICON_SOURCE "src/apps/res/Deskflow.icns")
+set(RELAYDESK_MACOS_LOCAL_NETWORK_USAGE_DESCRIPTION
+    "RelayDesk uses the local network to discover trusted computers and transfer input, clipboard, and files.")
+
 # Upstream binary and protocol names stay stable to minimize Deskflow sync risk.
 set(RELAYDESK_INTERNAL_EXECUTABLE_ID "deskflow")
 set(RELAYDESK_FILE_PROTOCOL "RDFT")

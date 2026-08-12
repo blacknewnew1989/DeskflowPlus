@@ -21,8 +21,8 @@ elseif(BUILD_OSX_BUNDLE)
   set(BUNDLE_BUNDLE_NAME "${target}")
   set(BUNDLE_DISPLAY_NAME "${target}")
   set(BUNDLE_GUI_IDENTIFIER "${CMAKE_PROJECT_REV_FQDN}")
-  # Keep the upstream icon filename until a final product icon is supplied.
-  set(BUNDLE_ICON_FILE Deskflow.icns)
+  set(BUNDLE_ICON_FILE "${RELAYDESK_MACOS_ICON_FILE}")
+  set(BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION "${RELAYDESK_MACOS_LOCAL_NETWORK_USAGE_DESCRIPTION}")
   set(BUNDLE_INFO_STRING "${CMAKE_PROJECT_DESCRIPTION}")
   set(BUNDLE_COPYRIGHT "${CMAKE_PROJECT_COPYRIGHT}")
 
@@ -32,7 +32,7 @@ elseif(BUILD_OSX_BUNDLE)
     @ONLY
   )
 
-  set(platform_extra ../res/Deskflow.icns)
+  set(platform_extra "${CMAKE_SOURCE_DIR}/${RELAYDESK_MACOS_ICON_SOURCE}")
   set_source_files_properties(${platform_extra} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 endif()
 
