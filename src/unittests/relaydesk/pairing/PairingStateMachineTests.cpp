@@ -60,6 +60,7 @@ private Q_SLOTS:
   void rejectsWrongCodesAfterBoundedAttempts();
   void expiresAtExactDeadline();
   void rejectsInvalidInputs();
+  void acceptsOnlyBoundSessionsWithinLocalValidity();
   void rejectsStaleAndOutOfOrderActions();
   void terminalStateNeverRegresses();
   void publishesEveryStateChange();
@@ -132,6 +133,45 @@ void PairingStateMachineTests::rejectsInvalidInputs()
 
   PairingStateMachine invalidGenerator({}, [now = fixture.now]() { return now; }, []() { return 1'000'000U; });
   QCOMPARE(invalidGenerator.begin(peerSnapshot(), fixture.fingerprint).error, PairingError::InvalidSas);
+}
+
+void PairingStateMachineTests::acceptsOnlyBoundSessionsWithinLocalValidity()
+{
+  Fixture fixture;
+  const auto sessionId = QUuid::createUuid();
+  const auto expiry = fixture.now.addSecs(240);
+
+  const auto accepted = fixture.machine.beginBoundSession(
+      peerSnapshot(), fixture.fingerprint, sessionId, expiry, QStringLiteral("654321")
+  );
+
+  QVERIFY2(accepted.ok(), qPrintable(accepted.diagnostic));
+  QCOMPARE(fixture.machine.snapshot()->pairingSessionId, sessionId);
+  QCOMPARE(fixture.machine.snapshot()->expiresAtUtc, expiry);
+  QCOMPARE(fixture.machine.snapshot()->sixDigitSas, QStringLiteral("654321"));
+
+  Fixture expired;
+  QCOMPARE(
+      expired.machine.beginBoundSession(
+          peerSnapshot(), expired.fingerprint, QUuid::createUuid(), expired.now, QStringLiteral("123456")
+      ).error,
+      PairingError::InvalidState
+  );
+  Fixture tooLong;
+  QCOMPARE(
+      tooLong.machine.beginBoundSession(
+          peerSnapshot(), tooLong.fingerprint, QUuid::createUuid(), tooLong.now.addSecs(301),
+          QStringLiteral("123456")
+      ).error,
+      PairingError::InvalidState
+  );
+  Fixture nullSession;
+  QCOMPARE(
+      nullSession.machine.beginBoundSession(
+          peerSnapshot(), nullSession.fingerprint, {}, nullSession.now.addSecs(60), QStringLiteral("123456")
+      ).error,
+      PairingError::InvalidState
+  );
 }
 
 void PairingStateMachineTests::rejectsStaleAndOutOfOrderActions()

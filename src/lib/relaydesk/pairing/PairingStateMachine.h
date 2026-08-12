@@ -92,6 +92,10 @@ public:
   [[nodiscard]] PairingActionResult begin(
       DeviceSnapshot peer, QByteArray peerFingerprintSha256, const std::optional<QString> &receivedSas = std::nullopt
   );
+  [[nodiscard]] PairingActionResult beginBoundSession(
+      DeviceSnapshot peer, QByteArray peerFingerprintSha256, const QUuid &sessionId, const QDateTime &expiresAtUtc,
+      const std::optional<QString> &receivedSas = std::nullopt
+  );
   [[nodiscard]] PairingActionResult markTransportReady(const QUuid &sessionId);
   [[nodiscard]] PairingActionResult markTranscriptExchanged(const QUuid &sessionId);
   [[nodiscard]] PairingActionResult confirmMatchingSas(const QUuid &sessionId);
@@ -109,6 +113,10 @@ Q_SIGNALS:
   void pairingChanged(const deskflow::relaydesk::PairingSnapshot &snapshot);
 
 private:
+  [[nodiscard]] PairingActionResult beginSession(
+      DeviceSnapshot peer, QByteArray peerFingerprintSha256, QUuid sessionId, QDateTime expiresAtUtc,
+      const std::optional<QString> &receivedSas
+  );
   [[nodiscard]] PairingActionResult prepareAction(const QUuid &sessionId);
   [[nodiscard]] PairingActionResult transition(const QUuid &sessionId, PairingState required, PairingState next);
   void publish();
