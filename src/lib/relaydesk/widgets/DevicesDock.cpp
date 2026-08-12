@@ -9,6 +9,7 @@
 #include "relaydesk/i18n/ProductStrings.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
+#include "relaydesk/model/PermissionStatusModel.h"
 
 #include <QAbstractItemModel>
 #include <QApplication>
@@ -128,10 +129,14 @@ QString groupedSas(const QString &sas)
 
 } // namespace
 
-DevicesDock::DevicesDock(model::DeviceHomeModel &devices, model::PairingWizardModel &pairing, QWidget *parent)
+DevicesDock::DevicesDock(
+    model::DeviceHomeModel &devices, model::PairingWizardModel &pairing, model::PermissionStatusModel &permissions,
+    QWidget *parent
+)
     : QDockWidget(parent),
       m_devices(devices),
-      m_pairing(pairing)
+      m_pairing(pairing),
+      m_permissions(permissions)
 {
   setObjectName(QStringLiteral("relaydeskDevicesDock"));
   setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
@@ -142,6 +147,27 @@ DevicesDock::DevicesDock(model::DeviceHomeModel &devices, model::PairingWizardMo
   auto *layout = new QVBoxLayout(body);
   layout->setContentsMargins(12, 10, 12, 12);
   layout->setSpacing(8);
+
+  m_permissionBanner = new QFrame(body);
+  m_permissionBanner->setObjectName(QStringLiteral("relaydeskPermissionBanner"));
+  m_permissionBanner->setFrameShape(QFrame::StyledPanel);
+  auto *permissionLayout = new QVBoxLayout(m_permissionBanner);
+  permissionLayout->setContentsMargins(10, 9, 10, 9);
+  permissionLayout->setSpacing(5);
+  m_permissionTitle = new QLabel(m_permissionBanner);
+  m_permissionTitle->setObjectName(QStringLiteral("relaydeskPermissionTitle"));
+  QFont permissionTitleFont(m_permissionTitle->font());
+  permissionTitleFont.setWeight(QFont::DemiBold);
+  m_permissionTitle->setFont(permissionTitleFont);
+  permissionLayout->addWidget(m_permissionTitle);
+  m_permissionMessage = new QLabel(m_permissionBanner);
+  m_permissionMessage->setObjectName(QStringLiteral("relaydeskPermissionMessage"));
+  m_permissionMessage->setWordWrap(true);
+  permissionLayout->addWidget(m_permissionMessage);
+  m_openPermissionSettingsButton = new QPushButton(m_permissionBanner);
+  m_openPermissionSettingsButton->setObjectName(QStringLiteral("relaydeskOpenPermissionSettingsButton"));
+  permissionLayout->addWidget(m_openPermissionSettingsButton, 0, Qt::AlignLeft);
+  layout->addWidget(m_permissionBanner);
 
   m_emptyLabel = new QLabel(body);
   m_emptyLabel->setObjectName(QStringLiteral("relaydeskDevicesEmptyLabel"));
@@ -252,6 +278,10 @@ DevicesDock::DevicesDock(model::DeviceHomeModel &devices, model::PairingWizardMo
   connect(m_pairButton, &QPushButton::clicked, this, [this]() { requestPairing(m_deviceList->currentIndex()); });
 
   connect(&m_pairing, &model::PairingWizardModel::changed, this, &DevicesDock::updatePairingPanel);
+  connect(&m_permissions, &model::PermissionStatusModel::snapshotChanged, this, &DevicesDock::updatePermissionBanner);
+  connect(m_openPermissionSettingsButton, &QPushButton::clicked, this, [this]() {
+    (void)m_permissions.requestPrimarySettings();
+  });
   connect(m_confirmCodeButton, &QPushButton::clicked, &m_pairing, &model::PairingWizardModel::confirmMatchingSas);
   connect(m_submitCodeButton, &QPushButton::clicked, this, &DevicesDock::submitPairingCode);
   connect(m_pairingCodeEntry, &QLineEdit::returnPressed, this, &DevicesDock::submitPairingCode);
@@ -266,6 +296,7 @@ DevicesDock::DevicesDock(model::DeviceHomeModel &devices, model::PairingWizardMo
   updateEmptyState();
   updateSelection();
   updatePairingPanel();
+  updatePermissionBanner();
 }
 
 model::DeviceHomeModel &DevicesDock::deviceModel() const
@@ -278,6 +309,11 @@ model::PairingWizardModel &DevicesDock::pairingModel() const
   return m_pairing;
 }
 
+model::PermissionStatusModel &DevicesDock::permissionModel() const
+{
+  return m_permissions;
+}
+
 void DevicesDock::changeEvent(QEvent *event)
 {
   QDockWidget::changeEvent(event);
@@ -285,6 +321,7 @@ void DevicesDock::changeEvent(QEvent *event)
     updateText();
     updateSelection();
     updatePairingPanel();
+    updatePermissionBanner();
     m_deviceList->viewport()->update();
   }
 }
@@ -300,6 +337,7 @@ void DevicesDock::updateText()
   m_submitCodeButton->setText(m_pairing.submitActionText());
   m_cancelPairingButton->setText(m_pairing.cancelActionText());
   m_fingerprintToggle->setText(m_pairing.fingerprintLabel());
+  m_openPermissionSettingsButton->setText(m_permissions.openSettingsActionText());
 }
 
 void DevicesDock::updateEmptyState()
@@ -374,6 +412,22 @@ void DevicesDock::submitPairingCode()
     return;
   if (m_pairing.submitDisplayedSas(m_pairingCodeEntry->text()))
     m_pairingCodeEntry->clear();
+}
+
+void DevicesDock::updatePermissionBanner()
+{
+  const auto visible = m_permissions.bannerVisible();
+  m_permissionBanner->setVisible(visible);
+  if (!visible)
+    return;
+
+  m_permissionTitle->setText(m_permissions.bannerTitle());
+  m_permissionMessage->setText(m_permissions.bannerMessage());
+  m_openPermissionSettingsButton->setText(m_permissions.openSettingsActionText());
+  m_openPermissionSettingsButton->setVisible(m_permissions.canOpenPrimarySettings());
+  m_permissionBanner->setAccessibleName(m_permissions.bannerTitle());
+  m_permissionBanner->setAccessibleDescription(m_permissions.bannerMessage());
+  m_openPermissionSettingsButton->setAccessibleName(m_permissions.openSettingsActionText());
 }
 
 } // namespace deskflow::relaydesk::widgets

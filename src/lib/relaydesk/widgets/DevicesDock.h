@@ -22,6 +22,7 @@ class QToolButton;
 namespace deskflow::relaydesk::model {
 class DeviceHomeModel;
 class PairingWizardModel;
+class PermissionStatusModel;
 } // namespace deskflow::relaydesk::model
 
 namespace deskflow::relaydesk::widgets {
@@ -31,10 +32,14 @@ class DevicesDock final : public QDockWidget
   Q_OBJECT
 
 public:
-  explicit DevicesDock(model::DeviceHomeModel &devices, model::PairingWizardModel &pairing, QWidget *parent = nullptr);
+  explicit DevicesDock(
+      model::DeviceHomeModel &devices, model::PairingWizardModel &pairing, model::PermissionStatusModel &permissions,
+      QWidget *parent = nullptr
+  );
 
   [[nodiscard]] model::DeviceHomeModel &deviceModel() const;
   [[nodiscard]] model::PairingWizardModel &pairingModel() const;
+  [[nodiscard]] model::PermissionStatusModel &permissionModel() const;
 
 Q_SIGNALS:
   void pairingRequested(DeviceSnapshot peer);
@@ -48,10 +53,16 @@ private:
   void updateSelection();
   void requestPairing(const QModelIndex &index);
   void updatePairingPanel();
+  void updatePermissionBanner();
   void submitPairingCode();
 
   model::DeviceHomeModel &m_devices;
   model::PairingWizardModel &m_pairing;
+  model::PermissionStatusModel &m_permissions;
+  QFrame *m_permissionBanner = nullptr;
+  QLabel *m_permissionTitle = nullptr;
+  QLabel *m_permissionMessage = nullptr;
+  QPushButton *m_openPermissionSettingsButton = nullptr;
   QListView *m_deviceList = nullptr;
   QLabel *m_emptyLabel = nullptr;
   QPushButton *m_pairButton = nullptr;

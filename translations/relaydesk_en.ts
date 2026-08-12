@@ -52,6 +52,27 @@
     <message><source>pairing.fingerprint.unavailable</source><translation>Fingerprint unavailable</translation></message>
     <message numerus="yes"><source>pairing.attempts_remaining</source><translation><numerusform>%n attempt remaining</numerusform><numerusform>%n attempts remaining</numerusform></translation></message>
     <message><source>pairing.expires_at</source><translation>Expires: %1</translation></message>
+    <message><source>permissions.banner.attention_title</source><translation>Permission needed</translation></message>
+    <message><source>permissions.banner.unknown_title</source><translation>Permission status not checked</translation></message>
+    <message><source>permissions.kind.windows_firewall</source><translation>Windows Firewall</translation></message>
+    <message><source>permissions.kind.windows_port</source><translation>Local network port</translation></message>
+    <message><source>permissions.kind.macos_local_network</source><translation>Local Network</translation></message>
+    <message><source>permissions.kind.macos_accessibility</source><translation>Accessibility</translation></message>
+    <message><source>permissions.kind.macos_input_monitoring</source><translation>Input Monitoring</translation></message>
+    <message><source>permissions.status.unknown</source><translation>Not checked</translation></message>
+    <message><source>permissions.status.not_required</source><translation>Not required</translation></message>
+    <message><source>permissions.status.granted</source><translation>Allowed</translation></message>
+    <message><source>permissions.status.denied</source><translation>Blocked</translation></message>
+    <message><source>permissions.status.needs_action</source><translation>Action needed</translation></message>
+    <message><source>permissions.message.unknown</source><translation>RelayDesk has not received a permission check yet.</translation></message>
+    <message><source>permissions.message.probe_unavailable</source><translation>RelayDesk could not check this setting. Try again.</translation></message>
+    <message><source>permissions.message.review</source><translation>Review this system setting to keep local device connections working.</translation></message>
+    <message><source>permissions.message.windows_firewall</source><translation>Allow RelayDesk through Windows Firewall on private networks.</translation></message>
+    <message><source>permissions.message.windows_port</source><translation>RelayDesk cannot listen on its local network port. Review firewall and port settings.</translation></message>
+    <message><source>permissions.message.macos_local_network</source><translation>Allow Local Network access so RelayDesk can find nearby devices.</translation></message>
+    <message><source>permissions.message.macos_accessibility</source><translation>Allow Accessibility so RelayDesk can control keyboard and pointer input.</translation></message>
+    <message><source>permissions.message.macos_input_monitoring</source><translation>Allow Input Monitoring when macOS requires it for shared input.</translation></message>
+    <message><source>permissions.action.open_settings</source><translation>Open settings</translation></message>
     <message><source>transfer.title</source><translation>Transfers</translation></message>
     <message><source>transfer.state.preparing</source><translation>Preparing</translation></message>
     <message><source>transfer.state.awaiting_confirmation</source><translation>Waiting for confirmation</translation></message>

@@ -62,6 +62,7 @@ class PairingStateMachine;
 namespace model {
 class DeviceHomeModel;
 class PairingWizardModel;
+class PermissionStatusModel;
 } // namespace model
 namespace widgets {
 class DevicesDock;
@@ -101,6 +102,7 @@ public:
   }
   [[nodiscard]] deskflow::relaydesk::model::DeviceHomeModel &relayDeskDeviceModel();
   [[nodiscard]] deskflow::relaydesk::model::PairingWizardModel &relayDeskPairingModel();
+  [[nodiscard]] deskflow::relaydesk::model::PermissionStatusModel &relayDeskPermissionModel();
   [[nodiscard]] deskflow::relaydesk::widgets::DevicesDock &relayDeskDevicesDock();
 
   void hide();
@@ -219,6 +221,7 @@ private:
   deskflow::relaydesk::PairingStateMachine *m_relayDeskPairingState = nullptr;
   deskflow::relaydesk::model::DeviceHomeModel *m_relayDeskDeviceModel = nullptr;
   deskflow::relaydesk::model::PairingWizardModel *m_relayDeskPairingModel = nullptr;
+  deskflow::relaydesk::model::PermissionStatusModel *m_relayDeskPermissionModel = nullptr;
   deskflow::relaydesk::widgets::DevicesDock *m_devicesDock = nullptr;
   QLabel *m_lblSecurityStatus = nullptr;
   QLabel *m_lblStatus = nullptr;

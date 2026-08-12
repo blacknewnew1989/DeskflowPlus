@@ -8,6 +8,7 @@
 
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
+#include "relaydesk/model/PermissionStatusModel.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -48,7 +49,8 @@ struct Fixture
   PairingStateMachine pairingState{{}, {}, []() { return 42U; }};
   DeviceHomeModel devices;
   PairingWizardModel pairing{pairingState};
-  DevicesDock dock{devices, pairing};
+  PermissionStatusModel permissions{PermissionPlatform::Other};
+  DevicesDock dock{devices, pairing, permissions};
   QByteArray fingerprint = QByteArray::fromHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
 };
 
@@ -64,6 +66,7 @@ private Q_SLOTS:
   void rendersAndDrivesSharedPairingModel();
   void confirmsAndCancelsFromPairingPanel();
   void rendersExpiredPairingState();
+  void rendersPermissionGuidanceAndKeyboardAction();
 };
 
 void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
@@ -200,7 +203,8 @@ void DevicesDockTests::rendersExpiredPairingState()
   PairingStateMachine pairingState({.validity = 5s}, [&now]() { return now; }, []() { return 42U; });
   DeviceHomeModel devices;
   PairingWizardModel pairing(pairingState);
-  DevicesDock dock(devices, pairing);
+  PermissionStatusModel permissions(PermissionPlatform::Other);
+  DevicesDock dock(devices, pairing, permissions);
   const auto fingerprint = QByteArray::fromHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
 
   dock.show();
@@ -214,6 +218,69 @@ void DevicesDockTests::rendersExpiredPairingState()
   QCOMPARE(state->text(), QStringLiteral("The pairing code expired. Generate a new code."));
   QCOMPARE(error->text(), QStringLiteral("The pairing code expired. Generate a new code."));
   QVERIFY(error->isVisible());
+}
+
+void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
+{
+  qRegisterMetaType<PermissionKind>();
+  PairingStateMachine pairingState;
+  DeviceHomeModel devices;
+  PairingWizardModel pairing(pairingState);
+  PermissionStatusModel permissions(PermissionPlatform::Windows);
+  DevicesDock dock(devices, pairing, permissions);
+  dock.show();
+  QCoreApplication::processEvents();
+
+  auto *banner = dock.findChild<QFrame *>(QStringLiteral("relaydeskPermissionBanner"));
+  auto *title = dock.findChild<QLabel *>(QStringLiteral("relaydeskPermissionTitle"));
+  auto *message = dock.findChild<QLabel *>(QStringLiteral("relaydeskPermissionMessage"));
+  auto *openSettings = dock.findChild<QPushButton *>(QStringLiteral("relaydeskOpenPermissionSettingsButton"));
+  QVERIFY(banner != nullptr);
+  QVERIFY(title != nullptr);
+  QVERIFY(message != nullptr);
+  QVERIFY(openSettings != nullptr);
+  QVERIFY(banner->isVisible());
+  QCOMPARE(title->text(), QStringLiteral("Permission status not checked"));
+  QVERIFY(!openSettings->isVisible());
+
+  QVERIFY(permissions.setSnapshot({
+      .platform = PermissionPlatform::Windows,
+      .entries = {
+          {
+              .kind = PermissionKind::WindowsFirewall,
+              .state = PermissionState::Denied,
+              .errorCode = static_cast<int>(PermissionErrorCode::WindowsFirewallBlocked),
+              .canOpenSettings = true,
+              .diagnostic = QStringLiteral("<b>remote detail must stay hidden</b>"),
+          },
+          {
+              .kind = PermissionKind::WindowsListeningPort,
+              .state = PermissionState::Granted,
+          },
+      },
+  }));
+  QTRY_VERIFY(openSettings->isVisible());
+  QCOMPARE(title->text(), QStringLiteral("Permission needed"));
+  QCOMPARE(message->text(), QStringLiteral("Allow RelayDesk through Windows Firewall on private networks."));
+  QVERIFY(!message->text().contains(QStringLiteral("remote detail")));
+  QCOMPARE(openSettings->text(), QStringLiteral("Open settings"));
+  QCOMPARE(openSettings->accessibleName(), QStringLiteral("Open settings"));
+  QVERIFY(openSettings->focusPolicy() != Qt::NoFocus);
+
+  QSignalSpy requested(&permissions, &PermissionStatusModel::openSettingsRequested);
+  openSettings->setFocus();
+  QTest::keyClick(openSettings, Qt::Key_Space);
+  QCOMPARE(requested.count(), 1);
+  QCOMPARE(requested.takeFirst().constFirst().value<PermissionKind>(), PermissionKind::WindowsFirewall);
+
+  QVERIFY(permissions.setSnapshot({
+      .platform = PermissionPlatform::Windows,
+      .entries = {
+          {.kind = PermissionKind::WindowsFirewall, .state = PermissionState::Granted},
+          {.kind = PermissionKind::WindowsListeningPort, .state = PermissionState::Granted},
+      },
+  }));
+  QVERIFY(!banner->isVisible());
 }
 
 QTEST_MAIN(DevicesDockTests)
