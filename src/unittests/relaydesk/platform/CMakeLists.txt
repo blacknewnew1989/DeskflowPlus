@@ -7,3 +7,11 @@ create_test(
   SOURCE PermissionSnapshotTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/platform"
 )
+
+create_test(
+  NAME RelayDeskWindowsFirewallProbeTests
+  DEPENDS relaydesk_windows_permissions
+  LIBS Qt6::Network
+  SOURCE WindowsFirewallProbeTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/platform"
+)
