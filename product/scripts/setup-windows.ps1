@@ -22,10 +22,12 @@ function Refresh-ProcessPath {
     $user = [Environment]::GetEnvironmentVariable("Path", "User")
     $pythonUserScripts = $null
     if (Get-Command python -ErrorAction SilentlyContinue) {
-        $pythonUserBase = (& python -c "import site; print(site.USER_BASE)" 2>$null).Trim()
-        if ($pythonUserBase) { $pythonUserScripts = Join-Path $pythonUserBase "Scripts" }
+        $pythonUserScripts = (
+            & python -c "import sysconfig; print(sysconfig.get_path('scripts', scheme='nt_user'))" 2>$null
+        ).Trim()
     }
-    $env:Path = "$machine;$user;$pythonUserScripts;$env:USERPROFILE\.dotnet\tools;$env:Path"
+    $windowsPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0"
+    $env:Path = "$machine;$user;$pythonUserScripts;$windowsPowerShell;$env:USERPROFILE\.dotnet\tools;$env:Path"
 }
 
 function Get-VcToolsInstallPath([string]$VsWhere) {
@@ -48,6 +50,33 @@ function Test-QtPrefix([string]$Prefix) {
     )
     foreach ($relative in $required) {
         if (-not (Test-Path (Join-Path $Prefix $relative))) { return $false }
+    }
+    return $true
+}
+
+function Install-QtArchives(
+    [string]$PythonCommand,
+    [string]$Version,
+    [string]$OutputRoot
+) {
+    foreach ($archive in @("qtbase", "qttools", "qtsvg", "qttranslations")) {
+        $installed = $false
+        for ($attempt = 1; $attempt -le 4; $attempt++) {
+            if ($PythonCommand -eq "py") {
+                & py -3 -m aqt install-qt windows desktop $Version win64_msvc2022_64 `
+                    -O $OutputRoot --archives $archive
+            }
+            else {
+                & python -m aqt install-qt windows desktop $Version win64_msvc2022_64 `
+                    -O $OutputRoot --archives $archive
+            }
+            if ($LASTEXITCODE -eq 0) {
+                $installed = $true
+                break
+            }
+            Start-Sleep -Seconds (3 * $attempt)
+        }
+        if (-not $installed) { return $false }
     }
     return $true
 }
@@ -106,6 +135,17 @@ if (-not $VsPath) { $ActionsFallback = $true }
 $PythonExe = $null
 if (Has-Command "python") { $PythonExe = "python" }
 elseif (Has-Command "py") { $PythonExe = "py" }
+$PythonUserScripts = $null
+if ($PythonExe -eq "python") {
+    $PythonUserScripts = (
+        & python -c "import sysconfig; print(sysconfig.get_path('scripts', scheme='nt_user'))" 2>$null
+    ).Trim()
+}
+elseif ($PythonExe -eq "py") {
+    $PythonUserScripts = (
+        & py -3 -c "import sysconfig; print(sysconfig.get_path('scripts', scheme='nt_user'))" 2>$null
+    ).Trim()
+}
 
 $QtRoot = Join-Path $ToolsRoot "Qt"
 $QtPrefix = Join-Path $QtRoot "$QtVersion\msvc2022_64"
@@ -118,13 +158,13 @@ if (-not (Test-QtPrefix $QtPrefix)) {
     elseif ($PythonExe -eq "py") {
         & py -3 -m pip install --disable-pip-version-check --user aqtinstall
         if ($LASTEXITCODE -eq 0) {
-            & py -3 -m aqt install-qt windows desktop $QtVersion win64_msvc2022_64 -O $QtStagingRoot
+            $null = Install-QtArchives "py" $QtVersion $QtStagingRoot
         }
     }
     elseif ($PythonExe -eq "python") {
         & python -m pip install --disable-pip-version-check --user aqtinstall
         if ($LASTEXITCODE -eq 0) {
-            & python -m aqt install-qt windows desktop $QtVersion win64_msvc2022_64 -O $QtStagingRoot
+            $null = Install-QtArchives "python" $QtVersion $QtStagingRoot
         }
     }
     else {
@@ -197,7 +237,7 @@ $EnvFile = Join-Path $RepoRoot ".relaydesk-toolchain-windows.ps1"
 `$env:RELAYDESK_QT_VERSION = "$QtVersion"
 `$env:RELAYDESK_QT_PREFIX = "$QtPrefix"
 `$env:VCPKG_ROOT = "$VcpkgRoot"
-`$env:PATH = "$QtPrefix\bin;$VcpkgRoot;`$env:USERPROFILE\.dotnet\tools;`$env:PATH"
+`$env:PATH = "$QtPrefix\bin;$VcpkgRoot;$PythonUserScripts;`$env:SystemRoot\System32\WindowsPowerShell\v1.0;`$env:USERPROFILE\.dotnet\tools;`$env:PATH"
 "@ | Set-Content -Encoding UTF8 $EnvFile
 
 $Report = [ordered]@{
