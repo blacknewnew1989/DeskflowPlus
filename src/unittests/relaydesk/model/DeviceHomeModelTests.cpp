@@ -73,6 +73,7 @@ private Q_SLOTS:
   void movesRowsWhenAnUpdateChangesSortPosition();
   void preservesTrustedDevicesWhenTheyGoOffline();
   void replacingLocalDeviceDoesNotLeaveASecondLocalRow();
+  void exposesPairingEntryOnlyForDiscoveredUntrustedPeers();
 };
 
 void DeviceHomeModelTests::exposesStableRolesAndCardData()
@@ -108,6 +109,7 @@ void DeviceHomeModelTests::exposesStableRolesAndCardData()
   QCOMPARE(roles.value(DeviceHomeModel::PresenceRole), QByteArray("presence"));
   QCOMPARE(roles.value(DeviceHomeModel::StatusTextRole), QByteArray("statusText"));
   QCOMPARE(roles.value(DeviceHomeModel::FileCapabilityRole), QByteArray("canSendFiles"));
+  QCOMPARE(roles.value(DeviceHomeModel::CanStartPairingRole), QByteArray("canStartPairing"));
   QCOMPARE(QSet<QByteArray>(roles.cbegin(), roles.cend()).size(), roles.size());
 }
 
@@ -247,6 +249,36 @@ void DeviceHomeModelTests::replacingLocalDeviceDoesNotLeaveASecondLocalRow()
   QVERIFY(model.data(model.index(0, 0), DeviceHomeModel::IsLocalRole).toBool());
   QVERIFY(!model.snapshot(oldLocal.id).has_value());
   QVERIFY(!model.data(model.index(1, 0), DeviceHomeModel::IsLocalRole).toBool());
+}
+
+void DeviceHomeModelTests::exposesPairingEntryOnlyForDiscoveredUntrustedPeers()
+{
+  DeviceHomeModel model;
+  const auto local =
+      makeSnapshot("70000000-0000-0000-0000-000000000001", QStringLiteral("Local"), DevicePresence::Online, true);
+  auto peer =
+      makeSnapshot("70000000-0000-0000-0000-000000000002", QStringLiteral("New Mac"), DevicePresence::Discovered);
+  model.setLocalDevice(local);
+  model.upsertRemoteDevice(peer);
+
+  QVERIFY(!model.data(model.index(0, 0), DeviceHomeModel::CanStartPairingRole).toBool());
+  QVERIFY(model.data(model.index(1, 0), DeviceHomeModel::CanStartPairingRole).toBool());
+  QCOMPARE(model.data(model.index(1, 0), DeviceHomeModel::PairActionTextRole).toString(), QStringLiteral("Pair"));
+
+  peer.presence = DevicePresence::Pairing;
+  model.upsertRemoteDevice(peer);
+  QVERIFY(!model.data(model.index(model.indexOf(peer.id), 0), DeviceHomeModel::CanStartPairingRole).toBool());
+
+  peer.presence = DevicePresence::Online;
+  peer.trusted = true;
+  model.upsertRemoteDevice(peer);
+  QVERIFY(!model.data(model.index(model.indexOf(peer.id), 0), DeviceHomeModel::CanStartPairingRole).toBool());
+
+  peer.presence = DevicePresence::TrustViolation;
+  model.upsertRemoteDevice(peer);
+  const auto violationIndex = model.index(model.indexOf(peer.id), 0);
+  QVERIFY(model.data(violationIndex, DeviceHomeModel::CanStartPairingRole).toBool());
+  QCOMPARE(model.data(violationIndex, DeviceHomeModel::PairActionTextRole).toString(), QStringLiteral("Pair again"));
 }
 
 QTEST_MAIN(DeviceHomeModelTests)

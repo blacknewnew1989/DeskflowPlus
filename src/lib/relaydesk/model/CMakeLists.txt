@@ -4,6 +4,8 @@
 add_library(relaydesk_device_model STATIC
   DeviceHomeModel.cpp
   DeviceHomeModel.h
+  PairingWizardModel.cpp
+  PairingWizardModel.h
 )
 
 target_include_directories(
@@ -15,5 +17,6 @@ target_link_libraries(
   PUBLIC
     relaydesk_device
     relaydesk_i18n
+    relaydesk_pairing
     Qt6::Core
 )

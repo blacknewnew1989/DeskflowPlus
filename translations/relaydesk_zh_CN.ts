@@ -23,11 +23,32 @@
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n 个项目</numerusform></translation></message>
     <message><source>pairing.title</source><translation>配对设备</translation></message>
     <message><source>pairing.code.prompt</source><translation>输入六位配对码</translation></message>
+    <message><source>pairing.state.ready</source><translation>可以开始配对</translation></message>
+    <message><source>pairing.state.requesting</source><translation>正在请求配对</translation></message>
+    <message><source>pairing.state.securing</source><translation>正在建立安全连接</translation></message>
+    <message><source>pairing.state.compare</source><translation>请比较两台设备上的配对码</translation></message>
+    <message><source>pairing.state.confirming</source><translation>正在确认配对</translation></message>
+    <message><source>pairing.state.rejected</source><translation>配对已取消</translation></message>
+    <message><source>pairing.state.failed</source><translation>配对失败</translation></message>
+    <message><source>pairing.action.start</source><translation>配对</translation></message>
+    <message><source>pairing.action.pair_again</source><translation>重新配对</translation></message>
+    <message><source>pairing.action.codes_match</source><translation>配对码相同</translation></message>
+    <message><source>pairing.action.submit_code</source><translation>确认配对码</translation></message>
+    <message><source>pairing.action.cancel</source><translation>取消</translation></message>
+    <message><source>pairing.code.invalid</source><translation>请输入六位数字</translation></message>
+    <message><source>pairing.code.mismatch</source><translation>配对码不匹配</translation></message>
     <message><source>pairing.code.expired</source><translation>配对码已过期，请重新生成。</translation></message>
+    <message><source>pairing.error.already_active</source><translation>另一项配对正在进行</translation></message>
+    <message><source>pairing.error.identity_not_ready</source><translation>设备身份尚未就绪，请重试。</translation></message>
+    <message><source>pairing.error.action_unavailable</source><translation>当前无法执行此配对操作</translation></message>
+    <message><source>pairing.error.session_unavailable</source><translation>配对会话已不可用</translation></message>
     <message><source>pairing.certificate_changed</source><translation>对方证书已变化，已停止自动连接。</translation></message>
     <message><source>pairing.too_many_attempts</source><translation>多次输入错误，请稍后再试。</translation></message>
     <message><source>pairing.not_direct</source><translation>两台设备无法直连，请尝试手动地址。</translation></message>
     <message><source>pairing.success</source><translation>设备配对成功</translation></message>
+    <message><source>pairing.fingerprint.label</source><translation>证书指纹</translation></message>
+    <message><source>pairing.fingerprint.unavailable</source><translation>指纹不可用</translation></message>
+    <message numerus="yes"><source>pairing.attempts_remaining</source><translation><numerusform>还可尝试 %n 次</numerusform></translation></message>
     <message><source>transfer.title</source><translation>传输</translation></message>
     <message><source>transfer.state.preparing</source><translation>正在准备</translation></message>
     <message><source>transfer.state.awaiting_confirmation</source><translation>等待对方确认</translation></message>

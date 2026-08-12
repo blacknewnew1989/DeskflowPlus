@@ -23,11 +23,32 @@
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n item</numerusform><numerusform>%n items</numerusform></translation></message>
     <message><source>pairing.title</source><translation>Pair device</translation></message>
     <message><source>pairing.code.prompt</source><translation>Enter the six-digit code</translation></message>
+    <message><source>pairing.state.ready</source><translation>Ready to pair</translation></message>
+    <message><source>pairing.state.requesting</source><translation>Requesting pairing</translation></message>
+    <message><source>pairing.state.securing</source><translation>Securing the connection</translation></message>
+    <message><source>pairing.state.compare</source><translation>Compare the code on both devices</translation></message>
+    <message><source>pairing.state.confirming</source><translation>Confirming pairing</translation></message>
+    <message><source>pairing.state.rejected</source><translation>Pairing canceled</translation></message>
+    <message><source>pairing.state.failed</source><translation>Pairing failed</translation></message>
+    <message><source>pairing.action.start</source><translation>Pair</translation></message>
+    <message><source>pairing.action.pair_again</source><translation>Pair again</translation></message>
+    <message><source>pairing.action.codes_match</source><translation>Codes match</translation></message>
+    <message><source>pairing.action.submit_code</source><translation>Confirm code</translation></message>
+    <message><source>pairing.action.cancel</source><translation>Cancel</translation></message>
+    <message><source>pairing.code.invalid</source><translation>Enter exactly six digits</translation></message>
+    <message><source>pairing.code.mismatch</source><translation>The pairing code does not match</translation></message>
     <message><source>pairing.code.expired</source><translation>The pairing code expired. Generate a new code.</translation></message>
+    <message><source>pairing.error.already_active</source><translation>Another pairing is already in progress</translation></message>
+    <message><source>pairing.error.identity_not_ready</source><translation>The device identity is not ready. Try again.</translation></message>
+    <message><source>pairing.error.action_unavailable</source><translation>This pairing action is not available now</translation></message>
+    <message><source>pairing.error.session_unavailable</source><translation>The pairing session is no longer available</translation></message>
     <message><source>pairing.certificate_changed</source><translation>The other device certificate changed. Automatic connection was stopped.</translation></message>
     <message><source>pairing.too_many_attempts</source><translation>Too many incorrect attempts. Try again later.</translation></message>
     <message><source>pairing.not_direct</source><translation>The devices cannot connect directly. Try a manual address.</translation></message>
     <message><source>pairing.success</source><translation>Device paired</translation></message>
+    <message><source>pairing.fingerprint.label</source><translation>Certificate fingerprint</translation></message>
+    <message><source>pairing.fingerprint.unavailable</source><translation>Fingerprint unavailable</translation></message>
+    <message numerus="yes"><source>pairing.attempts_remaining</source><translation><numerusform>%n attempt remaining</numerusform><numerusform>%n attempts remaining</numerusform></translation></message>
     <message><source>transfer.title</source><translation>Transfers</translation></message>
     <message><source>transfer.state.preparing</source><translation>Preparing</translation></message>
     <message><source>transfer.state.awaiting_confirmation</source><translation>Waiting for confirmation</translation></message>
