@@ -37,7 +37,9 @@ QString createFile(
   // Set the timestamp after the writer is closed. On APFS, closing a writer
   // after setFileTime can update mtime again when buffered data is committed.
   QFile timestampFile(path);
-  if (!timestampFile.open(QIODevice::ReadOnly) ||
+  // Windows requires a writable handle for SetFileTime, while APFS requires
+  // the original writer to be closed before the final timestamp is applied.
+  if (!timestampFile.open(QIODevice::ReadWrite) ||
       !timestampFile.setFileTime(
           QDateTime::fromMSecsSinceEpoch(modifiedAtMs, QTimeZone::UTC), QFileDevice::FileModificationTime
       )) {
