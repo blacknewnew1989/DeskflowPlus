@@ -31,6 +31,8 @@ add_library(relaydesk_transfer STATIC
   SessionMessageCodec.h
   TransferOfferStateMachine.cpp
   TransferOfferStateMachine.h
+  TransferProgressPublisher.cpp
+  TransferProgressPublisher.h
   TransferControlStateMachine.cpp
   TransferControlStateMachine.h
   TransferHistoryStore.cpp
