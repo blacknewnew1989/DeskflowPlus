@@ -1,0 +1,22 @@
+@CMAKE_PROJECT_PROPER_NAME@ @CMAKE_PROJECT_VERSION@ - Windows package
+
+Package identity
+----------------
+Product: @CMAKE_PROJECT_PROPER_NAME@
+Vendor: @CMAKE_PROJECT_VENDOR@
+Upgrade code: @RELAYDESK_WINDOWS_WIX_UPGRADE_GUID@
+
+Configuration and uninstall boundary
+------------------------------------
+The installed application keeps configuration, trusted devices, and transfer
+history outside the installation directory. A normal upgrade or uninstall does
+not delete that user data. Reinstalling the same product can reuse it.
+
+The portable archive is intentionally different: its settings directory stays
+beside the executable and is removed when the portable folder is deleted.
+
+Internal package signature
+--------------------------
+This package is unsigned unless both its file name and artifact manifest say it
+is signed. An unsigned internal package remains usable for development and
+testing, but Windows may display an unknown-publisher warning.
