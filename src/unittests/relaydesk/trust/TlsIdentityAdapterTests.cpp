@@ -14,23 +14,25 @@ using namespace deskflow::relaydesk;
 
 namespace {
 
-const auto kCertificatePem = QByteArrayLiteral("-----BEGIN CERTIFICATE-----\n"
-                                               "MIICxDCCAaygAwIBAgIIXTCCuzAC28owDQYJKoZIhvcNAQELBQAwIjEgMB4GA1UE\n"
-                                               "AxMXUmVsYXlEZXNrIFRlc3QgSWRlbnRpdHkwHhcNMjYwODExMTQzNzQ3WhcNMzEw\n"
-                                               "ODEyMTQzNzQ3WjAiMSAwHgYDVQQDExdSZWxheURlc2sgVGVzdCBJZGVudGl0eTCC\n"
-                                               "ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMtEGlVN6DYEMW2oSbBXC/aa\n"
-                                               "GkzH2sddhutYBJ9jYtbGeJLFrzFgo8iwYO1pLkQi8e6zZaFJjLcizuVgNOCKQOwQ\n"
-                                               "22E61vFysTp58vElpm/Zim0iGfZKdbQM49ZzlyG+8n6NcJ0bW/LFNdTxyStICQXL\n"
-                                               "gZWFiB+/6xvPpzrXIXOVwd3WSyVCSLApXY7ogEVlwLEj+r1RSYSfxpMXfbNG1GQv\n"
-                                               "U6L4wK9d6Jj6aCHCQEDy2jghsSMhTjpzxPUodn+KHZPb15vB8yc3Z50kupHMpeHz\n"
-                                               "2TkhPNk5BlUP9o6ardLyobUanRtjz0LBXRycQigkbwNba//kdYR58RoDx4hA6c0C\n"
-                                               "AwEAATANBgkqhkiG9w0BAQsFAAOCAQEAJbKHz4VMud9QoACvy72zTyc7m2E5rJkd\n"
-                                               "gf6oC9Va9hzP96tiecZ6K6kMs3ETLkp1QC+KwlZLlEXt8qvdiwkz92R6jg0erlZA\n"
-                                               "6mKZfzaOQ4GSY8u9itr6AcIz7K73Eu3yxUdtey1Jns0hzv7OLR83zhVIswhLjWbp\n"
-                                               "lApnuRGKbGVo1272s5H5hnsLgSfRIY/Pu92zxEo7cLJASZeaXHuH5DbLCONZf62c\n"
-                                               "tr7nh4Qbz32orYHVdKA/ZuM3n+IXLC1FhRejWp2n1HA+bY8Pw32KKKMTKt3mB9fY\n"
-                                               "eCeWLqLNP/PXiOAYCVNFv9BvTZiM0eUYtY3p2XK6YlUqABD00tzrGA==\n"
-                                               "-----END CERTIFICATE-----\n");
+const auto kCertificatePem = QByteArrayLiteral(
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIICxDCCAaygAwIBAgIIXTCCuzAC28owDQYJKoZIhvcNAQELBQAwIjEgMB4GA1UE\n"
+    "AxMXUmVsYXlEZXNrIFRlc3QgSWRlbnRpdHkwHhcNMjYwODExMTQzNzQ3WhcNMzEw\n"
+    "ODEyMTQzNzQ3WjAiMSAwHgYDVQQDExdSZWxheURlc2sgVGVzdCBJZGVudGl0eTCC\n"
+    "ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMtEGlVN6DYEMW2oSbBXC/aa\n"
+    "GkzH2sddhutYBJ9jYtbGeJLFrzFgo8iwYO1pLkQi8e6zZaFJjLcizuVgNOCKQOwQ\n"
+    "22E61vFysTp58vElpm/Zim0iGfZKdbQM49ZzlyG+8n6NcJ0bW/LFNdTxyStICQXL\n"
+    "gZWFiB+/6xvPpzrXIXOVwd3WSyVCSLApXY7ogEVlwLEj+r1RSYSfxpMXfbNG1GQv\n"
+    "U6L4wK9d6Jj6aCHCQEDy2jghsSMhTjpzxPUodn+KHZPb15vB8yc3Z50kupHMpeHz\n"
+    "2TkhPNk5BlUP9o6ardLyobUanRtjz0LBXRycQigkbwNba//kdYR58RoDx4hA6c0C\n"
+    "AwEAATANBgkqhkiG9w0BAQsFAAOCAQEAJbKHz4VMud9QoACvy72zTyc7m2E5rJkd\n"
+    "gf6oC9Va9hzP96tiecZ6K6kMs3ETLkp1QC+KwlZLlEXt8qvdiwkz92R6jg0erlZA\n"
+    "6mKZfzaOQ4GSY8u9itr6AcIz7K73Eu3yxUdtey1Jns0hzv7OLR83zhVIswhLjWbp\n"
+    "lApnuRGKbGVo1272s5H5hnsLgSfRIY/Pu92zxEo7cLJASZeaXHuH5DbLCONZf62c\n"
+    "tr7nh4Qbz32orYHVdKA/ZuM3n+IXLC1FhRejWp2n1HA+bY8Pw32KKKMTKt3mB9fY\n"
+    "eCeWLqLNP/PXiOAYCVNFv9BvTZiM0eUYtY3p2XK6YlUqABD00tzrGA==\n"
+    "-----END CERTIFICATE-----\n"
+);
 
 QString writeCertificate(const QTemporaryDir &directory, QByteArrayView contents = kCertificatePem)
 {
@@ -50,6 +52,7 @@ class TlsIdentityAdapterTests final : public QObject
 
 private Q_SLOTS:
   void readsDeskflowCertificateIdentity();
+  void rejectsCertificateWithoutPrivateKey();
   void rejectsMissingAndMalformedCertificate();
   void rejectsUnexpectedKeySize();
 };
@@ -70,6 +73,19 @@ void TlsIdentityAdapterTests::readsDeskflowCertificateIdentity()
       QByteArrayLiteral("8a7fbfae04b4090475991372c78e7053c774f42d95b9daebf41ce5a6c13beaf3")
   );
   QCOMPARE(identity.certificatePath, QFileInfo(path).canonicalFilePath());
+}
+
+void TlsIdentityAdapterTests::rejectsCertificateWithoutPrivateKey()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = writeCertificate(directory);
+  QString diagnostic;
+
+  const auto configuration = TlsIdentityAdapter::loadConfiguration(path, &diagnostic);
+
+  QVERIFY(!configuration.has_value());
+  QVERIFY(diagnostic.contains(QStringLiteral("private key")));
 }
 
 void TlsIdentityAdapterTests::rejectsMissingAndMalformedCertificate()
