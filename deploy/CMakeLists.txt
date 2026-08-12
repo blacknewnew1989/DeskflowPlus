@@ -18,6 +18,8 @@ set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt)
 
 set(CPACK_PACKAGE_VERSION ${CMAKE_PROJECT_VERSION})
 
+include(${CMAKE_SOURCE_DIR}/cmake/SourcePackage.cmake)
+
 #Prevent this override from being written in the package
 if(NOT PACKAGE_VERSION_LABEL)
     set (PACKAGE_VERSION_LABEL "${CPACK_PACKAGE_VERSION}")
