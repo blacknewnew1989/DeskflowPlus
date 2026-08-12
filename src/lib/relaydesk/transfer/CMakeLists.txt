@@ -29,6 +29,8 @@ add_library(relaydesk_transfer STATIC
   TransferOfferStateMachine.h
   TransferControlStateMachine.cpp
   TransferControlStateMachine.h
+  TransferHistoryStore.cpp
+  TransferHistoryStore.h
   TransferSender.cpp
   TransferSender.h
   TransferTypes.h
