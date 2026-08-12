@@ -6,18 +6,17 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 依赖 |
 |---|---|---|---|
-| BASE-002 | Windows 原版构建或 Actions 构建记录 | A4 | AUTO-004 |
-| BASE-003 | macOS 原版构建或 Actions 构建记录 | A5 | AUTO-004 |
 | UI-001 | 设备卡片与传输中心骨架 | A3 | AUTO-004 |
+| DISC-002 | 多网卡 discovery service | A2 | DISC-001 |
+| FILE-006 | file TLS listener/client | A2/A6 | PAIR-004, FILE-001 |
 
 ## In Progress
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
-| BASE-002 | Windows 原版构建或 Actions 构建记录 | A0/A4/A7 | 本机准备已回退；run `31594287736` queued |
-| BASE-003 | macOS 原版构建或 Actions 构建记录 | A5/A7 | run `31594287736` queued |
-| CORE-001 | 文件传输共享接口与协议骨架 | A6 | `agent/a6/file-protocol` 开发中 |
-| CI-001 | 非门禁 Windows/macOS build workflow | A7 | 唯一 workflow active，失败修复/监控中 |
+| DISC-002 | 多网卡 discovery service | A2 | DISC-001 codec 已集成，service 待实现 |
+| FILE-006 | file TLS listener/client | A2/A6 | 协议/路径/manifest 基础已集成 |
+| CI-001 | 非门禁 Windows/macOS build workflow | A7 | Phase 0 PASS；继续监控当前集成 HEAD |
 
 ## Blocked
 
@@ -32,6 +31,18 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | AUTO-003 | 创建/恢复产品分支并安装资料/workflow | A0/A1 | bootstrap worktree and commit |
 | AUTO-004 | bootstrap commit + push origin | A0 | `9b0a4111` pushed |
 | BASE-004 | 核查真实模块/CMake/测试/打包结构 | A1 | `5b01f073` baseline audit |
+| BASE-002 | Windows Release Actions 构建/测试/打包 | A0/A4/A7 | run `31602699800`, CTest 27/27, MSI/7Z |
+| BASE-003 | macOS arm64 Actions 构建/测试/打包 | A0/A5/A7 | run `31602699800`, CTest 28/28, App/DMG |
+| AUTO-006 | 触发并监控首次双平台 workflow | A0/A7 | phase tag run `31602699800` PASS |
+| BRAND-001 | 集中品牌与安装包身份配置 | A1/A3 | `7c1df18ad`, `e9cb1121a` |
+| I18N-001 | 中文翻译基线与语义 key | A3 | `a36ad2a91`, `f69555c6c`, `c097c2157` |
+| DEV-001 | 稳定 DeviceIdentity/deviceId | A2 | `2168f3941` |
+| DISC-001 | 严格 UDP discovery codec | A2 | `f82ef0eac`; local Qt Test PASS |
+| CORE-001 | 严格 CBOR 控制消息 | A6 | `ef53feb5d`; Qt Test PASS |
+| FILE-001 | RDFT FrameCodec | A6 | `bf367feaf`; Qt Test PASS |
+| FILE-003 | 共享 PathPolicy | A6 | `85efded28`; Qt Test PASS |
+| FILE-008 | 流式单文件 manifest | A6 | `1bd40469e`; Win/mac timestamp fixes integrated |
+| FILE-015 | 有界多文件/文件夹 manifest | A6 | `a5de2b3dc`; local transfer CTest 4/4 PASS |
 
 ## 规则
 
