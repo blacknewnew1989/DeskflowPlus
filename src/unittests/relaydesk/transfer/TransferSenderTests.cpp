@@ -110,6 +110,9 @@ QList<Frame> produceAll(TransferSender &sender, SenderFrameResult &last)
   QList<Frame> frames;
   while (!sender.finished()) {
     last = sender.nextFrame();
+    if (last.status == SenderFrameStatus::Preparing) {
+      continue;
+    }
     if (!last.ready()) {
       return frames;
     }
@@ -128,6 +131,10 @@ private Q_SLOTS:
   void streamsZeroByteUnicodeAndMultipleChunks_data();
   void streamsZeroByteUnicodeAndMultipleChunks();
   void supportsLargeLogicalFileSizeAtBegin();
+  void resumesWithHashedPrefixAndResetSequence_data();
+  void resumesWithHashedPrefixAndResetSequence();
+  void rejectsChangedResumePrefix();
+  void rejectsResumeOffsetBeyondSource();
   void rejectsShortReadAsSourceChanged();
   void rejectsSameSizeSourceMutation();
   void rejectsUnrepresentableLogicalSize();
@@ -231,6 +238,105 @@ void TransferSenderTests::supportsLargeLogicalFileSizeAtBegin()
   const auto &begin = std::get<FileBeginMessage>(*beginResult.message);
   QCOMPARE(begin.size, static_cast<quint64>(logicalSize));
   QCOMPARE(result.frame->payload.size(), 0);
+}
+
+void TransferSenderTests::resumesWithHashedPrefixAndResetSequence_data()
+{
+  QTest::addColumn<quint64>("startOffset");
+  QTest::newRow("middle") << quint64{1234};
+  QTest::newRow("near-end") << quint64{4095};
+  QTest::newRow("at-end") << quint64{4096};
+}
+
+void TransferSenderTests::resumesWithHashedPrefixAndResetSequence()
+{
+  QFETCH(quint64, startOffset);
+  QTemporaryDir directory;
+  const QString path = directory.filePath(QStringLiteral("resume-源.bin"));
+  QByteArray contents(4096, '\0');
+  for (qsizetype index = 0; index < contents.size(); ++index) {
+    contents[index] = static_cast<char>(index % 251);
+  }
+  QVERIFY(writeFile(path, contents));
+  const SingleFileManifest manifest = buildManifest(path, QStringLiteral("resume/源.bin"));
+  auto request = requestFor(manifest, 257);
+  request.startOffset = startOffset;
+  TransferSender sender(std::move(request));
+  SenderFrameResult last;
+
+  const QList<Frame> frames = produceAll(sender, last);
+
+  QVERIFY2(last.ready(), qPrintable(last.diagnostic));
+  QCOMPARE(frames.first().type, MessageType::FileBegin);
+  const auto beginResult = FileMessageCodec::decode(frames.first().type, frames.first().metadata);
+  QVERIFY(beginResult.ok());
+  QCOMPARE(std::get<FileBeginMessage>(*beginResult.message).startOffset, startOffset);
+  QByteArray suffix;
+  quint64 expectedOffset = startOffset;
+  quint64 expectedSequence = 0;
+  for (const Frame &frame : frames) {
+    if (frame.type != MessageType::FileChunk) {
+      continue;
+    }
+    const auto decoded = FileMessageCodec::decode(frame.type, frame.metadata);
+    QVERIFY(decoded.ok());
+    const auto &chunk = std::get<FileChunkMessage>(*decoded.message);
+    QCOMPARE(chunk.offset, expectedOffset);
+    QCOMPARE(chunk.sequence, expectedSequence);
+    expectedOffset += static_cast<quint64>(frame.payload.size());
+    ++expectedSequence;
+    suffix.append(frame.payload);
+  }
+  QCOMPARE(suffix, contents.sliced(static_cast<qsizetype>(startOffset)));
+  QCOMPARE(sender.bytesProduced(), static_cast<quint64>(contents.size()));
+  QCOMPARE(sender.nextSequence(), expectedSequence);
+  QCOMPARE(frames.last().type, MessageType::FileEnd);
+}
+
+void TransferSenderTests::rejectsChangedResumePrefix()
+{
+  QTemporaryDir directory;
+  const QString path = directory.filePath(QStringLiteral("changed-prefix.bin"));
+  QVERIFY(writeFile(path, QByteArray(2048, '\x31')));
+  const SingleFileManifest manifest = buildManifest(path, QStringLiteral("changed-prefix.bin"));
+  QVERIFY(writeFile(path, QByteArray(2048, '\x32')));
+  QFile timestampFile(path);
+  QVERIFY(timestampFile.open(QIODevice::ReadWrite));
+  QVERIFY(timestampFile.setFileTime(manifest.entry.modifiedUtc, QFileDevice::FileModificationTime));
+  timestampFile.close();
+  auto request = requestFor(manifest, 256);
+  request.startOffset = 1536;
+  TransferSender sender(std::move(request));
+  SenderFrameResult result;
+
+  for (int iteration = 0; iteration < 20; ++iteration) {
+    result = sender.nextFrame();
+    if (result.status == SenderFrameStatus::Failed || result.status == SenderFrameStatus::FrameReady) {
+      if (result.status == SenderFrameStatus::FrameReady && result.frame->type != MessageType::FileEnd) {
+        continue;
+      }
+      break;
+    }
+  }
+
+  QCOMPARE(result.status, SenderFrameStatus::Failed);
+  QCOMPARE(result.error, TransferSenderError::SourceChanged);
+}
+
+void TransferSenderTests::rejectsResumeOffsetBeyondSource()
+{
+  QTemporaryDir directory;
+  const QString path = directory.filePath(QStringLiteral("offset.bin"));
+  QVERIFY(writeFile(path, QByteArrayLiteral("1234")));
+  const SingleFileManifest manifest = buildManifest(path, QStringLiteral("offset.bin"));
+  auto request = requestFor(manifest, 2);
+  request.startOffset = 5;
+  TransferSender sender(std::move(request));
+
+  const auto result = sender.nextFrame();
+
+  QCOMPARE(result.status, SenderFrameStatus::Failed);
+  QCOMPARE(result.error, TransferSenderError::InvalidRequest);
 }
 
 void TransferSenderTests::rejectsShortReadAsSourceChanged()

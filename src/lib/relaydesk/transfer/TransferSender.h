@@ -21,6 +21,7 @@ struct TransferSenderRequest
   PreparedManifestEntry source;
   quint64 streamId = 0;
   quint32 chunkBytes = kDefaultSenderChunkBytes;
+  quint64 startOffset = 0;
 };
 
 enum class TransferSenderError
@@ -36,6 +37,7 @@ enum class TransferSenderError
 
 enum class SenderFrameStatus
 {
+  Preparing,
   FrameReady,
   Finished,
   Failed,
@@ -64,8 +66,9 @@ public:
   TransferSender &operator=(const TransferSender &) = delete;
 
   // Pure worker-side pull API. Every call performs at most one bounded QFile
-  // read and produces at most one frame. Network callbacks only consume the
-  // returned frame and never hash or read disk.
+  // read and produces at most one frame. A resumed sender returns Preparing
+  // while streaming the prefix into SHA-256 before FILE_BEGIN. Network
+  // callbacks only consume returned frames and never hash or read disk.
   [[nodiscard]] SenderFrameResult nextFrame();
 
   [[nodiscard]] quint64 bytesProduced() const noexcept;
