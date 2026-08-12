@@ -18,6 +18,8 @@ target_link_libraries(
 )
 
 add_library(relaydesk_macos_permissions STATIC
+  MacLocalNetworkStatus.cpp
+  MacLocalNetworkStatus.h
   MacPermissionBackend.h
   MacPermissionProbe.cpp
   MacPermissionProbe.h
