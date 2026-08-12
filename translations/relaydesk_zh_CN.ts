@@ -18,11 +18,17 @@
     <message><source>devices.status.trust_violation</source><translation>信任信息已变化</translation></message>
     <message><source>devices.status.transfer_busy</source><translation>正在传输文件</translation></message>
     <message><source>devices.action.send_file</source><translation>发送文件</translation></message>
+    <message><source>devices.action.send_folder</source><translation>发送文件夹</translation></message>
     <message><source>devices.action.more</source><translation>更多</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>自动排列</translation></message>
     <message><source>devices.action.reset_layout</source><translation>恢复默认布局</translation></message>
     <message><source>devices.drop.send_here</source><translation>把文件拖到这里发送</translation></message>
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n 个项目</numerusform></translation></message>
+    <message><source>devices.send.select_device</source><translation>请先选择设备</translation></message>
+    <message><source>devices.send.unavailable</source><translation>只能向在线且受信任的设备发送文件</translation></message>
+    <message><source>devices.send.local_only</source><translation>请选择存储在本机上的文件或文件夹</translation></message>
+    <message><source>devices.send.empty</source><translation>请至少选择一个文件或文件夹</translation></message>
+    <message><source>devices.send.unreadable</source><translation>一个或多个所选项目无法读取</translation></message>
     <message><source>pairing.title</source><translation>配对设备</translation></message>
     <message><source>pairing.code.prompt</source><translation>输入六位配对码</translation></message>
     <message><source>pairing.state.ready</source><translation>可以开始配对</translation></message>

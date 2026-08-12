@@ -47,6 +47,7 @@ public:
     LastSeenUtcRole,
     CanStartPairingRole,
     PairActionTextRole,
+    CanSendItemsRole,
   };
   Q_ENUM(Role)
 
@@ -62,6 +63,7 @@ public:
 
   [[nodiscard]] int indexOf(const DeviceId &deviceId) const;
   [[nodiscard]] std::optional<DeviceSnapshot> snapshot(const DeviceId &deviceId) const;
+  [[nodiscard]] bool canSendItems(const DeviceId &deviceId) const;
 
 private:
   [[nodiscard]] bool isLocal(const DeviceId &deviceId) const;
