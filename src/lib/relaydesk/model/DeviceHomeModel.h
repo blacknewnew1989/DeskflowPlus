@@ -45,6 +45,8 @@ public:
     AutoAcceptFilesRole,
     FingerprintRole,
     LastSeenUtcRole,
+    CanStartPairingRole,
+    PairActionTextRole,
   };
   Q_ENUM(Role)
 

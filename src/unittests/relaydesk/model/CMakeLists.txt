@@ -7,3 +7,10 @@ create_test(
   SOURCE DeviceHomeModelTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/model"
 )
+
+create_test(
+  NAME RelayDeskPairingWizardModelTests
+  DEPENDS relaydesk_device_model
+  SOURCE PairingWizardModelTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/model"
+)

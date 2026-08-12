@@ -60,7 +60,7 @@ QString statusText(DevicePresence presence)
 QList<int> allDataRoles()
 {
   QList<int> roles{Qt::DisplayRole};
-  for (int role = DeviceHomeModel::DeviceIdRole; role <= DeviceHomeModel::LastSeenUtcRole; ++role)
+  for (int role = DeviceHomeModel::DeviceIdRole; role <= DeviceHomeModel::PairActionTextRole; ++role)
     roles.append(role);
   return roles;
 }
@@ -137,6 +137,13 @@ QVariant DeviceHomeModel::data(const QModelIndex &index, int role) const
     return device.pinnedFingerprint;
   case LastSeenUtcRole:
     return device.lastSeenUtc;
+  case CanStartPairingRole:
+    return !isLocal(device.id) && ((!device.trusted && device.presence == DevicePresence::Discovered) ||
+                                   device.presence == DevicePresence::TrustViolation);
+  case PairActionTextRole:
+    return i18n::translate(
+        device.presence == DevicePresence::TrustViolation ? Text::PairingActionPairAgain : Text::PairingActionStart
+    );
   default:
     return {};
   }
@@ -168,6 +175,8 @@ QHash<int, QByteArray> DeviceHomeModel::roleNames() const
       {AutoAcceptFilesRole, "autoAcceptFiles"},
       {FingerprintRole, "pinnedFingerprint"},
       {LastSeenUtcRole, "lastSeenUtc"},
+      {CanStartPairingRole, "canStartPairing"},
+      {PairActionTextRole, "pairActionText"},
   };
 }
 

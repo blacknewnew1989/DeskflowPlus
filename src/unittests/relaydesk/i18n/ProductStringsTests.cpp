@@ -43,9 +43,12 @@ void ProductStringsTests::untranslatedCatalogUsesEnglishFallback()
 void ProductStringsTests::pluralFallbackUsesCount()
 {
   QVERIFY(isPlural(Text::DevicesDropItems));
+  QVERIFY(isPlural(Text::PairingAttemptsRemaining));
   QVERIFY(!isPlural(Text::DevicesTitle));
   QCOMPARE(translatePlural(Text::DevicesDropItems, 1), QStringLiteral("1 item"));
   QCOMPARE(translatePlural(Text::DevicesDropItems, 3), QStringLiteral("3 items"));
+  QCOMPARE(translatePlural(Text::PairingAttemptsRemaining, 1), QStringLiteral("1 attempt remaining"));
+  QCOMPARE(translatePlural(Text::PairingAttemptsRemaining, 2), QStringLiteral("2 attempts remaining"));
 }
 
 QTEST_MAIN(ProductStringsTests)
