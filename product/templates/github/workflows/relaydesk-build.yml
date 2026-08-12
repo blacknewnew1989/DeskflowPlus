@@ -163,3 +163,52 @@ jobs:
           echo "Package outcome: ${{ steps.package.outcome }}"
           echo "Test outcome: ${{ steps.tests.outcome }}"
           exit 1
+
+  publish-tag-artifacts:
+    name: Publish unsigned draft release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform artifacts
+        uses: actions/download-artifact@v5
+        with:
+          pattern: relaydesk-*-${{ github.sha }}
+          path: downloaded-artifacts
+
+      - name: Collect release assets and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find downloaded-artifacts -type f \( \
+            -name '*.msi' -o -name '*.7z' -o -name '*.dmg' -o \
+            -name '*.app.zip' -o -name '*-Source*.zip' -o -name '*-Source.tar.*' \
+          \) -exec cp '{}' release-assets/ \;
+          while IFS= read -r manifest; do
+            artifact_name=$(basename "$(dirname "$manifest")")
+            platform=$(printf '%s' "$artifact_name" | sed -E 's/^relaydesk-(windows-x64|macos-arm64)-.*/\1/')
+            cp "$manifest" "release-assets/SHA256SUMS-${platform}.txt"
+          done < <(find downloaded-artifacts -type f -name SHA256SUMS.txt | sort)
+          test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
+          (
+            cd release-assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 |
+              sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          )
+
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --draft \
+              --title "RelayDesk internal $GITHUB_REF_NAME" \
+              --notes "Unsigned internal Windows and macOS packages built from $GITHUB_SHA."
+          fi
+          gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
