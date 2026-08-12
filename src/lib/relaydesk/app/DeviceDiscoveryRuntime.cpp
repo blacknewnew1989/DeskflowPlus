@@ -1,0 +1,113 @@
+/*
+ * Deskflow -- mouse and keyboard sharing utility
+ * SPDX-FileCopyrightText: (C) 2026 RelayDesk Developers
+ * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+ */
+
+#include "relaydesk/app/DeviceDiscoveryRuntime.h"
+
+#include "relaydesk/model/DeviceHomeModel.h"
+
+#include <QDateTime>
+#include <QThread>
+
+#include <utility>
+
+namespace deskflow::relaydesk {
+
+namespace {
+void setDiagnostic(QString *diagnostic, const QString &message)
+{
+  if (diagnostic != nullptr) {
+    *diagnostic = message;
+  }
+}
+} // namespace
+
+DeviceDiscoveryRuntime::DeviceDiscoveryRuntime(
+    DeviceInfo localDevice, model::DeviceHomeModel &deviceModel, DeviceDiscoveryRuntimeOptions options,
+    QObject *parent
+)
+    : QObject(parent), m_deviceModel(deviceModel),
+      m_registry(new DiscoveryRegistry(localDevice.deviceId, options.registryTtl, {}, this)),
+      m_service(new DiscoveryService(
+          localDevice, options.serviceSettings, std::move(options.interfaceProvider),
+          std::move(options.datagramSender), this
+      ))
+{
+  m_deviceModel.setLocalDevice({
+      .id = localDevice.deviceId,
+      .displayName = localDevice.displayName,
+      .platform = localDevice.platform,
+      .architecture = localDevice.architecture,
+      .presence = DevicePresence::Online,
+      .trusted = true,
+      .capabilities = localDevice.capabilities,
+      .pinnedFingerprint = localDevice.certificateFingerprintSha256,
+      .lastSeenUtc = QDateTime::currentDateTimeUtc(),
+  });
+
+  connect(
+      m_service, &DiscoveryService::advertisementReceived, m_registry,
+      &DiscoveryRegistry::observeAdvertisement
+  );
+  connect(
+      m_registry, &DiscoveryRegistry::deviceAdded, &m_deviceModel,
+      &model::DeviceHomeModel::upsertRemoteDevice
+  );
+  connect(
+      m_registry, &DiscoveryRegistry::deviceChanged, &m_deviceModel,
+      &model::DeviceHomeModel::upsertRemoteDevice
+  );
+  connect(m_service, &DiscoveryService::errorOccurred, this, &DeviceDiscoveryRuntime::errorOccurred);
+}
+
+DeviceDiscoveryRuntime::~DeviceDiscoveryRuntime()
+{
+  stop();
+}
+
+bool DeviceDiscoveryRuntime::start(QString *diagnostic)
+{
+  if (diagnostic != nullptr) {
+    diagnostic->clear();
+  }
+  if (!onOwningThread(diagnostic)) {
+    return false;
+  }
+  return m_service->start(diagnostic);
+}
+
+void DeviceDiscoveryRuntime::stop()
+{
+  if (QThread::currentThread() == thread()) {
+    m_service->stop();
+  }
+}
+
+bool DeviceDiscoveryRuntime::isRunning() const
+{
+  return m_service->isRunning();
+}
+
+DiscoveryService &DeviceDiscoveryRuntime::service() const
+{
+  return *m_service;
+}
+
+DiscoveryRegistry &DeviceDiscoveryRuntime::registry() const
+{
+  return *m_registry;
+}
+
+bool DeviceDiscoveryRuntime::onOwningThread(QString *diagnostic) const
+{
+  if (QThread::currentThread() == thread() && m_deviceModel.thread() == thread() &&
+      m_registry->thread() == thread() && m_service->thread() == thread()) {
+    return true;
+  }
+  setDiagnostic(diagnostic, QStringLiteral("Discovery runtime must start on the device model's owning thread"));
+  return false;
+}
+
+} // namespace deskflow::relaydesk

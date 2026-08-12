@@ -58,6 +58,7 @@ class DaemonIpcClient;
 }
 
 namespace deskflow::relaydesk {
+class DeviceDiscoveryRuntime;
 class MacPermissionProbe;
 class PairingStateMachine;
 namespace model {
@@ -179,6 +180,7 @@ private:
   void remoteHostChanged(const QString &newRemoteHost);
   void handleNewClientPromptRequest(const QString &clientName, bool usePeerAuth);
   void updateIpLabel(const QStringList &addresses);
+  void setupRelayDeskDiscovery();
 
   /**
    * @brief showClientError
@@ -223,6 +225,7 @@ private:
   deskflow::gui::ipc::DaemonIpcClient *m_daemonIpcClient = nullptr;
 
   LogDock *m_logDock;
+  deskflow::relaydesk::DeviceDiscoveryRuntime *m_relayDeskDiscovery = nullptr;
   deskflow::relaydesk::PairingStateMachine *m_relayDeskPairingState = nullptr;
   deskflow::relaydesk::MacPermissionProbe *m_macPermissionProbe = nullptr;
   deskflow::relaydesk::model::DeviceHomeModel *m_relayDeskDeviceModel = nullptr;

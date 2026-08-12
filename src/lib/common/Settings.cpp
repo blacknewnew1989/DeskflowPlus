@@ -107,6 +107,8 @@ void Settings::cleanSettings()
   for (const QString &key : keys) {
     if (key.startsWith(QStringLiteral("internalConfig")))
       continue;
+    if (key.startsWith(QStringLiteral("relaydesk/")))
+      continue;
     if (!m_validKeys.contains(key))
       m_settings->remove(key);
     if (m_settings->value(key).toString().isEmpty())
