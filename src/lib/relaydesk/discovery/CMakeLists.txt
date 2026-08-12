@@ -4,6 +4,8 @@
 add_library(relaydesk_discovery STATIC
   DiscoveryCodec.cpp
   DiscoveryCodec.h
+  DiscoveryRegistry.cpp
+  DiscoveryRegistry.h
   DiscoveryService.cpp
   DiscoveryService.h
 )
