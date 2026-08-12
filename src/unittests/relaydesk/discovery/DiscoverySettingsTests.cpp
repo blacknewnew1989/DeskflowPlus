@@ -63,6 +63,9 @@ void DiscoverySettingsTests::rejectsInvalidHostAndPort_data()
   QTest::newRow("malformed-ipv6") << QStringLiteral("2001:::1") << 24800 << 24801;
   QTest::newRow("underscore") << QStringLiteral("bad_host.local") << 24800 << 24801;
   QTest::newRow("mismatched-bracket") << QStringLiteral("[::1") << 24800 << 24801;
+  QTest::newRow("bracketed-hostname") << QStringLiteral("[host.local]") << 24800 << 24801;
+  QTest::newRow("multiple-trailing-dots") << QStringLiteral("host.local..") << 24800 << 24801;
+  QTest::newRow("unspecified-ipv4") << QStringLiteral("0.0.0.0") << 24800 << 24801;
   QTest::newRow("zero-input-port") << QStringLiteral("host.local") << 0 << 24801;
   QTest::newRow("large-file-port") << QStringLiteral("host.local") << 24800 << 65536;
 }
