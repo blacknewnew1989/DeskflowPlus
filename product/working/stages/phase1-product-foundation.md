@@ -1,12 +1,13 @@
 # Phase 1 产品基础报告
 
-- 当前结论：`IN_PROGRESS`（已修复候选测试与 CI 结果语义，等待 `-02` 标签复验）
+- 当前结论：`IN_PROGRESS`（双平台标签构建已通过；等待草稿 Release 资产落地与本地校验）
 - 功能基线提交：`ead6acbd56506b92e1b755471dd7a105845fd63f`
-- 当前修复提交：`d789fb0a6`（含 `300a3c68a`、`99c98f500`）
+- 当前修复提交：`d2cb3f780`（含 `300a3c68a`、`99c98f500`、`d789fb0a6`、`0e8f6b416`）
 - 当前集成 run：[31618176846](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/31618176846)
 - 首次标签：`relaydesk-phase1-20260813-01`（run `31619248628`，保留失败证据）
 - 第二次标签：`relaydesk-phase1-20260813-02`（run `31620547696`，保留失败证据）
-- 目标复验标签：`relaydesk-phase1-20260813-03`
+- 通过标签：`relaydesk-phase1-20260813-03`（run `31621226862`）
+- Release 资产复验标签：`relaydesk-phase1-20260813-04`（待创建）
 - 产物性质：unsigned 内部包；签名凭据不是构建、测试和打包前置条件。
 
 ## 已集成范围
@@ -41,14 +42,18 @@
 
 第二次标签 run `31620547696` 中 macOS 完成 `61/61 PASS`、App/DMG/source 打包与 artifact 上传，证明 mutation 测试修复和 CI 失败恢复语义有效。Windows 再次在同一 `vcpkg.exe` URL 返回 WinHTTP `0x2F78`，仍未进入源码配置。`d789fb0a6` 因而为整个依赖安装增加恰好一次自动重试；成功的首次尝试不会重复执行，连续失败仍会让 job 失败。失败的 `-02` 标签同样保留且不改写。
 
+第三次标签 run `31621226862` 完整通过。Windows 首次依赖安装成功且自动跳过重试，完成 CMake/MSVC 构建、CTest `60/60 PASS`、MSI/7Z/source 打包与上传；macOS arm64 完成构建、CTest `61/61 PASS`、App/DMG/source 打包与上传。Windows artifact ID `9151621850`，GitHub ZIP digest `eb0c8e10e9dc1c0ccfd11b9902df868b85cadceae6892229991953156371efbc`；macOS artifact ID `9151451146`，GitHub ZIP digest `0e736638bd4d930cef282e6883ad598dc211aeb6fea64b0c5b23e676c519344e`。
+
+当前网络到 GitHub Actions Azure Blob 下载端点持续停留在 0 bytes；未把该外部传输问题误记为产物失败，也未交给用户处理。`0e8f6b416` 在唯一 `relaydesk-build.yml` 内增加 tag-only 草稿 Release 发布，`d2cb3f780` 显式设置 `GH_REPO=${{ github.repository }}`，将同一批已验证平台包复制为稳定 Release assets。`-04` 用于验证该下载通路并在本机复算每个交付包 SHA-256。
+
 ## 阶段完成条件
 
 - [x] Phase 1 功能以独立小提交合入并推送 `product/relaydesk-v1`。
 - [x] 当前可用本地 Qt 测试通过。
 - [x] 创建并推送 `relaydesk-phase1-20260813-01`；失败证据保留且未改写。
 - [x] 创建并推送 `relaydesk-phase1-20260813-02`；macOS PASS、Windows 依赖下载失败的证据保留。
-- [ ] 创建并推送 `relaydesk-phase1-20260813-03`。
-- [ ] 标签 run 的 Windows x64 与 macOS arm64 构建、CTest、打包均通过。
+- [x] 创建并推送 `relaydesk-phase1-20260813-03`。
+- [x] 标签 run 的 Windows x64 与 macOS arm64 构建、CTest、打包均通过。
 - [ ] 下载两平台 artifact，复算 SHA-256 并把结果写回本报告。
 
 ## NOT_RUN

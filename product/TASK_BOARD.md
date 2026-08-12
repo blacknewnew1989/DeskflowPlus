@@ -6,18 +6,21 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 依赖 |
 |---|---|---|---|
-| UI-007 | Transfer Center model | A3 | FILE-010, CTRL-001 |
-| UI-008 | 速度、ETA 与通知节流 | A3/A6 | UI-007 |
-| RESUME-005 | partial cleanup policy | A6/A3 | RESUME-001 |
+| UI-009 | 历史详情、打开目录与显式重试意图 | A3 | UI-007, HIST-001 |
+| TEST-005 | Windows/macOS 安装升级卸载回归 | A7 | WIN-003, MAC-003 |
+| REL-001/002 | 发布候选、安装说明与最终验收清单 | A0/A7 | Phase 4 packages |
 
 ## In Progress
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
-| UI-005/006 | 拖放发送与 Incoming Offer | A3 | 唯一共享契约 `ead6acbd5` 已集成，GUI 纵向切片开发中 |
-| CONFLICT-001 | 并发安全 auto rename resolver | A6 | 基于共享 PathPolicy 开发中 |
-| WIN-001 | Windows firewall/listening-port diagnostics | A4 | 真实 Windows 探针开发中 |
-| CI-001 | 非门禁 Windows/macOS build workflow | A0/A7 | run `31618176846` 验证当前集成 HEAD |
+| PHASE1-REL | Phase 1 草稿 Release 资产复验 | A0 | tag `-03` run `31621226862` 双平台 PASS；`-04` 下载校验待执行 |
+| UI-005..008 | 拖放、offer、传输中心、速度/ETA/通知 | A3/A6 | 代理提交均已完成或联编中，等待 A0 逐切片集成 |
+| CONFLICT-001/002 | 并发安全冲突策略 | A6 | `c65ad8639`、`dd02e0aec` 已推送，等待集成 |
+| RESUME-005 | partial cleanup policy | A6 | `70ce521e3`、`6263ec456` 已推送，等待集成 |
+| WIN-001..004 | Windows 诊断、开机启动、打包、可选签名 | A4 | 各代理分支真实 Windows 验证完成，等待集成 |
+| MAC-001/002 | macOS 权限探针与设置跳转 | A5 | 从最新产品分支开发中 |
+| TEST-004 | 中断/恢复/暂停/取消/重启组合矩阵 | A6 | 从现有 transfer core 开发中 |
 
 ## Blocked
 
@@ -68,6 +71,8 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | RESUME-001..004 | atomic state, durable checkpoints, negotiation and restart | A6/A7 | `3e5728b92` through `553537117`; local transfer CTest PASS |
 | CTRL-001 | pause/resume/cancel state machine | A6 | `97e7b4aad`; Qt Test PASS |
 | HIST-001 | bounded atomic transfer history | A6 | `3063ae589`; Qt Test PASS |
+| CI-001 | 唯一非门禁 Windows/macOS build workflow | A0/A7 | tag run `31621226862`; Windows 60/60、macOS 61/61、打包上传 PASS |
+| TEST-002/003 | 10 GiB logical bounded-memory 与输入优先级/I/O ownership probe | A6 | `5da597dc3`、`e2c68fb9b`; full harness 18/18 PASS，待集成 |
 
 ## 规则
 

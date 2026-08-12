@@ -10,7 +10,7 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 1 tag verification / Phase 2-3 implementation
+- Current phase: Phase 1 release-asset verification / Phase 2-4 implementation
 - Last updated: 2026-08-13
 - User action required during development: none
 
@@ -22,7 +22,8 @@
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
 - Last product implementation commit: `ead6acbd56506b92e1b755471dd7a105845fd63f`
-- Last stage tag: `relaydesk-phase0-20260812-01` (`808a3307b07422e7ea8c60af46148ce68af13649`)
+- Current integration commit: `d2cb3f780` (draft Release publication targets the authenticated origin repository)
+- Last verified stage tag: `relaydesk-phase1-20260813-03` (`7cafbf50e49e12976c7b81390a7a30f5e2fd3444`)
 
 ## 自动执行状态
 
@@ -37,7 +38,8 @@
 | macOS build | PASS | phase tag run `31602699800`; arm64 build, DMG/App/source, CTest 28/28 |
 | GitHub Actions artifacts | PASS | Windows artifact `9144025951`; macOS artifact `9143920156`; 30-day retention |
 | Phase 1 implementation | PASS | brand/i18n/device/discovery/pairing/trust/reconnect/device UI and permission guidance integrated through `ead6acbd5` |
-| Current integration CI | IN_PROGRESS | `300a3c68a` makes mutation tests deterministic; `99c98f500` exposes post-upload test failures; `d789fb0a6` retries transient dependency setup once; Phase 1 `-03` verification pending |
+| Phase 1 dual-platform CI | PASS | tag run `31621226862`; Windows 60/60, macOS 61/61; build/package/upload all succeeded |
+| Draft Release publication | IN_PROGRESS | `0e8f6b416` adds tag-only publication; `d2cb3f780` explicitly targets `github.repository`; `-04` verification pending |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -46,7 +48,7 @@
 | Phase | 状态 | 负责人 | 远程同步要求 |
 |---|---|---|---|
 | 0 仓库/基线 | PASS | A0/A1/A4/A5/A7 | tag `relaydesk-phase0-20260812-01`, run `31602699800` |
-| 1 产品基础 | IN_PROGRESS | A2/A3 | implementation complete; phase tag and dual-platform verification pending |
+| 1 产品基础 | IN_PROGRESS | A2/A3/A0 | implementation and dual-platform tag CI PASS; local Release-asset checksum verification pending |
 | 2 文件传输 | IN_PROGRESS | A2/A6 | protocol, manifest, TLS, offer, sender, receiver, paging and backpressure integrated |
 | 3 可靠性/UI | IN_PROGRESS | A3/A6/A7 | resume/checkpoint/control/history integrated; conflict and transfer UI active |
 | 4 平台/发布 | IN_PROGRESS | A4/A5/A7 | baseline unsigned packages exist; platform diagnostics/productized RC remain |
@@ -54,22 +56,22 @@
 
 ## 最终 artifact
 
-### Windows
+### Windows（最新 Phase 1 CI 候选）
 
-- Commit: `808a3307b07422e7ea8c60af46148ce68af13649`
-- Workflow run: `31602699800`
-- Artifact: `relaydesk-windows-x64-808a3307b07422e7ea8c60af46148ce68af13649` (ID `9144025951`)
-- SHA-256: `e97b274486a61909b89791bf85d576b534e532a3830929d1c0d5acfc672041dd` (GitHub artifact ZIP)
-- Build result: PASS (MSI + unsigned portable 7Z + source packages)
+- Commit: `7cafbf50e49e12976c7b81390a7a30f5e2fd3444`
+- Workflow run: `31621226862`
+- Artifact: `relaydesk-windows-x64-7cafbf50e49e12976c7b81390a7a30f5e2fd3444` (ID `9151621850`)
+- SHA-256: `eb0c8e10e9dc1c0ccfd11b9902df868b85cadceae6892229991953156371efbc` (GitHub artifact ZIP digest)
+- Build result: PASS (CTest 60/60; MSI + unsigned portable 7Z + source packages)
 - Runtime result: NOT_RUN
 
-### macOS
+### macOS（最新 Phase 1 CI 候选）
 
-- Commit: `808a3307b07422e7ea8c60af46148ce68af13649`
-- Workflow run: `31602699800`
-- Artifact: `relaydesk-macos-arm64-808a3307b07422e7ea8c60af46148ce68af13649` (ID `9143920156`)
-- SHA-256: `cc73b5d9226dc973348be64a9fa0470a7d88be00af84996b4b272aa87121bda5` (GitHub artifact ZIP)
-- Build result: PASS (unsigned/ad-hoc App ZIP + DMG + source packages)
+- Commit: `7cafbf50e49e12976c7b81390a7a30f5e2fd3444`
+- Workflow run: `31621226862`
+- Artifact: `relaydesk-macos-arm64-7cafbf50e49e12976c7b81390a7a30f5e2fd3444` (ID `9151451146`)
+- SHA-256: `0e736638bd4d930cef282e6883ad598dc211aeb6fea64b0c5b23e676c519344e` (GitHub artifact ZIP digest)
+- Build result: PASS (CTest 61/61; ad-hoc/unsigned App ZIP + DMG + source packages)
 - Runtime result: NOT_RUN
 
 ## 最终用户验收
