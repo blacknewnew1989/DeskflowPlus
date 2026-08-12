@@ -56,6 +56,28 @@ PairingActionResult PairingStateMachine::begin(
     DeviceSnapshot peer, QByteArray peerFingerprintSha256, const std::optional<QString> &receivedSas
 )
 {
+  const QDateTime now = m_clock().toUTC();
+  return beginSession(
+      std::move(peer), std::move(peerFingerprintSha256), QUuid::createUuid(),
+      now.addSecs(m_options.validity.count()), receivedSas
+  );
+}
+
+PairingActionResult PairingStateMachine::beginBoundSession(
+    DeviceSnapshot peer, QByteArray peerFingerprintSha256, const QUuid &sessionId, const QDateTime &expiresAtUtc,
+    const std::optional<QString> &receivedSas
+)
+{
+  return beginSession(
+      std::move(peer), std::move(peerFingerprintSha256), sessionId, expiresAtUtc.toUTC(), receivedSas
+  );
+}
+
+PairingActionResult PairingStateMachine::beginSession(
+    DeviceSnapshot peer, QByteArray peerFingerprintSha256, QUuid sessionId, QDateTime expiresAtUtc,
+    const std::optional<QString> &receivedSas
+)
+{
   (void)expireIfNeeded();
   if (m_snapshot.has_value() && !isTerminal(m_snapshot->state)) {
     return failure(PairingError::ActiveSessionExists, QStringLiteral("a pairing session is already active"));
@@ -82,16 +104,17 @@ PairingActionResult PairingStateMachine::begin(
   }
 
   const QDateTime now = m_clock().toUTC();
-  if (!now.isValid()) {
-    return failure(PairingError::InvalidState, QStringLiteral("pairing clock returned an invalid time"));
+  if (!now.isValid() || sessionId.isNull() || !expiresAtUtc.isValid() || expiresAtUtc <= now ||
+      expiresAtUtc > now.addSecs(m_options.validity.count())) {
+    return failure(PairingError::InvalidState, QStringLiteral("pairing session ID or expiry is invalid"));
   }
   m_peerFingerprintSha256 = std::move(peerFingerprintSha256);
   m_snapshot = PairingSnapshot{
-      .pairingSessionId = QUuid::createUuid(),
+      .pairingSessionId = std::move(sessionId),
       .peer = std::move(peer),
       .state = PairingState::Requesting,
       .sixDigitSas = std::move(sas),
-      .expiresAtUtc = now.addSecs(m_options.validity.count()),
+      .expiresAtUtc = std::move(expiresAtUtc),
       .attemptsRemaining = m_options.attempts,
   };
   publish();
