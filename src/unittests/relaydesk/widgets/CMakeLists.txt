@@ -7,3 +7,10 @@ create_test(
   SOURCE DevicesDockTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/widgets"
 )
+
+create_test(
+  NAME RelayDeskTransferCenterDockTests
+  DEPENDS relaydesk_widgets
+  SOURCE TransferCenterDockTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/widgets"
+)

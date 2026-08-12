@@ -21,3 +21,10 @@ create_test(
   SOURCE PermissionStatusModelTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/model"
 )
+
+create_test(
+  NAME RelayDeskTransferCenterModelTests
+  DEPENDS relaydesk_device_model
+  SOURCE TransferCenterModelTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/model"
+)
