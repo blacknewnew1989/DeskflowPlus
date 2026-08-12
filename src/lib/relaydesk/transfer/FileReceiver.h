@@ -5,6 +5,7 @@
 
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/PathPolicy.h"
+#include "relaydesk/transfer/ResumeStore.h"
 #include "relaydesk/transfer/TransferTypes.h"
 
 #include <QByteArrayView>
@@ -81,9 +82,32 @@ struct FileReceiverSnapshot
   quint64 nextSequence = 0;
   QString relativeProtocolPath;
   QString partPath;
+  QString partRelativePath;
   QString committedPath;
 
   [[nodiscard]] bool operator==(const FileReceiverSnapshot &) const = default;
+};
+
+enum class DurableCheckpointError
+{
+  None,
+  InvalidReceiverState,
+  ResumeStateMismatch,
+  FlushFailed,
+  SyncFailed,
+  PersistFailed,
+};
+
+struct DurableCheckpointResult
+{
+  std::optional<FileCheckpointMessage> message;
+  DurableCheckpointError error = DurableCheckpointError::None;
+  QString diagnostic;
+
+  [[nodiscard]] bool ok() const noexcept
+  {
+    return message.has_value() && error == DurableCheckpointError::None;
+  }
 };
 
 class FileReceiver final
@@ -99,6 +123,8 @@ public:
   [[nodiscard]] FileReceiverResult append(const FileChunkMessage &chunk, QByteArrayView payload);
   [[nodiscard]] FileReceiverResult finish(const FileEndMessage &end);
   [[nodiscard]] FileReceiverResult cancel(bool keepPartial);
+  [[nodiscard]] DurableCheckpointResult
+  checkpoint(const ResumeStore &store, ResumeState &state, QDateTime updatedUtc = QDateTime::currentDateTimeUtc());
 
   [[nodiscard]] FileReceiverSnapshot snapshot() const;
 

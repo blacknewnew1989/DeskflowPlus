@@ -58,6 +58,28 @@ struct Fixture
   }
 };
 
+ResumeState resumeStateFor(const Fixture &fixture, const FileReceiverSnapshot &snapshot)
+{
+  return {
+      .transferId = fixture.transferId,
+      .peerDeviceId =
+          *deskflow::relaydesk::DeviceId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
+      .manifestSha256 = QByteArray(32, '\x2a'),
+      .direction = ResumeDirection::Receiving,
+      .files =
+          {
+              {
+                  .fileId = fixture.fileId,
+                  .relativeProtocolPath = snapshot.relativeProtocolPath,
+                  .durableOffset = 0,
+                  .totalBytes = snapshot.expectedSize,
+                  .partRelativePath = snapshot.partRelativePath,
+              },
+          },
+      .updatedUtc = QDateTime::fromMSecsSinceEpoch(1'780'000'000'000LL, Qt::UTC),
+  };
+}
+
 } // namespace
 
 class FileReceiverTests final : public QObject
@@ -75,6 +97,9 @@ private Q_SLOTS:
   void autoRenamePreservesExistingFile();
   void stalePartRequiresResumeState();
   void cancelDeleteAndKeepAreIdempotent();
+  void persistsOnlySyncedDurableCheckpoints();
+  void rejectsMismatchedCheckpointState();
+  void failedCheckpointPersistenceNeverAdvancesState();
 };
 
 void FileReceiverTests::streamsPartThenAtomicallyCommits()
@@ -298,6 +323,81 @@ void FileReceiverTests::cancelDeleteAndKeepAreIdempotent()
   QVERIFY(keep.cancel(true).ok());
   QVERIFY(QFileInfo::exists(keptPart));
   QCOMPARE(readFile(keptPart), keepFixture.contents.first(3));
+}
+
+void FileReceiverTests::persistsOnlySyncedDurableCheckpoints()
+{
+  Fixture fixture;
+  FileReceiver receiver;
+  QVERIFY(receiver.begin(fixture.request()).ok());
+  ResumeStore store(fixture.directory.filePath(QStringLiteral("resume/active")));
+  auto state = resumeStateFor(fixture, receiver.snapshot());
+
+  const QByteArray first = fixture.contents.first(12);
+  const QByteArray second = fixture.contents.sliced(12);
+  QVERIFY(receiver.append({fixture.transferId, fixture.fileId, 0, 0}, first).ok());
+  const auto firstCheckpoint =
+      receiver.checkpoint(store, state, QDateTime::fromMSecsSinceEpoch(1'780'000'001'000LL, Qt::UTC));
+  QVERIFY2(firstCheckpoint.ok(), qPrintable(firstCheckpoint.diagnostic));
+  QCOMPARE(firstCheckpoint.message->durableOffset, quint64{12});
+  QCOMPARE(state.files.constFirst().durableOffset, quint64{12});
+  QCOMPARE(store.load(fixture.transferId).state->files.constFirst().durableOffset, quint64{12});
+
+  QVERIFY(receiver.append({fixture.transferId, fixture.fileId, 12, 1}, second).ok());
+  QCOMPARE(store.load(fixture.transferId).state->files.constFirst().durableOffset, quint64{12});
+
+  const auto finalCheckpoint =
+      receiver.checkpoint(store, state, QDateTime::fromMSecsSinceEpoch(1'780'000'002'000LL, Qt::UTC));
+  QVERIFY2(finalCheckpoint.ok(), qPrintable(finalCheckpoint.diagnostic));
+  QCOMPARE(finalCheckpoint.message->durableOffset, static_cast<quint64>(fixture.contents.size()));
+  const auto persisted = store.load(fixture.transferId);
+  QVERIFY(persisted.ok());
+  QCOMPARE(persisted.state->files.constFirst().durableOffset, static_cast<quint64>(fixture.contents.size()));
+  QCOMPARE(QFileInfo(receiver.snapshot().partPath).size(), fixture.contents.size());
+}
+
+void FileReceiverTests::rejectsMismatchedCheckpointState()
+{
+  Fixture fixture;
+  FileReceiver receiver;
+  QVERIFY(receiver.begin(fixture.request()).ok());
+  QVERIFY(receiver.append({fixture.transferId, fixture.fileId, 0, 0}, fixture.contents.first(12)).ok());
+  ResumeStore store(fixture.directory.filePath(QStringLiteral("resume/active")));
+  auto state = resumeStateFor(fixture, receiver.snapshot());
+
+  auto wrongTransfer = state;
+  wrongTransfer.transferId = QUuid::createUuid();
+  QCOMPARE(receiver.checkpoint(store, wrongTransfer).error, DurableCheckpointError::ResumeStateMismatch);
+  auto wrongPart = state;
+  wrongPart.files[0].partRelativePath = QStringLiteral("different.part");
+  QCOMPARE(receiver.checkpoint(store, wrongPart).error, DurableCheckpointError::ResumeStateMismatch);
+  auto offsetAhead = state;
+  offsetAhead.files[0].durableOffset = 13;
+  QCOMPARE(receiver.checkpoint(store, offsetAhead).error, DurableCheckpointError::ResumeStateMismatch);
+  QCOMPARE(store.load(fixture.transferId).error, ResumeStoreError::NotFound);
+}
+
+void FileReceiverTests::failedCheckpointPersistenceNeverAdvancesState()
+{
+  Fixture fixture;
+  FileReceiver receiver;
+  QVERIFY(receiver.begin(fixture.request()).ok());
+  QVERIFY(receiver.append({fixture.transferId, fixture.fileId, 0, 0}, fixture.contents.first(12)).ok());
+  auto state = resumeStateFor(fixture, receiver.snapshot());
+
+  const QString blocker = fixture.directory.filePath(QStringLiteral("not-a-directory"));
+  QVERIFY(writeFile(blocker, QByteArrayLiteral("block")));
+  ResumeStore blockedStore(blocker);
+  const auto failed = receiver.checkpoint(blockedStore, state);
+  QCOMPARE(failed.error, DurableCheckpointError::PersistFailed);
+  QVERIFY(!failed.message.has_value());
+  QCOMPARE(state.files.constFirst().durableOffset, quint64{0});
+
+  ResumeStore workingStore(fixture.directory.filePath(QStringLiteral("resume/active")));
+  const auto recovered = receiver.checkpoint(workingStore, state);
+  QVERIFY2(recovered.ok(), qPrintable(recovered.diagnostic));
+  QCOMPARE(recovered.message->durableOffset, quint64{12});
+  QCOMPARE(workingStore.load(fixture.transferId).state->files.constFirst().durableOffset, quint64{12});
 }
 
 QTEST_MAIN(FileReceiverTests)

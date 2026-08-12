@@ -6,6 +6,12 @@
 #include <QDir>
 #include <QFileInfo>
 
+#ifdef Q_OS_WIN
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 #include <limits>
 #include <utility>
 
@@ -18,6 +24,24 @@ constexpr int kMaximumAutoRenameAttempts = 10'000;
 FileReceiverResult failure(FileReceiverError error, QString diagnostic, PathError pathError = PathError::None)
 {
   return {.error = error, .pathError = pathError, .diagnostic = std::move(diagnostic)};
+}
+
+DurableCheckpointResult checkpointFailure(DurableCheckpointError error, QString diagnostic)
+{
+  return {.error = error, .diagnostic = std::move(diagnostic)};
+}
+
+bool syncToStableStorage(QFile &file)
+{
+  const int descriptor = file.handle();
+  if (descriptor < 0) {
+    return false;
+  }
+#ifdef Q_OS_WIN
+  return ::_commit(descriptor) == 0;
+#else
+  return ::fsync(descriptor) == 0;
+#endif
 }
 
 QString autoRenameCandidate(const QString &requestedTarget, int index)
@@ -114,6 +138,7 @@ FileReceiverResult FileReceiver::begin(const FileReceiveRequest &request)
       .expectedSize = request.begin.size,
       .relativeProtocolPath = targetPath.normalized,
       .partPath = std::move(partPath),
+      .partRelativePath = stagingRelative,
   };
   return {};
 }
@@ -222,6 +247,80 @@ FileReceiverResult FileReceiver::cancel(bool keepPartial)
   m_snapshot.state = FileReceiverState::Cancelled;
   return m_snapshot.transferId.isNull() ? FileReceiverResult{}
                                         : result(FileResultCode::Cancelled, QStringLiteral("CANCELLED"));
+}
+
+DurableCheckpointResult FileReceiver::checkpoint(const ResumeStore &store, ResumeState &state, QDateTime updatedUtc)
+{
+  if (m_snapshot.state != FileReceiverState::Receiving || !m_partFile.isOpen()) {
+    return checkpointFailure(
+        DurableCheckpointError::InvalidReceiverState, QStringLiteral("file receiver is not checkpointable")
+    );
+  }
+  if (state.transferId != m_snapshot.transferId || state.direction != ResumeDirection::Receiving ||
+      state.manifestSha256.size() != kSha256Bytes) {
+    return checkpointFailure(
+        DurableCheckpointError::ResumeStateMismatch, QStringLiteral("resume state does not match the receiver")
+    );
+  }
+
+  auto matching = state.files.end();
+  for (auto iterator = state.files.begin(); iterator != state.files.end(); ++iterator) {
+    if (iterator->fileId == m_snapshot.fileId) {
+      if (matching != state.files.end()) {
+        return checkpointFailure(
+            DurableCheckpointError::ResumeStateMismatch, QStringLiteral("resume state contains duplicate file IDs")
+        );
+      }
+      matching = iterator;
+    }
+  }
+  if (matching == state.files.end() || matching->relativeProtocolPath != m_snapshot.relativeProtocolPath ||
+      matching->totalBytes != m_snapshot.expectedSize || matching->partRelativePath != m_snapshot.partRelativePath ||
+      matching->durableOffset > m_snapshot.receivedBytes) {
+    return checkpointFailure(
+        DurableCheckpointError::ResumeStateMismatch, QStringLiteral("resume file state does not match the receiver")
+    );
+  }
+  if (!updatedUtc.isValid() || updatedUtc.toMSecsSinceEpoch() <= 0) {
+    return checkpointFailure(
+        DurableCheckpointError::ResumeStateMismatch, QStringLiteral("checkpoint timestamp is invalid")
+    );
+  }
+
+  if (!m_partFile.flush()) {
+    return checkpointFailure(DurableCheckpointError::FlushFailed, QStringLiteral("could not flush the staging file"));
+  }
+  if (!syncToStableStorage(m_partFile)) {
+    return checkpointFailure(
+        DurableCheckpointError::SyncFailed, QStringLiteral("could not sync the staging file to stable storage")
+    );
+  }
+
+  ResumeState candidate = state;
+  for (auto &file : candidate.files) {
+    if (file.fileId == m_snapshot.fileId) {
+      file.durableOffset = m_snapshot.receivedBytes;
+      break;
+    }
+  }
+  candidate.updatedUtc = updatedUtc.toUTC();
+  const auto persisted = store.save(candidate);
+  if (!persisted.ok()) {
+    return checkpointFailure(
+        DurableCheckpointError::PersistFailed,
+        persisted.diagnostic.isEmpty() ? QStringLiteral("could not persist durable checkpoint") : persisted.diagnostic
+    );
+  }
+
+  state = std::move(candidate);
+  return {
+      .message =
+          FileCheckpointMessage{
+              .transferId = m_snapshot.transferId,
+              .fileId = m_snapshot.fileId,
+              .durableOffset = m_snapshot.receivedBytes,
+          },
+  };
 }
 
 FileReceiverSnapshot FileReceiver::snapshot() const
