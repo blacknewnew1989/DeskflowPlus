@@ -1357,6 +1357,28 @@ Enabling this setting will disable the server config GUI.</source>
         <translation>自动</translation>
     </message>
     <message>
+        <source>Start with system</source>
+        <translation>登录系统时启动</translation>
+    </message>
+    <message>
+        <source>Start-at-login status could not be read (code %1, native %2). %3</source>
+        <translation>无法读取登录时启动状态（代码 %1，系统错误 %2）。%3</translation>
+    </message>
+    <message>
+        <source>The application path will be updated when preferences are saved.</source>
+        <translation>保存首选项时将更新应用程序路径。</translation>
+    </message>
+    <message>
+        <source>Start at login</source>
+        <translation>登录时启动</translation>
+    </message>
+    <message>
+        <source>The start-at-login setting could not be updated (code %1, native %2).
+%3</source>
+        <translation>无法更新登录时启动设置（代码 %1，系统错误 %2）。
+%3</translation>
+    </message>
+    <message>
         <source>Include version in the window title</source>
         <translation>在窗口标题中显示版本</translation>
     </message>
