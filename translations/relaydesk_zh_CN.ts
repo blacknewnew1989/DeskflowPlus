@@ -5,6 +5,8 @@
     <name>RelayDesk</name>
     <message><source>devices.title</source><translation>设备</translation></message>
     <message><source>devices.current</source><translation>当前设备</translation></message>
+    <message><source>devices.empty.waiting</source><translation>附近的设备会显示在这里</translation></message>
+    <message><source>devices.latency</source><translation>%1 毫秒</translation></message>
     <message><source>devices.status.online</source><translation>在线</translation></message>
     <message><source>devices.status.offline</source><translation>离线</translation></message>
     <message><source>devices.status.connecting</source><translation>正在连接</translation></message>
@@ -49,6 +51,7 @@
     <message><source>pairing.fingerprint.label</source><translation>证书指纹</translation></message>
     <message><source>pairing.fingerprint.unavailable</source><translation>指纹不可用</translation></message>
     <message numerus="yes"><source>pairing.attempts_remaining</source><translation><numerusform>还可尝试 %n 次</numerusform></translation></message>
+    <message><source>pairing.expires_at</source><translation>到期时间：%1</translation></message>
     <message><source>transfer.title</source><translation>传输</translation></message>
     <message><source>transfer.state.preparing</source><translation>正在准备</translation></message>
     <message><source>transfer.state.awaiting_confirmation</source><translation>等待对方确认</translation></message>

@@ -28,6 +28,9 @@ struct Entry
 constexpr std::array<Entry, static_cast<std::size_t>(Text::Count)> kEntries{{
     {Text::DevicesTitle, QT_TRANSLATE_NOOP("RelayDesk", "devices.title"), "Devices"},
     {Text::DevicesCurrent, QT_TRANSLATE_NOOP("RelayDesk", "devices.current"), "This device"},
+    {Text::DevicesEmptyWaiting, QT_TRANSLATE_NOOP("RelayDesk", "devices.empty.waiting"),
+     "Nearby devices will appear here"},
+    {Text::DevicesLatency, QT_TRANSLATE_NOOP("RelayDesk", "devices.latency"), "%1 ms"},
     {Text::DevicesStatusOnline, QT_TRANSLATE_NOOP("RelayDesk", "devices.status.online"), "Online"},
     {Text::DevicesStatusOffline, QT_TRANSLATE_NOOP("RelayDesk", "devices.status.offline"), "Offline"},
     {Text::DevicesStatusConnecting, QT_TRANSLATE_NOOP("RelayDesk", "devices.status.connecting"), "Connecting"},
@@ -88,6 +91,7 @@ constexpr std::array<Entry, static_cast<std::size_t>(Text::Count)> kEntries{{
      "Fingerprint unavailable"},
     {Text::PairingAttemptsRemaining, QT_TRANSLATE_N_NOOP("RelayDesk", "pairing.attempts_remaining"),
      "%n attempt remaining", "%n attempts remaining"},
+    {Text::PairingExpiresAt, QT_TRANSLATE_NOOP("RelayDesk", "pairing.expires_at"), "Expires: %1"},
     {Text::TransferTitle, QT_TRANSLATE_NOOP("RelayDesk", "transfer.title"), "Transfers"},
     {Text::TransferStatePreparing, QT_TRANSLATE_NOOP("RelayDesk", "transfer.state.preparing"), "Preparing"},
     {Text::TransferStateAwaitingConfirmation,

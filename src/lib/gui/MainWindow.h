@@ -57,6 +57,17 @@ namespace deskflow::gui::ipc {
 class DaemonIpcClient;
 }
 
+namespace deskflow::relaydesk {
+class PairingStateMachine;
+namespace model {
+class DeviceHomeModel;
+class PairingWizardModel;
+} // namespace model
+namespace widgets {
+class DevicesDock;
+} // namespace widgets
+} // namespace deskflow::relaydesk
+
 class MainWindow : public QMainWindow
 {
   using CoreMode = Settings::CoreMode;
@@ -88,6 +99,9 @@ public:
   {
     return m_serverConfig;
   }
+  [[nodiscard]] deskflow::relaydesk::model::DeviceHomeModel &relayDeskDeviceModel();
+  [[nodiscard]] deskflow::relaydesk::model::PairingWizardModel &relayDeskPairingModel();
+  [[nodiscard]] deskflow::relaydesk::widgets::DevicesDock &relayDeskDevicesDock();
 
   void hide();
 
@@ -202,6 +216,10 @@ private:
   deskflow::gui::ipc::DaemonIpcClient *m_daemonIpcClient = nullptr;
 
   LogDock *m_logDock;
+  deskflow::relaydesk::PairingStateMachine *m_relayDeskPairingState = nullptr;
+  deskflow::relaydesk::model::DeviceHomeModel *m_relayDeskDeviceModel = nullptr;
+  deskflow::relaydesk::model::PairingWizardModel *m_relayDeskPairingModel = nullptr;
+  deskflow::relaydesk::widgets::DevicesDock *m_devicesDock = nullptr;
   QLabel *m_lblSecurityStatus = nullptr;
   QLabel *m_lblStatus = nullptr;
   QPushButton *m_btnFingerprint = nullptr;
