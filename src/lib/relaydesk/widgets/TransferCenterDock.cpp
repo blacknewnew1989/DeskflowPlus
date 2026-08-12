@@ -8,6 +8,7 @@
 
 #include "relaydesk/i18n/ProductStrings.h"
 #include "relaydesk/model/TransferCenterModel.h"
+#include "relaydesk/widgets/TransferHistoryDetailsDialog.h"
 
 #include <QAbstractItemModel>
 #include <QApplication>
@@ -139,6 +140,21 @@ TransferCenterDock::TransferCenterDock(model::TransferCenterModel &transfers, QW
   m_list->setUniformItemSizes(true);
   m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   layout->addWidget(m_list, 1);
+  auto *historyActions = new QHBoxLayout();
+  m_detailsButton = new QPushButton(body);
+  m_detailsButton->setObjectName(QStringLiteral("relaydeskTransferDetailsButton"));
+  m_openFolderButton = new QPushButton(body);
+  m_openFolderButton->setObjectName(QStringLiteral("relaydeskTransferOpenFolderButton"));
+  m_openFileButton = new QPushButton(body);
+  m_openFileButton->setObjectName(QStringLiteral("relaydeskTransferOpenFileButton"));
+  m_retryButton = new QPushButton(body);
+  m_retryButton->setObjectName(QStringLiteral("relaydeskTransferRetryButton"));
+  historyActions->addWidget(m_detailsButton);
+  historyActions->addWidget(m_openFolderButton);
+  historyActions->addWidget(m_openFileButton);
+  historyActions->addStretch();
+  historyActions->addWidget(m_retryButton);
+  layout->addLayout(historyActions);
   auto *actions = new QHBoxLayout();
   m_pauseButton = new QPushButton(body);
   m_pauseButton->setObjectName(QStringLiteral("relaydeskTransferPauseButton"));
@@ -158,6 +174,26 @@ TransferCenterDock::TransferCenterDock(model::TransferCenterModel &transfers, QW
   connect(&m_transfers, &QAbstractItemModel::modelReset, this, &TransferCenterDock::updateEmptyState);
   connect(&m_transfers, &QAbstractItemModel::dataChanged, this, &TransferCenterDock::updateSelection);
   connect(m_list->selectionModel(), &QItemSelectionModel::selectionChanged, this, &TransferCenterDock::updateSelection);
+  connect(m_list, &QListView::activated, this, [this](const QModelIndex &index) {
+    if (index.data(model::TransferCenterModel::HasHistoryDetailsRole).toBool())
+      showHistoryDetails();
+  });
+  connect(m_detailsButton, &QPushButton::clicked, this, &TransferCenterDock::showHistoryDetails);
+  connect(m_openFolderButton, &QPushButton::clicked, this, [this]() {
+    const auto index = m_list->currentIndex();
+    if (index.isValid())
+      (void)m_transfers.requestOpenFolder(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+  });
+  connect(m_openFileButton, &QPushButton::clicked, this, [this]() {
+    const auto index = m_list->currentIndex();
+    if (index.isValid())
+      (void)m_transfers.requestOpenFile(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+  });
+  connect(m_retryButton, &QPushButton::clicked, this, [this]() {
+    const auto index = m_list->currentIndex();
+    if (index.isValid())
+      (void)m_transfers.requestRetry(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+  });
   connect(m_pauseButton, &QPushButton::clicked, this, [this]() {
     const auto index = m_list->currentIndex();
     if (index.isValid())
@@ -197,6 +233,14 @@ void TransferCenterDock::updateText()
   setWindowTitle(i18n::translate(Text::TransferTitle));
   m_emptyLabel->setText(i18n::translate(Text::TransferEmpty));
   m_list->setAccessibleName(i18n::translate(Text::TransferTitle));
+  m_detailsButton->setText(i18n::translate(Text::TransferActionDetails));
+  m_detailsButton->setAccessibleName(m_detailsButton->text());
+  m_openFolderButton->setText(i18n::translate(Text::TransferActionOpenFolder));
+  m_openFolderButton->setAccessibleName(m_openFolderButton->text());
+  m_openFileButton->setText(i18n::translate(Text::TransferActionOpenFile));
+  m_openFileButton->setAccessibleName(m_openFileButton->text());
+  m_retryButton->setText(i18n::translate(Text::TransferActionRetry));
+  m_retryButton->setAccessibleName(m_retryButton->text());
   m_pauseButton->setText(i18n::translate(Text::TransferActionPause));
   m_pauseButton->setAccessibleName(i18n::translate(Text::TransferActionPause));
   m_resumeButton->setText(i18n::translate(Text::TransferActionResume));
@@ -210,9 +254,6 @@ void TransferCenterDock::updateEmptyState()
   const auto empty = m_transfers.rowCount() == 0;
   m_emptyLabel->setVisible(empty);
   m_list->setVisible(!empty);
-  m_pauseButton->setVisible(!empty);
-  m_resumeButton->setVisible(!empty);
-  m_cancelButton->setVisible(!empty);
   if (empty)
     m_list->setCurrentIndex({});
   updateSelection();
@@ -221,9 +262,40 @@ void TransferCenterDock::updateEmptyState()
 void TransferCenterDock::updateSelection()
 {
   const auto index = m_list->currentIndex();
+  const auto hasTransfers = m_transfers.rowCount() > 0;
+  const auto historical = index.isValid() && index.data(model::TransferCenterModel::IsHistoricalRole).toBool();
+  const auto hasDetails = index.isValid() && index.data(model::TransferCenterModel::HasHistoryDetailsRole).toBool();
+  const auto canOpenFolder = index.isValid() && index.data(model::TransferCenterModel::CanOpenFolderRole).toBool();
+  const auto canOpenFile = index.isValid() && index.data(model::TransferCenterModel::CanOpenFileRole).toBool();
+  const auto canRetry = index.isValid() && index.data(model::TransferCenterModel::CanRetryRole).toBool();
+
+  m_detailsButton->setVisible(hasDetails);
+  m_detailsButton->setEnabled(hasDetails);
+  m_openFolderButton->setVisible(canOpenFolder);
+  m_openFolderButton->setEnabled(canOpenFolder);
+  m_openFileButton->setVisible(canOpenFile);
+  m_openFileButton->setEnabled(canOpenFile);
+  m_retryButton->setVisible(canRetry);
+  m_retryButton->setEnabled(canRetry);
+  m_pauseButton->setVisible(hasTransfers && !historical);
+  m_resumeButton->setVisible(hasTransfers && !historical);
+  m_cancelButton->setVisible(hasTransfers && !historical);
   m_pauseButton->setEnabled(index.isValid() && index.data(model::TransferCenterModel::CanPauseRole).toBool());
   m_resumeButton->setEnabled(index.isValid() && index.data(model::TransferCenterModel::CanResumeRole).toBool());
   m_cancelButton->setEnabled(index.isValid() && index.data(model::TransferCenterModel::CanCancelRole).toBool());
+}
+
+void TransferCenterDock::showHistoryDetails()
+{
+  const auto index = m_list->currentIndex();
+  if (!index.isValid() || !index.data(model::TransferCenterModel::HasHistoryDetailsRole).toBool())
+    return;
+  const auto record = m_transfers.historyRecord(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+  if (!record.has_value())
+    return;
+  auto *dialog = new TransferHistoryDetailsDialog(*record, this);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->show();
 }
 
 } // namespace deskflow::relaydesk::widgets

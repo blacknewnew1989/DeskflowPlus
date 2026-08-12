@@ -36,10 +36,15 @@ private:
   void updateText();
   void updateEmptyState();
   void updateSelection();
+  void showHistoryDetails();
 
   model::TransferCenterModel &m_transfers;
   QListView *m_list = nullptr;
   QLabel *m_emptyLabel = nullptr;
+  QPushButton *m_detailsButton = nullptr;
+  QPushButton *m_openFolderButton = nullptr;
+  QPushButton *m_openFileButton = nullptr;
+  QPushButton *m_retryButton = nullptr;
   QPushButton *m_pauseButton = nullptr;
   QPushButton *m_resumeButton = nullptr;
   QPushButton *m_cancelButton = nullptr;

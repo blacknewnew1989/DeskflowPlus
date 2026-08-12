@@ -54,6 +54,9 @@ public:
     FinishedUtcRole,
     SpeedTextRole,
     EtaTextRole,
+    HasHistoryDetailsRole,
+    CanOpenFolderRole,
+    CanOpenFileRole,
     AccessibleSummaryRole,
   };
   Q_ENUM(Role)
@@ -81,12 +84,19 @@ public:
   bool requestPause(const ::relaydesk::transfer::TransferId &transferId);
   bool requestResume(const ::relaydesk::transfer::TransferId &transferId);
   bool requestCancel(const ::relaydesk::transfer::TransferId &transferId);
+  bool requestRetry(const ::relaydesk::transfer::TransferId &transferId);
+  bool requestOpenFolder(const ::relaydesk::transfer::TransferId &transferId);
+  bool requestOpenFile(const ::relaydesk::transfer::TransferId &transferId);
   void flushDueUpdates();
 
 Q_SIGNALS:
   void pauseRequested(::relaydesk::transfer::TransferSnapshot snapshot);
   void resumeRequested(::relaydesk::transfer::TransferSnapshot snapshot);
   void cancelRequested(::relaydesk::transfer::TransferSnapshot snapshot);
+  void retryRequested(::relaydesk::transfer::TransferSnapshot snapshot);
+  void historyRetryRequested(::relaydesk::transfer::TransferHistoryRecord record);
+  void openFolderRequested(::relaydesk::transfer::TransferHistoryRecord record);
+  void openFileRequested(::relaydesk::transfer::TransferHistoryRecord record);
   void notificationRequested(
       ::relaydesk::transfer::TransferSnapshot snapshot, QString title, QString message
   );
@@ -123,6 +133,10 @@ private:
   [[nodiscard]] bool requestControl(
       const ::relaydesk::transfer::TransferId &transferId, Role allowedRole,
       void (TransferCenterModel::*signal)(::relaydesk::transfer::TransferSnapshot)
+  );
+  [[nodiscard]] bool requestHistoryAction(
+      const ::relaydesk::transfer::TransferId &transferId, Role allowedRole,
+      void (TransferCenterModel::*signal)(::relaydesk::transfer::TransferHistoryRecord)
   );
 
   QList<Entry> m_entries;

@@ -85,6 +85,7 @@ private Q_SLOTS:
   void emitsImmutableControlIntentsOnlyWhenAllowed();
   void handlesZeroByteAndTerminalProgress();
   void importsHistoryWithoutDiskAccessOrDuplicateRows();
+  void emitsValidatedHistoryOpenAndRetryIntents();
   void mapsStateAndErrorsToSafeVisibleStrings();
   void throttlesProgressUpdatesToFiveHertzButPublishesStateImmediately();
   void preservesServiceSpeedAndEta();
@@ -230,6 +231,77 @@ void TransferCenterModelTests::importsHistoryWithoutDiskAccessOrDuplicateRows()
   const auto row = model.indexOf(history.transferId);
   QVERIFY(model.data(model.index(row, 0), TransferCenterModel::IsHistoricalRole).toBool());
   QVERIFY(!model.requestCancel(history.transferId));
+}
+
+void TransferCenterModelTests::emitsValidatedHistoryOpenAndRetryIntents()
+{
+  TransferCenterModel model;
+  auto completed = historyRecord(QStringLiteral("11111111-1111-4111-8111-111111111111"));
+  completed.fileCount = 1;
+  auto failed = historyRecord(
+      QStringLiteral("22222222-2222-4222-8222-222222222222"), HistoryStatus::Failed
+  );
+  failed.errorMessageKey = QStringLiteral("remote.private.backend_stacktrace");
+  const auto liveFailed = transferSnapshot(
+      QStringLiteral("33333333-3333-4333-8333-333333333333"), TransferDirection::Sending,
+      TransferState::Failed
+  );
+  model.setTransfers({liveFailed});
+  model.setHistoryRecords({completed, failed});
+
+  const auto completedIndex = model.index(model.indexOf(completed.transferId), 0);
+  QVERIFY(model.data(completedIndex, TransferCenterModel::HasHistoryDetailsRole).toBool());
+  QVERIFY(model.data(completedIndex, TransferCenterModel::CanOpenFolderRole).toBool());
+  QVERIFY(model.data(completedIndex, TransferCenterModel::CanOpenFileRole).toBool());
+  QVERIFY(!model.data(completedIndex, TransferCenterModel::CanRetryRole).toBool());
+
+  const auto failedIndex = model.index(model.indexOf(failed.transferId), 0);
+  QVERIFY(model.data(failedIndex, TransferCenterModel::HasHistoryDetailsRole).toBool());
+  QVERIFY(!model.data(failedIndex, TransferCenterModel::CanOpenFolderRole).toBool());
+  QVERIFY(!model.data(failedIndex, TransferCenterModel::CanOpenFileRole).toBool());
+  QVERIFY(model.data(failedIndex, TransferCenterModel::CanRetryRole).toBool());
+
+  std::optional<TransferHistoryRecord> folderIntent;
+  std::optional<TransferHistoryRecord> fileIntent;
+  std::optional<TransferHistoryRecord> historyRetryIntent;
+  std::optional<TransferSnapshot> liveRetryIntent;
+  connect(&model, &TransferCenterModel::openFolderRequested, this, [&](TransferHistoryRecord record) {
+    folderIntent = std::move(record);
+  });
+  connect(&model, &TransferCenterModel::openFileRequested, this, [&](TransferHistoryRecord record) {
+    fileIntent = std::move(record);
+  });
+  connect(&model, &TransferCenterModel::historyRetryRequested, this, [&](TransferHistoryRecord record) {
+    historyRetryIntent = std::move(record);
+  });
+  connect(&model, &TransferCenterModel::retryRequested, this, [&](TransferSnapshot snapshot) {
+    liveRetryIntent = std::move(snapshot);
+  });
+
+  QVERIFY(model.requestOpenFolder(completed.transferId));
+  QVERIFY(model.requestOpenFile(completed.transferId));
+  QVERIFY(model.requestRetry(failed.transferId));
+  QVERIFY(model.requestRetry(liveFailed.id));
+  QVERIFY(folderIntent.has_value());
+  QVERIFY(fileIntent.has_value());
+  QVERIFY(historyRetryIntent.has_value());
+  QVERIFY(liveRetryIntent.has_value());
+  QCOMPARE(*folderIntent, completed);
+  QCOMPARE(*fileIntent, completed);
+  QCOMPARE(*historyRetryIntent, failed);
+  QCOMPARE(*liveRetryIntent, liveFailed);
+
+  auto replacement = completed;
+  replacement.displayName = QStringLiteral("Replacement");
+  model.setHistoryRecords({replacement, failed});
+  QCOMPARE(folderIntent->displayName, QStringLiteral("Archive"));
+
+  QVERIFY(!model.requestRetry(completed.transferId));
+  QVERIFY(!model.requestOpenFolder(failed.transferId));
+  QVERIFY(!model.requestOpenFile(failed.transferId));
+  QVERIFY(!model.requestOpenFolder(liveFailed.id));
+  QVERIFY(!model.requestOpenFile(liveFailed.id));
+  QVERIFY(!model.requestRetry(QUuid(QStringLiteral("44444444-4444-4444-8444-444444444444"))));
 }
 
 void TransferCenterModelTests::mapsStateAndErrorsToSafeVisibleStrings()

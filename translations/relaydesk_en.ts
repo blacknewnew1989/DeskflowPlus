@@ -102,6 +102,24 @@
     <message><source>transfer.action.cancel</source><translation>Cancel</translation></message>
     <message><source>transfer.action.retry</source><translation>Retry</translation></message>
     <message><source>transfer.action.open_folder</source><translation>Open folder</translation></message>
+    <message><source>transfer.action.open_file</source><translation>Open file</translation></message>
+    <message><source>transfer.action.details</source><translation>Details</translation></message>
+    <message><source>transfer.action.close</source><translation>Close</translation></message>
+    <message><source>transfer.history.details_title</source><translation>Transfer details</translation></message>
+    <message><source>transfer.history.name_label</source><translation>Transfer</translation></message>
+    <message><source>transfer.history.peer_label</source><translation>Device</translation></message>
+    <message><source>transfer.history.direction_label</source><translation>Direction</translation></message>
+    <message><source>transfer.history.status_label</source><translation>Status</translation></message>
+    <message><source>transfer.history.items_label</source><translation>Items</translation></message>
+    <message><source>transfer.history.size_label</source><translation>Size</translation></message>
+    <message><source>transfer.history.started_label</source><translation>Started</translation></message>
+    <message><source>transfer.history.finished_label</source><translation>Finished</translation></message>
+    <message><source>transfer.history.duration_label</source><translation>Duration</translation></message>
+    <message><source>transfer.history.error_label</source><translation>Error</translation></message>
+    <message numerus="yes"><source>transfer.history.items</source><translation><numerusform>%1 item</numerusform><numerusform>%1 items</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.history.duration_seconds</source><translation><numerusform>%1 second</numerusform><numerusform>%1 seconds</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.history.duration_minutes</source><translation><numerusform>%1 minute</numerusform><numerusform>%1 minutes</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.history.duration_hours</source><translation><numerusform>%1 hour</numerusform><numerusform>%1 hours</numerusform></translation></message>
     <message><source>transfer.action.accept</source><translation>Accept</translation></message>
     <message><source>transfer.action.reject</source><translation>Reject</translation></message>
     <message><source>transfer.action.dismiss</source><translation>Dismiss</translation></message>
