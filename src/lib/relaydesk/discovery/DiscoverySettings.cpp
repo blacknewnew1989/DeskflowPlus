@@ -104,11 +104,13 @@ parseManualAddress(QString host, int inputPort, int filePort, QString *diagnosti
   }
 
   host = host.trimmed();
+  bool bracketed = false;
   if (host.startsWith(QLatin1Char('[')) || host.endsWith(QLatin1Char(']'))) {
     if (host.size() < 3 || !host.startsWith(QLatin1Char('[')) || !host.endsWith(QLatin1Char(']'))) {
       setDiagnostic(diagnostic, QStringLiteral("Manual IPv6 address has mismatched brackets"));
       return std::nullopt;
     }
+    bracketed = true;
     host = host.sliced(1, host.size() - 2);
   }
   if (host.isEmpty()) {
@@ -118,7 +120,8 @@ parseManualAddress(QString host, int inputPort, int filePort, QString *diagnosti
 
   QHostAddress literalAddress;
   if (literalAddress.setAddress(host)) {
-    if (literalAddress.isNull() || literalAddress.isMulticast() || literalAddress.isBroadcast()) {
+    if (literalAddress.isNull() || literalAddress == QHostAddress::AnyIPv4 ||
+        literalAddress == QHostAddress::AnyIPv6 || literalAddress.isMulticast() || literalAddress.isBroadcast()) {
       setDiagnostic(diagnostic, QStringLiteral("Manual address must identify a unicast host"));
       return std::nullopt;
     }
@@ -129,13 +132,22 @@ parseManualAddress(QString host, int inputPort, int filePort, QString *diagnosti
     };
   }
 
+  if (bracketed) {
+    setDiagnostic(diagnostic, QStringLiteral("Bracketed manual address must contain IPv6"));
+    return std::nullopt;
+  }
+
   if (host.contains(QLatin1Char(':')) ||
       QRegularExpression(QStringLiteral("^[0-9.]+$")).match(host).hasMatch()) {
     setDiagnostic(diagnostic, QStringLiteral("Manual address is not a valid IP address"));
     return std::nullopt;
   }
-  while (host.endsWith(QLatin1Char('.'))) {
+  if (host.endsWith(QLatin1Char('.'))) {
     host.chop(1);
+  }
+  if (host.endsWith(QLatin1Char('.'))) {
+    setDiagnostic(diagnostic, QStringLiteral("Manual hostname has an empty trailing label"));
+    return std::nullopt;
   }
   const auto ace = QUrl::toAce(host).toLower();
   if (!isValidAceHostname(ace)) {
@@ -160,7 +172,17 @@ DiscoverySettingsLoadResult DiscoverySettingsStore::load()
   if (!schemaValue.isValid()) {
     const auto legacyHost = m_settings.value(legacyManualHostKey()).toString();
     if (legacyHost.trimmed().isEmpty()) {
-      return {.ok = true};
+      DiscoverySettings migrated{
+          .enabled = m_settings.value(enabledKey(), true).toBool(),
+      };
+      if (!m_settings.contains(enabledKey())) {
+        return {.ok = true, .settings = std::move(migrated)};
+      }
+      QString diagnostic;
+      if (!save(migrated, &diagnostic)) {
+        return {.ok = false, .diagnostic = QStringLiteral("Unable to migrate discovery settings: %1").arg(diagnostic)};
+      }
+      return {.ok = true, .settings = std::move(migrated), .migrated = true};
     }
     const auto inputPort = m_settings.value(legacyManualInputPortKey(), kDefaultManualInputPort).toInt();
     const auto filePort = m_settings.value(legacyManualFilePortKey(), kDefaultManualFilePort).toInt();
