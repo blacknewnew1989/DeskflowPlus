@@ -9,6 +9,13 @@ create_test(
 )
 
 create_test(
+  NAME RelayDeskConflictResolverTests
+  DEPENDS relaydesk_transfer
+  SOURCE ConflictResolverTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
+
+create_test(
   NAME RelayDeskFrameCodecTests
   DEPENDS relaydesk_transfer
   SOURCE FrameCodecTests.cpp
