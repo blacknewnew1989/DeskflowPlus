@@ -73,6 +73,15 @@ jobs:
 
       - name: Install upstream dependencies
         id: deps
+        continue-on-error: true
+        uses: ./.github/actions/install-dependencies
+        with:
+          qt-version: ${{ matrix.target.qt-version }}
+          vcpkg-triplet: ${{ matrix.target.vcpkg-triplet }}
+
+      - name: Retry upstream dependencies once
+        id: deps_retry
+        if: steps.deps.outcome == 'failure'
         uses: ./.github/actions/install-dependencies
         with:
           qt-version: ${{ matrix.target.qt-version }}
@@ -91,7 +100,7 @@ jobs:
           -DBUILD_TESTS=ON
           -DBUILD_INSTALLER=ON
           ${{ matrix.target.config-args }}
-          ${{ steps.deps.outputs.vcpkg-cmake-config }}
+          ${{ steps.deps.outcome == 'success' && steps.deps.outputs.vcpkg-cmake-config || steps.deps_retry.outputs.vcpkg-cmake-config }}
           -DPACKAGE_VERSION_LABEL="${{ github.sha }}"
 
       - name: Build
