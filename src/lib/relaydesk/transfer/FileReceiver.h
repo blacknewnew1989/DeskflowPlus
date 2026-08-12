@@ -48,6 +48,9 @@ enum class FileReceiverError
   HashMismatch,
   TargetExists,
   CommitFailed,
+  ResumeStateMismatch,
+  StagingSizeMismatch,
+  StagingReadFailed,
 };
 
 struct FileReceiveRequest
@@ -55,6 +58,7 @@ struct FileReceiveRequest
   QString receiveRoot;
   ManifestEntry entry;
   FileBeginMessage begin;
+  QByteArray manifestSha256;
   ConflictPolicy conflictPolicy = ConflictPolicy::AutoRename;
   PathLimits pathLimits;
 };
@@ -120,6 +124,7 @@ public:
   FileReceiver &operator=(const FileReceiver &) = delete;
 
   [[nodiscard]] FileReceiverResult begin(const FileReceiveRequest &request);
+  [[nodiscard]] FileReceiverResult resume(const FileReceiveRequest &request, const ResumeState &state);
   [[nodiscard]] FileReceiverResult append(const FileChunkMessage &chunk, QByteArrayView payload);
   [[nodiscard]] FileReceiverResult finish(const FileEndMessage &end);
   [[nodiscard]] FileReceiverResult cancel(bool keepPartial);
@@ -130,6 +135,7 @@ public:
 
 private:
   [[nodiscard]] FileReceiverResult fail(FileReceiverError error, FileResultCode code, QString diagnostic);
+  [[nodiscard]] FileReceiverResult beginInternal(const FileReceiveRequest &request, const ResumeState *resumeState);
   [[nodiscard]] FileReceiverResult result(FileResultCode code, QString diagnostic = {}) const;
   [[nodiscard]] QString chooseAutoRenameTarget(const QString &requestedTarget) const;
   void resetSession();

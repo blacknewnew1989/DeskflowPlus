@@ -9,6 +9,9 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <algorithm>
+#include <optional>
+
 using namespace relaydesk::transfer;
 
 namespace {
@@ -100,6 +103,11 @@ private Q_SLOTS:
   void persistsOnlySyncedDurableCheckpoints();
   void rejectsMismatchedCheckpointState();
   void failedCheckpointPersistenceNeverAdvancesState();
+  void restartsFromDurableCheckpoint_data();
+  void restartsFromDurableCheckpoint();
+  void rejectsMissingCorruptAndMismatchedResumeState();
+  void rejectsPartSizeMismatch();
+  void modifiedPartFailsFinalIntegrity();
 };
 
 void FileReceiverTests::streamsPartThenAtomicallyCommits()
@@ -158,7 +166,7 @@ void FileReceiverTests::rejectsUnsafeAndMismatchedRequests()
 
   auto resume = fixture.request();
   resume.begin.startOffset = 1;
-  QCOMPARE(receiver.begin(resume).error, FileReceiverError::InvalidRequest);
+  QCOMPARE(receiver.begin(resume).error, FileReceiverError::ResumeStateMismatch);
 
   auto unsupported = fixture.request();
   unsupported.conflictPolicy = ConflictPolicy::Overwrite;
@@ -398,6 +406,166 @@ void FileReceiverTests::failedCheckpointPersistenceNeverAdvancesState()
   QVERIFY2(recovered.ok(), qPrintable(recovered.diagnostic));
   QCOMPARE(recovered.message->durableOffset, quint64{12});
   QCOMPARE(workingStore.load(fixture.transferId).state->files.constFirst().durableOffset, quint64{12});
+}
+
+void FileReceiverTests::restartsFromDurableCheckpoint_data()
+{
+  QTest::addColumn<quint64>("durableOffset");
+  QTest::newRow("zero") << quint64{0};
+  QTest::newRow("middle") << quint64{12};
+  QTest::newRow("near-end") << quint64{23};
+}
+
+void FileReceiverTests::restartsFromDurableCheckpoint()
+{
+  QFETCH(quint64, durableOffset);
+  Fixture fixture;
+  const QByteArray manifestSha256(32, '\x5a');
+  ResumeStore store(fixture.directory.filePath(QStringLiteral("resume/active")));
+  auto initialRequest = fixture.request(QStringLiteral("restart/报告.bin"), 12);
+  std::optional<ResumeState> state;
+  QString partPath;
+  {
+    FileReceiver initial;
+    QVERIFY(initial.begin(initialRequest).ok());
+    quint64 offset = 0;
+    quint64 sequence = 0;
+    while (offset < durableOffset) {
+      const qsizetype bytes = static_cast<qsizetype>(std::min<quint64>(12, durableOffset - offset));
+      const QByteArray payload = fixture.contents.sliced(static_cast<qsizetype>(offset), bytes);
+      QVERIFY(initial.append({fixture.transferId, fixture.fileId, offset, sequence}, payload).ok());
+      offset += static_cast<quint64>(bytes);
+      ++sequence;
+    }
+    state = resumeStateFor(fixture, initial.snapshot());
+    state->manifestSha256 = manifestSha256;
+    const auto checkpoint = initial.checkpoint(store, *state);
+    QVERIFY2(checkpoint.ok(), qPrintable(checkpoint.diagnostic));
+    QCOMPARE(checkpoint.message->durableOffset, durableOffset);
+    partPath = initial.snapshot().partPath;
+  }
+  QVERIFY(QFileInfo::exists(partPath));
+  const auto loaded = store.load(fixture.transferId);
+  QVERIFY2(loaded.ok(), qPrintable(loaded.diagnostic));
+
+  auto resumeRequest = initialRequest;
+  resumeRequest.begin.startOffset = durableOffset;
+  resumeRequest.manifestSha256 = manifestSha256;
+  FileReceiver restarted;
+  const auto resumed = restarted.resume(resumeRequest, *loaded.state);
+  QVERIFY2(resumed.ok(), qPrintable(resumed.diagnostic));
+  QCOMPARE(restarted.snapshot().receivedBytes, durableOffset);
+  QCOMPARE(restarted.snapshot().nextSequence, quint64{0});
+
+  quint64 offset = durableOffset;
+  quint64 sequence = 0;
+  while (offset < static_cast<quint64>(fixture.contents.size())) {
+    const qsizetype bytes =
+        static_cast<qsizetype>(std::min<quint64>(12, static_cast<quint64>(fixture.contents.size()) - offset));
+    const QByteArray payload = fixture.contents.sliced(static_cast<qsizetype>(offset), bytes);
+    QVERIFY(restarted.append({fixture.transferId, fixture.fileId, offset, sequence}, payload).ok());
+    offset += static_cast<quint64>(bytes);
+    ++sequence;
+  }
+  const auto completed = restarted.finish(
+      {fixture.transferId, fixture.fileId, static_cast<quint64>(fixture.contents.size()), sha256(fixture.contents)}
+  );
+  QVERIFY2(completed.ok(), qPrintable(completed.diagnostic));
+  QCOMPARE(restarted.snapshot().state, FileReceiverState::Completed);
+  QCOMPARE(readFile(restarted.snapshot().committedPath), fixture.contents);
+  QVERIFY(!QFileInfo::exists(partPath));
+}
+
+void FileReceiverTests::rejectsMissingCorruptAndMismatchedResumeState()
+{
+  Fixture fixture;
+  const QByteArray manifestSha256(32, '\x6b');
+  ResumeStore store(fixture.directory.filePath(QStringLiteral("resume/active")));
+  auto request = fixture.request(QStringLiteral("state.bin"), 12);
+  std::optional<ResumeState> state;
+  {
+    FileReceiver initial;
+    QVERIFY(initial.begin(request).ok());
+    QVERIFY(initial.append({fixture.transferId, fixture.fileId, 0, 0}, fixture.contents.first(12)).ok());
+    state = resumeStateFor(fixture, initial.snapshot());
+    state->manifestSha256 = manifestSha256;
+    QVERIFY(initial.checkpoint(store, *state).ok());
+  }
+  request.begin.startOffset = 12;
+  request.manifestSha256 = manifestSha256;
+  FileReceiver missing;
+  QCOMPARE(missing.begin(request).error, FileReceiverError::ResumeStateMismatch);
+
+  auto wrongManifest = request;
+  wrongManifest.manifestSha256 = QByteArray(32, '\x7c');
+  FileReceiver mismatched;
+  QCOMPARE(mismatched.resume(wrongManifest, *state).error, FileReceiverError::ResumeStateMismatch);
+
+  QVERIFY(writeFile(store.statePath(fixture.transferId), QByteArrayLiteral("not-cbor")));
+  QCOMPARE(store.load(fixture.transferId).error, ResumeStoreError::MalformedCbor);
+  FileReceiver corrupt;
+  QCOMPARE(corrupt.begin(request).error, FileReceiverError::ResumeStateMismatch);
+}
+
+void FileReceiverTests::rejectsPartSizeMismatch()
+{
+  Fixture fixture;
+  const QByteArray manifestSha256(32, '\x3d');
+  ResumeStore store(fixture.directory.filePath(QStringLiteral("resume/active")));
+  auto request = fixture.request(QStringLiteral("size-state.bin"), 12);
+  std::optional<ResumeState> state;
+  QString partPath;
+  {
+    FileReceiver initial;
+    QVERIFY(initial.begin(request).ok());
+    QVERIFY(initial.append({fixture.transferId, fixture.fileId, 0, 0}, fixture.contents.first(12)).ok());
+    state = resumeStateFor(fixture, initial.snapshot());
+    state->manifestSha256 = manifestSha256;
+    QVERIFY(initial.checkpoint(store, *state).ok());
+    partPath = initial.snapshot().partPath;
+  }
+  QFile truncated(partPath);
+  QVERIFY(truncated.open(QIODevice::ReadWrite));
+  QVERIFY(truncated.resize(11));
+  truncated.close();
+  request.begin.startOffset = 12;
+  request.manifestSha256 = manifestSha256;
+
+  FileReceiver restarted;
+  QCOMPARE(restarted.resume(request, *state).error, FileReceiverError::StagingSizeMismatch);
+  QCOMPARE(restarted.snapshot().state, FileReceiverState::Idle);
+}
+
+void FileReceiverTests::modifiedPartFailsFinalIntegrity()
+{
+  Fixture fixture;
+  const QByteArray manifestSha256(32, '\x4e');
+  ResumeStore store(fixture.directory.filePath(QStringLiteral("resume/active")));
+  auto request = fixture.request(QStringLiteral("modified-part.bin"), 12);
+  std::optional<ResumeState> state;
+  QString partPath;
+  {
+    FileReceiver initial;
+    QVERIFY(initial.begin(request).ok());
+    QVERIFY(initial.append({fixture.transferId, fixture.fileId, 0, 0}, fixture.contents.first(12)).ok());
+    state = resumeStateFor(fixture, initial.snapshot());
+    state->manifestSha256 = manifestSha256;
+    QVERIFY(initial.checkpoint(store, *state).ok());
+    partPath = initial.snapshot().partPath;
+  }
+  QVERIFY(writeFile(partPath, QByteArray(12, '\x55')));
+  request.begin.startOffset = 12;
+  request.manifestSha256 = manifestSha256;
+  FileReceiver restarted;
+  QVERIFY(restarted.resume(request, *state).ok());
+  QVERIFY(restarted.append({fixture.transferId, fixture.fileId, 12, 0}, fixture.contents.sliced(12)).ok());
+
+  const auto completed = restarted.finish(
+      {fixture.transferId, fixture.fileId, static_cast<quint64>(fixture.contents.size()), sha256(fixture.contents)}
+  );
+  QCOMPARE(completed.error, FileReceiverError::HashMismatch);
+  QVERIFY(QFileInfo::exists(partPath));
+  QVERIFY(!QFileInfo::exists(fixture.directory.filePath(QStringLiteral("modified-part.bin"))));
 }
 
 QTEST_MAIN(FileReceiverTests)
