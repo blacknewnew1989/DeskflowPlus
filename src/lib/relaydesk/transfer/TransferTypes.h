@@ -7,6 +7,7 @@
 
 #include <QByteArray>
 #include <QDateTime>
+#include <QList>
 #include <QString>
 #include <QtGlobal>
 
@@ -54,6 +55,35 @@ struct SingleFileManifest
   TransferManifestSummary summary;
 
   [[nodiscard]] bool operator==(const SingleFileManifest &) const = default;
+};
+
+struct PreparedManifestEntry
+{
+  // Local-only snapshot used by the sender. It is deliberately excluded from
+  // the canonical wire digest.
+  QString canonicalSourcePath;
+  QString protocolCollisionKey;
+  ManifestEntry entry;
+
+  [[nodiscard]] bool operator==(const PreparedManifestEntry &) const = default;
+};
+
+struct ManifestBuildWarning
+{
+  QString relativeProtocolPath;
+  QString diagnostic;
+
+  [[nodiscard]] bool operator==(const ManifestBuildWarning &) const = default;
+};
+
+struct TransferManifest
+{
+  // Sorted by UTF-8 protocol path, entry type, then fileId bytes.
+  QList<PreparedManifestEntry> entries;
+  QList<ManifestBuildWarning> warnings;
+  TransferManifestSummary summary;
+
+  [[nodiscard]] bool operator==(const TransferManifest &) const = default;
 };
 
 } // namespace relaydesk::transfer

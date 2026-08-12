@@ -48,6 +48,22 @@ SingleFileManifestRequest requestFor(const QString &sourcePath)
   };
 }
 
+TransferManifestRequest
+transferRequestFor(const QList<ManifestSourceRequest> &sources, const QString &displayName = QString())
+{
+  return {.sources = sources, .transferId = kTransferId, .displayName = displayName};
+}
+
+const PreparedManifestEntry *findEntry(const TransferManifest &manifest, const QString &protocolPath)
+{
+  for (const PreparedManifestEntry &prepared : manifest.entries) {
+    if (prepared.entry.relativeProtocolPath == protocolPath) {
+      return &prepared;
+    }
+  }
+  return nullptr;
+}
+
 } // namespace
 
 class ManifestBuilderTests final : public QObject
@@ -69,6 +85,15 @@ private Q_SLOTS:
   void detectsSourceMtimeChangeDuringHash();
   void canonicalDigestExcludesLocalPathAndTransferId();
   void canonicalDigestMatchesFrozenVector();
+  void buildsNestedUnicodeFolderAndPreservesEmptyDirectories();
+  void buildsMultipleSourcesWithStableOrderAndDigest();
+  void rejectsPortableCollisionKeys();
+  void enforcesDepthEntryAndMetadataLimits();
+  void rejectsInvalidResourceOptions();
+  void detectsFileChangeAfterDirectoryScan();
+  void detectsDirectoryChangeDuringBuild();
+  void skipsNestedSymbolicLinkWhenSupported();
+  void buildsThousandsOfFilesWithinDefaultLimits();
 };
 
 void ManifestBuilderTests::buildsEmptyFileManifest()
@@ -341,6 +366,246 @@ void ManifestBuilderTests::canonicalDigestMatchesFrozenVector()
       result.manifest->summary.canonicalSha256.toHex(),
       QByteArrayLiteral("7fdd103e0b3fd12dd6762a609fe21b1d7cdb97962096922fa379a667283ec518")
   );
+}
+
+void ManifestBuilderTests::buildsNestedUnicodeFolderAndPreservesEmptyDirectories()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QDir root(directory.path());
+  QVERIFY(root.mkpath(QStringLiteral("Café/空目录")));
+  QVERIFY(root.mkpath(QStringLiteral("数据")));
+  const QString filePath = createFile(directory, QStringLiteral("数据/报告 😀.txt"), QByteArrayLiteral("abc"));
+  QVERIFY(!filePath.isEmpty());
+
+  const auto request = transferRequestFor({
+      {.sourcePath = directory.path(), .relativeProtocolPath = QStringLiteral("根")},
+  });
+  const auto result = ManifestBuilder::buildTransfer(request);
+
+  QVERIFY2(result.ok(), qPrintable(result.diagnostic));
+  QCOMPARE(result.manifest->summary.totalBytes, 3);
+  QCOMPARE(result.manifest->summary.fileCount, 1);
+  QCOMPARE(result.manifest->summary.directoryCount, 4);
+  QCOMPARE(result.manifest->entries.size(), 5);
+  const PreparedManifestEntry *file = findEntry(*result.manifest, QStringLiteral("根/数据/报告 😀.txt"));
+  QVERIFY(file != nullptr);
+  QCOMPARE(
+      file->entry.sha256.toHex(), QByteArrayLiteral("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+  );
+  QCOMPARE(file->protocolCollisionKey, QStringLiteral("根/数据/报告 😀.txt").toCaseFolded());
+  const PreparedManifestEntry *empty = findEntry(*result.manifest, QStringLiteral("根/Café/空目录"));
+  QVERIFY(empty != nullptr);
+  QCOMPARE(empty->entry.type, ManifestEntryType::Directory);
+  QCOMPARE(empty->entry.size, 0);
+  QVERIFY(empty->entry.sha256.isEmpty());
+}
+
+void ManifestBuilderTests::buildsMultipleSourcesWithStableOrderAndDigest()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString alpha = createFile(directory, QStringLiteral("local-a.bin"), QByteArrayLiteral("alpha"));
+  const QString beta = createFile(directory, QStringLiteral("local-b.bin"), QByteArrayLiteral("beta"));
+  QVERIFY(!alpha.isEmpty());
+  QVERIFY(!beta.isEmpty());
+  const ManifestSourceRequest alphaSource{.sourcePath = alpha, .relativeProtocolPath = QStringLiteral("Batch/a.bin")};
+  const ManifestSourceRequest betaSource{.sourcePath = beta, .relativeProtocolPath = QStringLiteral("Batch/b.bin")};
+
+  const auto forward =
+      ManifestBuilder::buildTransfer(transferRequestFor({betaSource, alphaSource}, QStringLiteral("Batch")));
+  auto reverseRequest = transferRequestFor({alphaSource, betaSource}, QStringLiteral("Batch"));
+  reverseRequest.transferId = QUuid(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"));
+  const auto reverse = ManifestBuilder::buildTransfer(reverseRequest);
+
+  QVERIFY2(forward.ok(), qPrintable(forward.diagnostic));
+  QVERIFY2(reverse.ok(), qPrintable(reverse.diagnostic));
+  QCOMPARE(forward.manifest->entries.at(0).entry.relativeProtocolPath, QStringLiteral("Batch/a.bin"));
+  QCOMPARE(forward.manifest->entries.at(1).entry.relativeProtocolPath, QStringLiteral("Batch/b.bin"));
+  QCOMPARE(forward.manifest->summary.fileCount, 2);
+  QCOMPARE(forward.manifest->summary.directoryCount, 0);
+  QCOMPARE(forward.manifest->summary.totalBytes, 9);
+  QCOMPARE(forward.manifest->summary.canonicalSha256, reverse.manifest->summary.canonicalSha256);
+  QCOMPARE(forward.manifest->entries.at(0).entry.id, reverse.manifest->entries.at(0).entry.id);
+  // Frozen RDFT/1 multi-entry vector. It also locks the deterministic UUIDv8
+  // entry IDs and UTF-8 path ordering into the shared compatibility contract.
+  QCOMPARE(
+      forward.manifest->summary.canonicalSha256.toHex(),
+      QByteArrayLiteral("88c8e7fb4629abd54fb73f89a50cb299cfde298afb7f742fc709e77eb89d9c7c")
+  );
+}
+
+void ManifestBuilderTests::rejectsPortableCollisionKeys()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString first = createFile(directory, QStringLiteral("first.bin"), QByteArrayLiteral("a"));
+  const QString second = createFile(directory, QStringLiteral("second.bin"), QByteArrayLiteral("b"));
+  QVERIFY(!first.isEmpty());
+  QVERIFY(!second.isEmpty());
+
+  const auto result = ManifestBuilder::buildTransfer(transferRequestFor(
+      {
+          {.sourcePath = first, .relativeProtocolPath = QStringLiteral("Data/Readme.txt")},
+          {.sourcePath = second, .relativeProtocolPath = QStringLiteral("data/README.TXT")},
+      },
+      QStringLiteral("Collision test")
+  ));
+
+  QVERIFY(!result.ok());
+  QCOMPARE(result.error, ManifestBuildError::ProtocolPathCollision);
+}
+
+void ManifestBuilderTests::enforcesDepthEntryAndMetadataLimits()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QDir root(directory.path());
+  QVERIFY(root.mkpath(QStringLiteral("one/two")));
+  QVERIFY(!createFile(directory, QStringLiteral("one/a.bin"), {}).isEmpty());
+  QVERIFY(!createFile(directory, QStringLiteral("one/two/b.bin"), {}).isEmpty());
+  const auto request = transferRequestFor({
+      {.sourcePath = directory.path(), .relativeProtocolPath = QStringLiteral("root")},
+  });
+
+  ManifestBuildOptions options;
+  options.pathLimits.maxDepth = 2;
+  auto result = ManifestBuilder::buildTransfer(request, options);
+  QVERIFY(!result.ok());
+  QCOMPARE(result.error, ManifestBuildError::UnsafeProtocolPath);
+  QCOMPARE(result.pathError, PathError::TooDeep);
+
+  options = {};
+  options.maxEntries = 2;
+  result = ManifestBuilder::buildTransfer(request, options);
+  QVERIFY(!result.ok());
+  QCOMPARE(result.error, ManifestBuildError::TooManyEntries);
+
+  options = {};
+  options.maxMetadataBytes = 1;
+  result = ManifestBuilder::buildTransfer(request, options);
+  QVERIFY(!result.ok());
+  QCOMPARE(result.error, ManifestBuildError::ManifestMetadataTooLarge);
+}
+
+void ManifestBuilderTests::rejectsInvalidResourceOptions()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto request = transferRequestFor({
+      {.sourcePath = directory.path(), .relativeProtocolPath = QStringLiteral("root")},
+  });
+  ManifestBuildOptions options;
+  options.maxEntries = kMaxManifestEntries + 1;
+  QCOMPARE(ManifestBuilder::buildTransfer(request, options).error, ManifestBuildError::InvalidOptions);
+  options = {};
+  options.maxMetadataBytes = kMaxManifestMetadataBytes + 1;
+  QCOMPARE(ManifestBuilder::buildTransfer(request, options).error, ManifestBuildError::InvalidOptions);
+}
+
+void ManifestBuilderTests::detectsFileChangeAfterDirectoryScan()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString first = createFile(directory, QStringLiteral("a.bin"), QByteArrayLiteral("aaaa"));
+  const QString later = createFile(directory, QStringLiteral("z.bin"), QByteArrayLiteral("zzzz"));
+  QVERIFY(!first.isEmpty());
+  QVERIFY(!later.isEmpty());
+  bool changed = false;
+  ManifestBuildOptions options;
+  options.hashChunkBytes = 2;
+  options.progress = [&changed, &later](const ManifestBuildProgress &) {
+    if (changed) {
+      return;
+    }
+    QFile mutator(later);
+    QVERIFY(mutator.open(QIODevice::Append));
+    QCOMPARE(mutator.write("x", 1), 1);
+    mutator.close();
+    changed = true;
+  };
+  const auto request = transferRequestFor({
+      {.sourcePath = directory.path(), .relativeProtocolPath = QStringLiteral("root")},
+  });
+
+  const auto result = ManifestBuilder::buildTransfer(request, options);
+
+  QVERIFY(changed);
+  QVERIFY(!result.ok());
+  QCOMPARE(result.error, ManifestBuildError::SourceChanged);
+}
+
+void ManifestBuilderTests::detectsDirectoryChangeDuringBuild()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QVERIFY(!createFile(directory, QStringLiteral("source.bin"), QByteArrayLiteral("data")).isEmpty());
+  bool changed = false;
+  ManifestBuildOptions options;
+  options.hashChunkBytes = 2;
+  options.progress = [&changed, &directory](const ManifestBuildProgress &) {
+    if (changed) {
+      return;
+    }
+    QVERIFY(!createFile(directory, QStringLiteral("appeared.bin"), QByteArrayLiteral("new")).isEmpty());
+    changed = true;
+  };
+  const auto request = transferRequestFor({
+      {.sourcePath = directory.path(), .relativeProtocolPath = QStringLiteral("root")},
+  });
+
+  const auto result = ManifestBuilder::buildTransfer(request, options);
+
+  QVERIFY(changed);
+  QVERIFY(!result.ok());
+  QCOMPARE(result.error, ManifestBuildError::SourceChanged);
+}
+
+void ManifestBuilderTests::skipsNestedSymbolicLinkWhenSupported()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString target = createFile(directory, QStringLiteral("target.bin"), QByteArrayLiteral("data"));
+  QVERIFY(!target.isEmpty());
+  const QString link = directory.filePath(QStringLiteral("nested-link"));
+  if (!QFile::link(target, link) || !QFileInfo(link).isSymLink()) {
+    QSKIP("This Windows environment cannot create a QFileInfo-visible symbolic link");
+  }
+  const auto request = transferRequestFor({
+      {.sourcePath = directory.path(), .relativeProtocolPath = QStringLiteral("root")},
+  });
+
+  const auto result = ManifestBuilder::buildTransfer(request);
+
+  QVERIFY2(result.ok(), qPrintable(result.diagnostic));
+  QCOMPARE(result.manifest->summary.fileCount, 1);
+  QCOMPARE(result.manifest->warnings.size(), 1);
+  QCOMPARE(result.manifest->warnings.constFirst().relativeProtocolPath, QStringLiteral("root/nested-link"));
+  QVERIFY(!result.manifest->warnings.constFirst().diagnostic.isEmpty());
+}
+
+void ManifestBuilderTests::buildsThousandsOfFilesWithinDefaultLimits()
+{
+  constexpr int kFileCount = 2'048;
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  for (int index = 0; index < kFileCount; ++index) {
+    const QString name = QStringLiteral("file-%1.bin").arg(index, 4, 10, QLatin1Char('0'));
+    QVERIFY2(!createFile(directory, name, {}).isEmpty(), qPrintable(name));
+  }
+  const auto request = transferRequestFor({
+      {.sourcePath = directory.path(), .relativeProtocolPath = QStringLiteral("bulk")},
+  });
+
+  const auto result = ManifestBuilder::buildTransfer(request);
+
+  QVERIFY2(result.ok(), qPrintable(result.diagnostic));
+  QCOMPARE(result.manifest->entries.size(), kFileCount + 1);
+  QCOMPARE(result.manifest->summary.fileCount, kFileCount);
+  QCOMPARE(result.manifest->summary.directoryCount, 1);
+  QCOMPARE(result.manifest->summary.totalBytes, 0);
+  QCOMPARE(result.manifest->entries.constFirst().entry.relativeProtocolPath, QStringLiteral("bulk"));
+  QCOMPARE(result.manifest->entries.constLast().entry.relativeProtocolPath, QStringLiteral("bulk/file-2047.bin"));
 }
 
 QTEST_MAIN(ManifestBuilderTests)
