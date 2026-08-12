@@ -4,6 +4,8 @@
 add_library(relaydesk_trust STATIC
   TlsIdentityAdapter.cpp
   TlsIdentityAdapter.h
+  TlsPeerPinningPolicy.cpp
+  TlsPeerPinningPolicy.h
   TrustedDeviceStore.cpp
   TrustedDeviceStore.h
 )
