@@ -112,3 +112,10 @@ create_test(
   SOURCE LargeFileBoundedBenchmark.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
 )
+
+create_test(
+  NAME RelayDeskInputPriorityUnderTransferBenchmark
+  DEPENDS relaydesk_transfer
+  SOURCE InputPriorityUnderTransferBenchmark.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
