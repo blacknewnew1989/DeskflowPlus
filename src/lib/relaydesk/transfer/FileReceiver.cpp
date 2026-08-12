@@ -12,6 +12,7 @@
 #include <unistd.h>
 #endif
 
+#include <algorithm>
 #include <limits>
 #include <utility>
 
@@ -19,6 +20,7 @@ namespace relaydesk::transfer {
 namespace {
 
 constexpr quint32 kMaximumChunkBytes = 4U * 1024U * 1024U;
+constexpr quint32 kResumeHashChunkBytes = 1U * 1024U * 1024U;
 constexpr int kMaximumAutoRenameAttempts = 10'000;
 
 FileReceiverResult failure(FileReceiverError error, QString diagnostic, PathError pathError = PathError::None)
@@ -71,6 +73,22 @@ FileReceiver::~FileReceiver()
 
 FileReceiverResult FileReceiver::begin(const FileReceiveRequest &request)
 {
+  if (request.begin.startOffset != 0) {
+    return failure(
+        FileReceiverError::ResumeStateMismatch,
+        QStringLiteral("a non-zero FILE_BEGIN offset requires explicit validated resume state")
+    );
+  }
+  return beginInternal(request, nullptr);
+}
+
+FileReceiverResult FileReceiver::resume(const FileReceiveRequest &request, const ResumeState &state)
+{
+  return beginInternal(request, &state);
+}
+
+FileReceiverResult FileReceiver::beginInternal(const FileReceiveRequest &request, const ResumeState *resumeState)
+{
   if (m_snapshot.state != FileReceiverState::Idle) {
     return failure(FileReceiverError::InvalidState, QStringLiteral("file receiver is not idle"));
   }
@@ -82,9 +100,10 @@ FileReceiverResult FileReceiver::begin(const FileReceiveRequest &request)
   }
   if (request.entry.type != ManifestEntryType::File || request.entry.id.isNull() || request.begin.transferId.isNull() ||
       request.begin.fileId != request.entry.id || request.begin.size != request.entry.size ||
-      request.begin.size > static_cast<quint64>(std::numeric_limits<qint64>::max()) || request.begin.startOffset != 0 ||
-      request.begin.chunkBytes == 0 || request.begin.chunkBytes > kMaximumChunkBytes ||
-      request.entry.sha256.size() != kSha256Bytes || request.begin.expectedSha256 != request.entry.sha256) {
+      request.begin.size > static_cast<quint64>(std::numeric_limits<qint64>::max()) ||
+      request.begin.startOffset > request.begin.size || request.begin.chunkBytes == 0 ||
+      request.begin.chunkBytes > kMaximumChunkBytes || request.entry.sha256.size() != kSha256Bytes ||
+      request.begin.expectedSha256 != request.entry.sha256) {
     return failure(
         FileReceiverError::InvalidRequest, QStringLiteral("FILE_BEGIN does not match the accepted manifest entry")
     );
@@ -109,7 +128,7 @@ FileReceiverResult FileReceiver::begin(const FileReceiveRequest &request)
   if (!stagingPath.ok) {
     return failure(FileReceiverError::UnsafePath, stagingPath.diagnostic, stagingPath.error);
   }
-  if (QFileInfo::exists(partPath)) {
+  if (resumeState == nullptr && QFileInfo::exists(partPath)) {
     return failure(
         FileReceiverError::StagingExists,
         QStringLiteral("a staging file already exists; resume state is required before it can be reused")
@@ -119,14 +138,68 @@ FileReceiverResult FileReceiver::begin(const FileReceiveRequest &request)
     return failure(FileReceiverError::DirectoryCreateFailed, QStringLiteral("could not create the staging directory"));
   }
 
+  m_hash.reset();
   m_partFile.setFileName(partPath);
-  if (!m_partFile.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
-    return failure(
-        FileReceiverError::StagingOpenFailed, QStringLiteral("could not exclusively create the staging file")
-    );
+  if (resumeState == nullptr) {
+    if (!m_partFile.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
+      return failure(
+          FileReceiverError::StagingOpenFailed, QStringLiteral("could not exclusively create the staging file")
+      );
+    }
+  } else {
+    const ResumeFileState *matching = nullptr;
+    for (const auto &file : resumeState->files) {
+      if (file.fileId == request.begin.fileId) {
+        if (matching != nullptr) {
+          return failure(
+              FileReceiverError::ResumeStateMismatch, QStringLiteral("resume state contains duplicate file IDs")
+          );
+        }
+        matching = &file;
+      }
+    }
+    if (resumeState->transferId != request.begin.transferId || resumeState->peerDeviceId.value().isNull() ||
+        resumeState->direction != ResumeDirection::Receiving || resumeState->manifestSha256.size() != kSha256Bytes ||
+        request.manifestSha256.size() != kSha256Bytes || resumeState->manifestSha256 != request.manifestSha256 ||
+        !resumeState->updatedUtc.isValid() || resumeState->updatedUtc.toMSecsSinceEpoch() <= 0 || matching == nullptr ||
+        matching->relativeProtocolPath != targetPath.normalized || matching->totalBytes != request.entry.size ||
+        matching->durableOffset != request.begin.startOffset || matching->partRelativePath != stagingRelative) {
+      return failure(
+          FileReceiverError::ResumeStateMismatch,
+          QStringLiteral("resume state does not match the accepted manifest and FILE_BEGIN")
+      );
+    }
+    QFileInfo partInfo(partPath);
+    partInfo.refresh();
+    if (!partInfo.exists() || partInfo.isSymLink() || !partInfo.isFile() || partInfo.size() < 0 ||
+        static_cast<quint64>(partInfo.size()) != request.begin.startOffset) {
+      return failure(
+          FileReceiverError::StagingSizeMismatch,
+          QStringLiteral("staging file size does not match the durable resume offset")
+      );
+    }
+    if (!m_partFile.open(QIODevice::ReadWrite)) {
+      return failure(FileReceiverError::StagingOpenFailed, QStringLiteral("could not reopen the staging file"));
+    }
+    quint64 remaining = request.begin.startOffset;
+    while (remaining > 0) {
+      const quint64 wanted = std::min<quint64>(remaining, kResumeHashChunkBytes);
+      const QByteArray prefix = m_partFile.read(static_cast<qint64>(wanted));
+      if (static_cast<quint64>(prefix.size()) != wanted) {
+        m_partFile.close();
+        return failure(
+            FileReceiverError::StagingReadFailed, QStringLiteral("could not rehash the complete staging prefix")
+        );
+      }
+      m_hash.addData(QByteArrayView(prefix));
+      remaining -= wanted;
+    }
+    if (!m_partFile.seek(static_cast<qint64>(request.begin.startOffset))) {
+      m_partFile.close();
+      return failure(FileReceiverError::StagingReadFailed, QStringLiteral("could not seek to the resume offset"));
+    }
   }
 
-  m_hash.reset();
   m_expectedSha256 = request.entry.sha256;
   m_chunkBytes = request.begin.chunkBytes;
   m_requestedTarget = std::move(requestedTarget);
@@ -136,6 +209,8 @@ FileReceiverResult FileReceiver::begin(const FileReceiveRequest &request)
       .transferId = request.begin.transferId,
       .fileId = request.begin.fileId,
       .expectedSize = request.begin.size,
+      .receivedBytes = request.begin.startOffset,
+      .nextSequence = 0,
       .relativeProtocolPath = targetPath.normalized,
       .partPath = std::move(partPath),
       .partRelativePath = stagingRelative,
@@ -314,12 +389,11 @@ DurableCheckpointResult FileReceiver::checkpoint(const ResumeStore &store, Resum
 
   state = std::move(candidate);
   return {
-      .message =
-          FileCheckpointMessage{
-              .transferId = m_snapshot.transferId,
-              .fileId = m_snapshot.fileId,
-              .durableOffset = m_snapshot.receivedBytes,
-          },
+      .message = FileCheckpointMessage{
+          .transferId = m_snapshot.transferId,
+          .fileId = m_snapshot.fileId,
+          .durableOffset = m_snapshot.receivedBytes,
+      },
   };
 }
 
