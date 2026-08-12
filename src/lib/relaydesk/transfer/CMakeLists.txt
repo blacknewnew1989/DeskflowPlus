@@ -6,6 +6,8 @@ add_library(relaydesk_transfer STATIC
   CapabilityCodec.h
   ControlMessageCodec.cpp
   ControlMessageCodec.h
+  ConflictResolver.cpp
+  ConflictResolver.h
   FrameCodec.cpp
   FrameCodec.h
   FileMessageCodec.cpp
