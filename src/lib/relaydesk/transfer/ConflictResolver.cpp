@@ -37,29 +37,29 @@ QString renamedRelativePath(const QString &normalized, quint32 index)
   return parent + renamedFileName(fileName, index);
 }
 
-bool filesystemCollision(const QString &absolutePath)
+QString filesystemCollision(const QString &absolutePath)
 {
   if (QFileInfo::exists(absolutePath)) {
-    return true;
+    return absolutePath;
   }
   const QFileInfo candidate(absolutePath);
   const auto candidateName = PathPolicy::validateRelative(candidate.fileName());
   if (!candidateName.ok) {
-    return true;
+    return absolutePath;
   }
   const QDir parent(candidate.absolutePath());
   if (!parent.exists()) {
-    return false;
+    return {};
   }
   const QFileInfoList siblings =
       parent.entryInfoList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot, QDir::NoSort);
   for (const QFileInfo &sibling : siblings) {
     const auto siblingPath = PathPolicy::validateRelative(sibling.fileName());
     if (siblingPath.ok && siblingPath.collisionKey == candidateName.collisionKey) {
-      return true;
+      return sibling.absoluteFilePath();
     }
   }
-  return false;
+  return {};
 }
 
 } // namespace
@@ -100,17 +100,12 @@ ConflictDecision ConflictResolver::resolveLocked(const ConflictResolveRequest &r
   if (!requested.ok) {
     return fail(ConflictResolverError::UnsafePath, requested.diagnostic, requested.error);
   }
-  if (request.policy != ConflictPolicy::AutoRename) {
-    return fail(
-        ConflictResolverError::UnsupportedPolicy,
-        QStringLiteral("CONFLICT-001 supports only the default auto-rename policy")
-    );
-  }
   if (request.maximumRenameAttempts == 0) {
     return fail(ConflictResolverError::CandidateExhausted, QStringLiteral("no auto-rename attempts were allowed"));
   }
 
-  for (quint32 index = 0; index < request.maximumRenameAttempts; ++index) {
+  const quint32 attempts = request.policy == ConflictPolicy::AutoRename ? request.maximumRenameAttempts : 1;
+  for (quint32 index = 0; index < attempts; ++index) {
     const QString relativeCandidate = renamedRelativePath(requested.normalized, index);
     QString absoluteCandidate;
     const auto candidate = PathPolicy::joinLexicallyUnderRoot(
@@ -125,12 +120,37 @@ ConflictDecision ConflictResolver::resolveLocked(const ConflictResolveRequest &r
     const QString reservationKey =
         QDir::cleanPath(request.targetRoot).normalized(QString::NormalizationForm_C).toCaseFolded() + QLatin1Char('/') +
         candidate.collisionKey;
-    if (filesystemCollision(absoluteCandidate) || m_reservations.values().contains(reservationKey)) {
+    const QString existingPath = filesystemCollision(absoluteCandidate);
+    const bool reserved = m_reservations.values().contains(reservationKey);
+    if (request.policy == ConflictPolicy::Skip && (!existingPath.isEmpty() || reserved)) {
+      return SkipTarget{existingPath.isEmpty() ? absoluteCandidate : existingPath};
+    }
+    if (request.policy == ConflictPolicy::Ask && (!existingPath.isEmpty() || reserved)) {
+      return AskTarget{QUuid::createUuid(), existingPath.isEmpty() ? absoluteCandidate : existingPath};
+    }
+    if (request.policy == ConflictPolicy::Overwrite && reserved) {
+      return fail(
+          ConflictResolverError::TargetReserved,
+          QStringLiteral("another in-process transfer already reserved the overwrite target")
+      );
+    }
+    if (request.policy == ConflictPolicy::Overwrite && !existingPath.isEmpty() && QFileInfo(existingPath).isDir()) {
+      return fail(
+          ConflictResolverError::UnsupportedPolicy,
+          QStringLiteral("CONFLICT-002 does not overwrite an existing directory")
+      );
+    }
+    if (request.policy == ConflictPolicy::AutoRename && (!existingPath.isEmpty() || reserved)) {
       continue;
     }
     const QUuid reservationId = QUuid::createUuid();
     m_reservations.insert(reservationId, reservationKey);
-    return UseTarget{absoluteCandidate, candidate.normalized, reservationId};
+    return UseTarget{
+        request.policy == ConflictPolicy::Overwrite && !existingPath.isEmpty() ? existingPath : absoluteCandidate,
+        candidate.normalized,
+        reservationId,
+        request.policy == ConflictPolicy::Overwrite && !existingPath.isEmpty(),
+    };
   }
   return fail(
       ConflictResolverError::CandidateExhausted, QStringLiteral("no available auto-rename target could be reserved")
