@@ -1,62 +1,66 @@
-# Phase 0 dual-platform build, test, and package record
+# Phase 0 双平台 CI 与内部包报告
 
-Date: 2026-08-12 (Asia/Shanghai)  
-Owner: A0/A7  
-Stage tag: `relaydesk-phase0-20260812-01`  
-Commit: `808a3307b07422e7ea8c60af46148ce68af13649`  
-Workflow run: `31602699800`
+- 结论：`PASS`
+- 集成提交：`808a3307b07422e7ea8c60af46148ce68af13649`
+- 集成 run：[31602376403](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/31602376403)
+- 阶段标签：`relaydesk-phase0-20260812-01`
+- 标签复验 run：[31602699800](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/31602699800)，双平台 `PASS`
+- 产物性质：unsigned 内部包；缺少正式签名凭据未阻塞构建、测试或打包。
 
-## Result
+## 构建与测试
 
-The unique `.github/workflows/relaydesk-build.yml` completed successfully from the
-annotated Phase 0 tag on Windows 2022 x64 and macOS 15 arm64. The development
-materials diagnostic also passed. Tests remain diagnostic rather than a required
-repository gate, but their actual results were inspected: Windows passed 27/27
-CTest targets and macOS passed 28/28.
+| 平台 | Runner / 工具链 | 构建与打包 | CTest |
+| --- | --- | --- | --- |
+| Windows x64 | `windows-2022`；MSVC 2022；Windows SDK 10.0.26100；Qt 6.10.1 | `PASS` | `27/27 PASS`，1.19 秒 |
+| macOS arm64 | `macos-15`；Xcode 16.4；macOS SDK 15.5；Qt 6.10.1 | `PASS` | `28/28 PASS`，3.68 秒 |
+| 开发资料诊断 | `ubuntu-latest` | `PASS` | 不适用 |
 
-## Windows x64
+测试从真实注册目录 `build/src/unittests` 执行。Windows 的 `RelayDeskManifestBuilderTests` 与 macOS 同名测试均已通过，未再出现仅 workflow 绿色但未发现测试的假阳性。
 
-- Toolchain: Windows 2022 runner, MSVC, Ninja, Qt 6.10.1, vcpkg
-  `x64-windows-release`.
-- Packages: portable 7Z, WiX MSI, source 7Z, and source ZIP.
-- Artifact: `relaydesk-windows-x64-808a3307b07422e7ea8c60af46148ce68af13649`.
-- Artifact ID: `9144025951`.
-- Artifact ZIP size: 32,044,850 bytes.
-- GitHub artifact SHA-256:
-  `e97b274486a61909b89791bf85d576b534e532a3830929d1c0d5acfc672041dd`.
-- CTest: PASS, 27/27.
+## 已下载产物
 
-## macOS arm64
+本地下载根目录：`F:\github\DeskflowPlus-a7-phase0-ci\dist\actions\31602376403`
 
-- Toolchain: macOS 15 runner, Apple Silicon target, Ninja, Qt 6.10.1, macOS 14
-  deployment target.
-- Packages: ad-hoc/unsigned internal App ZIP, DragNDrop DMG, and source archives.
-- Artifact: `relaydesk-macos-arm64-808a3307b07422e7ea8c60af46148ce68af13649`.
-- Artifact ID: `9143920156`.
-- Artifact ZIP size: 38,236,127 bytes.
-- GitHub artifact SHA-256:
-  `cc73b5d9226dc973348be64a9fa0470a7d88be00af84996b4b272aa87121bda5`.
-- CTest: PASS, 28/28.
+GitHub artifact ZIP：
 
-## Diagnosed CI issues fixed before sealing the stage
+| 平台 | Artifact | ID | 大小 | ZIP SHA-256 |
+| --- | --- | ---: | ---: | --- |
+| Windows x64 | `relaydesk-windows-x64-808a3307b07422e7ea8c60af46148ce68af13649` | 9143920988 | 32,046,359 | `99abc150ebbab36294f2771034d6aad6a2914f167de615276be932b1e6970d74` |
+| macOS arm64 | `relaydesk-macos-arm64-808a3307b07422e7ea8c60af46148ce68af13649` | 9143801915 | 38,235,413 | `12e9763ec66d89ad73691db522e916abe019f6ca5fa68f634685c5973e895b45` |
 
-- Resolved the macOS SDK dynamically to avoid an empty `--sysroot` linker flag.
-- Preserved Windows vcpkg paths by using the runner default configure shell.
-- Serialized binary and source CPack targets to prevent `.ninja_log` copy races.
-- Excluded generated build/tool directories from source packages.
-- Collected only final CPack outputs, not temporary staging trees.
-- Pointed CTest at the registered `build/src/unittests` tree.
-- Closed the APFS writer before setting the fixture timestamp, then reopened the
-  file `ReadWrite` because Windows requires a writable handle for `SetFileTime`.
+交付文件：
 
-## NOT_RUN / final device acceptance
+| 文件 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `deskflow-relaydesk-808a3307b07422e7ea8c60af46148ce68af13649-win-x64-portable.7z` | 12,851,423 | `208e93bee5f1080cd8e43369a87fcee1fa18c097e50f4d5e5fa5a4d62c830722` |
+| `deskflow-relaydesk-808a3307b07422e7ea8c60af46148ce68af13649-win-x64.msi` | 15,784,493 | `a2325ce33ae9f9e83e6f22392c7de40435d1c9807be63cf5d1dad7fc74389fb1` |
+| `RelayDesk-macos-arm64-unsigned-808a3307.app.zip` | 6,085,110 | `7a0655c8e68ef8a290d0e73dd99b4bf664117afb87f8db6fd102525f2275c9a0` |
+| `deskflow-relaydesk-808a3307b07422e7ea8c60af46148ce68af13649-macos-arm64.dmg` | 28,372,516 | `0e068a53af783bc7030c941f93950e8ea5e704fc45bef866c96a4a0221b7b812` |
 
-- Windows-to-macOS and macOS-to-Windows real keyboard, mouse, scroll, and text
-  clipboard operation: NOT_RUN; requires two installed physical systems.
-- macOS Accessibility, Input Monitoring, and Local Network permission flows:
-  NOT_RUN; these are final user authorization steps.
-- Gatekeeper first-open behavior and real Apple/Windows code signing: NOT_RUN;
-  current packages are explicitly internal unsigned/ad-hoc artifacts.
+源码包及其摘要记录在 `product/working/actions/31602376403.json` 和两个下载 artifact 内的 `SHA256SUMS.txt`。所有 ZIP 与文件摘要均在下载后本地重新计算，并与 GitHub artifact digest / 内嵌 manifest 一致。
 
-No source download, tool installation, Git operation, Actions operation, packaging,
-or artifact production was delegated to the user.
+## CI 修复记录
+
+A7 分支上的六个独立修复均已推送，并由 A0 挑选到 `product/relaydesk-v1`：
+
+1. `c1628dc06`：在 macOS 配置前解析 SDK，避免空 `--sysroot`。
+2. `2d79dccd4`：保留 Windows vcpkg toolchain 路径，避免 Git Bash 改写盘符反斜杠。
+3. `d02d480df`：串行执行 binary/source package target。
+4. `bdcce2331`：`run-github-actions.py` 从 `origin` 解析仓库并统一传入 `gh -R`，避免误用 upstream。
+5. `1412b0ade`：打包失败后仍保留独立测试诊断。
+6. `64015e1a7`：源码包排除 `.git`、in-tree `build`、`dist`、工具/缓存/vcpkg/tmp 目录，消除 CPack 递归复制活动构建树。
+
+集成分支后续还修复了真实 CTest 目录、最终 CPack 产物收集以及跨平台测试时间戳处理。最后一个 Windows 根因是测试辅助函数以只读句柄调用 `setFileTime`；提交 `808a3307b` 在 writer 已关闭后改用可写句柄，最终 Windows 与 macOS 全部测试通过。
+
+早期 bootstrap run `31593498656` 的失败证据已核实：macOS SDK 为空导致链接器找不到 `c++`；Windows vcpkg toolchain 路径被 shell 改写。后续 run 还暴露了 in-tree source package 递归、CTest 目录错误和 artifact collector 遍历 `_CPack_Packages` 等问题，均在最终候选前修复。
+
+## NOT_RUN
+
+以下必须依赖真实双机或系统授权的项目没有伪造为 PASS：
+
+- `NOT_RUN`：Windows↔macOS 双向键盘、鼠标、滚轮和文本剪贴板真机联调。
+- `NOT_RUN`：macOS Accessibility、Input Monitoring、Local Network 权限授权流程。
+- `NOT_RUN`：干净机器实际安装/首次启动 Windows MSI/便携包和 macOS unsigned App/DMG。
+- `NOT_RUN`：正式 Windows/Apple 签名、公证及 SmartScreen/Gatekeeper 信誉验证。
+
+便携包、MSI、App ZIP 与 DMG 已生成且可供最终安装、系统权限授权和验收。
