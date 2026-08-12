@@ -46,7 +46,7 @@ constexpr std::array<Entry, static_cast<std::size_t>(Text::Count)> kEntries{{
     {Text::DevicesActionAutoArrange, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.auto_arrange"), "Auto arrange"},
     {Text::DevicesActionResetLayout, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.reset_layout"), "Reset layout"},
     {Text::DevicesDropSendHere, QT_TRANSLATE_NOOP("RelayDesk", "devices.drop.send_here"), "Drop files here to send"},
-    {Text::DevicesDropItems, QT_TRANSLATE_NOOP("RelayDesk", "devices.drop.items"), "%n item", "%n items"},
+    {Text::DevicesDropItems, QT_TRANSLATE_N_NOOP("RelayDesk", "devices.drop.items"), "%n item", "%n items"},
     {Text::PairingTitle, QT_TRANSLATE_NOOP("RelayDesk", "pairing.title"), "Pair device"},
     {Text::PairingCodePrompt, QT_TRANSLATE_NOOP("RelayDesk", "pairing.code.prompt"), "Enter the six-digit code"},
     {Text::PairingCodeExpired, QT_TRANSLATE_NOOP("RelayDesk", "pairing.code.expired"),
