@@ -17,6 +17,8 @@ add_library(relaydesk_transfer STATIC
   Protocol.h
   SessionMessageCodec.cpp
   SessionMessageCodec.h
+  TransferOfferStateMachine.cpp
+  TransferOfferStateMachine.h
   TransferTypes.h
 )
 
