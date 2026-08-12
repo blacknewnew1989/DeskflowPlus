@@ -76,11 +76,28 @@ enum class ConflictPolicy
 enum class RejectReason : quint32
 {
   UserDeclined = 1,
-  UnsupportedCapability = 2,
-  InsufficientSpace = 3,
-  InvalidManifest = 4,
-  Busy = 5,
-  PolicyDenied = 6,
+  NotTrusted = 2,
+  PolicyDenied = 3,
+  InsufficientSpace = 4,
+  TooManyFiles = 5,
+  PathInvalid = 6,
+  UnsupportedCapability = 7,
+  Busy = 8,
+  InternalError = 9,
+};
+
+enum class FileResultCode : quint32
+{
+  Ok = 0,
+  HashMismatch = 1,
+  SizeMismatch = 2,
+  SourceChanged = 3,
+  TargetExists = 4,
+  DiskFull = 5,
+  PermissionDenied = 6,
+  PathInvalid = 7,
+  IoError = 8,
+  Cancelled = 9,
 };
 
 struct TransferOffer

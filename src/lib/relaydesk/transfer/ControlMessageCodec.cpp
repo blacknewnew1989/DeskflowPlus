@@ -78,11 +78,14 @@ bool isKnownRejectReason(RejectReason reason)
 {
   switch (reason) {
   case RejectReason::UserDeclined:
-  case RejectReason::UnsupportedCapability:
-  case RejectReason::InsufficientSpace:
-  case RejectReason::InvalidManifest:
-  case RejectReason::Busy:
+  case RejectReason::NotTrusted:
   case RejectReason::PolicyDenied:
+  case RejectReason::InsufficientSpace:
+  case RejectReason::TooManyFiles:
+  case RejectReason::PathInvalid:
+  case RejectReason::UnsupportedCapability:
+  case RejectReason::Busy:
+  case RejectReason::InternalError:
     return true;
   }
   return false;
