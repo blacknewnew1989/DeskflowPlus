@@ -7,6 +7,7 @@
 #include "relaydesk/widgets/DevicesDock.h"
 
 #include "relaydesk/model/DeviceHomeModel.h"
+#include "relaydesk/model/IncomingOfferModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
 
@@ -49,6 +50,42 @@ DeviceSnapshot peerSnapshot(DevicePresence presence = DevicePresence::Discovered
   };
 }
 
+::relaydesk::transfer::NegotiatedCapabilities transferCapabilities()
+{
+  using namespace ::relaydesk::transfer;
+  return {
+      .protocolMajorVersion = kProtocolMajorVersion,
+      .features = {QStringLiteral("file.v1"), QStringLiteral("folder.v1")},
+      .chunkBytes = 1024,
+      .maxPayloadBytes = 4096,
+      .maxConcurrentTransfers = 2,
+      .maxConcurrentFiles = 2,
+      .maxManifestEntries = 1000,
+      .conflictPolicies = {ConflictPolicy::AutoRename, ConflictPolicy::Ask},
+  };
+}
+
+::relaydesk::transfer::IncomingOffer incomingTransfer(bool trusted = true)
+{
+  using namespace ::relaydesk::transfer;
+  return {
+      .peerDeviceId = DeviceId::generate(),
+      .peerDisplayName = QStringLiteral("<b>Studio Mac</b>"),
+      .offer = {
+          .transferId = QUuid::createUuid(),
+          .displayName = QStringLiteral("<img src=x> Project"),
+          .totalBytes = 4096,
+          .fileCount = 2,
+          .directoryCount = 1,
+          .manifestSha256 = QByteArray(kSha256Bytes, '\x2a'),
+          .manifestPageCount = 1,
+          .requestedConflictPolicy = ConflictPolicy::AutoRename,
+      },
+      .peerTrusted = trusted,
+      .mayAutoAccept = false,
+  };
+}
+
 struct Fixture
 {
   PairingStateMachine pairingState{{}, {}, []() { return 42U; }};
@@ -75,6 +112,8 @@ private Q_SLOTS:
   void choosesFilesAndFolderAndPublishesImmutableIntent();
   void rejectsInvalidOrIneligibleSendItems();
   void acceptsLocalUrlDropOnlyForEligiblePeer();
+  void rendersNonBlockingIncomingOfferAndKeyboardDecisions();
+  void rendersUntrustedAndExpiredOfferSafely();
 };
 
 void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
@@ -442,6 +481,117 @@ void DevicesDockTests::acceptsLocalUrlDropOnlyForEligiblePeer()
   QDragEnterEvent rejectedEnter(position, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
   QCoreApplication::sendEvent(list->viewport(), &rejectedEnter);
   QVERIFY(!rejectedEnter.isAccepted());
+}
+
+void DevicesDockTests::rendersNonBlockingIncomingOfferAndKeyboardDecisions()
+{
+  Fixture fixture;
+  ::relaydesk::transfer::TransferOfferStateMachine stateMachine(transferCapabilities());
+  IncomingOfferModel incomingModel(
+      stateMachine,
+      {
+          .destinationRoot = QStringLiteral("Downloads/RelayDesk"),
+          .availableBytes = 1'000'000,
+          .autoAcceptTrustedDevices = false,
+          .decisionTimeoutMs = 5000,
+      }
+  );
+  fixture.dock.setIncomingOfferModel(&incomingModel);
+  fixture.dock.resize(460, 760);
+  fixture.dock.show();
+  QVERIFY(incomingModel.receiveOffer(incomingTransfer()));
+
+  auto *panel = fixture.dock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingOfferPanel"));
+  auto *heading = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingOfferHeading"));
+  auto *name = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingOfferName"));
+  auto *summary = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingOfferSummary"));
+  auto *destination = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingOfferDestination"));
+  auto *conflict = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingOfferConflict"));
+  auto *accept = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskAcceptIncomingOfferButton"));
+  auto *reject = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskRejectIncomingOfferButton"));
+  auto *changeSettings =
+      fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskChangeIncomingOfferSettingsButton"));
+  QVERIFY(panel != nullptr);
+  QVERIFY(heading != nullptr);
+  QVERIFY(name != nullptr);
+  QVERIFY(summary != nullptr);
+  QVERIFY(destination != nullptr);
+  QVERIFY(conflict != nullptr);
+  QVERIFY(accept != nullptr);
+  QVERIFY(reject != nullptr);
+  QVERIFY(changeSettings != nullptr);
+  QVERIFY(panel->isVisible());
+  QVERIFY(!panel->isWindow());
+  QVERIFY(fixture.dock.isEnabled());
+  QCOMPARE(heading->textFormat(), Qt::PlainText);
+  QCOMPARE(name->textFormat(), Qt::PlainText);
+  QCOMPARE(heading->text(), QStringLiteral("<b>Studio Mac</b> wants to send"));
+  QCOMPARE(name->text(), QStringLiteral("<img src=x> Project"));
+  QVERIFY(summary->text().startsWith(QStringLiteral("3 items · ")));
+  QCOMPARE(destination->text(), QStringLiteral("Save to: Downloads/RelayDesk"));
+  QCOMPARE(conflict->text(), QStringLiteral("Conflict: auto rename"));
+  QCOMPARE(accept->accessibleName(), QStringLiteral("Accept"));
+  QVERIFY(accept->focusPolicy() != Qt::NoFocus);
+  QVERIFY(reject->focusPolicy() != Qt::NoFocus);
+
+  QSignalSpy settingsRequested(&fixture.dock, &DevicesDock::incomingOfferSettingsRequested);
+  changeSettings->setFocus();
+  QTest::keyClick(changeSettings, Qt::Key_Space);
+  QCOMPARE(settingsRequested.count(), 1);
+
+  QSignalSpy accepted(&incomingModel, &IncomingOfferModel::acceptanceReady);
+  accept->setFocus();
+  QTest::keyClick(accept, Qt::Key_Space);
+  QCOMPARE(accepted.count(), 1);
+  QVERIFY(!panel->isVisible());
+  QVERIFY(incomingModel.acceptance().has_value());
+}
+
+void DevicesDockTests::rendersUntrustedAndExpiredOfferSafely()
+{
+  qint64 now = 1000;
+  Fixture fixture;
+  ::relaydesk::transfer::TransferOfferStateMachine stateMachine(transferCapabilities());
+  IncomingOfferModel incomingModel(
+      stateMachine,
+      {
+          .destinationRoot = QStringLiteral("Downloads/RelayDesk"),
+          .availableBytes = 1'000'000,
+          .autoAcceptTrustedDevices = true,
+          .decisionTimeoutMs = 100,
+      },
+      [&now]() { return now; }
+  );
+  fixture.dock.setIncomingOfferModel(&incomingModel);
+  fixture.dock.resize(460, 760);
+  fixture.dock.show();
+  const auto incoming = incomingTransfer(false);
+  QVERIFY(incomingModel.receiveOffer(incoming));
+
+  auto *panel = fixture.dock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingOfferPanel"));
+  auto *error = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingOfferError"));
+  auto *accept = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskAcceptIncomingOfferButton"));
+  auto *reject = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskRejectIncomingOfferButton"));
+  auto *dismiss = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskDismissIncomingOfferButton"));
+  QVERIFY(panel != nullptr);
+  QVERIFY(error != nullptr);
+  QVERIFY(accept != nullptr);
+  QVERIFY(reject != nullptr);
+  QVERIFY(dismiss != nullptr);
+  QVERIFY(panel->isVisible());
+  QVERIFY(!accept->isVisible());
+  QVERIFY(reject->isVisible());
+  QCOMPARE(error->text(), QStringLiteral("Pair this device before receiving files"));
+
+  now += 100;
+  QVERIFY(incomingModel.expireIfNeeded());
+  QVERIFY(panel->isVisible());
+  QVERIFY(!reject->isVisible());
+  QVERIFY(dismiss->isVisible());
+  QCOMPARE(error->text(), QStringLiteral("This transfer request expired"));
+  dismiss->setFocus();
+  QTest::keyClick(dismiss, Qt::Key_Space);
+  QVERIFY(!panel->isVisible());
 }
 
 QTEST_MAIN(DevicesDockTests)

@@ -99,6 +99,7 @@
     <message><source>transfer.action.open_folder</source><translation>Open folder</translation></message>
     <message><source>transfer.action.accept</source><translation>Accept</translation></message>
     <message><source>transfer.action.reject</source><translation>Reject</translation></message>
+    <message><source>transfer.action.dismiss</source><translation>Dismiss</translation></message>
     <message><source>transfer.action.change_settings</source><translation>Change settings</translation></message>
     <message><source>transfer.error.disk_full</source><translation>Not enough disk space</translation></message>
     <message><source>transfer.error.unsafe_path</source><translation>The received path is not safe</translation></message>
@@ -109,6 +110,13 @@
     <message><source>transfer.incoming.save_to</source><translation>Save to: %1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>Conflict: auto rename</translation></message>
     <message><source>transfer.incoming.always_accept</source><translation>Always accept files from this device</translation></message>
+    <message><source>transfer.incoming.unknown_device</source><translation>Unknown device</translation></message>
+    <message><source>transfer.incoming.pair_first</source><translation>Pair this device before receiving files</translation></message>
+    <message><source>transfer.incoming.expired</source><translation>This transfer request expired</translation></message>
+    <message><source>transfer.incoming.destination_unavailable</source><translation>Choose a valid receive folder in settings</translation></message>
+    <message><source>transfer.incoming.invalid</source><translation>The incoming transfer request is invalid</translation></message>
+    <message><source>transfer.incoming.busy</source><translation>Another transfer request is waiting</translation></message>
+    <message><source>transfer.incoming.decision_unavailable</source><translation>This transfer request cannot be accepted right now</translation></message>
     <message><source>settings.title</source><translation>Settings</translation></message>
     <message><source>settings.general</source><translation>General</translation></message>
     <message><source>settings.input</source><translation>Keyboard and mouse</translation></message>
