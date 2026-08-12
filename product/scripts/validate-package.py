@@ -228,6 +228,7 @@ else:
         "workflow_dispatch",
         "actions/upload-artifact",
         "collect-ci-artifacts.py",
+        '-DPACKAGE_VERSION_LABEL="${{ github.sha }}"',
     ]:
         if required_workflow_phrase not in workflow_text:
             errors.append(f"canonical workflow phrase missing: {required_workflow_phrase}")

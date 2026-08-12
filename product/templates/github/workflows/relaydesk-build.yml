@@ -89,7 +89,7 @@ jobs:
           -DBUILD_INSTALLER=ON
           ${{ matrix.target.config-args }}
           ${{ steps.deps.outputs.vcpkg-cmake-config }}
-          -DPACKAGE_VERSION_LABEL="relaydesk-${{ github.sha }}"
+          -DPACKAGE_VERSION_LABEL="${{ github.sha }}"
 
       - name: Build
         shell: bash
