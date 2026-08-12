@@ -9,10 +9,8 @@
 
 #include "common/Settings.h"
 #include "net/SecureUtils.h"
+#include "relaydesk/trust/TlsIdentityAdapter.h"
 
-#include <QFile>
-#include <QSslCertificate>
-#include <QSslKey>
 #include <QString>
 
 namespace deskflow::gui::TlsUtility {
@@ -24,86 +22,30 @@ bool isEnabled()
 
 bool isCertValid(const QString &certPath)
 {
-  const auto certs = QSslCertificate::fromPath(certPath);
-  if (certs.isEmpty()) {
-    //: %1 will be replaced by the certificate path
-    qDebug() << QObject::tr("failed to read key from certificate file: %1").arg(certPath);
-    return false;
+  const auto identity =
+      deskflow::relaydesk::TlsIdentityAdapter::inspect(certPath, Settings::value(Settings::Security::KeySize).toInt());
+  if (!identity.ok()) {
+    qDebug().noquote() << identity.diagnostic;
   }
-
-  const auto cert = certs.first();
-  if (cert.isNull()) {
-    //: %1 will be replaced by the certificate path
-    qDebug() << QObject::tr("failed to parse certificate file: %1").arg(certPath);
-    return false;
-  }
-
-  const auto key = cert.publicKey();
-  if (key.isNull()) {
-    //: %1 will be replaced by the certificate path
-    qDebug() << QObject::tr("failed to read key from certificate file: %1").arg(certPath);
-    return false;
-  }
-
-  if (key.length() != Settings::value(Settings::Security::KeySize).toInt()) {
-    qDebug() << QObject::tr("key detected is the incorrect size");
-    return false;
-  }
-
-  if (key.algorithm() != QSsl::Rsa) {
-    //: %1 will be replaced by the certificate path
-    qDebug() << QObject::tr("failed to read RSA key from certificate file: %1").arg(certPath);
-    return false;
-  }
-
-  return true;
+  return identity.ok();
 }
 
 int getCertKeyLength(const QString &certPath)
 {
-  QFile file(certPath);
-  if (!file.open(QFile::ReadOnly)) {
-    //: %1 will be replaced by the certificate path
-    qDebug() << QObject::tr("failed to read key from certificate file: %1").arg(certPath);
-    return -1;
-  }
-
-  const auto key = QSslKey(&file, QSsl::Rsa);
-  if (key.isNull()) {
-    //: %1 will be replaced by the certificate path
-    qDebug() << QObject::tr("failed to parse certificate file: %1").arg(certPath);
-    return -1;
-  }
-  return key.length();
+  const auto identity = deskflow::relaydesk::TlsIdentityAdapter::inspect(certPath);
+  return identity.ok() ? identity.publicKeyBits : -1;
 }
 
 QByteArray certFingerprint(const QString &certPath)
 {
-  QByteArray fingerprint;
-
-  const auto certs = QSslCertificate::fromPath(certPath);
-  if (certs.isEmpty()) {
-    //: %1 will be replaced by the certificate path
-    qDebug() << QObject::tr("failed to read key from certificate file: %1").arg(certPath);
-    return fingerprint;
-  }
-
-  const auto cert = certs.first();
-  if (cert.isNull()) {
-    //: %1 will be replaced by the certificate path
-    qWarning() << QObject::tr("failed to parse certificate file: %1").arg(certPath);
-    return fingerprint;
-  }
-
-  return cert.digest(QCryptographicHash::Sha256);
+  const auto identity = deskflow::relaydesk::TlsIdentityAdapter::inspect(certPath);
+  return identity.ok() ? identity.fingerprintSha256 : QByteArray{};
 }
 
 bool generateCertificate()
 {
-  qDebug(
-      "generating tls certificate, "
-      "all clients must trust the new fingerprint"
-  );
+  qDebug("generating tls certificate, "
+         "all clients must trust the new fingerprint");
 
   const auto keyLength = std::max(2048, Settings::value(Settings::Security::KeySize).toInt());
   const auto certPath = Settings::value(Settings::Security::Certificate).toString();

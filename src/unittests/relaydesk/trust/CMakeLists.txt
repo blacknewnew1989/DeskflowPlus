@@ -7,3 +7,10 @@ create_test(
   SOURCE TrustedDeviceStoreTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/trust"
 )
+
+create_test(
+  NAME RelayDeskTlsIdentityAdapterTests
+  DEPENDS relaydesk_trust
+  SOURCE TlsIdentityAdapterTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/trust"
+)

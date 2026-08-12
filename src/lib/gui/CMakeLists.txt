@@ -127,6 +127,7 @@ target_link_libraries(
   ${target}
   common
   platform
+  relaydesk_trust
   Qt6::Core
   Qt6::Widgets
   Qt6::Network)

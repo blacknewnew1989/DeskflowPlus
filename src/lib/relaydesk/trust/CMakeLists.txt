@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 add_library(relaydesk_trust STATIC
+  TlsIdentityAdapter.cpp
+  TlsIdentityAdapter.h
   TrustedDeviceStore.cpp
   TrustedDeviceStore.h
 )
