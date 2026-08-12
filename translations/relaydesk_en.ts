@@ -114,7 +114,20 @@
     <message><source>transfer.error.unknown</source><translation>Transfer failed. Try again.</translation></message>
     <message><source>transfer.progress.bytes</source><translation>%1 of %2</translation></message>
     <message numerus="yes"><source>transfer.progress.items</source><translation><numerusform>%1 of %n item</numerusform><numerusform>%1 of %n items</numerusform></translation></message>
+    <message><source>transfer.speed</source><translation>%1/s</translation></message>
+    <message><source>transfer.speed.unknown</source><translation>Speed unavailable</translation></message>
+    <message><source>transfer.eta.unknown</source><translation>Calculating time remaining</translation></message>
+    <message numerus="yes"><source>transfer.eta.seconds</source><translation><numerusform>%n second remaining</numerusform><numerusform>%n seconds remaining</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.eta.minutes</source><translation><numerusform>%n minute remaining</numerusform><numerusform>%n minutes remaining</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.eta.hours</source><translation><numerusform>%n hour remaining</numerusform><numerusform>%n hours remaining</numerusform></translation></message>
+    <message numerus="yes"><source>transfer.eta.days</source><translation><numerusform>%n day remaining</numerusform><numerusform>%n days remaining</numerusform></translation></message>
+    <message><source>transfer.eta.long</source><translation>99 days or more remaining</translation></message>
     <message><source>transfer.accessible.summary</source><translation>%1, %2, %3, %4, %5</translation></message>
+    <message><source>transfer.notification.completed</source><translation>Transfer completed</translation></message>
+    <message><source>transfer.notification.rejected</source><translation>Transfer rejected</translation></message>
+    <message><source>transfer.notification.canceled</source><translation>Transfer canceled</translation></message>
+    <message><source>transfer.notification.failed</source><translation>Transfer failed</translation></message>
+    <message><source>transfer.notification.body</source><translation>%1 · %2</translation></message>
     <message><source>transfer.incoming.wants_to_send</source><translation>%1 wants to send</translation></message>
     <message><source>transfer.incoming.save_to</source><translation>Save to: %1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>Conflict: auto rename</translation></message>

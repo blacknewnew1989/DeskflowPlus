@@ -10,6 +10,8 @@
 #include <QSignalSpy>
 #include <QTest>
 
+#include <limits>
+
 using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
 using namespace relaydesk::transfer;
@@ -84,6 +86,10 @@ private Q_SLOTS:
   void handlesZeroByteAndTerminalProgress();
   void importsHistoryWithoutDiskAccessOrDuplicateRows();
   void mapsStateAndErrorsToSafeVisibleStrings();
+  void throttlesProgressUpdatesToFiveHertzButPublishesStateImmediately();
+  void preservesServiceSpeedAndEta();
+  void handlesUnknownAndCompletedEtaBoundaries();
+  void throttlesTerminalNotificationsWithoutDroppingThem();
 };
 
 void TransferCenterModelTests::obeysAbstractItemModelContractAndUnifiesDirections()
@@ -118,7 +124,8 @@ void TransferCenterModelTests::obeysAbstractItemModelContractAndUnifiesDirection
 
 void TransferCenterModelTests::updatesMovesAndRemovesByTransferId()
 {
-  TransferCenterModel model;
+  qint64 now = 1'000;
+  TransferCenterModel model([&now]() { return now; });
   const auto first = transferSnapshot(QStringLiteral("11111111-1111-4111-8111-111111111111"));
   const auto second = transferSnapshot(
       QStringLiteral("22222222-2222-4222-8222-222222222222"), TransferDirection::Receiving,
@@ -133,6 +140,9 @@ void TransferCenterModelTests::updatesMovesAndRemovesByTransferId()
   updated.progress.completedBytes = 75;
   updated.currentRelativeDisplayPath = QStringLiteral("next.bin");
   QVERIFY(model.upsertTransfer(updated));
+  QCOMPARE(changed.count(), 0);
+  now += 200;
+  model.flushDueUpdates();
   QCOMPARE(changed.count(), 1);
   QCOMPARE(model.snapshot(first.id)->progress.completedBytes, 75ULL);
 
@@ -237,6 +247,211 @@ void TransferCenterModelTests::mapsStateAndErrorsToSafeVisibleStrings()
   QVERIFY(!model.data(index, TransferCenterModel::ErrorTextRole).toString().contains(QStringLiteral("stacktrace")));
   QCOMPARE(model.data(index, TransferCenterModel::CanRetryRole).toBool(), true);
   QCOMPARE(model.data(index, TransferCenterModel::CanCancelRole).toBool(), false);
+}
+
+void TransferCenterModelTests::throttlesProgressUpdatesToFiveHertzButPublishesStateImmediately()
+{
+  qint64 now = 10'000;
+  TransferCenterModel model([&now]() { return now; });
+  auto active = transferSnapshot(
+      QStringLiteral("11111111-1111-4111-8111-111111111111"), TransferDirection::Sending,
+      TransferState::Transferring, 0, 1000, 10
+  );
+  active.progress.completedBytes = 0;
+  active.progress.completedFiles = 0;
+  active.progress.bytesPerSecond = 100.0;
+  QVERIFY(model.upsertTransfer(active));
+  QSignalSpy changed(&model, &QAbstractItemModel::dataChanged);
+
+  for (int sample = 1; sample <= 100; ++sample) {
+    now = 10'000 + sample * 10;
+    active.progress.completedBytes = static_cast<quint64>(sample * 5);
+    active.progress.completedFiles = static_cast<quint64>(sample / 10);
+    QVERIFY(model.upsertTransfer(active));
+    model.flushDueUpdates();
+  }
+  QCOMPARE(changed.count(), 5);
+  QCOMPARE(model.snapshot(active.id)->progress.completedBytes, 500ULL);
+
+  now += 10;
+  active.state = TransferState::Paused;
+  active.canPause = false;
+  active.canResume = true;
+  active.progress.bytesPerSecond = 0.0;
+  QVERIFY(model.upsertTransfer(active));
+  QCOMPARE(changed.count(), 6);
+  QCOMPARE(model.snapshot(active.id)->state, TransferState::Paused);
+  QCOMPARE(model.snapshot(active.id)->progress.bytesPerSecond, 0.0);
+}
+
+void TransferCenterModelTests::preservesServiceSpeedAndEta()
+{
+  qint64 now = 20'000;
+  TransferCenterModel model([&now]() { return now; });
+  auto active = transferSnapshot(
+      QStringLiteral("11111111-1111-4111-8111-111111111111"), TransferDirection::Receiving,
+      TransferState::Transferring, 0, 1000, 1
+  );
+  active.progress.completedBytes = 100;
+  active.progress.completedFiles = 0;
+  active.progress.bytesPerSecond = 100.0;
+  active.progress.estimatedRemaining = std::chrono::seconds{9};
+  QVERIFY(model.upsertTransfer(active));
+  QCOMPARE(model.snapshot(active.id)->progress.bytesPerSecond, 100.0);
+  QCOMPARE(model.snapshot(active.id)->progress.estimatedRemaining, std::chrono::seconds{9});
+
+  now += 200;
+  active.progress.completedBytes = 200;
+  active.progress.bytesPerSecond = 300.0;
+  active.progress.estimatedRemaining = std::chrono::seconds{6};
+  QVERIFY(model.upsertTransfer(active));
+  QCOMPARE(model.snapshot(active.id)->progress.bytesPerSecond, 300.0);
+  QCOMPARE(model.snapshot(active.id)->progress.estimatedRemaining, std::chrono::seconds{6});
+  const auto index = model.index(model.indexOf(active.id), 0);
+  QVERIFY(model.data(index, TransferCenterModel::SpeedTextRole).toString().endsWith(QStringLiteral("/s")));
+  QCOMPARE(model.data(index, TransferCenterModel::EtaTextRole).toString(), QStringLiteral("6 seconds remaining"));
+  QVERIFY(model.data(index, Qt::AccessibleTextRole).toString().contains(QStringLiteral("6 seconds remaining")));
+
+  now += 200;
+  active.progress.completedBytes = 201;
+  active.progress.bytesPerSecond = 0.25;
+  active.progress.estimatedRemaining = std::chrono::seconds{10};
+  QVERIFY(model.upsertTransfer(active));
+  const auto lowSpeedText = model.data(index, TransferCenterModel::SpeedTextRole).toString();
+  QVERIFY(lowSpeedText.endsWith(QStringLiteral("/s")));
+  QVERIFY(lowSpeedText != QStringLiteral("Speed unavailable"));
+}
+
+void TransferCenterModelTests::handlesUnknownAndCompletedEtaBoundaries()
+{
+  TransferCenterModel model;
+  auto zero = transferSnapshot(
+      QStringLiteral("11111111-1111-4111-8111-111111111111"), TransferDirection::Sending,
+      TransferState::Transferring, 0, 0, 0
+  );
+  zero.progress.completedBytes = 0;
+  zero.progress.completedFiles = 0;
+  zero.progress.bytesPerSecond = 0.0;
+  QVERIFY(model.upsertTransfer(zero));
+  auto index = model.index(model.indexOf(zero.id), 0);
+  QVERIFY(!model.snapshot(zero.id)->progress.estimatedRemaining.has_value());
+  QCOMPARE(model.data(index, TransferCenterModel::SpeedTextRole).toString(), QStringLiteral("Speed unavailable"));
+  QCOMPARE(model.data(index, TransferCenterModel::EtaTextRole).toString(), QStringLiteral("Calculating time remaining"));
+
+  auto longRunning = transferSnapshot(
+      QStringLiteral("22222222-2222-4222-8222-222222222222"), TransferDirection::Sending,
+      TransferState::Transferring, 1, std::numeric_limits<quint64>::max(), 1
+  );
+  longRunning.progress.completedBytes = 0;
+  longRunning.progress.completedFiles = 0;
+  longRunning.progress.bytesPerSecond = 1.0;
+  longRunning.progress.estimatedRemaining = std::chrono::hours{24 * 99};
+  QVERIFY(model.upsertTransfer(longRunning));
+  index = model.index(model.indexOf(longRunning.id), 0);
+  QCOMPARE(model.data(index, TransferCenterModel::EtaTextRole).toString(), QStringLiteral("99 days or more remaining"));
+
+  auto finishing = transferSnapshot(
+      QStringLiteral("33333333-3333-4333-8333-333333333333"), TransferDirection::Receiving,
+      TransferState::Transferring, 2, 100, 1
+  );
+  finishing.progress.completedBytes = 100;
+  finishing.progress.completedFiles = 1;
+  finishing.progress.bytesPerSecond = 100.0;
+  finishing.progress.estimatedRemaining = std::chrono::seconds{0};
+  QVERIFY(model.upsertTransfer(finishing));
+  index = model.index(model.indexOf(finishing.id), 0);
+  QCOMPARE(model.snapshot(finishing.id)->progress.estimatedRemaining, std::chrono::seconds{0});
+  QCOMPARE(model.data(index, TransferCenterModel::EtaTextRole).toString(), QStringLiteral("0 seconds remaining"));
+
+  finishing.state = TransferState::Completed;
+  finishing.canPause = false;
+  finishing.canCancel = false;
+  finishing.progress.bytesPerSecond = 0.0;
+  finishing.finishedUtc = kBaseUtc.addSecs(20);
+  QVERIFY(model.upsertTransfer(finishing));
+  index = model.index(model.indexOf(finishing.id), 0);
+  QVERIFY(model.data(index, TransferCenterModel::SpeedTextRole).toString().isEmpty());
+  QVERIFY(model.data(index, TransferCenterModel::EtaTextRole).toString().isEmpty());
+
+  auto paused = zero;
+  paused.state = TransferState::Paused;
+  paused.canPause = false;
+  paused.canResume = true;
+  QVERIFY(model.upsertTransfer(paused));
+  index = model.index(model.indexOf(paused.id), 0);
+  QVERIFY(model.data(index, TransferCenterModel::SpeedTextRole).toString().isEmpty());
+  QVERIFY(model.data(index, TransferCenterModel::EtaTextRole).toString().isEmpty());
+
+  paused.state = TransferState::Resuming;
+  QVERIFY(model.upsertTransfer(paused));
+  index = model.index(model.indexOf(paused.id), 0);
+  QCOMPARE(model.data(index, TransferCenterModel::SpeedTextRole).toString(), QStringLiteral("Speed unavailable"));
+  QCOMPARE(
+      model.data(index, TransferCenterModel::EtaTextRole).toString(), QStringLiteral("Calculating time remaining")
+  );
+}
+
+void TransferCenterModelTests::throttlesTerminalNotificationsWithoutDroppingThem()
+{
+  qRegisterMetaType<TransferSnapshot>();
+  qint64 now = 30'000;
+  TransferCenterModel model([&now]() { return now; });
+  QSignalSpy notifications(&model, &TransferCenterModel::notificationRequested);
+  auto first = transferSnapshot(
+      QStringLiteral("11111111-1111-4111-8111-111111111111"), TransferDirection::Sending,
+      TransferState::Transferring
+  );
+  QVERIFY(model.upsertTransfer(first));
+  first.state = TransferState::Completed;
+  first.progress.completedBytes = first.progress.totalBytes;
+  first.progress.completedFiles = first.progress.totalFiles;
+  first.progress.bytesPerSecond = 0.0;
+  first.canPause = false;
+  first.canCancel = false;
+  first.finishedUtc = kBaseUtc.addSecs(10);
+  QVERIFY(model.upsertTransfer(first));
+  QCOMPARE(notifications.count(), 1);
+  QVERIFY(model.upsertTransfer(first));
+  QCOMPARE(notifications.count(), 1);
+
+  auto second = transferSnapshot(
+      QStringLiteral("22222222-2222-4222-8222-222222222222"), TransferDirection::Receiving,
+      TransferState::Failed, 1
+  );
+  second.errorMessageKey = QStringLiteral("remote.private.diagnostic");
+  second.errorCode = 4008;
+  QVERIFY(model.upsertTransfer(second));
+  QCOMPARE(notifications.count(), 1);
+  now += 1999;
+  model.flushDueUpdates();
+  QCOMPARE(notifications.count(), 1);
+  now += 1;
+  model.flushDueUpdates();
+  QCOMPARE(notifications.count(), 2);
+
+  const auto firstArguments = notifications.at(0);
+  const auto *firstSnapshot = static_cast<const TransferSnapshot *>(firstArguments.at(0).constData());
+  QVERIFY(firstSnapshot != nullptr);
+  QCOMPARE(firstSnapshot->id, first.id);
+  QCOMPARE(firstArguments.at(1).toString(), QStringLiteral("Transfer completed"));
+  QCOMPARE(firstArguments.at(2).toString(), QStringLiteral("Project · Studio Mac"));
+  const auto secondArguments = notifications.at(1);
+  QCOMPARE(secondArguments.at(1).toString(), QStringLiteral("Transfer failed"));
+  QVERIFY(!secondArguments.at(2).toString().contains(QStringLiteral("diagnostic")));
+
+  auto third = transferSnapshot(
+      QStringLiteral("33333333-3333-4333-8333-333333333333"), TransferDirection::Receiving,
+      TransferState::Cancelled, 2
+  );
+  QVERIFY(model.upsertTransfer(third));
+  QCOMPARE(notifications.count(), 2);
+  model.setTransfers({first, second, third});
+  now += 2000;
+  model.flushDueUpdates();
+  QCOMPARE(notifications.count(), 2);
+  QVERIFY(model.removeTransfer(first.id));
+  QVERIFY(model.upsertTransfer(first));
+  QCOMPARE(notifications.count(), 2);
 }
 
 QTEST_MAIN(TransferCenterModelTests)
