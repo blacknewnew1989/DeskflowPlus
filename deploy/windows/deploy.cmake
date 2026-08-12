@@ -16,6 +16,7 @@ configure_file(${MY_DIR}/cpack-options.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/cpac
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_CURRENT_BINARY_DIR}/cpack-options.cmake)
 
 set(OS_STRING "win-${BUILD_ARCHITECTURE}")
+set(RELAYDESK_PACKAGE_VARIANT "unsigned")
 
 list(APPEND CPACK_GENERATOR "7Z")
 
@@ -35,6 +36,7 @@ set(CPACK_PACKAGE_EXECUTABLES "deskflow" "${CMAKE_PROJECT_PROPER_NAME}")
 
 # Default Install Path
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "${CMAKE_PROJECT_PROPER_NAME}")
+set(CPACK_WIX_PROPERTY_ARPCOMMENTS "Configuration, trusted devices, and transfer history are retained when this package is upgraded or uninstalled.")
 
 # Wix Specific Values
 set(CPACK_WIX_UPGRADE_GUID "${RELAYDESK_WINDOWS_WIX_UPGRADE_GUID}")
@@ -56,6 +58,13 @@ configure_file(
 # This patch set ups filewall rules, the service and msm module
 set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_BINARY_DIR}/wix-patch.xml")
 
+configure_file(
+  ${MY_DIR}/README-Windows.txt.in
+  ${CMAKE_CURRENT_BINARY_DIR}/README-Windows.txt
+  @ONLY
+)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/README-Windows.txt DESTINATION .)
+
 # Creates a DLL that can be used by our MSI for custom actions.
 configure_file(
   ${MY_DIR}/wix-custom.h.in
@@ -67,6 +76,7 @@ add_library(
 )
 target_include_directories(wix-custom PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 set_target_properties(wix-custom PROPERTIES
+  PREFIX ""
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 )
 target_link_libraries(wix-custom PRIVATE Msi)
