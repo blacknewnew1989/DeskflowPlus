@@ -16,6 +16,8 @@
 /.venv
 aqtinstall.log
 Brewfile.lock.json
+__pycache__/
+*.py[cod]
 
 # typical developer-created files
 deskflow-config.toml
