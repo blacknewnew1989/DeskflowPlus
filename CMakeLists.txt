@@ -27,6 +27,10 @@ set(DESKFLOW_VERSION_MINOR 26)
 set(DESKFLOW_VERSION_PATCH 0)
 set(DESKFLOW_VERSION_TWEAK 0)
 
+# Product-facing identity is intentionally separate from the upstream project,
+# target, and namespace names used for Deskflow compatibility.
+include(product/branding/RelayDeskBrand.cmake)
+
 # Get the version from git if it's a git repository
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/.git)
   find_package(Git)
@@ -76,17 +80,17 @@ endif()
 project(
   deskflow
   VERSION "${DESKFLOW_VERSION_MAJOR}.${DESKFLOW_VERSION_MINOR}.${DESKFLOW_VERSION_PATCH}.${DESKFLOW_VERSION_TWEAK}"
-  DESCRIPTION "Keyboard and mouse sharing utility"
+  DESCRIPTION "${RELAYDESK_PRODUCT_DESCRIPTION}"
   HOMEPAGE_URL "https://deskflow.org"
   LANGUAGES C CXX
 )
 
 # Define Additional "PROJECT" vars for packaging and metadata
-set(CMAKE_PROJECT_PROPER_NAME "Deskflow")
-set(CMAKE_PROJECT_VENDOR "${CMAKE_PROJECT_PROPER_NAME} Devs")
+set(CMAKE_PROJECT_PROPER_NAME "${RELAYDESK_PRODUCT_NAME}")
+set(CMAKE_PROJECT_VENDOR "${RELAYDESK_VENDOR_NAME}")
 set(CMAKE_PROJECT_COPYRIGHT "(C) 2024-2026 ${CMAKE_PROJECT_VENDOR}")
-set(CMAKE_PROJECT_CONTACT "${CMAKE_PROJECT_PROPER_NAME} <maintainers@deskflow.org>")
-set(CMAKE_PROJECT_REV_FQDN "org.deskflow.deskflow")
+set(CMAKE_PROJECT_CONTACT "${RELAYDESK_CONTACT}")
+set(CMAKE_PROJECT_REV_FQDN "${RELAYDESK_BUNDLE_IDENTIFIER}")
 
 #Unset the vars used in the project call
 unset(DESKFLOW_VERSION_MAJOR)

@@ -18,6 +18,8 @@
 	<string>@CMAKE_PROJECT_VERSION@</string>
 	<key>CFBundleName</key>
 	<string>@BUNDLE_BUNDLE_NAME@</string>
+	<key>CFBundleDisplayName</key>
+	<string>@BUNDLE_DISPLAY_NAME@</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -41,7 +43,7 @@
 
 	<!-- Local Lan Entitlements -->
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>This app uses local network permissions for communication between a Deskflow server and clients.</string>
+	<string>@CMAKE_PROJECT_PROPER_NAME@ uses the local network to connect trusted nearby devices.</string>
 	<key>com.apple.security.networking.local</key>
 	<true/>
 

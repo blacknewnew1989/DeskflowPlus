@@ -13,6 +13,14 @@ const auto kAppDescription = "@CMAKE_PROJECT_DESCRIPTION@";
 const auto kDaemonBinName = "@CMAKE_PROJECT_NAME@-daemon";
 const auto kDaemonIpcName = "@CMAKE_PROJECT_NAME@-daemon";
 const auto kRevFqdnName = "@CMAKE_PROJECT_REV_FQDN@";
+const auto kOrganizationDomain = "@RELAYDESK_ORGANIZATION_DOMAIN@";
+const auto kWindowsAppUserModelId = "@RELAYDESK_WINDOWS_APP_USER_MODEL_ID@";
+const auto kDefaultReceiveFolder = "@RELAYDESK_DEFAULT_RECEIVE_FOLDER@";
+const auto kFileProtocolName = "@RELAYDESK_FILE_PROTOCOL@";
+constexpr auto kFileProtocolMajor = @RELAYDESK_FILE_PROTOCOL_MAJOR@;
+constexpr auto kFileFallbackPort = @RELAYDESK_FILE_FALLBACK_PORT@;
+#cmakedefine01 RELAYDESK_UPDATE_CHECK_ENABLED
+constexpr auto kUpdateCheckEnabled = RELAYDESK_UPDATE_CHECK_ENABLED != 0;
 
 const auto kCopyright = //
     "Copyright @CMAKE_PROJECT_COPYRIGHT@\n"
