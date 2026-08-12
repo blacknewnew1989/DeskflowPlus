@@ -21,3 +21,10 @@ create_test(
   SOURCE PathPolicyTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
 )
+
+create_test(
+  NAME RelayDeskManifestBuilderTests
+  DEPENDS relaydesk_transfer
+  SOURCE ManifestBuilderTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
