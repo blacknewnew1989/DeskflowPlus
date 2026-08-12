@@ -77,4 +77,75 @@ private:
   std::unique_ptr<Impl> m_impl;
 };
 
+enum class SenderFrameSinkStatus
+{
+  Accepted,
+  Backpressured,
+  Failed,
+};
+
+struct SenderFrameSinkResult
+{
+  SenderFrameSinkStatus status = SenderFrameSinkStatus::Failed;
+  QString diagnostic;
+};
+
+class TransferFrameSink
+{
+public:
+  virtual ~TransferFrameSink() = default;
+
+  [[nodiscard]] virtual quint64 queuedBytes() const noexcept = 0;
+  // A backpressured result must not consume frame. The pump retains exactly
+  // that frame and retries it before reading any more source data.
+  [[nodiscard]] virtual SenderFrameSinkResult submit(const Frame &frame) = 0;
+};
+
+inline constexpr quint64 kDefaultSenderHighWaterBytes = 16ULL * 1024ULL * 1024ULL;
+inline constexpr quint64 kDefaultSenderLowWaterBytes = 8ULL * 1024ULL * 1024ULL;
+
+struct SenderBackpressureLimits
+{
+  quint64 highWaterBytes = kDefaultSenderHighWaterBytes;
+  quint64 lowWaterBytes = kDefaultSenderLowWaterBytes;
+};
+
+enum class SenderPumpStatus
+{
+  Progressed,
+  Backpressured,
+  Finished,
+  Failed,
+};
+
+struct SenderPumpResult
+{
+  SenderPumpStatus status = SenderPumpStatus::Failed;
+  TransferSenderError senderError = TransferSenderError::None;
+  QString diagnostic;
+};
+
+class TransferSenderPump final
+{
+public:
+  TransferSenderPump(TransferSenderRequest request, TransferFrameSink &sink, SenderBackpressureLimits limits = {});
+  ~TransferSenderPump();
+
+  TransferSenderPump(const TransferSenderPump &) = delete;
+  TransferSenderPump &operator=(const TransferSenderPump &) = delete;
+
+  // Call from the sender worker. Each call submits at most one frame, and
+  // reads at most one source chunk only when the sink is below its watermarks.
+  [[nodiscard]] SenderPumpResult pump();
+
+  [[nodiscard]] bool paused() const noexcept;
+  [[nodiscard]] bool finished() const noexcept;
+  [[nodiscard]] quint64 bufferedFrameBytes() const noexcept;
+  [[nodiscard]] quint64 bytesProduced() const noexcept;
+
+private:
+  class Impl;
+  std::unique_ptr<Impl> m_impl;
+};
+
 } // namespace relaydesk::transfer

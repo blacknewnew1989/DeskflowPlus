@@ -273,4 +273,146 @@ bool TransferSender::finished() const noexcept
   return m_impl->state == Impl::State::Finished;
 }
 
+namespace {
+
+quint64 frameMemoryBytes(const Frame &frame) noexcept
+{
+  return static_cast<quint64>(kFixedHeaderBytes) + static_cast<quint64>(frame.metadata.size()) +
+         static_cast<quint64>(frame.payload.size());
+}
+
+} // namespace
+
+class TransferSenderPump::Impl final
+{
+public:
+  Impl(TransferSenderRequest request, TransferFrameSink &output, SenderBackpressureLimits watermarks)
+      : sender(std::move(request)),
+        sink(output),
+        limits(watermarks)
+  {
+  }
+
+  [[nodiscard]] SenderPumpResult pump();
+
+  TransferSender sender;
+  TransferFrameSink &sink;
+  SenderBackpressureLimits limits;
+  std::optional<Frame> pendingFrame;
+  bool isPaused = false;
+  bool isFailed = false;
+};
+
+SenderPumpResult TransferSenderPump::Impl::pump()
+{
+  if (isFailed) {
+    return {
+        .status = SenderPumpStatus::Failed,
+        .senderError = TransferSenderError::AlreadyFinished,
+        .diagnostic = QStringLiteral("sender pump is in a terminal failed state"),
+    };
+  }
+  if (sender.finished() && !pendingFrame.has_value()) {
+    return {.status = SenderPumpStatus::Finished};
+  }
+  if (limits.highWaterBytes == 0 || limits.lowWaterBytes >= limits.highWaterBytes) {
+    isFailed = true;
+    return {
+        .status = SenderPumpStatus::Failed,
+        .senderError = TransferSenderError::InvalidRequest,
+        .diagnostic = QStringLiteral("sender high/low watermarks are invalid"),
+    };
+  }
+
+  const quint64 queued = sink.queuedBytes();
+  if (isPaused && queued > limits.lowWaterBytes) {
+    return {.status = SenderPumpStatus::Backpressured};
+  }
+  isPaused = false;
+  if (!pendingFrame.has_value() && queued >= limits.highWaterBytes) {
+    isPaused = true;
+    return {.status = SenderPumpStatus::Backpressured};
+  }
+
+  if (!pendingFrame.has_value()) {
+    SenderFrameResult produced = sender.nextFrame();
+    if (produced.status == SenderFrameStatus::Finished) {
+      return {.status = SenderPumpStatus::Finished};
+    }
+    if (!produced.ready()) {
+      isFailed = true;
+      return {
+          .status = SenderPumpStatus::Failed,
+          .senderError = produced.error,
+          .diagnostic = std::move(produced.diagnostic),
+      };
+    }
+    pendingFrame = std::move(*produced.frame);
+  }
+
+  SenderFrameSinkResult submitted = sink.submit(*pendingFrame);
+  switch (submitted.status) {
+  case SenderFrameSinkStatus::Accepted:
+    pendingFrame.reset();
+    if (sender.finished()) {
+      return {.status = SenderPumpStatus::Finished};
+    }
+    if (sink.queuedBytes() >= limits.highWaterBytes) {
+      isPaused = true;
+      return {.status = SenderPumpStatus::Backpressured};
+    }
+    return {.status = SenderPumpStatus::Progressed};
+  case SenderFrameSinkStatus::Backpressured:
+    isPaused = true;
+    return {.status = SenderPumpStatus::Backpressured, .diagnostic = std::move(submitted.diagnostic)};
+  case SenderFrameSinkStatus::Failed:
+    isFailed = true;
+    return {
+        .status = SenderPumpStatus::Failed,
+        .senderError = TransferSenderError::ProtocolError,
+        .diagnostic = std::move(submitted.diagnostic),
+    };
+  }
+  isFailed = true;
+  return {
+      .status = SenderPumpStatus::Failed,
+      .senderError = TransferSenderError::ProtocolError,
+      .diagnostic = QStringLiteral("sender sink returned an invalid status"),
+  };
+}
+
+TransferSenderPump::TransferSenderPump(
+    TransferSenderRequest request, TransferFrameSink &sink, SenderBackpressureLimits limits
+)
+    : m_impl(std::make_unique<Impl>(std::move(request), sink, limits))
+{
+}
+
+TransferSenderPump::~TransferSenderPump() = default;
+
+SenderPumpResult TransferSenderPump::pump()
+{
+  return m_impl->pump();
+}
+
+bool TransferSenderPump::paused() const noexcept
+{
+  return m_impl->isPaused;
+}
+
+bool TransferSenderPump::finished() const noexcept
+{
+  return m_impl->sender.finished() && !m_impl->pendingFrame.has_value();
+}
+
+quint64 TransferSenderPump::bufferedFrameBytes() const noexcept
+{
+  return m_impl->pendingFrame.has_value() ? frameMemoryBytes(*m_impl->pendingFrame) : 0;
+}
+
+quint64 TransferSenderPump::bytesProduced() const noexcept
+{
+  return m_impl->sender.bytesProduced();
+}
+
 } // namespace relaydesk::transfer

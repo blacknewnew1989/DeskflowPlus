@@ -120,6 +120,16 @@ std::optional<DeviceId> FileTlsConnection::peerDeviceId() const
   return m_peerDeviceId;
 }
 
+quint64 FileTlsConnection::queuedWriteBytes() const noexcept
+{
+  return static_cast<quint64>(std::max<qint64>(0, m_socket->bytesToWrite()));
+}
+
+quint64 FileTlsConnection::writeHighWaterBytes() const noexcept
+{
+  return m_settings.maxQueuedWriteBytes;
+}
+
 FileTlsError FileTlsConnection::sendFrame(const Frame &frame, QString *diagnostic)
 {
   if (!m_authenticated) {
@@ -297,7 +307,7 @@ void FileTlsConnection::fail(FileTlsError error, QString diagnostic)
 
 bool FileTlsConnection::writeEncoded(QByteArray encoded, QString *diagnostic)
 {
-  const quint64 pending = static_cast<quint64>(std::max<qint64>(0, m_socket->bytesToWrite()));
+  const quint64 pending = queuedWriteBytes();
   if (static_cast<quint64>(encoded.size()) > m_settings.maxQueuedWriteBytes ||
       pending > m_settings.maxQueuedWriteBytes - static_cast<quint64>(encoded.size())) {
     setDiagnostic(diagnostic, QStringLiteral("file TLS write high-water limit exceeded"));

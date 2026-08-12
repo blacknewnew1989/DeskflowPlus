@@ -61,6 +61,8 @@ public:
 
   [[nodiscard]] bool isAuthenticated() const noexcept;
   [[nodiscard]] std::optional<DeviceId> peerDeviceId() const;
+  [[nodiscard]] quint64 queuedWriteBytes() const noexcept;
+  [[nodiscard]] quint64 writeHighWaterBytes() const noexcept;
   [[nodiscard]] FileTlsError sendFrame(const ::relaydesk::transfer::Frame &frame, QString *diagnostic = nullptr);
   void close();
 
