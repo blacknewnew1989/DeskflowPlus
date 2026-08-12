@@ -15,8 +15,8 @@ set(RELAYDESK_FILE_PROTOCOL "RDFT")
 set(RELAYDESK_FILE_PROTOCOL_MAJOR 1)
 set(RELAYDESK_FILE_FALLBACK_PORT 24801)
 set(RELAYDESK_DEFAULT_RECEIVE_FOLDER "RelayDesk")
+set(RELAYDESK_TRANSLATION_CATALOG "relaydesk")
 
 # Internal builds must not query Deskflow's public update service as though they
 # were official Deskflow releases.
 set(RELAYDESK_UPDATE_CHECK_ENABLED OFF)
-

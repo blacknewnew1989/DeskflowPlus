@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="zh_CN" sourcelanguage="en_US">
+<context>
+    <name>RelayDesk</name>
+    <message><source>devices.title</source><translation>设备</translation></message>
+    <message><source>devices.current</source><translation>当前设备</translation></message>
+    <message><source>devices.status.online</source><translation>在线</translation></message>
+    <message><source>devices.status.offline</source><translation>离线</translation></message>
+    <message><source>devices.status.connecting</source><translation>正在连接</translation></message>
+    <message><source>devices.status.permission_required</source><translation>需要授权</translation></message>
+    <message><source>devices.status.paused</source><translation>已暂停</translation></message>
+    <message><source>devices.status.error</source><translation>错误</translation></message>
+    <message><source>devices.status.discovered</source><translation>已发现</translation></message>
+    <message><source>devices.status.pairing</source><translation>正在配对</translation></message>
+    <message><source>devices.status.trust_violation</source><translation>信任信息已变化</translation></message>
+    <message><source>devices.status.transfer_busy</source><translation>正在传输文件</translation></message>
+    <message><source>devices.action.send_file</source><translation>发送文件</translation></message>
+    <message><source>devices.action.more</source><translation>更多</translation></message>
+    <message><source>devices.action.auto_arrange</source><translation>自动排列</translation></message>
+    <message><source>devices.action.reset_layout</source><translation>恢复默认布局</translation></message>
+    <message><source>devices.drop.send_here</source><translation>把文件拖到这里发送</translation></message>
+    <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n 个项目</numerusform></translation></message>
+    <message><source>pairing.title</source><translation>配对设备</translation></message>
+    <message><source>pairing.code.prompt</source><translation>输入六位配对码</translation></message>
+    <message><source>pairing.code.expired</source><translation>配对码已过期，请重新生成。</translation></message>
+    <message><source>pairing.certificate_changed</source><translation>对方证书已变化，已停止自动连接。</translation></message>
+    <message><source>pairing.too_many_attempts</source><translation>多次输入错误，请稍后再试。</translation></message>
+    <message><source>pairing.not_direct</source><translation>两台设备无法直连，请尝试手动地址。</translation></message>
+    <message><source>pairing.success</source><translation>设备配对成功</translation></message>
+    <message><source>transfer.title</source><translation>传输</translation></message>
+    <message><source>transfer.state.preparing</source><translation>正在准备</translation></message>
+    <message><source>transfer.state.awaiting_confirmation</source><translation>等待对方确认</translation></message>
+    <message><source>transfer.state.queued</source><translation>排队中</translation></message>
+    <message><source>transfer.state.transferring</source><translation>正在传输</translation></message>
+    <message><source>transfer.state.paused</source><translation>已暂停</translation></message>
+    <message><source>transfer.state.interrupted</source><translation>连接中断，等待恢复</translation></message>
+    <message><source>transfer.state.verifying</source><translation>正在校验</translation></message>
+    <message><source>transfer.state.saving</source><translation>正在保存</translation></message>
+    <message><source>transfer.state.completed</source><translation>已完成</translation></message>
+    <message><source>transfer.state.rejected</source><translation>已拒绝</translation></message>
+    <message><source>transfer.state.canceled</source><translation>已取消</translation></message>
+    <message><source>transfer.state.failed</source><translation>失败</translation></message>
+    <message><source>transfer.action.pause</source><translation>暂停</translation></message>
+    <message><source>transfer.action.resume</source><translation>继续</translation></message>
+    <message><source>transfer.action.cancel</source><translation>取消</translation></message>
+    <message><source>transfer.action.retry</source><translation>重试</translation></message>
+    <message><source>transfer.action.open_folder</source><translation>打开目录</translation></message>
+    <message><source>transfer.action.accept</source><translation>接收</translation></message>
+    <message><source>transfer.action.reject</source><translation>拒绝</translation></message>
+    <message><source>transfer.action.change_settings</source><translation>更改设置</translation></message>
+    <message><source>transfer.error.disk_full</source><translation>磁盘空间不足</translation></message>
+    <message><source>transfer.error.unsafe_path</source><translation>接收路径不安全</translation></message>
+    <message><source>transfer.error.unreadable</source><translation>一个或多个项目无法读取</translation></message>
+    <message><source>transfer.error.connection_lost</source><translation>连接已中断</translation></message>
+    <message><source>transfer.error.checksum_mismatch</source><translation>文件校验失败</translation></message>
+    <message><source>transfer.incoming.wants_to_send</source><translation>%1 想发送</translation></message>
+    <message><source>transfer.incoming.save_to</source><translation>保存到：%1</translation></message>
+    <message><source>transfer.incoming.auto_rename</source><translation>冲突：自动重命名</translation></message>
+    <message><source>transfer.incoming.always_accept</source><translation>始终自动接收此设备的文件</translation></message>
+    <message><source>settings.title</source><translation>设置</translation></message>
+    <message><source>settings.general</source><translation>常规</translation></message>
+    <message><source>settings.input</source><translation>键盘与鼠标</translation></message>
+    <message><source>settings.clipboard</source><translation>剪贴板</translation></message>
+    <message><source>settings.file_transfer</source><translation>文件传输</translation></message>
+    <message><source>settings.network</source><translation>发现与网络</translation></message>
+    <message><source>settings.trusted_devices</source><translation>信任设备</translation></message>
+    <message><source>settings.startup</source><translation>开机启动</translation></message>
+    <message><source>settings.advanced</source><translation>高级与日志</translation></message>
+    <message><source>about.title</source><translation>关于 RelayDesk</translation></message>
+    <message><source>about.diagnostics</source><translation>诊断</translation></message>
+</context>
+</TS>

@@ -31,7 +31,7 @@ void I18NTests::initTestCase()
 
   dir.mkdir(m_myTDir);
   dir.setPath(srcTDir);
-  for (const auto &file : dir.entryList({"deskflow_*.qm"}, QDir::Files, QDir::Name)) {
+  for (const auto &file : dir.entryList({"deskflow_*.qm", "relaydesk_*.qm"}, QDir::Files, QDir::Name)) {
     QFile::copy(QStringLiteral("%1/%2").arg(srcTDir, file), QStringLiteral("%1/%2").arg(m_myTDir, file));
     QVERIFY(QFile::exists(QStringLiteral("%1/%2").arg(m_myTDir, file)));
   }
@@ -95,6 +95,19 @@ void I18NTests::setLangTest_currentLang()
   QSignalSpy spy(I18N::instance(), &I18N::languageChanged);
   I18N::setLanguage(I18N::currentLanguage());
   QCOMPARE(spy.count(), 0);
+}
+
+void I18NTests::productCatalogTest()
+{
+  I18N::setLanguage(QStringLiteral("zh_CN"));
+  QCOMPARE(QCoreApplication::translate("RelayDesk", "devices.status.online"), QStringLiteral("在线"));
+  QCOMPARE(QCoreApplication::translate("RelayDesk", "transfer.action.open_folder"), QStringLiteral("打开目录"));
+  QCOMPARE(
+      QCoreApplication::translate("RelayDesk", "devices.drop.items", nullptr, 3), QStringLiteral("3 个项目")
+  );
+
+  I18N::setLanguage(QStringLiteral("en"));
+  QCOMPARE(QCoreApplication::translate("RelayDesk", "devices.status.online"), QStringLiteral("Online"));
 }
 
 void I18NTests::reDetectTest()

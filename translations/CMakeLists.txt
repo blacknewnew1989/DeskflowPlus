@@ -25,12 +25,25 @@ qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${CMAKE_PROJECT_NAME}_en.ts OP
 # Other languages contain the full set of strings.
 qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${${CMAKE_PROJECT_NAME}_TRS} OPTIONS ${TR_OPTIONS})
 
+# RelayDesk UI uses semantic keys, so keep its source-language catalog complete
+# instead of applying Deskflow's plurals-only English catalog rule.
+set(RELAYDESK_TS
+  ${RELAYDESK_TRANSLATION_CATALOG}_en.ts
+  ${RELAYDESK_TRANSLATION_CATALOG}_zh_CN.ts
+)
+qt_create_translation(
+  RELAYDESK_TRS
+  ${CMAKE_SOURCE_DIR}/src/lib/relaydesk/i18n
+  ${RELAYDESK_TS}
+  OPTIONS ${TR_OPTIONS}
+)
+
 #ensure that the targets are built always
-add_custom_target(app_translations ALL DEPENDS ${TRS})
+add_custom_target(app_translations ALL DEPENDS ${TRS} ${RELAYDESK_TRS})
 
 if (NOT BUILD_OSX_BUNDLE)
   # install our translations
-  install(FILES ${TRS} DESTINATION ${CMAKE_INSTALL_I18N_DIR})
+  install(FILES ${TRS} ${RELAYDESK_TRS} DESTINATION ${CMAKE_INSTALL_I18N_DIR})
 else()
   #when making the bundle copy our translation into the bundle
   set(BUNDLE_TR_DIR $<TARGET_BUNDLE_CONTENT_DIR:${CMAKE_PROJECT_PROPER_NAME}>/Resources/translations)
