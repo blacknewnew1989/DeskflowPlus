@@ -23,6 +23,7 @@ enum class ConflictResolverError
   UnsupportedPolicy,
   CandidateExhausted,
   InvalidReservation,
+  TargetReserved,
 };
 
 struct UseTarget
@@ -30,6 +31,9 @@ struct UseTarget
   QString absolutePath;
   QString relativeProtocolPath;
   QUuid reservationId;
+  // The receiver commit boundary must use an atomic platform replacement.
+  // ConflictResolver never deletes or mutates the existing target itself.
+  bool replaceExisting = false;
 
   [[nodiscard]] bool operator==(const UseTarget &) const = default;
 };

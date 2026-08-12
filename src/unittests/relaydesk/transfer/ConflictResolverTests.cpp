@@ -38,11 +38,14 @@ class ConflictResolverTests final : public QObject
 private Q_SLOTS:
   void autoRenamesFilesExtensionsAndDirectories_data();
   void autoRenamesFilesExtensionsAndDirectories();
-  void rejectsUnsafePathsAndUnsupportedPolicies();
+  void rejectsUnsafePaths();
   void reservesConcurrentNamesConservatively();
   void retriesWhenReservedCandidateAppears();
   void treatsCaseAndUnicodeNormalizationAsConflicts();
   void boundsRenameAttempts();
+  void resolvesSkipAskAndOverwriteWithoutMutatingTarget();
+  void nonAutoPoliciesUseUnoccupiedTarget();
+  void refusesDirectoryOverwriteAndReservedOverwrite();
 };
 
 void ConflictResolverTests::autoRenamesFilesExtensionsAndDirectories_data()
@@ -77,19 +80,13 @@ void ConflictResolverTests::autoRenamesFilesExtensionsAndDirectories()
   QVERIFY(resolver.release(use(decision).reservationId));
 }
 
-void ConflictResolverTests::rejectsUnsafePathsAndUnsupportedPolicies()
+void ConflictResolverTests::rejectsUnsafePaths()
 {
   QTemporaryDir root;
   ConflictResolver resolver;
   const auto unsafe = resolver.resolve({.targetRoot = root.path(), .relativeProtocolPath = QStringLiteral("../x")});
   QVERIFY(std::holds_alternative<ConflictFailure>(unsafe));
   QCOMPARE(std::get<ConflictFailure>(unsafe).error, ConflictResolverError::UnsafePath);
-
-  const auto skip = resolver.resolve(
-      {.targetRoot = root.path(), .relativeProtocolPath = QStringLiteral("x"), .policy = ConflictPolicy::Skip}
-  );
-  QVERIFY(std::holds_alternative<ConflictFailure>(skip));
-  QCOMPARE(std::get<ConflictFailure>(skip).error, ConflictResolverError::UnsupportedPolicy);
 }
 
 void ConflictResolverTests::reservesConcurrentNamesConservatively()
@@ -159,6 +156,73 @@ void ConflictResolverTests::boundsRenameAttempts()
   );
   QVERIFY(std::holds_alternative<ConflictFailure>(decision));
   QCOMPARE(std::get<ConflictFailure>(decision).error, ConflictResolverError::CandidateExhausted);
+}
+
+void ConflictResolverTests::resolvesSkipAskAndOverwriteWithoutMutatingTarget()
+{
+  QTemporaryDir root;
+  const QString target = root.filePath(QStringLiteral("existing.txt"));
+  QVERIFY(createFile(target));
+  ConflictResolver resolver;
+
+  const auto skipped = resolver.resolve(
+      {.targetRoot = root.path(),
+       .relativeProtocolPath = QStringLiteral("existing.txt"),
+       .policy = ConflictPolicy::Skip}
+  );
+  QVERIFY(std::holds_alternative<SkipTarget>(skipped));
+  QCOMPARE(std::get<SkipTarget>(skipped).absolutePath, target);
+
+  const auto asked = resolver.resolve(
+      {.targetRoot = root.path(), .relativeProtocolPath = QStringLiteral("existing.txt"), .policy = ConflictPolicy::Ask}
+  );
+  QVERIFY(std::holds_alternative<AskTarget>(asked));
+  QVERIFY(!std::get<AskTarget>(asked).conflictId.isNull());
+  QCOMPARE(std::get<AskTarget>(asked).absolutePath, target);
+
+  const auto overwrite = resolver.resolve(
+      {.targetRoot = root.path(),
+       .relativeProtocolPath = QStringLiteral("existing.txt"),
+       .policy = ConflictPolicy::Overwrite}
+  );
+  QVERIFY(std::holds_alternative<UseTarget>(overwrite));
+  QVERIFY(use(overwrite).replaceExisting);
+  QVERIFY(QFileInfo::exists(target));
+  QVERIFY(resolver.release(use(overwrite).reservationId));
+}
+
+void ConflictResolverTests::nonAutoPoliciesUseUnoccupiedTarget()
+{
+  QTemporaryDir root;
+  for (const ConflictPolicy policy : {ConflictPolicy::Skip, ConflictPolicy::Ask, ConflictPolicy::Overwrite}) {
+    ConflictResolver resolver;
+    const auto decision = resolver.resolve(
+        {.targetRoot = root.path(), .relativeProtocolPath = QStringLiteral("free.txt"), .policy = policy}
+    );
+    QVERIFY(std::holds_alternative<UseTarget>(decision));
+    QVERIFY(!use(decision).replaceExisting);
+    QVERIFY(resolver.release(use(decision).reservationId));
+  }
+}
+
+void ConflictResolverTests::refusesDirectoryOverwriteAndReservedOverwrite()
+{
+  QTemporaryDir root;
+  QVERIFY(QDir().mkpath(root.filePath(QStringLiteral("folder"))));
+  ConflictResolver resolver;
+  const auto directory = resolver.resolve(
+      {.targetRoot = root.path(), .relativeProtocolPath = QStringLiteral("folder"), .policy = ConflictPolicy::Overwrite}
+  );
+  QVERIFY(std::holds_alternative<ConflictFailure>(directory));
+  QCOMPARE(std::get<ConflictFailure>(directory).error, ConflictResolverError::UnsupportedPolicy);
+
+  const auto reserved = resolver.resolve({.targetRoot = root.path(), .relativeProtocolPath = QStringLiteral("busy")});
+  QVERIFY(std::holds_alternative<UseTarget>(reserved));
+  const auto overwrite = resolver.resolve(
+      {.targetRoot = root.path(), .relativeProtocolPath = QStringLiteral("busy"), .policy = ConflictPolicy::Overwrite}
+  );
+  QVERIFY(std::holds_alternative<ConflictFailure>(overwrite));
+  QCOMPARE(std::get<ConflictFailure>(overwrite).error, ConflictResolverError::TargetReserved);
 }
 
 QTEST_MAIN(ConflictResolverTests)
