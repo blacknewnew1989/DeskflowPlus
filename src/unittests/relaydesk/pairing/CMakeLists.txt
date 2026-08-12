@@ -14,3 +14,10 @@ create_test(
   SOURCE PairingMessageCodecTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/pairing"
 )
+
+create_test(
+  NAME RelayDeskPairingTrustCommitterTests
+  DEPENDS relaydesk_pairing
+  SOURCE PairingTrustCommitterTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/pairing"
+)

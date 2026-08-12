@@ -6,10 +6,12 @@ add_library(relaydesk_pairing STATIC
   PairingMessageCodec.h
   PairingStateMachine.cpp
   PairingStateMachine.h
+  PairingTrustCommitter.cpp
+  PairingTrustCommitter.h
 )
 
 target_include_directories(
   relaydesk_pairing
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../.."
 )
-target_link_libraries(relaydesk_pairing PUBLIC relaydesk_device Qt6::Core Qt6::Network)
+target_link_libraries(relaydesk_pairing PUBLIC relaydesk_device relaydesk_trust Qt6::Core Qt6::Network)

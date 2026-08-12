@@ -195,6 +195,15 @@ std::optional<PairingSnapshot> PairingStateMachine::snapshot() const
   return m_snapshot;
 }
 
+std::optional<QByteArray> PairingStateMachine::pendingFingerprint(const QUuid &sessionId) const
+{
+  if (!m_snapshot.has_value() || m_snapshot->pairingSessionId != sessionId ||
+      m_snapshot->state != PairingState::Confirming) {
+    return std::nullopt;
+  }
+  return m_peerFingerprintSha256;
+}
+
 std::optional<QByteArray> PairingStateMachine::confirmedFingerprint(const QUuid &sessionId) const
 {
   if (!m_snapshot.has_value() || m_snapshot->pairingSessionId != sessionId ||

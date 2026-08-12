@@ -102,6 +102,7 @@ public:
   [[nodiscard]] bool expireIfNeeded();
 
   [[nodiscard]] std::optional<PairingSnapshot> snapshot() const;
+  [[nodiscard]] std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const;
   [[nodiscard]] std::optional<QByteArray> confirmedFingerprint(const QUuid &sessionId) const;
 
 Q_SIGNALS:
