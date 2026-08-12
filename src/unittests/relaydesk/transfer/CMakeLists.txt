@@ -63,3 +63,10 @@ create_test(
   SOURCE FileMessageCodecTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
 )
+
+create_test(
+  NAME RelayDeskFileReceiverTests
+  DEPENDS relaydesk_transfer
+  SOURCE FileReceiverTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)

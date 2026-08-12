@@ -10,6 +10,8 @@ add_library(relaydesk_transfer STATIC
   FrameCodec.h
   FileMessageCodec.cpp
   FileMessageCodec.h
+  FileReceiver.cpp
+  FileReceiver.h
   ManifestBuilder.cpp
   ManifestBuilder.h
   ManifestPageCodec.cpp
