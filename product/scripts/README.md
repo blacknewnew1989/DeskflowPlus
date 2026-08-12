@@ -36,6 +36,16 @@ A0 自动查找或触发当前 commit 的 `relaydesk-build.yml`，等待完成�
 - `build-windows.ps1`：Debug/Release 构建与测试；
 - `package-windows.ps1`：CPack/WiX 打包、产物收集和 SHA-256。
 
+Windows 签名是可选步骤。没有签名身份时脚本继续生成明确标注的 `unsigned` 内部包。需要签名时，可通过参数或对应环境变量提供：
+
+- `-SigningCertificatePath` / `RELAYDESK_WINDOWS_SIGN_CERTIFICATE`；
+- `-SigningCertificateThumbprint` / `RELAYDESK_WINDOWS_SIGN_THUMBPRINT`；
+- `-SigningTimestampUrl` / `RELAYDESK_WINDOWS_SIGN_TIMESTAMP_URL`；
+- `-SignToolPath` / `RELAYDESK_WINDOWS_SIGNTOOL`；
+- `-SigningCertificatePassword`（`SecureString`）或 `RELAYDESK_WINDOWS_SIGN_PASSWORD`。
+
+证书文件、密码和真实 thumbprint 不写入仓库或构建报告。PFX 路径与证书库 thumbprint 二选一；配置签名时失败会终止 signed 包，禁止把失败包误标为 signed。
+
 本机权限或工具链不满足时，A0 使用 `.github/workflows/relaydesk-build.yml` 的 Windows runner，不向用户转交安装命令。
 
 ## macOS

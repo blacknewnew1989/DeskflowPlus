@@ -3,7 +3,9 @@ param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Debug",
     [switch]$RunTests,
-    [switch]$SkipAutoSetup
+    [switch]$SkipAutoSetup,
+    [ValidateSet("signed", "unsigned")]
+    [string]$PackageVariant = "unsigned"
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,6 +74,7 @@ $Arguments = @(
     "-DSKIP_BUILD_TESTS=ON",
     "-DBUILD_TESTS=ON",
     "-DBUILD_INSTALLER=ON",
+    "-DRELAYDESK_PACKAGE_VARIANT=$PackageVariant",
     "-DCMAKE_PREFIX_PATH=$env:RELAYDESK_QT_PREFIX"
 )
 if ($env:VCPKG_ROOT) {
