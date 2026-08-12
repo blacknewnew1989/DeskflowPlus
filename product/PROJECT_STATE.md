@@ -10,32 +10,32 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Autonomous bootstrap
-- Last updated: 未开始
+- Current phase: Phase 0 - upstream baseline and dual-platform build
+- Last updated: 2026-08-12
 - User action required during development: none
 
 ## Git 状态
 
-- Repository root:
-- Active source worktree:
-- origin URL:
-- upstream URL:
-- Current branch:
-- Last pushed commit:
+- Repository root: `F:\github\DeskflowPlus`
+- Active source worktree: `F:\github\DeskflowPlus-relaydesk`
+- origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
+- upstream URL: `https://github.com/deskflow/deskflow.git`
+- Current branch: `product/relaydesk-v1`
+- Last pushed commit: `b64a7aef7e500e548b479095274a3ca2deb609e8`
 - Last stage tag:
 
 ## 自动执行状态
 
 | 项目 | 状态 | 证据 |
 |---|---|---|
-| origin 可读写 | NOT_RUN | |
-| upstream fetch | NOT_RUN | |
-| v1.26.0=760e3b9 | NOT_RUN | |
-| bootstrap commit | NOT_RUN | |
-| integration branch push | NOT_RUN | |
-| Windows build | NOT_RUN | |
-| macOS build | NOT_RUN | |
-| GitHub Actions artifacts | NOT_RUN | |
+| origin 可读写 | PASS | bootstrap push and subsequent integration push succeeded |
+| upstream fetch | PASS | official refs fetched from `deskflow/deskflow` |
+| v1.26.0=760e3b9 | PASS | `760e3b99b00053647a96b405276bf614bd860075` |
+| bootstrap commit | PASS | `9b0a4111141abe0a619d5eaeea87b8690b771f70` |
+| integration branch push | PASS | remote branch tracks local product branch |
+| Windows build | IN_PROGRESS | local toolchain incomplete; Actions run `31594287736` queued |
+| macOS build | IN_PROGRESS | macOS 15 arm64 Actions job queued in run `31594287736` |
+| GitHub Actions artifacts | IN_PROGRESS | unique workflow registered; failure diagnosis and rerun active |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -43,7 +43,7 @@
 
 | Phase | 状态 | 负责人 | 远程同步要求 |
 |---|---|---|---|
-| 0 仓库/基线 | NOT_STARTED | A0/A1/A4/A5 | push integration + phase tag + build artifacts |
+| 0 仓库/基线 | IN_PROGRESS | A0/A1/A4/A5/A7 | push integration + phase tag + build artifacts |
 | 1 产品基础 | NOT_STARTED | A2/A3 | 小功能 commit，阶段 push |
 | 2 文件传输 | NOT_STARTED | A2/A6 | 小功能 commit，阶段 push |
 | 3 可靠性/UI | NOT_STARTED | A3/A6/A7 | 小功能 commit，阶段 push |

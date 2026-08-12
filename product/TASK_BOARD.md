@@ -6,20 +6,18 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 依赖 |
 |---|---|---|---|
-| AUTO-001 | 识别当前 GitHub 仓库、origin、登录状态 | A0/A1 | 无 |
-| AUTO-002 | 添加 upstream、fetch v1.26.0、验证 760e3b9 | A1 | AUTO-001 |
-| AUTO-003 | 创建/恢复 product/relaydesk-v1，安装开发资料 | A0/A1 | AUTO-002 |
-| AUTO-004 | bootstrap commit + push origin | A0 | AUTO-003 |
 | BASE-002 | Windows 原版构建或 Actions 构建记录 | A4 | AUTO-004 |
 | BASE-003 | macOS 原版构建或 Actions 构建记录 | A5 | AUTO-004 |
-| BASE-004 | 核查真实模块/CMake/测试/打包结构 | A1 | AUTO-004 |
-| CORE-001 | 文件传输共享接口与协议骨架 | A6 | AUTO-004 |
 | UI-001 | 设备卡片与传输中心骨架 | A3 | AUTO-004 |
-| CI-001 | 非门禁 Windows/macOS build workflow | A7 | AUTO-004 |
 
 ## In Progress
 
-无。
+| ID | 任务 | Owner | 当前证据 |
+|---|---|---|---|
+| BASE-002 | Windows 原版构建或 Actions 构建记录 | A0/A4/A7 | 本机准备已回退；run `31594287736` queued |
+| BASE-003 | macOS 原版构建或 Actions 构建记录 | A5/A7 | run `31594287736` queued |
+| CORE-001 | 文件传输共享接口与协议骨架 | A6 | `agent/a6/file-protocol` 开发中 |
+| CI-001 | 非门禁 Windows/macOS build workflow | A7 | 唯一 workflow active，失败修复/监控中 |
 
 ## Blocked
 
@@ -27,7 +25,13 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 ## Done
 
-无。
+| ID | 任务 | Owner | 证据 |
+|---|---|---|---|
+| AUTO-001 | 识别当前 GitHub 仓库、origin、登录状态 | A0/A1 | GitHub admin/push 权限确认 |
+| AUTO-002 | 添加 upstream、fetch v1.26.0、验证 760e3b9 | A0/A1 | `760e3b99` |
+| AUTO-003 | 创建/恢复产品分支并安装资料/workflow | A0/A1 | bootstrap worktree and commit |
+| AUTO-004 | bootstrap commit + push origin | A0 | `9b0a4111` pushed |
+| BASE-004 | 核查真实模块/CMake/测试/打包结构 | A1 | `5b01f073` baseline audit |
 
 ## 规则
 
