@@ -27,6 +27,12 @@ bool writeFile(const QString &path, QByteArrayView data)
   return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(data.data(), data.size()) == data.size();
 }
 
+bool setModifiedTime(const QString &path, const QDateTime &modifiedUtc)
+{
+  QFile file(path);
+  return file.open(QIODevice::ReadWrite) && file.setFileTime(modifiedUtc, QFileDevice::FileModificationTime);
+}
+
 SingleFileManifest buildManifest(const QString &path, const QString &logicalPath = QStringLiteral("数据/片段.bin"))
 {
   const auto result = ManifestBuilder::buildSingleFile({
@@ -368,6 +374,7 @@ void TransferSenderTests::rejectsSameSizeSourceMutation()
   QVERIFY(sender.nextFrame().ready());
   QVERIFY(sender.nextFrame().ready());
   QVERIFY(writeFile(path, QByteArrayLiteral("MUTATION")));
+  QVERIFY(setModifiedTime(path, manifest.entry.modifiedUtc.addSecs(10)));
 
   const auto result = sender.nextFrame();
 
@@ -478,6 +485,7 @@ void TransferSenderTests::detectsSourceMutationAfterBackpressure()
   QCOMPARE(pump.bytesProduced(), 256);
   QVERIFY(pump.bufferedFrameBytes() > 0);
   QVERIFY(writeFile(path, QByteArray(1024, '\x42')));
+  QVERIFY(setModifiedTime(path, manifest.entry.modifiedUtc.addSecs(10)));
 
   sink.forceBackpressure = false;
   sink.drainTo(0);
