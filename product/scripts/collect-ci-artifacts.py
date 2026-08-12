@@ -39,6 +39,22 @@ def unique_target(out: Path, source: Path) -> Path:
     return out / f"{source.parent.name}-{source.name}"
 
 
+def package_candidates(build: Path) -> list[Path]:
+    """Return final CPack outputs without walking temporary staging trees."""
+    return sorted(
+        item for item in build.iterdir() if item.is_file() and is_candidate(item)
+    )
+
+
+def app_candidates(build: Path) -> list[Path]:
+    ignored_parts = {"_CPack_Packages", "vcpkg_installed", "CMakeFiles"}
+    return sorted(
+        path
+        for path in build.rglob("*.app")
+        if path.is_dir() and not ignored_parts.intersection(path.parts)
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--build-dir", type=Path, required=True)
@@ -52,16 +68,15 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     copied: list[Path] = []
-    for item in sorted(build.rglob("*")):
-        if item.is_file() and is_candidate(item):
-            target = unique_target(out, item)
-            if not target.exists():
-                shutil.copy2(item, target)
-            copied.append(target)
+    for item in package_candidates(build):
+        target = unique_target(out, item)
+        if not target.exists():
+            shutil.copy2(item, target)
+        copied.append(target)
 
     # Always preserve a directly installable app bundle in addition to a DMG.
     if args.platform.startswith("macos"):
-        apps = sorted(path for path in build.rglob("*.app") if path.is_dir())
+        apps = app_candidates(build)
         if apps:
             archive_base = out / f"RelayDesk-{args.platform}-unsigned-{args.commit[:8]}.app"
             archive = Path(
