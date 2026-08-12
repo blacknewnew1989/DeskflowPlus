@@ -6,6 +6,8 @@ add_library(relaydesk_pairing STATIC
   PairingManager.h
   PairingMessageCodec.cpp
   PairingMessageCodec.h
+  PairingService.cpp
+  PairingService.h
   PairingStateMachine.cpp
   PairingStateMachine.h
   PairingTrustCommitter.cpp
