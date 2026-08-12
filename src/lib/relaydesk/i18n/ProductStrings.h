@@ -1,0 +1,91 @@
+/*
+ * Deskflow -- mouse and keyboard sharing utility
+ * SPDX-FileCopyrightText: (C) 2026 RelayDesk Developers
+ * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+ */
+
+#pragma once
+
+#include <QString>
+#include <QStringList>
+
+namespace deskflow::relaydesk::i18n {
+
+enum class Text
+{
+  DevicesTitle,
+  DevicesCurrent,
+  DevicesStatusOnline,
+  DevicesStatusOffline,
+  DevicesStatusConnecting,
+  DevicesStatusPermissionRequired,
+  DevicesStatusPaused,
+  DevicesStatusError,
+  DevicesStatusDiscovered,
+  DevicesStatusPairing,
+  DevicesStatusTrustViolation,
+  DevicesStatusTransferBusy,
+  DevicesActionSendFile,
+  DevicesActionMore,
+  DevicesActionAutoArrange,
+  DevicesActionResetLayout,
+  DevicesDropSendHere,
+  DevicesDropItems,
+  PairingTitle,
+  PairingCodePrompt,
+  PairingCodeExpired,
+  PairingCertificateChanged,
+  PairingTooManyAttempts,
+  PairingNotDirect,
+  PairingSuccess,
+  TransferTitle,
+  TransferStatePreparing,
+  TransferStateAwaitingConfirmation,
+  TransferStateQueued,
+  TransferStateTransferring,
+  TransferStatePaused,
+  TransferStateInterrupted,
+  TransferStateVerifying,
+  TransferStateSaving,
+  TransferStateCompleted,
+  TransferStateRejected,
+  TransferStateCanceled,
+  TransferStateFailed,
+  TransferActionPause,
+  TransferActionResume,
+  TransferActionCancel,
+  TransferActionRetry,
+  TransferActionOpenFolder,
+  TransferActionAccept,
+  TransferActionReject,
+  TransferActionChangeSettings,
+  TransferErrorDiskFull,
+  TransferErrorUnsafePath,
+  TransferErrorUnreadable,
+  TransferErrorConnectionLost,
+  TransferErrorChecksumMismatch,
+  TransferIncomingWantsToSend,
+  TransferIncomingSaveTo,
+  TransferIncomingAutoRename,
+  TransferIncomingAlwaysAccept,
+  SettingsTitle,
+  SettingsGeneral,
+  SettingsInput,
+  SettingsClipboard,
+  SettingsFileTransfer,
+  SettingsNetwork,
+  SettingsTrustedDevices,
+  SettingsStartup,
+  SettingsAdvanced,
+  AboutTitle,
+  AboutDiagnostics,
+  Count
+};
+
+[[nodiscard]] QString key(Text text);
+[[nodiscard]] QString translate(Text text);
+[[nodiscard]] QString translatePlural(Text text, int count);
+[[nodiscard]] bool isPlural(Text text);
+[[nodiscard]] QStringList allKeys();
+
+} // namespace deskflow::relaydesk::i18n

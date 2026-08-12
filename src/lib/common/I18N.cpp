@@ -93,6 +93,12 @@ I18N::I18N(QObject *parent) : QObject{parent}
     if (m_currentLang.isEmpty())
       m_currentLang = QStringLiteral("en");
 
+    auto productTranslator = new QTranslator(this);
+    if (productTranslator->load(QLocale(), kProductTranslationCatalog, s_prefix, m_appTrPath)) {
+      m_currentTranslations.append(productTranslator);
+      QCoreApplication::installTranslator(productTranslator);
+    }
+
     auto qtTranslator = new QTranslator(this);
     if (qtTranslator->load(QLocale(), QStringLiteral("qt"), s_prefix, m_qtTrPath)) {
       m_currentTranslations.append(qtTranslator);
@@ -175,6 +181,7 @@ void I18N::detectLanguages()
 
   QStringList nameFilter = {QStringLiteral("%1_*.qm").arg(kAppId)};
   QMap<QString, QString> appTranslations;
+  QMap<QString, QString> productTranslations;
   QStringList detectedLangCodes;
   QDir dir(m_appTrPath);
   QStringList langList = dir.entryList(nameFilter, QDir::Files, QDir::Name);
@@ -200,6 +207,22 @@ void I18N::detectLanguages()
     detectedLangCodes.append(QStringLiteral("qt_%1.qm").arg(shortCode));
   }
 
+  nameFilter = {QStringLiteral("%1_*.qm").arg(kProductTranslationCatalog)};
+  langList = dir.entryList(nameFilter, QDir::Files, QDir::Name);
+  for (const QString &translation : std::as_const(langList)) {
+    QTranslator translator;
+    std::ignore = translator.load(translation, dir.absolutePath());
+    const auto longCode = translator.language();
+
+    QString shortCode;
+    if (longCode.startsWith(QStringLiteral("zh")) || longCode.startsWith(QStringLiteral("pt")))
+      shortCode = longCode;
+    else
+      shortCode = longCode.mid(0, 2);
+
+    productTranslations.insert(shortCode, translator.filePath());
+  }
+
   dir.setPath(m_qtTrPath);
   const static auto qtTrNameLen = 3; // length of qt_
   langList = dir.entryList(detectedLangCodes, QDir::Files, QDir::Name);
@@ -211,8 +234,14 @@ void I18N::detectLanguages()
   }
 
   const QStringList keys = appTranslations.keys();
-  for (const QString &lang : keys)
-    m_translations.insert(lang, {appTranslations.value(lang), qtTranslations.value(lang)});
+  for (const QString &lang : keys) {
+    QStringList translations{appTranslations.value(lang)};
+    if (productTranslations.contains(lang))
+      translations.append(productTranslations.value(lang));
+    if (qtTranslations.contains(lang))
+      translations.append(qtTranslations.value(lang));
+    m_translations.insert(lang, translations);
+  }
 
   if (oldList != m_translations)
     Q_EMIT languagesChanged(m_translations.keys());

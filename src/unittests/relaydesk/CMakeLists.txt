@@ -3,3 +3,4 @@
 
 add_subdirectory(device)
 add_subdirectory(transfer)
+add_subdirectory(i18n)
