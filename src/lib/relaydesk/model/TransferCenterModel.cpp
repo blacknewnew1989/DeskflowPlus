@@ -405,6 +405,10 @@ bool TransferCenterModel::removeTransfer(const TransferId &transferId)
   endRemoveRows();
   m_pendingEntries.remove(transferId);
   m_lastPublishedMs.remove(transferId);
+  m_notifiedTerminalIds.remove(transferId);
+  m_pendingNotifications.removeIf([&transferId](const auto &notification) {
+    return notification.snapshot.id == transferId;
+  });
   scheduleUpdateTimer();
   return true;
 }
@@ -414,6 +418,7 @@ void TransferCenterModel::setTransfers(const QList<TransferSnapshot> &snapshots)
   m_updateTimer.stop();
   m_pendingNotifications.clear();
   m_lastNotificationMs.reset();
+  m_notifiedTerminalIds.clear();
   QList<Entry> entries;
   for (const auto &entry : std::as_const(m_entries)) {
     if (entry.history.has_value())

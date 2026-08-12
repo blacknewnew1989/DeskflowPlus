@@ -451,7 +451,18 @@ void TransferCenterModelTests::throttlesTerminalNotificationsWithoutDroppingThem
   QCOMPARE(notifications.count(), 2);
   QVERIFY(model.removeTransfer(first.id));
   QVERIFY(model.upsertTransfer(first));
-  QCOMPARE(notifications.count(), 2);
+  QCOMPARE(notifications.count(), 3);
+
+  auto removedWhileQueued = transferSnapshot(
+      QStringLiteral("44444444-4444-4444-8444-444444444444"), TransferDirection::Sending,
+      TransferState::Completed, 3
+  );
+  QVERIFY(model.upsertTransfer(removedWhileQueued));
+  QCOMPARE(notifications.count(), 3);
+  QVERIFY(model.removeTransfer(removedWhileQueued.id));
+  now += 2000;
+  model.flushDueUpdates();
+  QCOMPARE(notifications.count(), 3);
 }
 
 QTEST_MAIN(TransferCenterModelTests)
