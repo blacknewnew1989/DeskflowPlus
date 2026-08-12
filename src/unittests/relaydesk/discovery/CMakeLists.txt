@@ -21,3 +21,10 @@ create_test(
   SOURCE DiscoveryRegistryTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/discovery"
 )
+
+create_test(
+  NAME RelayDeskDiscoverySettingsTests
+  DEPENDS relaydesk_discovery
+  SOURCE DiscoverySettingsTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/discovery"
+)
