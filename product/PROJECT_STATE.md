@@ -10,8 +10,8 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 1 product foundation / Phase 2 independent core slices
-- Last updated: 2026-08-12
+- Current phase: Phase 1 tag verification / Phase 2-3 implementation
+- Last updated: 2026-08-13
 - User action required during development: none
 
 ## Git 状态
@@ -21,7 +21,7 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last pushed commit: `a5de2b3dc0c3c8bdf7ecd05f396b53365415e70d`
+- Last product implementation commit: `ead6acbd56506b92e1b755471dd7a105845fd63f`
 - Last stage tag: `relaydesk-phase0-20260812-01` (`808a3307b07422e7ea8c60af46148ce68af13649`)
 
 ## 自动执行状态
@@ -36,6 +36,8 @@
 | Windows build | PASS | phase tag run `31602699800`; CMake/Ninja/MSVC build, CPack MSI/7Z/source, CTest 27/27 |
 | macOS build | PASS | phase tag run `31602699800`; arm64 build, DMG/App/source, CTest 28/28 |
 | GitHub Actions artifacts | PASS | Windows artifact `9144025951`; macOS artifact `9143920156`; 30-day retention |
+| Phase 1 implementation | PASS | brand/i18n/device/discovery/pairing/trust/reconnect/device UI and permission guidance integrated through `ead6acbd5` |
+| Current integration CI | PASS | run `31618176846`; Windows/macOS build, CTest, package and artifact upload succeeded |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -44,10 +46,10 @@
 | Phase | 状态 | 负责人 | 远程同步要求 |
 |---|---|---|---|
 | 0 仓库/基线 | PASS | A0/A1/A4/A5/A7 | tag `relaydesk-phase0-20260812-01`, run `31602699800` |
-| 1 产品基础 | IN_PROGRESS | A2/A3 | BRAND-001/I18N-001/DEV-001/DISC-001 integrated |
-| 2 文件传输 | IN_PROGRESS | A2/A6 | CORE-001/FILE-001/003/008/015 integrated |
-| 3 可靠性/UI | NOT_STARTED | A3/A6/A7 | 小功能 commit，阶段 push |
-| 4 平台/发布 | NOT_STARTED | A4/A5/A7 | Windows/macOS packages + artifact |
+| 1 产品基础 | IN_PROGRESS | A2/A3 | implementation complete; phase tag and dual-platform verification pending |
+| 2 文件传输 | IN_PROGRESS | A2/A6 | protocol, manifest, TLS, offer, sender, receiver, paging and backpressure integrated |
+| 3 可靠性/UI | IN_PROGRESS | A3/A6/A7 | resume/checkpoint/control/history integrated; conflict and transfer UI active |
+| 4 平台/发布 | IN_PROGRESS | A4/A5/A7 | baseline unsigned packages exist; platform diagnostics/productized RC remain |
 | 5 增强 | NOT_STARTED | A3/A4/A5 | 按价值推进 |
 
 ## 最终 artifact

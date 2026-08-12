@@ -6,17 +6,18 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 依赖 |
 |---|---|---|---|
-| UI-001 | 设备卡片与传输中心骨架 | A3 | AUTO-004 |
-| DISC-002 | 多网卡 discovery service | A2 | DISC-001 |
-| FILE-006 | file TLS listener/client | A2/A6 | PAIR-004, FILE-001 |
+| UI-007 | Transfer Center model | A3 | FILE-010, CTRL-001 |
+| UI-008 | 速度、ETA 与通知节流 | A3/A6 | UI-007 |
+| RESUME-005 | partial cleanup policy | A6/A3 | RESUME-001 |
 
 ## In Progress
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
-| DISC-002 | 多网卡 discovery service | A2 | DISC-001 codec 已集成，service 待实现 |
-| FILE-006 | file TLS listener/client | A2/A6 | 协议/路径/manifest 基础已集成 |
-| CI-001 | 非门禁 Windows/macOS build workflow | A7 | Phase 0 PASS；继续监控当前集成 HEAD |
+| UI-005/006 | 拖放发送与 Incoming Offer | A3 | 唯一共享契约 `ead6acbd5` 已集成，GUI 纵向切片开发中 |
+| CONFLICT-001 | 并发安全 auto rename resolver | A6 | 基于共享 PathPolicy 开发中 |
+| WIN-001 | Windows firewall/listening-port diagnostics | A4 | 真实 Windows 探针开发中 |
+| CI-001 | 非门禁 Windows/macOS build workflow | A0/A7 | run `31618176846` 验证当前集成 HEAD |
 
 ## Blocked
 
@@ -43,6 +44,30 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | FILE-003 | 共享 PathPolicy | A6 | `85efded28`; Qt Test PASS |
 | FILE-008 | 流式单文件 manifest | A6 | `1bd40469e`; Win/mac timestamp fixes integrated |
 | FILE-015 | 有界多文件/文件夹 manifest | A6 | `a5de2b3dc`; local transfer CTest 4/4 PASS |
+| DEV-002 | 复用 Deskflow TLS identity | A2 | `acc06b567`; Qt Test PASS |
+| DISC-002 | 多网卡 UDP discovery service | A2 | `68c423a63`; real loopback and Qt Test PASS |
+| DISC-003 | DeviceSnapshot registry/TTL | A2 | `907df4412`, `7894979a0`; Qt Test PASS |
+| DISC-004 | 手动地址、迁移与候选解析 | A2 | `4306100f4`, `55fc7d830`, `a0ea42ba3`; Qt Test PASS |
+| PAIR-001 | 有界 SAS pairing state machine | A2 | `2b851fe28`; Qt Test PASS |
+| PAIR-002 | 六位码与 peer identity exchange | A2 | `9b67b2f13`; Qt Test PASS |
+| PAIR-003 | 原子 trust store 与真实 UDP manager/service | A2 | `bc7c12f2b`, `0955ec823`, `21b60f497`, `a8e77f61f`, `c1c35bf14`; Qt Test PASS |
+| PAIR-004 | TLS fingerprint pinning | A2 | `46682deb7`; Qt Test PASS |
+| PAIR-005 | 可信设备自动重连 | A2 | `9da6930db`; Qt Test PASS |
+| UI-001 | 设备首页模型 | A3 | `e7890507a`; Qt Test PASS |
+| UI-002 | 配对向导模型 | A3 | `05152e338`; Qt Test PASS |
+| UI-003 | Devices Dock 应用入口 | A3 | `36004dda0`; Qt Test PASS |
+| UI-004 | 权限契约与可操作状态提示 | A3/A4/A5 | `ad2c941fc`, `acc20f843`; Qt Test PASS |
+| FILE-002 | 严格 CBOR message registry/types | A6 | `ef53feb5d`; Qt Test PASS |
+| FILE-006 | pinned TLS file listener/client | A2/A6 | `3a869489a`; loopback Qt Test PASS |
+| FILE-007 | bounded capability negotiation | A6 | `8fe0e48b0`; Qt Test PASS |
+| FILE-009 | offer/accept/reject control flow | A6 | `97996a0a7`, `1bec537d2`; Qt Test PASS |
+| FILE-010 | streaming single-file sender | A6 | `7158d6014`; Qt Test PASS |
+| FILE-011/012 | `.part` receiver, SHA-256 verify and atomic commit | A6 | `4c6922dfa`, `f67916798`; Qt Test PASS |
+| FILE-016 | bounded manifest paging | A6 | `7f62f2dad`; Qt Test PASS |
+| FILE-017/018 | backpressure and source mutation handling | A6 | `761ee7e3d`; Qt Test PASS |
+| RESUME-001..004 | atomic state, durable checkpoints, negotiation and restart | A6/A7 | `3e5728b92` through `553537117`; local transfer CTest PASS |
+| CTRL-001 | pause/resume/cancel state machine | A6 | `97e7b4aad`; Qt Test PASS |
+| HIST-001 | bounded atomic transfer history | A6 | `3063ae589`; Qt Test PASS |
 
 ## 规则
 
