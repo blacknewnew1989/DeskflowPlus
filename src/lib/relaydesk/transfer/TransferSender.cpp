@@ -53,6 +53,8 @@ public:
 
   [[nodiscard]] SenderFrameResult nextFrame();
   [[nodiscard]] SenderFrameResult initialize();
+  [[nodiscard]] SenderFrameResult rehashPrefix();
+  [[nodiscard]] SenderFrameResult beginFile();
   [[nodiscard]] SenderFrameResult produceChunk();
   [[nodiscard]] SenderFrameResult finishFile();
   [[nodiscard]] SenderFrameResult encodeFrame(MessageType type, const QByteArray &metadata, QByteArray payload = {});
@@ -61,6 +63,8 @@ public:
   enum class State
   {
     Initial,
+    PrefixHashing,
+    BeginPending,
     Chunks,
     EndPending,
     Finished,
@@ -96,6 +100,10 @@ std::optional<TransferSenderError> TransferSender::Impl::validate(QString &diagn
   }
   if (entry.size > static_cast<quint64>(std::numeric_limits<qint64>::max())) {
     diagnostic = QStringLiteral("source size exceeds QFile's supported range");
+    return TransferSenderError::InvalidRequest;
+  }
+  if (request.startOffset > entry.size) {
+    diagnostic = QStringLiteral("resume offset exceeds source size");
     return TransferSenderError::InvalidRequest;
   }
   return std::nullopt;
@@ -142,11 +150,41 @@ SenderFrameResult TransferSender::Impl::initialize()
     );
   }
 
+  state = request.startOffset == 0 ? State::BeginPending : State::PrefixHashing;
+  return state == State::BeginPending ? beginFile() : rehashPrefix();
+}
+
+SenderFrameResult TransferSender::Impl::rehashPrefix()
+{
+  const quint64 remaining = request.startOffset - offset;
+  const quint64 wanted = std::min<quint64>(remaining, request.chunkBytes);
+  QByteArray prefix = source.read(static_cast<qint64>(wanted));
+  if (prefix.isNull() && source.error() != QFileDevice::NoError) {
+    state = State::Failed;
+    return failure(
+        TransferSenderError::SourceReadFailed,
+        QStringLiteral("source prefix could not be read: %1").arg(source.errorString())
+    );
+  }
+  if (static_cast<quint64>(prefix.size()) != wanted) {
+    state = State::Failed;
+    return failure(TransferSenderError::SourceChanged, QStringLiteral("source prefix produced a short read"));
+  }
+  hash.addData(QByteArrayView(prefix));
+  offset += wanted;
+  if (offset == request.startOffset) {
+    state = State::BeginPending;
+  }
+  return {.status = SenderFrameStatus::Preparing};
+}
+
+SenderFrameResult TransferSender::Impl::beginFile()
+{
   FileBeginMessage message{
       .transferId = request.transferId,
       .fileId = request.source.entry.id,
       .size = request.source.entry.size,
-      .startOffset = 0,
+      .startOffset = request.startOffset,
       .chunkBytes = request.chunkBytes,
       .expectedSha256 = request.source.entry.sha256,
   };
@@ -156,7 +194,7 @@ SenderFrameResult TransferSender::Impl::initialize()
     state = State::Failed;
     return failure(TransferSenderError::ProtocolError, std::move(encodeError));
   }
-  state = request.source.entry.size == 0 ? State::EndPending : State::Chunks;
+  state = request.startOffset == request.source.entry.size ? State::EndPending : State::Chunks;
   return encodeFrame(MessageType::FileBegin, metadata);
 }
 
@@ -233,6 +271,10 @@ SenderFrameResult TransferSender::Impl::nextFrame()
   switch (state) {
   case State::Initial:
     return initialize();
+  case State::PrefixHashing:
+    return rehashPrefix();
+  case State::BeginPending:
+    return beginFile();
   case State::Chunks:
     return produceChunk();
   case State::EndPending:
@@ -336,6 +378,9 @@ SenderPumpResult TransferSenderPump::Impl::pump()
 
   if (!pendingFrame.has_value()) {
     SenderFrameResult produced = sender.nextFrame();
+    if (produced.status == SenderFrameStatus::Preparing) {
+      return {.status = SenderPumpStatus::Progressed};
+    }
     if (produced.status == SenderFrameStatus::Finished) {
       return {.status = SenderPumpStatus::Finished};
     }
