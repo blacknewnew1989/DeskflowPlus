@@ -13,8 +13,10 @@ add_library(relaydesk_transfer STATIC
   PathPolicy.cpp
   PathPolicy.h
   Protocol.h
+  SessionMessageCodec.cpp
+  SessionMessageCodec.h
   TransferTypes.h
 )
 
 target_include_directories(relaydesk_transfer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-target_link_libraries(relaydesk_transfer PUBLIC Qt6::Core)
+target_link_libraries(relaydesk_transfer PUBLIC relaydesk_device Qt6::Core)
