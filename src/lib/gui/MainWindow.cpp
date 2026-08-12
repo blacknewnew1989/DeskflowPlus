@@ -30,6 +30,10 @@
 #include "gui/ipc/DaemonIpcClient.h"
 #include "gui/widgets/LogDock.h"
 #include "net/FingerprintDatabase.h"
+#include "relaydesk/model/DeviceHomeModel.h"
+#include "relaydesk/model/PairingWizardModel.h"
+#include "relaydesk/pairing/PairingStateMachine.h"
+#include "relaydesk/widgets/DevicesDock.h"
 
 #include <QCloseEvent>
 #include <QDesktopServices>
@@ -93,6 +97,15 @@ MainWindow::MainWindow()
   setWindowIcon(QIcon::fromTheme(kRevFqdnName));
 
   addDockWidget(Qt::BottomDockWidgetArea, m_logDock);
+
+  m_relayDeskPairingState = new deskflow::relaydesk::PairingStateMachine({}, {}, {}, this);
+  m_relayDeskDeviceModel = new deskflow::relaydesk::model::DeviceHomeModel(this);
+  m_relayDeskPairingModel =
+      new deskflow::relaydesk::model::PairingWizardModel(*m_relayDeskPairingState, this);
+  m_devicesDock = new deskflow::relaydesk::widgets::DevicesDock(
+      *m_relayDeskDeviceModel, *m_relayDeskPairingModel, this
+  );
+  addDockWidget(Qt::RightDockWidgetArea, m_devicesDock);
 
   // Setup Actions
   m_actionAbout->setMenuRole(QAction::AboutRole);
@@ -172,6 +185,21 @@ MainWindow::~MainWindow()
 
   m_guiDupeChecker->close();
   m_coreProcess.cleanup();
+}
+
+deskflow::relaydesk::model::DeviceHomeModel &MainWindow::relayDeskDeviceModel()
+{
+  return *m_relayDeskDeviceModel;
+}
+
+deskflow::relaydesk::model::PairingWizardModel &MainWindow::relayDeskPairingModel()
+{
+  return *m_relayDeskPairingModel;
+}
+
+deskflow::relaydesk::widgets::DevicesDock &MainWindow::relayDeskDevicesDock()
+{
+  return *m_devicesDock;
 }
 
 void MainWindow::restoreWindow()
@@ -693,6 +721,7 @@ void MainWindow::createMenuBar()
   m_menuEdit->addAction(m_actionSettings);
 
   m_menuView->addAction(m_logDock->toggleViewAction());
+  m_menuView->addAction(m_devicesDock->toggleViewAction());
 
   m_menuHelp->addAction(m_actionAbout);
   m_menuHelp->addAction(m_actionReportBug);

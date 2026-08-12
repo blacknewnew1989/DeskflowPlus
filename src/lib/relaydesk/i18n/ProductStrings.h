@@ -15,6 +15,8 @@ enum class Text
 {
   DevicesTitle,
   DevicesCurrent,
+  DevicesEmptyWaiting,
+  DevicesLatency,
   DevicesStatusOnline,
   DevicesStatusOffline,
   DevicesStatusConnecting,
@@ -59,6 +61,7 @@ enum class Text
   PairingFingerprintLabel,
   PairingFingerprintUnavailable,
   PairingAttemptsRemaining,
+  PairingExpiresAt,
   TransferTitle,
   TransferStatePreparing,
   TransferStateAwaitingConfirmation,

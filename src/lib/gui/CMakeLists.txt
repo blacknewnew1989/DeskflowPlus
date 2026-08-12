@@ -128,6 +128,7 @@ target_link_libraries(
   common
   platform
   relaydesk_trust
+  relaydesk_widgets
   Qt6::Core
   Qt6::Widgets
   Qt6::Network)

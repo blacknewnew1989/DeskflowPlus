@@ -5,6 +5,8 @@
     <name>RelayDesk</name>
     <message><source>devices.title</source><translation>Devices</translation></message>
     <message><source>devices.current</source><translation>This device</translation></message>
+    <message><source>devices.empty.waiting</source><translation>Nearby devices will appear here</translation></message>
+    <message><source>devices.latency</source><translation>%1 ms</translation></message>
     <message><source>devices.status.online</source><translation>Online</translation></message>
     <message><source>devices.status.offline</source><translation>Offline</translation></message>
     <message><source>devices.status.connecting</source><translation>Connecting</translation></message>
@@ -49,6 +51,7 @@
     <message><source>pairing.fingerprint.label</source><translation>Certificate fingerprint</translation></message>
     <message><source>pairing.fingerprint.unavailable</source><translation>Fingerprint unavailable</translation></message>
     <message numerus="yes"><source>pairing.attempts_remaining</source><translation><numerusform>%n attempt remaining</numerusform><numerusform>%n attempts remaining</numerusform></translation></message>
+    <message><source>pairing.expires_at</source><translation>Expires: %1</translation></message>
     <message><source>transfer.title</source><translation>Transfers</translation></message>
     <message><source>transfer.state.preparing</source><translation>Preparing</translation></message>
     <message><source>transfer.state.awaiting_confirmation</source><translation>Waiting for confirmation</translation></message>
