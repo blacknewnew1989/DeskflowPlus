@@ -33,8 +33,8 @@ else()
   message(STATUS "UNKNOWN System: ${CMAKE_SYSTEM_NAME}")
 endif()
 
-# Always use "deskflow" for start of name
-set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${PACKAGE_VERSION_LABEL}-${OS_STRING}")
+# The product package name is separate from Deskflow's internal CMake target ID.
+set(CPACK_PACKAGE_FILE_NAME "${RELAYDESK_PACKAGE_ID}-${PACKAGE_VERSION_LABEL}-${OS_STRING}")
 message(STATUS "Package Basename: ${CPACK_PACKAGE_FILE_NAME}")
 
 include(CPack)

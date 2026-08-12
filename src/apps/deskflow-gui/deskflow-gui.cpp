@@ -23,6 +23,10 @@
 #include <QMessageBox>
 #include <QSharedMemory>
 
+#if defined(Q_OS_WIN)
+#include <shobjidl_core.h>
+#endif
+
 #if defined(Q_OS_MACOS)
 #include <Carbon/Carbon.h>
 #include <cstdlib>
@@ -62,6 +66,15 @@ int main(int argc, char *argv[])
   QGuiApplication::setDesktopFileName(kRevFqdnName);
 
   QApplication app(argc, argv);
+
+#if defined(Q_OS_WIN)
+  const auto appUserModelId = QString::fromLatin1(kWindowsAppUserModelId);
+  const auto appUserModelResult =
+      SetCurrentProcessExplicitAppUserModelID(reinterpret_cast<PCWSTR>(appUserModelId.utf16()));
+  if (FAILED(appUserModelResult)) {
+    qWarning("failed to set Windows AppUserModelID: 0x%08lx", static_cast<unsigned long>(appUserModelResult));
+  }
+#endif
 
   // Ensure the I18N object is made before strings
   QTextStream(stdout) << "initial language: " << I18N::currentLanguage() << '\n';
