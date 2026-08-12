@@ -10,7 +10,7 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 1 release-asset verification / Phase 2-4 implementation
+- Current phase: Phase 2-4 integration and release hardening
 - Last updated: 2026-08-13
 - User action required during development: none
 
@@ -22,8 +22,8 @@
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
 - Last product implementation commit: `ead6acbd56506b92e1b755471dd7a105845fd63f`
-- Current integration commit: `d2cb3f780` (draft Release publication targets the authenticated origin repository)
-- Last verified stage tag: `relaydesk-phase1-20260813-03` (`7cafbf50e49e12976c7b81390a7a30f5e2fd3444`)
+- Current integration commit: `e9b05deb24` (Phase 2/3 UI and reliability plus Windows/macOS platform work integrated)
+- Last verified stage tag: `relaydesk-phase1-20260813-04` (`2fe393ef298721f469dc3932c5f9f999bf13df56`)
 
 ## 自动执行状态
 
@@ -39,7 +39,7 @@
 | GitHub Actions artifacts | PASS | Windows artifact `9144025951`; macOS artifact `9143920156`; 30-day retention |
 | Phase 1 implementation | PASS | brand/i18n/device/discovery/pairing/trust/reconnect/device UI and permission guidance integrated through `ead6acbd5` |
 | Phase 1 dual-platform CI | PASS | tag run `31621226862`; Windows 60/60, macOS 61/61; build/package/upload all succeeded |
-| Draft Release publication | IN_PROGRESS | `0e8f6b416` adds tag-only publication; `d2cb3f780` explicitly targets `github.repository`; `-04` verification pending |
+| Draft Release publication | PASS | tag run `31623677270`; tag-only draft Release job succeeded and all four delivery binaries were downloaded locally |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -48,7 +48,7 @@
 | Phase | 状态 | 负责人 | 远程同步要求 |
 |---|---|---|---|
 | 0 仓库/基线 | PASS | A0/A1/A4/A5/A7 | tag `relaydesk-phase0-20260812-01`, run `31602699800` |
-| 1 产品基础 | IN_PROGRESS | A2/A3/A0 | implementation and dual-platform tag CI PASS; local Release-asset checksum verification pending |
+| 1 产品基础 | PASS | A2/A3/A0 | tag `relaydesk-phase1-20260813-04`; run `31623677270`; local Release asset SHA verification PASS |
 | 2 文件传输 | IN_PROGRESS | A2/A6 | protocol, manifest, TLS, offer, sender, receiver, paging and backpressure integrated |
 | 3 可靠性/UI | IN_PROGRESS | A3/A6/A7 | resume/checkpoint/control/history integrated; conflict and transfer UI active |
 | 4 平台/发布 | IN_PROGRESS | A4/A5/A7 | baseline unsigned packages exist; platform diagnostics/productized RC remain |

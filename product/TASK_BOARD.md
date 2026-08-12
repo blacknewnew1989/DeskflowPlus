@@ -14,7 +14,6 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
-| PHASE1-REL | Phase 1 草稿 Release 资产复验 | A0 | tag `-03` run `31621226862` 双平台 PASS；`-04` 下载校验待执行 |
 | UI-005..008 | 拖放、offer、传输中心、速度/ETA/通知 | A3/A6 | 代理提交均已完成或联编中，等待 A0 逐切片集成 |
 | CONFLICT-001/002 | 并发安全冲突策略 | A6 | `c65ad8639`、`dd02e0aec` 已推送，等待集成 |
 | RESUME-005 | partial cleanup policy | A6 | `70ce521e3`、`6263ec456` 已推送，等待集成 |
@@ -73,6 +72,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | HIST-001 | bounded atomic transfer history | A6 | `3063ae589`; Qt Test PASS |
 | CI-001 | 唯一非门禁 Windows/macOS build workflow | A0/A7 | tag run `31621226862`; Windows 60/60、macOS 61/61、打包上传 PASS |
 | TEST-002/003 | 10 GiB logical bounded-memory 与输入优先级/I/O ownership probe | A6 | `5da597dc3`、`e2c68fb9b`; full harness 18/18 PASS，待集成 |
+| PHASE1-REL | Phase 1 双平台 CI、草稿 Release 与本地 SHA 复验 | A0 | tag `relaydesk-phase1-20260813-04`; run `31623677270`; App/DMG/MSI/7Z 三重摘要一致 |
 
 ## 规则
 

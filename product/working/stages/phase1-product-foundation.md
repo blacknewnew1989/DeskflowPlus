@@ -1,13 +1,13 @@
 # Phase 1 产品基础报告
 
-- 当前结论：`IN_PROGRESS`（双平台标签构建已通过；等待草稿 Release 资产落地与本地校验）
+- 当前结论：`PASS`
 - 功能基线提交：`ead6acbd56506b92e1b755471dd7a105845fd63f`
 - 当前修复提交：`d2cb3f780`（含 `300a3c68a`、`99c98f500`、`d789fb0a6`、`0e8f6b416`）
 - 当前集成 run：[31618176846](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/31618176846)
 - 首次标签：`relaydesk-phase1-20260813-01`（run `31619248628`，保留失败证据）
 - 第二次标签：`relaydesk-phase1-20260813-02`（run `31620547696`，保留失败证据）
 - 通过标签：`relaydesk-phase1-20260813-03`（run `31621226862`）
-- Release 资产复验标签：`relaydesk-phase1-20260813-04`（待创建）
+- Release 资产复验标签：`relaydesk-phase1-20260813-04`（run `31623677270`，PASS）
 - 产物性质：unsigned 内部包；签名凭据不是构建、测试和打包前置条件。
 
 ## 已集成范围
@@ -46,6 +46,17 @@
 
 当前网络到 GitHub Actions Azure Blob 下载端点持续停留在 0 bytes；未把该外部传输问题误记为产物失败，也未交给用户处理。`0e8f6b416` 在唯一 `relaydesk-build.yml` 内增加 tag-only 草稿 Release 发布，`d2cb3f780` 显式设置 `GH_REPO=${{ github.repository }}`，将同一批已验证平台包复制为稳定 Release assets。`-04` 用于验证该下载通路并在本机复算每个交付包 SHA-256。
 
+`-04` run `31623677270` 的 Development materials、Windows x64、macOS arm64 和 `Publish unsigned draft release` 四个 job 全部成功。Windows 再次为 `60/60 PASS`，macOS 为 `61/61 PASS`；草稿 Release 已包含 MSI、Windows portable 7Z、macOS App ZIP、DMG、源码包和三份摘要清单。
+
+四个交付二进制已通过 authenticated Release Asset API 自动下载到 `F:\github\DeskflowPlus-relaydesk\dist\releases\relaydesk-phase1-20260813-04`。本地复算值与 Release API digest、聚合 `SHA256SUMS.txt` 三方一致：
+
+| 交付文件 | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `RelayDesk-macos-arm64-unsigned-2fe393ef.app.zip` | 6,218,904 | `21b2a727ff94a4bee5102baf843883e3bf961e59c787be4dffb7af805e4a05d8` |
+| `relaydesk-2fe393ef298721f469dc3932c5f9f999bf13df56-macos-arm64.dmg` | 28,480,152 | `65d35578cad0008bd06bb55731ec12900e15a154a16b5ed53112ba44a03a58a8` |
+| `relaydesk-2fe393ef298721f469dc3932c5f9f999bf13df56-win-x64.msi` | 15,854,400 | `c365ff5de2c6d50bede407aa43a850e7b591a242c5bb2f8f20627dba371d31fd` |
+| `relaydesk-2fe393ef298721f469dc3932c5f9f999bf13df56-win-x64-portable.7z` | 12,909,493 | `bf1814a949d8aed6b3e91ad313acf4cdc21797a1235fc2e0c92ffe72fa9032b9` |
+
 ## 阶段完成条件
 
 - [x] Phase 1 功能以独立小提交合入并推送 `product/relaydesk-v1`。
@@ -54,7 +65,8 @@
 - [x] 创建并推送 `relaydesk-phase1-20260813-02`；macOS PASS、Windows 依赖下载失败的证据保留。
 - [x] 创建并推送 `relaydesk-phase1-20260813-03`。
 - [x] 标签 run 的 Windows x64 与 macOS arm64 构建、CTest、打包均通过。
-- [ ] 下载两平台 artifact，复算 SHA-256 并把结果写回本报告。
+- [x] 创建并推送 `relaydesk-phase1-20260813-04`，验证草稿 Release job。
+- [x] 下载两平台 Release assets，复算 SHA-256 并把结果写回本报告。
 
 ## NOT_RUN
 
