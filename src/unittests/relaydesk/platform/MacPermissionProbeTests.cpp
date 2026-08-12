@@ -6,6 +6,8 @@
 
 #include "relaydesk/platform/MacPermissionProbe.h"
 
+#include "relaydesk/platform/MacLocalNetworkStatus.h"
+
 #include <QSignalSpy>
 #include <QTest>
 
@@ -82,6 +84,7 @@ private Q_SLOTS:
   void publishesTypedSnapshotWithoutInventingGrants();
   void appliesAsynchronousLocalNetworkResult();
   void onlyRoutesMacSettingsKinds();
+  void mapsLocalNetworkNativeStatesConservatively();
 };
 
 void MacPermissionProbeTests::publishesTypedSnapshotWithoutInventingGrants()
@@ -133,7 +136,28 @@ void MacPermissionProbeTests::onlyRoutesMacSettingsKinds()
   QCOMPARE(fake->opened.size(), 3);
 }
 
+void MacPermissionProbeTests::mapsLocalNetworkNativeStatesConservatively()
+{
+  const auto ready = macLocalNetworkEntry(MacLocalNetworkProbeState::Ready, false);
+  QCOMPARE(ready.state, PermissionState::Granted);
+  QCOMPARE(ready.errorCode, static_cast<int>(PermissionErrorCode::None));
+
+  const auto denied = macLocalNetworkEntry(MacLocalNetworkProbeState::Waiting, true, 2, -65570);
+  QCOMPARE(denied.state, PermissionState::Denied);
+  QCOMPARE(denied.errorCode, static_cast<int>(PermissionErrorCode::MacLocalNetworkDenied));
+  QVERIFY(denied.canOpenSettings);
+  QVERIFY(denied.diagnostic.contains(QStringLiteral("-65570")));
+
+  const auto offline = macLocalNetworkEntry(MacLocalNetworkProbeState::Waiting, false, 1, 50);
+  QCOMPARE(offline.state, PermissionState::Unknown);
+  QCOMPARE(offline.errorCode, static_cast<int>(PermissionErrorCode::ProbeUnavailable));
+  QVERIFY(!offline.canOpenSettings);
+
+  const auto failed = macLocalNetworkEntry(MacLocalNetworkProbeState::Failed, false, 1, 22);
+  QCOMPARE(failed.state, PermissionState::Unknown);
+  QCOMPARE(failed.errorCode, static_cast<int>(PermissionErrorCode::ProbeUnavailable));
+}
+
 QTEST_GUILESS_MAIN(MacPermissionProbeTests)
 
 #include "MacPermissionProbeTests.moc"
-
