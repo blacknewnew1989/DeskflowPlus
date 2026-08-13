@@ -4,6 +4,8 @@
 add_library(relaydesk_app STATIC
   DeviceDiscoveryRuntime.cpp
   DeviceDiscoveryRuntime.h
+  FileTransferRuntime.cpp
+  FileTransferRuntime.h
   TransferUiRuntime.cpp
   TransferUiRuntime.h
 )
@@ -17,6 +19,8 @@ target_link_libraries(
   PUBLIC
     relaydesk_device_model
     relaydesk_discovery
+    relaydesk_file_transport
+    relaydesk_trust
     relaydesk_widgets
     Qt6::Core
     Qt6::Network
