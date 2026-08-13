@@ -64,6 +64,7 @@ private Q_SLOTS:
   void commitsWithoutReplacingAnExistingDestination();
   void atomicallyReplacesARegularDestination();
   void rejectsSymlinkedStagingAndDestinationPaths();
+  void rejectsSymlinkedCommitParents();
 };
 
 void MacFileSafetyTests::rejectsInvalidRequestsAndUnavailableRoots()
@@ -249,6 +250,43 @@ void MacFileSafetyTests::rejectsSymlinkedStagingAndDestinationPaths()
       FileSafetyError::LinkTraversalDetected
   );
   QVERIFY(QFile::exists(staging));
+}
+
+void MacFileSafetyTests::rejectsSymlinkedCommitParents()
+{
+  MacFileSafety safety;
+  QTemporaryDir root;
+  QTemporaryDir outside;
+  QVERIFY(root.isValid());
+  QVERIFY(outside.isValid());
+  const QString stagingDirectory = QDir(root.path()).absoluteFilePath(QStringLiteral(".incoming"));
+  const QString outsideDirectory = QDir(outside.path()).absoluteFilePath(QStringLiteral("outside"));
+  createDirectory(stagingDirectory);
+  createDirectory(outsideDirectory);
+
+  const QString stagingParentLink = QDir(root.path()).absoluteFilePath(QStringLiteral("staging-link"));
+  const QString destinationParentLink = QDir(root.path()).absoluteFilePath(QStringLiteral("destination-link"));
+  createSymlink(stagingDirectory, stagingParentLink);
+  createSymlink(outsideDirectory, destinationParentLink);
+
+  const QString staging = QDir(stagingDirectory).absoluteFilePath(QStringLiteral("file.part"));
+  writeFile(staging, QByteArrayLiteral("staged"));
+  const QString destination = QDir(destinationParentLink).absoluteFilePath(QStringLiteral("file.txt"));
+  QCOMPARE(
+      safety.commitStagedFile(commitRequest(root.path(), staging, destination)).error,
+      FileSafetyError::LinkTraversalDetected
+  );
+  QVERIFY(QFile::exists(staging));
+  QVERIFY(!QFile::exists(QDir(outsideDirectory).absoluteFilePath(QStringLiteral("file.txt"))));
+
+  const QString linkedStaging = QDir(stagingParentLink).absoluteFilePath(QStringLiteral("file.part"));
+  const QString safeDestination = QDir(root.path()).absoluteFilePath(QStringLiteral("file.txt"));
+  QCOMPARE(
+      safety.commitStagedFile(commitRequest(root.path(), linkedStaging, safeDestination)).error,
+      FileSafetyError::LinkTraversalDetected
+  );
+  QVERIFY(QFile::exists(staging));
+  QVERIFY(!QFile::exists(safeDestination));
 }
 
 QTEST_GUILESS_MAIN(MacFileSafetyTests)

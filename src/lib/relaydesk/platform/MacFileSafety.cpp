@@ -113,6 +113,12 @@ bool containsEmbeddedNull(const QString &path)
   return path.contains(QChar::Null);
 }
 
+bool isSymlinkAt(int parentDescriptor, const QByteArray &name)
+{
+  struct stat entry{};
+  return ::fstatat(parentDescriptor, name.constData(), &entry, AT_SYMLINK_NOFOLLOW) == 0 && S_ISLNK(entry.st_mode);
+}
+
 std::pair<RootHandle, FileSafetyResult> openRoot(const QString &path)
 {
   if (containsEmbeddedNull(path)) {
@@ -123,28 +129,13 @@ std::pair<RootHandle, FileSafetyResult> openRoot(const QString &path)
   }
   const QString cleanPath = QDir::cleanPath(path);
   const QByteArray encodedPath = QFile::encodeName(cleanPath);
-  struct stat entry{};
-  if (::lstat(encodedPath.constData(), &entry) != 0) {
-    const int nativeError = errno;
-    return {RootHandle{}, errnoFailure(rootOpenError(nativeError), QStringLiteral("lstat receive root"), nativeError)};
-  }
-  if (S_ISLNK(entry.st_mode)) {
-    return {
-        RootHandle{},
-        failure(FileSafetyError::LinkTraversalDetected, QStringLiteral("receive root is a symbolic link")),
-    };
-  }
-  if (!S_ISDIR(entry.st_mode)) {
-    return {
-        RootHandle{},
-        failure(FileSafetyError::ReceiveRootNotDirectory, QStringLiteral("receive root is not a directory")),
-    };
-  }
-
   const int descriptor = ::open(encodedPath.constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
   if (descriptor < 0) {
     const int nativeError = errno;
-    return {RootHandle{}, errnoFailure(rootOpenError(nativeError), QStringLiteral("open receive root"), nativeError)};
+    const FileSafetyError error = nativeError == ENOTDIR && isSymlinkAt(AT_FDCWD, encodedPath)
+                                      ? FileSafetyError::LinkTraversalDetected
+                                      : rootOpenError(nativeError);
+    return {RootHandle{}, errnoFailure(error, QStringLiteral("open receive root"), nativeError)};
   }
   return {RootHandle{cleanPath, FileDescriptor(descriptor)}, FileSafetyResult{}};
 }
@@ -245,26 +236,12 @@ openParent(int rootDescriptor, const QStringList &components, FileSafetyError un
 
   for (qsizetype index = 0; index + 1 < components.size(); ++index) {
     const QByteArray name = QFile::encodeName(components.at(index));
-    struct stat entry{};
-    if (::fstatat(current.get(), name.constData(), &entry, AT_SYMLINK_NOFOLLOW) != 0) {
-      const int nativeError = errno;
-      const FileSafetyError error = nativeError == ELOOP ? FileSafetyError::LinkTraversalDetected : unavailableError;
-      return {ParentHandle{}, errnoFailure(error, QStringLiteral("inspect commit parent"), nativeError)};
-    }
-    if (S_ISLNK(entry.st_mode)) {
-      return {
-          ParentHandle{},
-          failure(FileSafetyError::LinkTraversalDetected, QStringLiteral("commit parent is a symbolic link")),
-      };
-    }
-    if (!S_ISDIR(entry.st_mode)) {
-      return {ParentHandle{}, failure(unavailableError, QStringLiteral("commit parent is not a directory"))};
-    }
-
     const int next = ::openat(current.get(), name.constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
     if (next < 0) {
       const int nativeError = errno;
-      const FileSafetyError error = nativeError == ELOOP ? FileSafetyError::LinkTraversalDetected : unavailableError;
+      const FileSafetyError error = nativeError == ELOOP || (nativeError == ENOTDIR && isSymlinkAt(current.get(), name))
+                                        ? FileSafetyError::LinkTraversalDetected
+                                        : unavailableError;
       return {ParentHandle{}, errnoFailure(error, QStringLiteral("open commit parent"), nativeError)};
     }
     current = FileDescriptor(next);
