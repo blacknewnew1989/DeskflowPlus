@@ -45,7 +45,16 @@ public:
     const QMutexLocker lock(&mutex);
     commitRequests.append(request);
     workerThreads.append(QThread::currentThread());
-    return commitResult;
+    if (!commitResult.ok()) {
+      return commitResult;
+    }
+    if (!QFile::rename(request.stagingPath, request.destinationPath)) {
+      return {
+          .error = FileSafetyError::CommitFailed,
+          .diagnostic = QStringLiteral("fake adapter could not move staging file"),
+      };
+    }
+    return {};
   }
 
   mutable QMutex mutex;
@@ -104,6 +113,7 @@ private Q_SLOTS:
   void ownsCompleteFileReceiverLifecycleOnDiskWorker();
   void rejectsPlatformSafetyFailureBeforeCreatingPart();
   void rejectsCrossThreadReuse();
+  void retainsPartWhenPlatformCommitFails();
 };
 
 void IncomingFileReceiverWorkerTests::ownsCompleteFileReceiverLifecycleOnDiskWorker()
@@ -161,8 +171,11 @@ void IncomingFileReceiverWorkerTests::ownsCompleteFileReceiverLifecycleOnDiskWor
   QCOMPARE(safety.traversalRequests.size(), 2);
   QCOMPARE(safety.traversalRequests.first().candidatePath, root.filePath(QStringLiteral("nested/payload.bin")));
   QVERIFY(safety.traversalRequests.last().candidatePath.endsWith(QStringLiteral(".part")));
-  QCOMPARE(safety.commitRequests.size(), 0);
-  QVERIFY(!IncomingFileReceiverWorker::platformCommitWired());
+  QCOMPARE(safety.commitRequests.size(), 1);
+  QCOMPARE(safety.commitRequests.first().receiveRoot, root.path());
+  QCOMPARE(safety.commitRequests.first().destinationPath, result.snapshot.committedPath);
+  QCOMPARE(safety.commitRequests.first().disposition, CommitDisposition::FailIfExists);
+  QVERIFY(IncomingFileReceiverWorker::platformCommitWired());
   for (auto *thread : std::as_const(safety.workerThreads)) {
     QCOMPARE(thread, result.workerThread);
     QVERIFY(thread != QThread::currentThread());
@@ -216,6 +229,48 @@ void IncomingFileReceiverWorkerTests::rejectsCrossThreadReuse()
   QVERIFY(result.diagnostic.contains(QStringLiteral("disk worker")));
   QCOMPARE(safety.rootRequests.size(), 0);
   QCOMPARE(safety.traversalRequests.size(), 0);
+}
+
+void IncomingFileReceiverWorkerTests::retainsPartWhenPlatformCommitFails()
+{
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const QByteArray bytes(17, '\x33');
+  const auto request = requestFor(root.path(), bytes);
+  FakeFileSafety safety;
+  safety.commitResult = {
+      .error = FileSafetyError::DestinationExists,
+      .diagnostic = QStringLiteral("destination appeared before atomic commit"),
+  };
+  QThreadPool pool;
+  auto future = QtConcurrent::run(&pool, [&]() {
+    IncomingFileReceiverWorker worker(safety);
+    WorkerResult result;
+    result.begin = worker.begin(request);
+    result.firstAppend = worker.append(
+        {.transferId = request.begin.transferId, .fileId = request.begin.fileId},
+        QByteArrayView(bytes)
+    );
+    result.finish = worker.finish({
+        .transferId = request.begin.transferId,
+        .fileId = request.begin.fileId,
+        .size = request.begin.size,
+        .sha256 = request.begin.expectedSha256,
+    });
+    result.snapshot = worker.snapshot();
+    return result;
+  });
+  future.waitForFinished();
+  const auto result = future.result();
+
+  QVERIFY(result.begin.ok());
+  QVERIFY(result.firstAppend.ok());
+  QCOMPARE(result.finish.error, FileReceiverError::TargetExists);
+  QVERIFY(result.finish.fileResult.has_value());
+  QCOMPARE(result.finish.fileResult->code, FileResultCode::TargetExists);
+  QCOMPARE(result.snapshot.state, FileReceiverState::Failed);
+  QVERIFY(QFile::exists(result.snapshot.partPath));
+  QCOMPARE(safety.commitRequests.size(), 1);
 }
 
 QTEST_MAIN(IncomingFileReceiverWorkerTests)
