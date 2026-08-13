@@ -31,6 +31,7 @@
 #include "gui/widgets/LogDock.h"
 #include "net/FingerprintDatabase.h"
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
+#include "relaydesk/app/AutoReconnectRuntime.h"
 #include "relaydesk/app/PairingTrustRuntime.h"
 #include "relaydesk/app/FileTransferRuntime.h"
 #include "relaydesk/app/TransferRuntimeComposition.h"
@@ -360,6 +361,12 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
   if (!m_relayDeskTransfer->start(&diagnostic)) {
     qWarning().noquote() << "RelayDesk file transfer could not start:" << diagnostic;
   }
+  QSettings relayDeskSettings(Settings::settingsFile(), QSettings::IniFormat);
+  const auto discoverySettings = deskflow::relaydesk::DiscoverySettingsStore(relayDeskSettings).load();
+  m_relayDeskReconnect = new deskflow::relaydesk::AutoReconnectRuntime(
+      *m_relayDeskPairing, *m_relayDeskDiscovery, *runtimeObserver,
+      discoverySettings.ok ? discoverySettings.settings : deskflow::relaydesk::DiscoverySettings{}, this
+  );
 }
 
 deskflow::relaydesk::model::DeviceHomeModel &MainWindow::relayDeskDeviceModel()
