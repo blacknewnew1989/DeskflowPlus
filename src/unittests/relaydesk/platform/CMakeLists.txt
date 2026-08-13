@@ -31,6 +31,15 @@ create_test(
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/platform"
 )
 
+if(APPLE)
+  create_test(
+    NAME RelayDeskMacFileSafetyTests
+    DEPENDS relaydesk_macos_file_safety
+    SOURCE MacFileSafetyTests.cpp
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/platform"
+  )
+endif()
+
 create_test(
   NAME RelayDeskWindowsFirewallProbeTests
   DEPENDS relaydesk_windows_permissions
