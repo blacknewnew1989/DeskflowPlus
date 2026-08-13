@@ -33,7 +33,8 @@ DeviceSnapshot peerSnapshot()
 struct Fixture
 {
   PairingSnapshot makeSnapshot(
-      PairingState state, QString sas = {}, int attemptsRemaining = 3, QString errorMessageKey = {}
+      PairingState state, QString sas = {}, int attemptsRemaining = 3,
+      PairingFailureReason failureReason = PairingFailureReason::None
   ) const
   {
     return {
@@ -43,14 +44,17 @@ struct Fixture
         .sixDigitSas = std::move(sas),
         .expiresAtUtc = QDateTime::fromMSecsSinceEpoch(1'730'000'060'000LL, QTimeZone::UTC),
         .attemptsRemaining = attemptsRemaining,
-        .errorMessageKey = std::move(errorMessageKey),
+        .failureReason = failureReason,
     };
   }
 
-  void publish(PairingState state, QString sas = {}, int attemptsRemaining = 3, QString errorMessageKey = {})
+  void publish(
+      PairingState state, QString sas = {}, int attemptsRemaining = 3,
+      PairingFailureReason failureReason = PairingFailureReason::None
+  )
   {
     service.publish(
-        makeSnapshot(state, std::move(sas), attemptsRemaining, std::move(errorMessageKey)), fingerprint
+        makeSnapshot(state, std::move(sas), attemptsRemaining, failureReason), fingerprint
     );
   }
 
@@ -73,7 +77,7 @@ private Q_SLOTS:
   void confirmsMatchingDisplayedCodeThroughService();
   void validatesAndSubmitsEnteredCodeThroughService();
   void cancelsActiveSessionThroughService();
-  void exposesTerminalAndSharedErrorKeys();
+  void exposesTerminalAndTypedFailureReasons();
   void mapsTypedServiceFailures();
   void rejectsActionsWithoutBoundSession();
   void formatsMissingFingerprintSafely();
@@ -170,14 +174,14 @@ void PairingWizardModelTests::cancelsActiveSessionThroughService()
   QVERIFY(!fixture.wizard.canCancel());
 }
 
-void PairingWizardModelTests::exposesTerminalAndSharedErrorKeys()
+void PairingWizardModelTests::exposesTerminalAndTypedFailureReasons()
 {
   Fixture fixture;
-  fixture.publish(PairingState::Expired, {}, 3, QStringLiteral("pairing.code.expired"));
+  fixture.publish(PairingState::Expired, {}, 3, PairingFailureReason::Expired);
   QCOMPARE(fixture.wizard.stateText(), QStringLiteral("The pairing code expired. Generate a new code."));
   QCOMPARE(fixture.wizard.errorText(), QStringLiteral("The pairing code expired. Generate a new code."));
 
-  fixture.publish(PairingState::Failed, {}, 3, QStringLiteral("pairing.certificate_changed"));
+  fixture.publish(PairingState::Failed, {}, 3, PairingFailureReason::CertificateChanged);
   QCOMPARE(
       fixture.wizard.errorText(),
       QStringLiteral("The other device certificate changed. Automatic connection was stopped.")

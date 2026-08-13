@@ -170,7 +170,7 @@ void PairingTrustCommitterTests::writeFailureDoesNotCompletePairing()
 
   QCOMPARE(result.error, PairingTrustCommitError::PersistenceFailed);
   QCOMPARE(machine.snapshot()->state, PairingState::Failed);
-  QCOMPARE(machine.snapshot()->errorMessageKey, QStringLiteral("pairing.trust_store_write_failed"));
+  QCOMPARE(machine.snapshot()->failureReason, PairingFailureReason::TrustStoreWriteFailed);
   QVERIFY(store.devices().isEmpty());
   QVERIFY(!machine.confirmedFingerprint(sessionId).has_value());
 }

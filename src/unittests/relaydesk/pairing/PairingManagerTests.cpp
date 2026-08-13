@@ -157,6 +157,7 @@ void PairingManagerTests::wrongCodeRejectsWithoutTrust()
 
   QCOMPARE(compared.error, PairingOperationError::InvalidCode);
   QCOMPARE(fixture.first.snapshot()->state, PairingState::Rejected);
+  QCOMPARE(fixture.first.snapshot()->failureReason, PairingFailureReason::CodeMismatch);
   QVERIFY(fixture.firstStore.devices().isEmpty());
   const auto rejected = fixture.firstPackets.takeFirst();
   QCOMPARE(
@@ -164,6 +165,7 @@ void PairingManagerTests::wrongCodeRejectsWithoutTrust()
       PairingOperationError::InvalidCode
   );
   QCOMPARE(fixture.second.snapshot()->state, PairingState::Failed);
+  QCOMPARE(fixture.second.snapshot()->failureReason, PairingFailureReason::CodeMismatch);
   QVERIFY(fixture.secondStore.devices().isEmpty());
 }
 
@@ -236,7 +238,10 @@ void PairingManagerTests::rejectsDuplicatesAndOutOfOrderMessages()
   );
 
   const auto sessionId = fixture.first.snapshot()->pairingSessionId;
-  const auto prematureResult = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{sessionId, true, {}}));
+  const auto prematureResult = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{
+      .pairingSessionId = sessionId,
+      .accepted = true,
+  }));
   QCOMPARE(
       fixture.first.receiveDatagram(prematureResult, fixture.secondEndpoint).error,
       PairingOperationError::UnexpectedMessage
@@ -305,6 +310,7 @@ void PairingManagerTests::persistenceFailureRejectsBothSides()
 
   QCOMPARE(persisted.error, PairingOperationError::PersistenceFailed);
   QCOMPARE(first.snapshot()->state, PairingState::Failed);
+  QCOMPARE(first.snapshot()->failureReason, PairingFailureReason::TrustStoreWriteFailed);
   QVERIFY(failingStore.devices().isEmpty());
   QVERIFY(second.receiveDatagram(firstPackets.takeFirst().bytes, firstEndpoint).error != PairingOperationError::None);
   QVERIFY(goodStore.devices().isEmpty());
@@ -315,8 +321,17 @@ void PairingManagerTests::cancelAndRevokeAreDurable()
   Fixture fixture;
   QVERIFY(fixture.startAndDeliverRequest().ok());
   const auto sessionId = fixture.first.snapshot()->pairingSessionId;
+  QVERIFY(fixture.second.submitDisplayedSas(sessionId, fixture.first.snapshot()->sixDigitSas).ok());
   QVERIFY(fixture.first.cancel(sessionId).ok());
   QCOMPARE(fixture.first.snapshot()->state, PairingState::Rejected);
+  QCOMPARE(fixture.first.snapshot()->failureReason, PairingFailureReason::Cancelled);
+  const auto cancelled = fixture.firstPackets.takeFirst();
+  QCOMPARE(
+      fixture.second.receiveDatagram(cancelled.bytes, fixture.firstEndpoint).error,
+      PairingOperationError::InvalidState
+  );
+  QCOMPARE(fixture.second.snapshot()->state, PairingState::Failed);
+  QCOMPARE(fixture.second.snapshot()->failureReason, PairingFailureReason::Cancelled);
 
   QVERIFY(fixture.firstStore.upsert({
       .deviceId = fixture.secondId,

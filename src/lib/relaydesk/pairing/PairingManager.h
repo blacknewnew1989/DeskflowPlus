@@ -100,7 +100,7 @@ private:
   [[nodiscard]] PairingOperationResult sendMessage(const PairingMessage &message);
   [[nodiscard]] PairingOperationResult finalizeOutgoing();
   [[nodiscard]] PairingOperationResult failState(
-      PairingOperationError error, QString diagnostic, QString errorMessageKey
+      PairingOperationError error, QString diagnostic, PairingFailureReason reason
   );
   [[nodiscard]] PairingOperationResult resultFromState(const PairingActionResult &result) const;
   [[nodiscard]] PairingOperationResult resultFromTrust(const PairingTrustCommitResult &result) const;

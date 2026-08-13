@@ -7,6 +7,7 @@
 #pragma once
 
 #include "relaydesk/device/DeviceInfo.h"
+#include "relaydesk/pairing/PairingFailureReason.h"
 
 #include <QByteArray>
 #include <QByteArrayView>
@@ -52,7 +53,10 @@ struct PairingResultMessage
 {
   QUuid pairingSessionId;
   bool accepted = false;
-  QString errorMessageKey;
+  PairingFailureReason failureReason = PairingFailureReason::None;
+  // Diagnostic is optional, untrusted log context. It is never a wire reason,
+  // localization key, or input to compatibility decisions.
+  QString diagnostic;
 
   bool operator==(const PairingResultMessage &) const = default;
 };

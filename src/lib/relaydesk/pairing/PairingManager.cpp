@@ -28,6 +28,29 @@ bool isTerminal(PairingState state)
          state == PairingState::Failed;
 }
 
+PairingOperationError operationErrorFor(PairingFailureReason reason)
+{
+  switch (reason) {
+  case PairingFailureReason::None:
+  case PairingFailureReason::Cancelled:
+    return PairingOperationError::InvalidState;
+  case PairingFailureReason::CodeMismatch:
+  case PairingFailureReason::TooManyAttempts:
+    return PairingOperationError::InvalidCode;
+  case PairingFailureReason::Expired:
+    return PairingOperationError::Expired;
+  case PairingFailureReason::TransportFailed:
+    return PairingOperationError::SendFailed;
+  case PairingFailureReason::TrustStoreWriteFailed:
+    return PairingOperationError::PersistenceFailed;
+  case PairingFailureReason::CertificateChanged:
+    return PairingOperationError::InvalidPeer;
+  case PairingFailureReason::DirectConnectionRequired:
+    return PairingOperationError::InvalidEndpoint;
+  }
+  return PairingOperationError::InvalidState;
+}
+
 bool isUsableEndpoint(const PairingEndpoint &endpoint)
 {
   return endpoint.port != 0 && !endpoint.address.isNull() && !endpoint.address.isMulticast() &&
@@ -109,7 +132,7 @@ PairingOperationResult PairingManager::startPairing(
       .expiresAtUtc = current.expiresAtUtc,
   });
   if (!sent.ok()) {
-    return failState(sent.error, sent.diagnostic, QStringLiteral("pairing.network_send_failed"));
+    return failState(sent.error, sent.diagnostic, PairingFailureReason::TransportFailed);
   }
   const auto transportReady = m_stateMachine.markTransportReady(current.pairingSessionId);
   if (!transportReady.ok()) {
@@ -226,7 +249,7 @@ PairingOperationResult PairingManager::submitDisplayedSas(const QUuid &sessionId
       .sixDigitSas = sixDigits,
   });
   if (!sent.ok()) {
-    return failState(sent.error, sent.diagnostic, QStringLiteral("pairing.network_send_failed"));
+    return failState(sent.error, sent.diagnostic, PairingFailureReason::TransportFailed);
   }
   return {};
 }
@@ -242,11 +265,11 @@ PairingOperationResult PairingManager::cancel(const QUuid &sessionId)
   const auto sent = sendMessage(PairingResultMessage{
       .pairingSessionId = sessionId,
       .accepted = false,
-      .errorMessageKey = QStringLiteral("pairing.cancelled"),
+      .failureReason = PairingFailureReason::Cancelled,
   });
   if (m_manualSnapshot.has_value()) {
     m_manualSnapshot->state = PairingState::Rejected;
-    m_manualSnapshot->errorMessageKey = QStringLiteral("pairing.cancelled");
+    m_manualSnapshot->failureReason = PairingFailureReason::Cancelled;
     publishManualSnapshot();
   } else {
     const auto cancelled = m_stateMachine.cancel(sessionId);
@@ -276,7 +299,7 @@ bool PairingManager::expireIfNeeded()
   if (m_manualSnapshot.has_value()) {
     if (!isTerminal(m_manualSnapshot->state) && nowUtc() >= m_manualSnapshot->expiresAtUtc) {
       m_manualSnapshot->state = PairingState::Expired;
-      m_manualSnapshot->errorMessageKey = QStringLiteral("pairing.code.expired");
+      m_manualSnapshot->failureReason = PairingFailureReason::Expired;
       publishManualSnapshot();
       return true;
     }
@@ -364,11 +387,16 @@ PairingOperationResult PairingManager::handleSubmission(
 
   const auto compared = m_stateMachine.submitDisplayedSas(submission.pairingSessionId, submission.sixDigitSas);
   if (!compared.ok()) {
-    (void)m_stateMachine.cancel(submission.pairingSessionId);
+    const auto reason = compared.error == PairingError::AttemptsExhausted
+                            ? PairingFailureReason::TooManyAttempts
+                            : PairingFailureReason::CodeMismatch;
+    if (compared.error != PairingError::AttemptsExhausted) {
+      (void)m_stateMachine.reject(submission.pairingSessionId, reason);
+    }
     const auto sent = sendMessage(PairingResultMessage{
         .pairingSessionId = submission.pairingSessionId,
         .accepted = false,
-        .errorMessageKey = QStringLiteral("pairing.code_mismatch"),
+        .failureReason = reason,
     });
     if (!sent.ok()) {
       return sent;
@@ -396,7 +424,7 @@ PairingOperationResult PairingManager::handleResult(
   }
   if (!message.accepted && m_manualSnapshot.has_value()) {
     m_manualSnapshot->state = PairingState::Rejected;
-    m_manualSnapshot->errorMessageKey = message.errorMessageKey;
+    m_manualSnapshot->failureReason = message.failureReason;
     publishManualSnapshot();
     return {};
   }
@@ -406,7 +434,8 @@ PairingOperationResult PairingManager::handleResult(
   }
   if (!message.accepted) {
     return failState(
-        PairingOperationError::InvalidCode, QStringLiteral("remote peer rejected pairing"), message.errorMessageKey
+        operationErrorFor(message.failureReason), QStringLiteral("remote peer rejected pairing"),
+        message.failureReason
     );
   }
   return resultFromTrust(PairingTrustCommitter::commit(
@@ -462,7 +491,7 @@ PairingOperationResult PairingManager::finalizeOutgoing()
     (void)sendMessage(PairingResultMessage{
         .pairingSessionId = current->pairingSessionId,
         .accepted = false,
-        .errorMessageKey = QStringLiteral("pairing.trust_store_write_failed"),
+        .failureReason = PairingFailureReason::TrustStoreWriteFailed,
     });
     return resultFromTrust(committed);
   }
@@ -473,12 +502,12 @@ PairingOperationResult PairingManager::finalizeOutgoing()
 }
 
 PairingOperationResult PairingManager::failState(
-    PairingOperationError error, QString diagnostic, QString errorMessageKey
+    PairingOperationError error, QString diagnostic, PairingFailureReason reason
 )
 {
   const auto current = snapshot();
   if (current.has_value() && m_stateMachine.snapshot().has_value()) {
-    (void)m_stateMachine.fail(current->pairingSessionId, std::move(errorMessageKey));
+    (void)m_stateMachine.fail(current->pairingSessionId, reason);
   }
   return failure(error, std::move(diagnostic));
 }

@@ -7,6 +7,7 @@
 #pragma once
 
 #include "relaydesk/device/DeviceSnapshot.h"
+#include "relaydesk/pairing/PairingFailureReason.h"
 
 #include <QByteArray>
 #include <QDateTime>
@@ -42,7 +43,7 @@ struct PairingSnapshot
   QString sixDigitSas;
   QDateTime expiresAtUtc;
   int attemptsRemaining = 0;
-  QString errorMessageKey;
+  PairingFailureReason failureReason = PairingFailureReason::None;
 
   bool operator==(const PairingSnapshot &) const = default;
 };
@@ -102,7 +103,8 @@ public:
   [[nodiscard]] PairingActionResult submitDisplayedSas(const QUuid &sessionId, const QString &sixDigits);
   [[nodiscard]] PairingActionResult complete(const QUuid &sessionId);
   [[nodiscard]] PairingActionResult cancel(const QUuid &sessionId);
-  [[nodiscard]] PairingActionResult fail(const QUuid &sessionId, QString errorMessageKey);
+  [[nodiscard]] PairingActionResult reject(const QUuid &sessionId, PairingFailureReason reason);
+  [[nodiscard]] PairingActionResult fail(const QUuid &sessionId, PairingFailureReason reason);
   [[nodiscard]] bool expireIfNeeded();
 
   [[nodiscard]] std::optional<PairingSnapshot> snapshot() const;

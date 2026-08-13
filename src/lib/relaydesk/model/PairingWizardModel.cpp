@@ -97,7 +97,7 @@ QString PairingWizardModel::errorText() const
 {
   if (!m_actionErrorText.isEmpty())
     return m_actionErrorText;
-  return m_snapshot.has_value() ? translatedMessageKey(m_snapshot->errorMessageKey) : QString();
+  return m_snapshot.has_value() ? failureText(m_snapshot->failureReason) : QString();
 }
 
 QString PairingWizardModel::shortFingerprint() const
@@ -214,18 +214,27 @@ QString PairingWizardModel::formatFingerprint(const QByteArray &fingerprint, boo
          QString::fromLatin1(components.sliced(28, 4).join(':'));
 }
 
-QString PairingWizardModel::translatedMessageKey(const QString &messageKey)
+QString PairingWizardModel::failureText(PairingFailureReason reason)
 {
-  if (messageKey.isEmpty())
+  switch (reason) {
+  case PairingFailureReason::None:
     return {};
-  if (messageKey == i18n::key(Text::PairingCodeExpired))
+  case PairingFailureReason::Cancelled:
+    return i18n::translate(Text::PairingStateRejected);
+  case PairingFailureReason::CodeMismatch:
+    return i18n::translate(Text::PairingCodeMismatch);
+  case PairingFailureReason::Expired:
     return i18n::translate(Text::PairingCodeExpired);
-  if (messageKey == i18n::key(Text::PairingTooManyAttempts))
+  case PairingFailureReason::TooManyAttempts:
     return i18n::translate(Text::PairingTooManyAttempts);
-  if (messageKey == i18n::key(Text::PairingCertificateChanged))
+  case PairingFailureReason::CertificateChanged:
     return i18n::translate(Text::PairingCertificateChanged);
-  if (messageKey == i18n::key(Text::PairingNotDirect))
+  case PairingFailureReason::DirectConnectionRequired:
     return i18n::translate(Text::PairingNotDirect);
+  case PairingFailureReason::TransportFailed:
+  case PairingFailureReason::TrustStoreWriteFailed:
+    return i18n::translate(Text::PairingStateFailed);
+  }
   return i18n::translate(Text::PairingStateFailed);
 }
 

@@ -105,7 +105,7 @@ void PairingStateMachineTests::rejectsWrongCodesAfterBoundedAttempts()
   const auto exhausted = fixture.machine.submitDisplayedSas(sessionId, QStringLiteral("999999"));
   QCOMPARE(exhausted.error, PairingError::AttemptsExhausted);
   QCOMPARE(fixture.machine.snapshot()->state, PairingState::Rejected);
-  QCOMPARE(fixture.machine.snapshot()->errorMessageKey, QStringLiteral("pairing.too_many_attempts"));
+  QCOMPARE(fixture.machine.snapshot()->failureReason, PairingFailureReason::TooManyAttempts);
 }
 
 void PairingStateMachineTests::expiresAtExactDeadline()
@@ -118,7 +118,7 @@ void PairingStateMachineTests::expiresAtExactDeadline()
   fixture.now = snapshot.expiresAtUtc;
   QVERIFY(fixture.machine.expireIfNeeded());
   QCOMPARE(fixture.machine.snapshot()->state, PairingState::Expired);
-  QCOMPARE(fixture.machine.snapshot()->errorMessageKey, QStringLiteral("pairing.code.expired"));
+  QCOMPARE(fixture.machine.snapshot()->failureReason, PairingFailureReason::Expired);
   QVERIFY(!fixture.machine.expireIfNeeded());
 }
 
@@ -190,6 +190,7 @@ void PairingStateMachineTests::terminalStateNeverRegresses()
   const QUuid sessionId = beginToComparison(fixture);
   QVERIFY(fixture.machine.cancel(sessionId).ok());
   QCOMPARE(fixture.machine.snapshot()->state, PairingState::Rejected);
+  QCOMPARE(fixture.machine.snapshot()->failureReason, PairingFailureReason::Cancelled);
   QCOMPARE(fixture.machine.confirmMatchingSas(sessionId).error, PairingError::InvalidState);
   QCOMPARE(fixture.machine.snapshot()->state, PairingState::Rejected);
 
