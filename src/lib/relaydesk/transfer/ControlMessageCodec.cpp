@@ -130,8 +130,9 @@ bool validate(const TransferReject &message, QString &error)
 
 bool validate(const ErrorMessage &message, QString &error)
 {
-  if (message.code == 0 || !isWireInteger(message.code)) {
-    error = QStringLiteral("error code must be a positive CBOR integer");
+  if (!isKnownProtocolErrorCode(message.code) ||
+      !isWireInteger(static_cast<quint64>(message.code))) {
+    error = QStringLiteral("error code is not in the RDFT v1 catalog");
   } else if (!isValidString(message.diagnostic)) {
     error = QStringLiteral("diagnostic must be non-empty and at most 4096 UTF-8 bytes");
   } else {
@@ -190,9 +191,9 @@ QByteArray encode(const TransferReject &message)
 QByteArray encode(const ErrorMessage &message)
 {
   QCborMap map;
-  insertUnsigned(map, 1, message.code);
+  insertUnsigned(map, 1, static_cast<quint64>(message.code));
   map.insert(key(2), QCborValue(message.diagnostic));
-  map.insert(key(3), QCborValue(message.retryable));
+  map.insert(key(3), QCborValue(protocolErrorIsRetryable(message.code)));
   if (message.transferId.has_value()) {
     insertUuid(map, 4, *message.transferId);
   }
@@ -472,8 +473,12 @@ ControlMessageDecodeResult decodeProtocolError(const QCborMap &map)
       !readBool(map, 3, retryable, failure)) {
     return failure;
   }
-  if (code == 0) {
-    return invalidValue(1, QStringLiteral("error code must be positive"));
+  const auto typedCode = static_cast<ProtocolErrorCode>(code);
+  if (!isKnownProtocolErrorCode(typedCode)) {
+    return invalidValue(1, QStringLiteral("error code is not in the RDFT v1 catalog"));
+  }
+  if (retryable != protocolErrorIsRetryable(typedCode)) {
+    return invalidValue(3, QStringLiteral("error retryability does not match the RDFT v1 catalog"));
   }
 
   std::optional<TransferId> transferId;
@@ -491,9 +496,8 @@ ControlMessageDecodeResult decodeProtocolError(const QCborMap &map)
     }
   }
   ErrorMessage message{
-      .code = code,
+      .code = typedCode,
       .diagnostic = std::move(diagnostic),
-      .retryable = retryable,
       .transferId = std::move(transferId),
       .fileId = std::move(fileId),
   };

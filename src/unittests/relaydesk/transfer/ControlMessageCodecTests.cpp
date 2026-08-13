@@ -57,6 +57,7 @@ private Q_SLOTS:
   void acceptRoundTripPreservesUnicodePathMetadata();
   void rejectRoundTripSupportsOptionalDiagnostic();
   void rejectsUnknownRejectReason();
+  void errorCatalogIsStableAndOwnsRetryability();
   void errorRoundTripPreservesOptionalIds();
   void rejectsUnsupportedVersion();
   void rejectsUnsupportedMessageType();
@@ -143,9 +144,8 @@ void ControlMessageCodecTests::rejectsUnknownRejectReason()
 void ControlMessageCodecTests::errorRoundTripPreservesOptionalIds()
 {
   ErrorMessage source;
-  source.code = 1002;
+  source.code = ProtocolErrorCode::InvalidFrame;
   source.diagnostic = QStringLiteral("INVALID_FRAME_LENGTH");
-  source.retryable = false;
   source.transferId = kTransferId;
   source.fileId = kFileId;
 
@@ -155,6 +155,46 @@ void ControlMessageCodecTests::errorRoundTripPreservesOptionalIds()
   const auto *decoded = std::get_if<ErrorMessage>(&*result.message);
   QVERIFY(decoded != nullptr);
   QVERIFY(*decoded == source);
+}
+
+void ControlMessageCodecTests::errorCatalogIsStableAndOwnsRetryability()
+{
+  QCOMPARE(static_cast<quint64>(ProtocolErrorCode::None), quint64{0});
+  QCOMPARE(static_cast<quint64>(ProtocolErrorCode::UnsupportedVersion), quint64{1001});
+  QCOMPARE(static_cast<quint64>(ProtocolErrorCode::InvalidFrame), quint64{1002});
+  QCOMPARE(static_cast<quint64>(ProtocolErrorCode::UnsupportedMessage), quint64{1003});
+  QCOMPARE(static_cast<quint64>(ProtocolErrorCode::InvalidState), quint64{1004});
+  QCOMPARE(static_cast<quint64>(ProtocolErrorCode::TemporarilyUnavailable), quint64{1005});
+  QCOMPARE(static_cast<quint64>(ProtocolErrorCode::InternalError), quint64{1006});
+  QVERIFY(!isKnownProtocolErrorCode(ProtocolErrorCode::None));
+  QVERIFY(isKnownProtocolErrorCode(ProtocolErrorCode::InvalidFrame));
+  QVERIFY(!isKnownProtocolErrorCode(static_cast<ProtocolErrorCode>(1007)));
+  QVERIFY(!protocolErrorIsRetryable(ProtocolErrorCode::InvalidFrame));
+  QVERIFY(protocolErrorIsRetryable(ProtocolErrorCode::TemporarilyUnavailable));
+
+  QString error;
+  const QByteArray valid = ControlMessageCodec::encode(
+      kProtocolMajorVersion,
+      ControlMessage{ErrorMessage{
+          .code = ProtocolErrorCode::TemporarilyUnavailable,
+          .diagnostic = QStringLiteral("BUSY"),
+      }},
+      &error
+  );
+  QVERIFY2(!valid.isEmpty(), qPrintable(error));
+  auto map = QCborValue::fromCbor(valid).toMap();
+  QCOMPARE(map.value(QCborValue(3)).toBool(), true);
+
+  map.insert(QCborValue(3), false);
+  QCOMPARE(
+      ControlMessageCodec::decode(kProtocolMajorVersion, MessageType::Error, QCborValue(map).toCbor()).error,
+      ControlMessageError::InvalidFieldValue
+  );
+  map.insert(QCborValue(1), 1007);
+  QCOMPARE(
+      ControlMessageCodec::decode(kProtocolMajorVersion, MessageType::Error, QCborValue(map).toCbor()).error,
+      ControlMessageError::InvalidFieldValue
+  );
 }
 
 void ControlMessageCodecTests::rejectsUnsupportedVersion()

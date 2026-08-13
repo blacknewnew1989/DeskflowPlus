@@ -12,8 +12,10 @@
 #include "relaydesk/device/DeviceSnapshot.h"
 #include "relaydesk/model/IncomingOfferModel.h"
 #include "relaydesk/model/TransferCenterModel.h"
+#include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/platform/PermissionSnapshot.h"
 #include "relaydesk/transfer/TransferHistoryStore.h"
+#include "relaydesk/trust/TrustedDeviceStore.h"
 #include "relaydesk/widgets/DevicesDock.h"
 
 #include <QDir>
@@ -24,6 +26,7 @@
 #include <QMutexLocker>
 #include <QRegularExpression>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QThread>
 #include <QtTest>
 
@@ -48,8 +51,12 @@ public:
   std::optional<SendOptions> sendOptions;
   std::optional<ReceiveOptions> receiveOptions;
   std::optional<TransferCancelOptions> cancelOptions;
+  std::optional<TransferOperationResult> operationResult;
   std::optional<PermissionSnapshot> permissionSnapshot;
+  std::optional<DeviceId> readyPeerDeviceId;
+  std::optional<NegotiatedCapabilities> negotiatedCapabilities;
   QThread *deliveryThread = nullptr;
+  QThread *peerReadyDeliveryThread = nullptr;
 
 public Q_SLOTS:
   void receive(
@@ -57,7 +64,7 @@ public Q_SLOTS:
       IncomingOffer receivedIncomingOffer, TransferSnapshot receivedTransferSnapshot,
       TransferHistoryRecord receivedHistoryRecord, SendOptions receivedSendOptions,
       ReceiveOptions receivedReceiveOptions, TransferCancelOptions receivedCancelOptions,
-      PermissionSnapshot receivedPermissionSnapshot
+      TransferOperationResult receivedOperationResult, PermissionSnapshot receivedPermissionSnapshot
   )
   {
     deviceId = std::move(receivedDeviceId);
@@ -69,13 +76,25 @@ public Q_SLOTS:
     sendOptions = std::move(receivedSendOptions);
     receiveOptions = std::move(receivedReceiveOptions);
     cancelOptions = std::move(receivedCancelOptions);
+    operationResult = std::move(receivedOperationResult);
     permissionSnapshot = std::move(receivedPermissionSnapshot);
     deliveryThread = QThread::currentThread();
     Q_EMIT delivered();
   }
 
+  void receivePeerReady(
+      DeviceId receivedPeerDeviceId, NegotiatedCapabilities receivedCapabilities
+  )
+  {
+    readyPeerDeviceId = std::move(receivedPeerDeviceId);
+    negotiatedCapabilities = std::move(receivedCapabilities);
+    peerReadyDeliveryThread = QThread::currentThread();
+    Q_EMIT peerReadyDelivered();
+  }
+
 Q_SIGNALS:
   void delivered();
+  void peerReadyDelivered();
 };
 
 namespace {
@@ -150,6 +169,7 @@ using ActiveTransfersMethod = QList<TransferSnapshot> (IFileTransferService::*)(
 using IncomingOfferSignal = void (IFileTransferService::*)(IncomingOffer);
 using TransferSnapshotSignal = void (IFileTransferService::*)(TransferSnapshot);
 using TransferRemovedSignal = void (IFileTransferService::*)(TransferId);
+using TransferOperationSignal = void (IFileTransferService::*)(TransferOperationResult);
 using DiscoveryEndpointMethod = bool (DiscoveryService::*)(FileEndpointAnnouncement, QString *);
 using DiscoveryRuntimeEndpointMethod = bool (DeviceDiscoveryRuntime::*)(FileEndpointAnnouncement, QString *);
 using SendItemsIntent = void (widgets::DevicesDock::*)(DeviceId, QList<QUrl>, SendOptions);
@@ -157,6 +177,7 @@ using AcceptIntent = void (model::IncomingOfferModel::*)(TransferId, ReceiveOpti
 using RejectIntent = void (model::IncomingOfferModel::*)(TransferId, RejectReason);
 using TransferIntent = void (model::TransferCenterModel::*)(TransferId);
 using CancelIntent = void (model::TransferCenterModel::*)(TransferId, TransferCancelOptions);
+using PeerReadySignal = void (FileTransferRuntime::*)(DeviceId, NegotiatedCapabilities);
 
 static_assert(std::is_abstract_v<IFileTransferService>);
 static_assert(std::is_base_of_v<IFileTransferService, FileTransferRuntime>);
@@ -176,6 +197,9 @@ static_assert(std::is_same_v<decltype(&IFileTransferService::incomingOffer), Inc
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferAdded), TransferSnapshotSignal>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferChanged), TransferSnapshotSignal>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferRemoved), TransferRemovedSignal>);
+static_assert(
+    std::is_same_v<decltype(&IFileTransferService::transferOperationFinished), TransferOperationSignal>
+);
 static_assert(std::is_same_v<decltype(&DiscoveryService::setFileEndpoint), DiscoveryEndpointMethod>);
 static_assert(
     std::is_same_v<decltype(&DeviceDiscoveryRuntime::setFileEndpoint), DiscoveryRuntimeEndpointMethod>
@@ -188,6 +212,7 @@ static_assert(std::is_same_v<decltype(&model::TransferCenterModel::resumeRequest
 static_assert(std::is_same_v<decltype(&model::TransferCenterModel::retryRequested), TransferIntent>);
 static_assert(std::is_same_v<decltype(&model::TransferCenterModel::historyRetryRequested), TransferIntent>);
 static_assert(std::is_same_v<decltype(&model::TransferCenterModel::cancelRequested), CancelIntent>);
+static_assert(std::is_same_v<decltype(&FileTransferRuntime::peerReady), PeerReadySignal>);
 static_assert(
     std::is_constructible_v<
         TransferUiRuntime, IFileTransferService &, widgets::DevicesDock &, widgets::TransferCenterDock &,
@@ -220,6 +245,23 @@ static_assert(static_cast<quint32>(TransferStartError::WrongThread) == 1);
 static_assert(static_cast<quint32>(TransferStartError::InvalidRequest) == 2);
 static_assert(static_cast<quint32>(TransferStartError::NotRunning) == 3);
 static_assert(static_cast<quint32>(TransferStartError::PeerUnavailable) == 4);
+static_assert(std::is_same_v<std::underlying_type_t<TransferOperation>, quint8>);
+static_assert(static_cast<quint8>(TransferOperation::Accept) == 1);
+static_assert(static_cast<quint8>(TransferOperation::Reject) == 2);
+static_assert(static_cast<quint8>(TransferOperation::Pause) == 3);
+static_assert(static_cast<quint8>(TransferOperation::Resume) == 4);
+static_assert(static_cast<quint8>(TransferOperation::Cancel) == 5);
+static_assert(static_cast<quint8>(TransferOperation::Retry) == 6);
+static_assert(std::is_same_v<std::underlying_type_t<TransferOperationOutcome>, quint8>);
+static_assert(static_cast<quint8>(TransferOperationOutcome::Applied) == 0);
+static_assert(static_cast<quint8>(TransferOperationOutcome::Idempotent) == 1);
+static_assert(static_cast<quint8>(TransferOperationOutcome::Rejected) == 2);
+static_assert(std::is_same_v<std::underlying_type_t<TransferOperationError>, quint32>);
+static_assert(static_cast<quint32>(TransferOperationError::None) == 0);
+static_assert(static_cast<quint32>(TransferOperationError::UnknownTransfer) == 1);
+static_assert(static_cast<quint32>(TransferOperationError::UnsupportedOperation) == 2);
+static_assert(static_cast<quint32>(TransferOperationError::InvalidState) == 3);
+static_assert(static_cast<quint32>(TransferOperationError::StartFailed) == 4);
 
 static_assert(std::is_copy_constructible_v<DeviceId>);
 static_assert(std::is_copy_constructible_v<DeviceInfo>);
@@ -232,6 +274,7 @@ static_assert(std::is_copy_constructible_v<ReceiveOptions>);
 static_assert(std::is_copy_constructible_v<TransferCancelOptions>);
 static_assert(std::is_copy_constructible_v<TransferStartResult>);
 static_assert(std::is_copy_constructible_v<PermissionSnapshot>);
+static_assert(std::is_copy_constructible_v<NegotiatedCapabilities>);
 static_assert(std::is_copy_constructible_v<FileEndpointAnnouncement>);
 static_assert(FileEndpointAnnouncement::disabled().isDisabled());
 static_assert(FileEndpointAnnouncement::disabled().isValid());
@@ -255,7 +298,7 @@ Q_SIGNALS:
       DeviceId deviceId, TransferId transferId, FileId fileId, IncomingOffer incomingOffer,
       TransferSnapshot transferSnapshot, TransferHistoryRecord historyRecord, SendOptions sendOptions,
       ReceiveOptions receiveOptions, TransferCancelOptions cancelOptions,
-      PermissionSnapshot permissionSnapshot
+      TransferOperationResult operationResult, PermissionSnapshot permissionSnapshot
   );
 };
 
@@ -265,6 +308,8 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferAdded).isValid());
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferChanged).isValid());
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferRemoved).isValid());
+  QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferOperationFinished).isValid());
+  QVERIFY(QMetaMethod::fromSignal(&FileTransferRuntime::peerReady).isValid());
 
   QVERIFY(QMetaType::fromType<DeviceId>().isValid());
   QVERIFY(QMetaType::fromType<DeviceCapabilities>().isValid());
@@ -282,8 +327,13 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaType::fromType<TransferCancelReason>().isValid());
   QVERIFY(QMetaType::fromType<TransferStartError>().isValid());
   QVERIFY(QMetaType::fromType<TransferStartResult>().isValid());
+  QVERIFY(QMetaType::fromType<TransferOperation>().isValid());
+  QVERIFY(QMetaType::fromType<TransferOperationOutcome>().isValid());
+  QVERIFY(QMetaType::fromType<TransferOperationError>().isValid());
+  QVERIFY(QMetaType::fromType<TransferOperationResult>().isValid());
   QVERIFY(QMetaType::fromType<PermissionSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<FileEndpointAnnouncement>().isValid());
+  QVERIFY(QMetaType::fromType<NegotiatedCapabilities>().isValid());
 }
 
 void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
@@ -344,11 +394,47 @@ void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
       .reason = TransferCancelReason::ApplicationShutdown,
       .partialDisposition = PartialDisposition::Remove,
   };
+  const TransferOperationResult operationResult{
+      .transferId = transferId,
+      .operation = TransferOperation::Pause,
+      .outcome = TransferOperationOutcome::Applied,
+  };
   const PermissionSnapshot permissionSnapshot{
       .platform = PermissionPlatform::MacOS,
       .entries = {{PermissionKind::MacLocalNetwork, PermissionState::Granted}},
       .checkedAtUtc = now,
   };
+  const NegotiatedCapabilities negotiatedCapabilities{
+      .protocolMajorVersion = 1,
+      .features = {QStringLiteral("file.v1"), QStringLiteral("sha256")},
+      .chunkBytes = 512U * 1024U,
+      .maxPayloadBytes = 2U * 1024U * 1024U,
+      .maxConcurrentTransfers = 3,
+      .maxConcurrentFiles = 4,
+      .maxManifestEntries = 12'345,
+      .conflictPolicies = {ConflictPolicy::AutoRename, ConflictPolicy::Ask},
+  };
+
+  QTemporaryDir runtimeDirectory;
+  QVERIFY(runtimeDirectory.isValid());
+  TrustedDeviceStore trustedDevices(
+      runtimeDirectory.filePath(QStringLiteral("trusted-devices.json"))
+  );
+  model::DeviceHomeModel deviceModel;
+  DeviceDiscoveryRuntime discoveryRuntime(
+      DeviceInfo{
+          .deviceId = DeviceId::generate(),
+          .displayName = QStringLiteral("Queued boundary source"),
+          .platform = QStringLiteral("windows"),
+          .architecture = QStringLiteral("x86_64"),
+          .appVersion = QStringLiteral("0.1.2"),
+          .inputPort = 24800,
+      },
+      deviceModel
+  );
+  FileTransferRuntime runtime(
+      discoveryRuntime.service().localDevice().deviceId, trustedDevices, discoveryRuntime, QString{}
+  );
 
   QThread worker;
   QueuedBoundaryReceiver receiver;
@@ -358,8 +444,14 @@ void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
       this, &SharedInterfaceFreezeTests::sharedValuesReady, &receiver, &QueuedBoundaryReceiver::receive,
       Qt::QueuedConnection
   ));
+  QVERIFY(connect(
+      &runtime, &FileTransferRuntime::peerReady, &receiver, &QueuedBoundaryReceiver::receivePeerReady,
+      Qt::QueuedConnection
+  ));
   QSignalSpy delivered(&receiver, &QueuedBoundaryReceiver::delivered);
+  QSignalSpy peerReadyDelivered(&receiver, &QueuedBoundaryReceiver::peerReadyDelivered);
   QVERIFY(delivered.isValid());
+  QVERIFY(peerReadyDelivered.isValid());
   worker.start();
 
   CapturedQtMessages captured;
@@ -367,9 +459,11 @@ void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
     ScopedMessageCapture capture(captured);
     Q_EMIT sharedValuesReady(
         deviceId, transferId, fileId, incomingOffer, transferSnapshot, historyRecord, sendOptions,
-        receiveOptions, cancelOptions, permissionSnapshot
+        receiveOptions, cancelOptions, operationResult, permissionSnapshot
     );
+    Q_EMIT runtime.peerReady(deviceId, negotiatedCapabilities);
     QTRY_COMPARE_WITH_TIMEOUT(delivered.count(), 1, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(peerReadyDelivered.count(), 1, 5000);
   }
 
   QCOMPARE(receiver.deliveryThread, &worker);
@@ -382,7 +476,14 @@ void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
   QCOMPARE(receiver.sendOptions, std::optional<SendOptions>{sendOptions});
   QCOMPARE(receiver.receiveOptions, std::optional<ReceiveOptions>{receiveOptions});
   QCOMPARE(receiver.cancelOptions, std::optional<TransferCancelOptions>{cancelOptions});
+  QCOMPARE(receiver.operationResult, std::optional<TransferOperationResult>{operationResult});
   QCOMPARE(receiver.permissionSnapshot, std::optional<PermissionSnapshot>{permissionSnapshot});
+  QCOMPARE(receiver.readyPeerDeviceId, std::optional<DeviceId>{deviceId});
+  QCOMPARE(
+      receiver.negotiatedCapabilities,
+      std::optional<NegotiatedCapabilities>{negotiatedCapabilities}
+  );
+  QCOMPARE(receiver.peerReadyDeliveryThread, &worker);
   const QMutexLocker locker(&captured.mutex);
   for (const auto &message : captured.messages)
     QVERIFY2(!message.contains(QStringLiteral("Cannot queue arguments")), qPrintable(message));

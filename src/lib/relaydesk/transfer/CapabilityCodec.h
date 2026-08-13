@@ -108,3 +108,5 @@ public:
 };
 
 } // namespace relaydesk::transfer
+
+Q_DECLARE_METATYPE(relaydesk::transfer::NegotiatedCapabilities)

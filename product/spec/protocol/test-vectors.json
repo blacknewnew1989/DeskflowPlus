@@ -78,8 +78,8 @@
     },
     {
       "kind": "metadata-negative",
-      "name": "auth-result-missing-accepted",
-      "metadataHex": "a0",
+      "name": "auth-result-unknown-error-code",
+      "metadataHex": "a301f40218630367756e6b6e6f776e",
       "messageType": 2,
       "expectedCodecError": "InvalidAuthResult"
     },
@@ -385,10 +385,10 @@
     },
     {
       "kind": "metadata-negative",
-      "name": "error-missing-fields",
-      "metadataHex": "a0",
+      "name": "error-unknown-code",
+      "metadataHex": "a3011903ef026d554e4b4e4f574e5f4552524f5203f4",
       "messageType": 32766,
-      "expectedCodecError": "MissingField"
+      "expectedCodecError": "InvalidFieldValue"
     },
     {
       "kind": "frame-positive",

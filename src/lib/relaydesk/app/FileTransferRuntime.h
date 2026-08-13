@@ -150,6 +150,13 @@ private:
   void updateOutgoingProgress(OutgoingSession &session);
   void completeOutgoing(OutgoingSession &session);
   void failOutgoing(OutgoingSession &session, int errorCode, QString errorMessageKey, QString diagnostic = {});
+  void publishOperation(
+      const ::relaydesk::transfer::TransferId &transferId,
+      ::relaydesk::transfer::TransferOperation operation,
+      ::relaydesk::transfer::TransferOperationOutcome outcome,
+      ::relaydesk::transfer::TransferOperationError error = ::relaydesk::transfer::TransferOperationError::None,
+      QString diagnostic = {}
+  );
   [[nodiscard]] OutgoingSession *outgoing(const ::relaydesk::transfer::TransferId &transferId) const;
 
   DeviceId m_localDeviceId;

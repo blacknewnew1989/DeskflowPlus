@@ -278,17 +278,17 @@ QByteArray SessionMessageCodec::encodeAuthResult(const AuthResultMessage &messag
   }
   QCborMap map{{key(AcceptedKey), message.accepted}};
   if (message.accepted) {
-    if (message.errorCode != 0 || !message.diagnostic.isEmpty()) {
+    if (message.errorCode != AuthResultErrorCode::None || !message.diagnostic.isEmpty()) {
       setError(error, QStringLiteral("accepted AUTH_RESULT cannot contain an error"));
       return {};
     }
   } else {
-    if (message.errorCode == 0 || message.diagnostic.isEmpty() ||
+    if (!isKnownAuthResultErrorCode(message.errorCode) || message.diagnostic.isEmpty() ||
         message.diagnostic.toUtf8().size() > kMaximumDiagnosticUtf8Bytes) {
-      setError(error, QStringLiteral("rejected AUTH_RESULT requires a bounded error"));
+      setError(error, QStringLiteral("rejected AUTH_RESULT requires a known bounded error"));
       return {};
     }
-    map.insert(key(ErrorCodeKey), message.errorCode);
+    map.insert(key(ErrorCodeKey), static_cast<quint32>(message.errorCode));
     map.insert(key(DiagnosticKey), message.diagnostic);
   }
   return QCborValue(map).toCbor(QCborValue::EncodingOption::SortKeysInMaps);
@@ -331,8 +331,14 @@ AuthResultDecodeResult SessionMessageCodec::decodeAuthResult(MessageType type, Q
   const auto errorCode = valueFor(map, ErrorCodeKey);
   const auto diagnostic = valueFor(map, DiagnosticKey);
   if (!errorCode.isInteger() || errorCode.toInteger() <= 0 ||
-      errorCode.toInteger() > std::numeric_limits<quint32>::max() || !diagnostic.isString() ||
-      diagnostic.toString().isEmpty() || diagnostic.toString().toUtf8().size() > kMaximumDiagnosticUtf8Bytes) {
+      errorCode.toInteger() > std::numeric_limits<quint32>::max()) {
+    return failure<AuthResultMessage>(
+        SessionMessageError::InvalidAuthResult, QStringLiteral("rejected AUTH_RESULT contains an invalid error")
+    );
+  }
+  const auto typedErrorCode = static_cast<AuthResultErrorCode>(static_cast<quint32>(errorCode.toInteger()));
+  if (!isKnownAuthResultErrorCode(typedErrorCode) || !diagnostic.isString() || diagnostic.toString().isEmpty() ||
+      diagnostic.toString().toUtf8().size() > kMaximumDiagnosticUtf8Bytes) {
     return failure<AuthResultMessage>(
         SessionMessageError::InvalidAuthResult, QStringLiteral("rejected AUTH_RESULT contains an invalid error")
     );
@@ -341,7 +347,7 @@ AuthResultDecodeResult SessionMessageCodec::decodeAuthResult(MessageType type, Q
       .message =
           AuthResultMessage{
               .accepted = false,
-              .errorCode = static_cast<quint32>(errorCode.toInteger()),
+              .errorCode = typedErrorCode,
               .diagnostic = diagnostic.toString(),
           }
   };

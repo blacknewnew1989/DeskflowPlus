@@ -87,6 +87,40 @@ enum class FileResultCode : quint32
   Cancelled = 9,
 };
 
+/** Stable RDFT ERROR codes. Values not listed here are invalid in protocol v1. */
+enum class ProtocolErrorCode : quint64
+{
+  None = 0,
+  UnsupportedVersion = 1001,
+  InvalidFrame = 1002,
+  UnsupportedMessage = 1003,
+  InvalidState = 1004,
+  TemporarilyUnavailable = 1005,
+  InternalError = 1006,
+};
+
+[[nodiscard]] constexpr bool isKnownProtocolErrorCode(ProtocolErrorCode code) noexcept
+{
+  switch (code) {
+  case ProtocolErrorCode::UnsupportedVersion:
+  case ProtocolErrorCode::InvalidFrame:
+  case ProtocolErrorCode::UnsupportedMessage:
+  case ProtocolErrorCode::InvalidState:
+  case ProtocolErrorCode::TemporarilyUnavailable:
+  case ProtocolErrorCode::InternalError:
+    return true;
+  case ProtocolErrorCode::None:
+    return false;
+  }
+  return false;
+}
+
+/** Retryability is a property of the frozen code catalog, not caller input. */
+[[nodiscard]] constexpr bool protocolErrorIsRetryable(ProtocolErrorCode code) noexcept
+{
+  return code == ProtocolErrorCode::TemporarilyUnavailable;
+}
+
 struct TransferOffer
 {
   TransferId transferId;
@@ -124,9 +158,8 @@ struct TransferReject
 
 struct ErrorMessage
 {
-  quint64 code = 0;
+  ProtocolErrorCode code = ProtocolErrorCode::None;
   QString diagnostic;
-  bool retryable = false;
   std::optional<TransferId> transferId;
   std::optional<FileId> fileId;
 
@@ -176,3 +209,4 @@ struct Frame
 Q_DECLARE_METATYPE(relaydesk::transfer::ConflictPolicy)
 Q_DECLARE_METATYPE(relaydesk::transfer::RejectReason)
 Q_DECLARE_METATYPE(relaydesk::transfer::TransferCancelReason)
+Q_DECLARE_METATYPE(relaydesk::transfer::ProtocolErrorCode)

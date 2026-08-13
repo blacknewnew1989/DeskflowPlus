@@ -161,8 +161,11 @@ exact-field 检查拒绝未知字段。
 
 - `Hello` 是精确六字段 map；device/session UUID 不能为 null，fingerprint 必须为
   32 bytes，app version 最多 64 UTF-8 bytes，supported versions 为 1..16 个有效值。
-- Accepted `AuthResult` 只能包含 `{1: true}`；rejected 形态必须包含 false、非零
-  error code 和 1..512 UTF-8-byte diagnostic。
+- Accepted `AuthResult` 只能包含 `{1: true}`；rejected 形态必须包含 false、1..512
+  UTF-8-byte diagnostic 和已冻结 `AuthResultErrorCode`：`InvalidHello=1`、
+  `UnsupportedVersion=2`、`UnknownPeer=3`、`RevokedPeer=4`、
+  `FingerprintMismatch=5`、`InternalError=6`。`None=0` 只用于 accepted typed value，
+  不得出现在 rejected wire；其他值在 v1 返回 `InvalidAuthResult`。
 - `Heartbeat` 与 `HeartbeatAck` 共用精确 map `{1: sequence, 2: timestampMs}`：sequence
   为 `0..2^63-1`，timestamp 为 `1..2^63-1`。
 - `Capabilities` 是精确七字段 map。feature/policy list 要非空、无重复并满足 codec 的
@@ -172,6 +175,11 @@ exact-field 检查拒绝未知字段。
   `ConflictPolicy`、`RejectReason`。`RejectReason` 的 wire 值为 `UserDeclined=1`、
   `NotTrusted=2`、`PolicyDenied=3`、`InsufficientSpace=4`、`TooManyFiles=5`、
   `PathInvalid=6`、`UnsupportedCapability=7`、`Busy=8`、`InternalError=9`。
+- `ErrorMessage` 使用 `ProtocolErrorCode`：`UnsupportedVersion=1001`、
+  `InvalidFrame=1002`、`UnsupportedMessage=1003`、`InvalidState=1004`、
+  `TemporarilyUnavailable=1005`、`InternalError=1006`。只有
+  `TemporarilyUnavailable` 的 metadata retryable 为 true；该 boolean 由 catalog 派生，
+  wire 值与 catalog 不一致或未知 code 都返回 `InvalidFieldValue`。`None=0` 不上 wire。
 - Manifest entry 类型只有 `File=0` 与 `Directory=1`。协议路径必须已是安全、相对、
   `/` 分隔、NFC 的共享格式；默认最多 4,096 UTF-8 bytes、单 component 255 bytes、
   depth 128。目录必须 size 0 且没有 SHA-256；文件 SHA-256 只能缺省或为 32 bytes。
@@ -209,9 +217,10 @@ family：
   key 分配语义，也不允许平台 adapter 自行解释它。
 
 此行为由 `ControlMessageCodecTests::ignoresUnknownIntegerKey()` 覆盖。当前 60 个共享
-JSON vectors 没有冻结 unknown Control integer extension key；四个 Control
-`metadata-negative` vector 只覆盖缺 required fields 并期望 `MissingField`。因此这是
-当前共享 codec contract，不应误报为现有 vector contract。
+JSON vectors 没有冻结 unknown Control integer extension key；三个 transfer Control
+`metadata-negative` vector 覆盖缺 required fields 并期望 `MissingField`，`Error` 的
+negative vector 覆盖未知 catalog code 并期望 `InvalidFieldValue`。因此 integer-key
+extension 是当前共享 codec contract，但 unknown error code 明确不是 extension。
 
 CDDL 中写作 `uint` 不代表 codec 接受 Qt CBOR signed integer range 以外的值；具体边界
 以对应 codec 为准。
