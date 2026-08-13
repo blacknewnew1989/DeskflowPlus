@@ -21,9 +21,9 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last product implementation commit: `e6f5fe519b726b0bbd97051e076c87b32c0bbf07`
+- Last product implementation commit: `8f5a992f85ab8a3b1eb208e4d3ea260b8352e7fd`
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
-- Current implementation: PROTO-FREEZE-001 is frozen and dual-platform verified. Windows/macOS `IPlatformFileSafety` adapters and the incoming transfer worker/decision core are integrated without changing the frozen interface; final receiver-to-platform atomic commit and product composition remain in progress.
+- Current implementation: PROTO-FREEZE-001 is frozen and dual-platform verified. COMP-004 production runtime now routes negotiated incoming offers through a bounded worker, frozen typed decisions, SHA-256 verification and the real Windows/macOS platform atomic-commit adapters; `file.receive.v1` and discovery endpoint are published only while the complete receiver path is ready.
 - Last verified stage tag: `relaydesk-phase2-20260813-04` (`d14a92335cc326f00c3bd12869585d48201d1bc0`)
 
 ## 自动执行状态
@@ -45,6 +45,7 @@
 | Final macOS bundle seal/lifecycle | PASS | TEST-005 run `31657596578`; symlink-preserving App ZIP, strict ad-hoc codesign, DMG verify/mount, isolated install/upgrade/uninstall and user-data preservation PASS |
 | Protocol/interface freeze | PASS | tag `relaydesk-protocol-v1-20260813-01`, run `31672497950`; Windows 84/84, macOS 85/85; artifact IDs `9170492840` / `9170386546` |
 | Cross-platform file safety adapters | PASS | integration `e6f5fe519`; run `31678206041`: Windows 87/87, macOS 88/88, strict App seal and installer/lifecycle jobs PASS |
+| Incoming file runtime composition | PASS | `8f5a992f8`; run `31682728899`: Windows 87/87, macOS 88/88, strict App seal and macOS lifecycle PASS; artifacts `9174449354` / `9174307269` |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -55,7 +56,7 @@
 | 0 仓库/基线 | PASS | A0/A1/A4/A5/A7 | tag `relaydesk-phase0-20260812-01`, run `31602699800` |
 | 1 产品基础 | PASS | A2/A3/A0 | tag `relaydesk-phase1-20260813-04`; run `31623677270`; local Release asset SHA verification PASS |
 | 2 文件传输 | PASS | A2/A6/A0 | tag `relaydesk-phase2-20260813-04`; run `31655013105`; Win 74/74, Mac 75/75; four assets triple-digest verified |
-| 3 可靠性/UI | IN_PROGRESS | A3/A6/A7 | incoming decisions/worker integrated; final file-safety commit and product composition active |
+| 3 可靠性/UI | IN_PROGRESS | A3/A6/A7 | production incoming single-file runtime composed; folder/resume/history/product MainWindow bridge remain |
 | 4 平台/发布 | IN_PROGRESS | A4/A5/A7 | Win/mac file-safety adapters and unsigned packages pass canonical Actions; final productized RC remains |
 | 5 增强 | NOT_STARTED | A3/A4/A5 | 按价值推进 |
 

@@ -435,6 +435,7 @@ private:
       snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
       session->pipelineSnapshot = snapshot;
       Q_EMIT runtime.transferChanged(snapshot);
+      Q_EMIT runtime.pipelineFailed(id, code, std::move(diagnostic));
     });
   }
 
@@ -681,6 +682,27 @@ void IncomingTransferRuntime::peerDisconnected(const DeviceId &peerDeviceId)
     session->pipelineSnapshot.canCancel = true;
     Q_EMIT transferChanged(session->pipelineSnapshot);
   }
+}
+
+bool IncomingTransferRuntime::contains(
+    const ::relaydesk::transfer::TransferId &transferId
+) const
+{
+  return m_sessions.contains(transferId);
+}
+
+QList<::relaydesk::transfer::TransferSnapshot> IncomingTransferRuntime::activeTransfers() const
+{
+  QList<::relaydesk::transfer::TransferSnapshot> result;
+  for (const auto *session : m_sessions) {
+    if (session != nullptr && session->pipeline != nullptr &&
+        !::relaydesk::transfer::TransferControlStateMachine::isTerminal(
+            session->pipelineSnapshot.state
+        )) {
+      result.append(session->pipelineSnapshot);
+    }
+  }
+  return result;
 }
 
 void IncomingTransferRuntime::finishAcceptPreflight(

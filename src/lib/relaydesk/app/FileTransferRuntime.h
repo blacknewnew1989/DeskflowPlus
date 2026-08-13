@@ -25,6 +25,8 @@ class QThreadPool;
 namespace deskflow::relaydesk {
 
 class DeviceDiscoveryRuntime;
+class IncomingTransferRuntime;
+class IPlatformFileSafety;
 class TrustedDeviceStore;
 
 struct FileTransferRuntimeOptions
@@ -172,6 +174,8 @@ private:
   QHash<DeviceId, FileTlsClient *> m_clients;
   QHash<::relaydesk::transfer::TransferId, OutgoingSession *> m_outgoing;
   std::unique_ptr<QThreadPool> m_workerPool;
+  std::unique_ptr<IPlatformFileSafety> m_fileSafety;
+  std::unique_ptr<IncomingTransferRuntime> m_incoming;
 };
 
 } // namespace deskflow::relaydesk
