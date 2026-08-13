@@ -789,6 +789,7 @@ void FileTransferRuntime::sendOffer(OutgoingSession &session)
   QString diagnostic;
   Frame frame{
       .type = MessageType::TransferOffer,
+      .flags = ::relaydesk::transfer::AckRequired,
       .metadata = ControlMessageCodec::encode(
           ::relaydesk::transfer::kProtocolMajorVersion, ControlMessage{offer}, &diagnostic
       ),
@@ -888,6 +889,7 @@ void FileTransferRuntime::sendNextManifestPage(const ::relaydesk::transfer::Tran
 
   Frame complete{
       .type = MessageType::ManifestComplete,
+      .flags = ::relaydesk::transfer::Final,
       .metadata = ManifestPageCodec::encodeComplete(
           ManifestComplete{.transferId = session->id,
                            .canonicalSha256 = session->manifest->summary.canonicalSha256},

@@ -119,7 +119,7 @@ SenderFrameResult TransferSender::Impl::encodeFrame(MessageType type, const QByt
       Frame{
           .version = kProtocolMajorVersion,
           .type = type,
-          .flags = 0,
+          .flags = type == MessageType::FileEnd ? Final : 0,
           .streamId = request.streamId,
           .metadata = metadata,
           .payload = std::move(payload),

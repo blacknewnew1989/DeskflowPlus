@@ -28,6 +28,12 @@ enum class FrameDecodeError
   UnexpectedPayload,
   FrameTooLarge,
   LengthOverflow,
+  ReservedMessageType,
+  InvalidFlags,
+  InvalidStreamId,
+  MissingMetadata,
+  UnexpectedMetadata,
+  MissingPayload,
 };
 
 struct FrameDecodeResult
