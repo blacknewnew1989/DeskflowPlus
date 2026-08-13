@@ -21,10 +21,10 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last product implementation commit: `4903df2d1c0ea8c37a28db2e0e9f743daa566e90`
+- Last product implementation commit: `05f92a1ab721f7fd8b893e47e05643d5988e1719`
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
-- Current implementation: the v1 internal-release code path is composed: MainWindow owns transfer UI/service/history, incoming single/multi-file/folders, four conflict policies and interrupted resume use bounded workers and platform atomic commits, reconnect dials the selected authenticated TLS candidate, and Windows/macOS permission adapters feed the shared model.
-- Last verified stage tag: `relaydesk-phase4-20260813-02` (`4903df2d1c0ea8c37a28db2e0e9f743daa566e90`)
+- Current implementation: the v1 internal-release code path is composed: MainWindow owns transfer UI/service/history, incoming single/multi-file/folders, four conflict policies and interrupted resume use bounded workers and platform atomic commits, reconnect dials the selected authenticated TLS candidate, Windows/macOS permission adapters feed the shared model, and trusted input peers are synchronized idempotently into the Deskflow screen layout after pairing or rediscovery.
+- Last verified stage tag: `relaydesk-phase4-20260813-03` (`05f92a1ab721f7fd8b893e47e05643d5988e1719`)
 
 ## 自动执行状态
 
@@ -48,7 +48,8 @@
 | Incoming file runtime composition | PASS | `8f5a992f8`; run `31682728899`: Windows 87/87, macOS 88/88, strict App seal and macOS lifecycle PASS; artifacts `9174449354` / `9174307269` |
 | Multi-file/folder/resume production path | PASS | `e742ba4a4`, `7d9bfcbf6`, `5941ebd85`; real two-file/folder and 20 MiB interruption/resume TLS loopbacks PASS |
 | Product GUI/reconnect/permission composition | PASS | `479a0f78f`, `b251933dd`, `cc923dacc`, `0341c9b86`, `f79cc64dd`; targeted composition/reconnect/firewall tests PASS |
-| Phase 4 exact-tag release | PASS | tag `relaydesk-phase4-20260813-02`; run `31688962563`; Windows 88/88, macOS 89/89, Windows installer and macOS lifecycle PASS; unsigned draft Release published |
+| Pairing input-layout composition | PASS | `05f92a1ab`; trusted input peer add/persist/idempotency/rejection tests PASS on Windows and macOS |
+| Phase 4 exact-tag release | PASS | tag `relaydesk-phase4-20260813-03`; run `31706167585`; Windows 89/89, macOS 90/90, Windows installer and macOS lifecycle PASS; unsigned draft Release published |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -60,33 +61,33 @@
 | 1 产品基础 | PASS | A2/A3/A0 | tag `relaydesk-phase1-20260813-04`; run `31623677270`; local Release asset SHA verification PASS |
 | 2 文件传输 | PASS | A2/A6/A0 | tag `relaydesk-phase2-20260813-04`; run `31655013105`; Win 74/74, Mac 75/75; four assets triple-digest verified |
 | 3 可靠性/UI | PASS | A3/A6/A7 | tag `relaydesk-phase3-20260813-01`; run `31691378517` SUCCESS; Win 88/88, Mac 89/89; physical Win↔Mac remains final acceptance |
-| 4 平台/发布 | PASS | A4/A5/A7 | tag `relaydesk-phase4-20260813-02`; run `31688962563`; exact-tag unsigned MSI/7Z/App ZIP/DMG downloaded and SHA-256 verified |
+| 4 平台/发布 | PASS | A4/A5/A7 | tag `relaydesk-phase4-20260813-03`; run `31706167585`; layout fix + exact-tag unsigned MSI/7Z/App ZIP/DMG downloaded and SHA-256 verified |
 | 5 增强 | NOT_STARTED | A3/A4/A5 | 按价值推进 |
 
 ## 最终 artifact
 
 ### Windows（Phase 4 最终内部候选）
 
-- Commit: `4903df2d1c0ea8c37a28db2e0e9f743daa566e90`
-- Tag / workflow run: `relaydesk-phase4-20260813-02` / `31688962563`
-- Artifact: `relaydesk-windows-x64-4903df2d1c0ea8c37a28db2e0e9f743daa566e90` (ID `9177022266`)
-- Artifact ZIP SHA-256: `e3e6387cdf054aa1a1fb596e38bb7ce00dc971e1047c35cb29da5da073d6af54`
-- MSI SHA-256: `35c7ebcc5538b553e866b1f8e38bda2d0951248defddaef557a03da732845d1c`
-- Portable SHA-256: `c4bf6ba0ca094233dff4246be3b6cbce8fa8cae4908e87057cc3556c4f12bfd2`
-- Build result: PASS (CTest 88/88; unsigned MSI + portable 7Z + source packages)
+- Commit: `05f92a1ab721f7fd8b893e47e05643d5988e1719`
+- Tag / workflow run: `relaydesk-phase4-20260813-03` / `31706167585`
+- Artifact: `relaydesk-windows-x64-05f92a1ab721f7fd8b893e47e05643d5988e1719` (ID `9183676968`)
+- Artifact ZIP SHA-256: `d0cd7ab0aee49473d62cd0673a2f0b9e80c6b04a6906fc43c375b2f748161e2c`
+- MSI SHA-256: `28340705a8c31d663cd5f10ea605679210c5fec393048c5a2070ae92335d2f07`
+- Portable SHA-256: `51e88f915007d51f7efcbe0a9e8496720edebb2b1ac98371584070eedf22655d`
+- Build result: PASS (CTest 89/89; unsigned MSI + portable 7Z + source packages)
 - Installer result: PASS (clean install, repair, real MSI major upgrade, two uninstalls, service,
   firewall, residue and user-data preservation)
 - Physical Win↔Mac runtime result: NOT_RUN; final user acceptance required
 
 ### macOS（Phase 4 最终内部候选）
 
-- Commit: `4903df2d1c0ea8c37a28db2e0e9f743daa566e90`
-- Tag / workflow run: `relaydesk-phase4-20260813-02` / `31688962563`
-- Artifact: `relaydesk-macos-arm64-4903df2d1c0ea8c37a28db2e0e9f743daa566e90` (ID `9176744262`)
-- Artifact ZIP SHA-256: `bbba52bd0f2785848cc3971d5f3abcb073c7b09f67f4e56287b4621d108efdda`
-- App ZIP SHA-256: `9ac817a661081b519a5009579bca502611f6d9c0da0758799a5a753c9ed77097`
-- DMG SHA-256: `7d4af9b3a4935a49d791fc2837992e50703bed9879fe21c0ce10d1659bab1d27`
-- Build result: PASS (CTest 89/89; ad-hoc App ZIP + DMG + source packages)
+- Commit: `05f92a1ab721f7fd8b893e47e05643d5988e1719`
+- Tag / workflow run: `relaydesk-phase4-20260813-03` / `31706167585`
+- Artifact: `relaydesk-macos-arm64-05f92a1ab721f7fd8b893e47e05643d5988e1719` (ID `9183524798`)
+- Artifact ZIP SHA-256: `4e03738e2186ff214081546875594c9c463615401dd5e81130683ba2f371013f`
+- App ZIP SHA-256: `ad1a56cd74b32a7ebb499b73376a019745fe3a8e42ce69f1e73bc0696430b8af`
+- DMG SHA-256: `0377d49f7bbb9284f666f2033219b5f39c73d7a496238257881ef299a35e2b29`
+- Build result: PASS (CTest 90/90; ad-hoc App ZIP + DMG + source packages)
 - Lifecycle result: PASS (strict ad-hoc codesign, ZIP symlinks, DMG verify/mount, isolated launch,
   replace, App-only uninstall and user-data preservation)
 - Physical Win↔Mac runtime and OS permission result: NOT_RUN; final user acceptance required

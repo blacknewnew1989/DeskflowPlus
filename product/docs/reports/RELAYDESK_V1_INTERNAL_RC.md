@@ -9,15 +9,17 @@ atomic commit and interrupted resume.
 
 ## Final release identity
 
-- Product commit: `4903df2d1c0ea8c37a28db2e0e9f743daa566e90`.
-- Annotated tag: `relaydesk-phase4-20260813-02` (tag object
-  `bf6de5412e587039469d7baa0416ef6a2a2cc8a0`).
-- GitHub Actions run: `31688962563` (`SUCCESS`).
-- Draft unsigned release: `RelayDesk internal relaydesk-phase4-20260813-02`.
+- Product commit: `05f92a1ab721f7fd8b893e47e05643d5988e1719`.
+- Annotated tag: `relaydesk-phase4-20260813-03` (tag object
+  `7254073dc61b1053f67dbea7e55c3e249a80e782`).
+- GitHub Actions run: `31706167585` (`SUCCESS`).
+- Draft unsigned release: `RelayDesk internal relaydesk-phase4-20260813-03`.
 
-The earlier `relaydesk-phase4-20260813-01` tag is retained as an immutable failed-attempt record. Its
-Windows build exposed a file-scope initialization error that was fixed by commit `4903df2d1`; it is
-not a release candidate and was not moved.
+The earlier tags remain immutable. `relaydesk-phase4-20260813-01` records a Windows compile failure
+fixed by `4903df2d1`; `relaydesk-phase4-20260813-02` is the first complete internal candidate. The
+current `-03` candidate additionally fixes the missing pairing-to-Deskflow-layout composition bridge:
+trusted input-capable peers are inserted idempotently into `ServerConfig` after pairing or trusted
+rediscovery, while external configurations, invalid names and full layouts remain untouched.
 
 ## Automated evidence PASS
 
@@ -29,12 +31,14 @@ not a release candidate and was not moved.
 - Production file runtime: real pinned TLS loopbacks cover single file, two files plus nested empty
   folder, four conflict policies, Windows/macOS platform-safe atomic commit and a 20 MiB transfer
   interrupted at a 1 MiB durable checkpoint then resumed after listener restart.
-- Exact-tag Windows job `94411592107`: build/package PASS, CTest 88/88, and the real unsigned MSI
+- Exact-tag Windows job `94467163015`: build/package PASS, CTest 89/89, and the real unsigned MSI
   clean-install/repair/major-upgrade/uninstall/service/firewall/residue/data-preservation suite PASS.
-- Exact-tag macOS job `94411592029`: build/package PASS, CTest 89/89, strict ad-hoc App verification
-  PASS. Install lifecycle job `94415359394` verifies ZIP symlinks, DMG, isolated launch, replacement,
+- Exact-tag macOS job `94467163121`: build/package PASS, CTest 90/90, strict ad-hoc App verification
+  PASS. Install lifecycle job `94470799096` verifies ZIP symlinks, DMG, isolated launch, replacement,
   App-only uninstall and user-data preservation.
-- Draft release publication job `94415359536`: PASS.
+- `RelayDeskInputLayoutTests` covers first insertion and persistence, repeated-observation idempotency,
+  trust/input eligibility, invalid names and external-configuration preservation on both platforms.
+- Draft release publication job `94470799137`: PASS.
 
 ## Final packages
 
@@ -43,19 +47,19 @@ hashes match both the GitHub release-asset digests and `SHA256SUMS.txt`.
 
 | Platform | Package | Bytes | SHA-256 |
 |---|---|---:|---|
-| Windows x64 | `relaydesk-4903df2d1c0ea8c37a28db2e0e9f743daa566e90-win-x64-unsigned.msi` | 16,239,673 | `35c7ebcc5538b553e866b1f8e38bda2d0951248defddaef557a03da732845d1c` |
-| Windows x64 | `relaydesk-4903df2d1c0ea8c37a28db2e0e9f743daa566e90-win-x64-unsigned-portable.7z` | 13,241,161 | `c4bf6ba0ca094233dff4246be3b6cbce8fa8cae4908e87057cc3556c4f12bfd2` |
-| macOS arm64 | `RelayDesk-macos-arm64-adhoc-4903df2d.app.zip` | 28,818,619 | `9ac817a661081b519a5009579bca502611f6d9c0da0758799a5a753c9ed77097` |
-| macOS arm64 | `relaydesk-4903df2d1c0ea8c37a28db2e0e9f743daa566e90-macos-arm64-adhoc.dmg` | 29,063,661 | `7d4af9b3a4935a49d791fc2837992e50703bed9879fe21c0ce10d1659bab1d27` |
+| Windows x64 | `relaydesk-05f92a1ab721f7fd8b893e47e05643d5988e1719-win-x64-unsigned.msi` | 16,243,769 | `28340705a8c31d663cd5f10ea605679210c5fec393048c5a2070ae92335d2f07` |
+| Windows x64 | `relaydesk-05f92a1ab721f7fd8b893e47e05643d5988e1719-win-x64-unsigned-portable.7z` | 13,244,230 | `51e88f915007d51f7efcbe0a9e8496720edebb2b1ac98371584070eedf22655d` |
+| macOS arm64 | `RelayDesk-macos-arm64-adhoc-05f92a1a.app.zip` | 28,821,846 | `ad1a56cd74b32a7ebb499b73376a019745fe3a8e42ce69f1e73bc0696430b8af` |
+| macOS arm64 | `relaydesk-05f92a1ab721f7fd8b893e47e05643d5988e1719-macos-arm64-adhoc.dmg` | 29,068,808 | `0377d49f7bbb9284f666f2033219b5f39c73d7a496238257881ef299a35e2b29` |
 
 Actions artifact evidence:
 
-- Windows artifact `9177022266`, API ZIP digest
-  `e3e6387cdf054aa1a1fb596e38bb7ce00dc971e1047c35cb29da5da073d6af54`.
-- macOS artifact `9176744262`, API ZIP digest
-  `bbba52bd0f2785848cc3971d5f3abcb073c7b09f67f4e56287b4621d108efdda`.
-- macOS lifecycle artifact `9177032890`, API ZIP digest
-  `e5110d6d38e4ccc24f3fecbdabb979fddfb30c0714ecc31b59900ab3c5df077f`.
+- Windows artifact `9183676968`, API ZIP digest
+  `d0cd7ab0aee49473d62cd0673a2f0b9e80c6b04a6906fc43c375b2f748161e2c`.
+- macOS artifact `9183524798`, API ZIP digest
+  `4e03738e2186ff214081546875594c9c463615401dd5e81130683ba2f371013f`.
+- macOS lifecycle artifact `9183692586`, API ZIP digest
+  `afc76c0ab786e7be7606e4b2f3f0622085f75f036c803273c09db6412c8630b8`.
 
 ## Internal installation
 

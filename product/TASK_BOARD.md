@@ -27,8 +27,9 @@ No active implementation tasks.
 | COMP-006 | MainWindow transfer service/UI/history composition | A3/A0 | `f04293dad`, `14e6f2453`, `479a0f78f`; typed lifecycle and asynchronous history/free-space bridge tests PASS |
 | COMP-007 | conflict four-policy production composition | A6/A0 | `153d38df6`, `2717f77d6`; AutoRename/Overwrite/Skip/Ask real TLS paths and 7/7 suites PASS |
 | COMP-008 | authenticated reconnect and Windows permission product wiring | A3/A2/A4/A0 | `b251933dd` through `f79cc64dd`; selected-candidate TLS, async failure completion and firewall probe tests PASS |
+| MAC-036 | 配对设备自动同步到 Deskflow 键鼠屏幕布局 | A5/A0 | `05f92a1ab`; run `31706167585` SUCCESS; Windows 89/89, macOS 90/90; add/persist/idempotency/rejection tests PASS |
 | PHASE3-CI | Reliability/UI stage tag and dual-platform verification | A0/A7 | tag `relaydesk-phase3-20260813-01`; run `31691378517` SUCCESS; Win 88/88, Mac 89/89; macOS lifecycle and draft publication PASS |
-| REL-001/002 | Phase 4 release candidate, installation instructions and acceptance checklist | A0/A7 | tag `relaydesk-phase4-20260813-02`; run `31688962563` SUCCESS; Win 88/88, Mac 89/89; installer/lifecycle PASS; four final packages locally SHA-256 verified |
+| REL-001/002 | Phase 4 release candidate, installation instructions and acceptance checklist | A0/A7 | tag `relaydesk-phase4-20260813-03`; run `31706167585` SUCCESS; Win 89/89, Mac 90/90; installer/lifecycle PASS; four final packages locally SHA-256 verified |
 | AUTO-001 | 识别当前 GitHub 仓库、origin、登录状态 | A0/A1 | GitHub admin/push 权限确认 |
 | AUTO-002 | 添加 upstream、fetch v1.26.0、验证 760e3b9 | A0/A1 | `760e3b99` |
 | AUTO-003 | 创建/恢复产品分支并安装资料/workflow | A0/A1 | bootstrap worktree and commit |
