@@ -8,6 +8,8 @@
 #include <QCborValue>
 #include <QTest>
 
+#include <limits>
+
 using namespace relaydesk::transfer;
 
 namespace {
@@ -40,12 +42,14 @@ class SessionMessageCodecTests final : public QObject
 private Q_SLOTS:
   void helloRoundTrip();
   void authResultRoundTrip();
+  void heartbeatAndAckMatchFrozenVectors();
   void deterministicEncoding();
   void rejectsWrongMessageTypes();
   void rejectsMalformedAndTrailingCbor();
   void rejectsHelloFieldShapeAndLengths();
   void rejectsInvalidVersions();
   void rejectsUnsafeAuthCombinations();
+  void rejectsInvalidHeartbeatMetadata();
 };
 
 void SessionMessageCodecTests::helloRoundTrip()
@@ -65,6 +69,21 @@ void SessionMessageCodecTests::authResultRoundTrip()
   for (const auto &expected : messages) {
     const auto decoded =
         SessionMessageCodec::decodeAuthResult(MessageType::AuthResult, SessionMessageCodec::encodeAuthResult(expected));
+    QVERIFY2(decoded.ok(), qPrintable(decoded.diagnostic));
+    QCOMPARE(*decoded.message, expected);
+  }
+}
+
+void SessionMessageCodecTests::heartbeatAndAckMatchFrozenVectors()
+{
+  const HeartbeatMessage expected{.sequence = 7, .timestampMs = 1'730'000'000'000ULL};
+  for (const auto type : {MessageType::Heartbeat, MessageType::HeartbeatAck}) {
+    QString error;
+    const QByteArray encoded = SessionMessageCodec::encodeHeartbeat(type, expected, &error);
+    QVERIFY2(!encoded.isEmpty(), qPrintable(error));
+    QCOMPARE(encoded.toHex(), QByteArrayLiteral("a20107021b00000192cc091400"));
+
+    const auto decoded = SessionMessageCodec::decodeHeartbeat(kProtocolMajorVersion, type, encoded);
     QVERIFY2(decoded.ok(), qPrintable(decoded.diagnostic));
     QCOMPARE(*decoded.message, expected);
   }
@@ -178,6 +197,56 @@ void SessionMessageCodecTests::rejectsUnsafeAuthCombinations()
       SessionMessageCodec::decodeAuthResult(MessageType::AuthResult, rejectedWithoutDiagnostic).error,
       SessionMessageError::InvalidAuthResult
   );
+}
+
+void SessionMessageCodecTests::rejectsInvalidHeartbeatMetadata()
+{
+  const HeartbeatMessage valid{.sequence = 7, .timestampMs = 1'730'000'000'000ULL};
+  const QByteArray encoded = SessionMessageCodec::encodeHeartbeat(MessageType::Heartbeat, valid);
+  QCOMPARE(
+      SessionMessageCodec::decodeHeartbeat(2, MessageType::Heartbeat, encoded).error,
+      SessionMessageError::UnsupportedVersion
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeHeartbeat(kProtocolMajorVersion, MessageType::Capabilities, encoded).error,
+      SessionMessageError::UnsupportedMessageType
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeHeartbeat(kProtocolMajorVersion, MessageType::Heartbeat, {}).error,
+      SessionMessageError::TooLarge
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeHeartbeat(kProtocolMajorVersion, MessageType::Heartbeat, encoded + '\0').error,
+      SessionMessageError::MalformedCbor
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeHeartbeat(
+          kProtocolMajorVersion, MessageType::Heartbeat,
+          mutate(encoded, [](QCborMap &map) { map.insert(9, true); })
+      ).error,
+      SessionMessageError::InvalidFields
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeHeartbeat(
+          kProtocolMajorVersion, MessageType::Heartbeat,
+          mutate(encoded, [](QCborMap &map) { map.insert(1, -1); })
+      ).error,
+      SessionMessageError::InvalidSequence
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeHeartbeat(
+          kProtocolMajorVersion, MessageType::Heartbeat,
+          mutate(encoded, [](QCborMap &map) { map.insert(2, 0); })
+      ).error,
+      SessionMessageError::InvalidTimestamp
+  );
+
+  QString error;
+  QVERIFY(SessionMessageCodec::encodeHeartbeat(MessageType::Hello, valid, &error).isEmpty());
+  QVERIFY(!error.isEmpty());
+  auto overflow = valid;
+  overflow.sequence = static_cast<quint64>(std::numeric_limits<qint64>::max()) + 1;
+  QVERIFY(SessionMessageCodec::encodeHeartbeat(MessageType::Heartbeat, overflow, &error).isEmpty());
 }
 
 QTEST_MAIN(SessionMessageCodecTests)

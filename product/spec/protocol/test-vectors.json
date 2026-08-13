@@ -3,18 +3,42 @@
   "fixedHeaderBytes": 32,
   "vectors": [
     {
-      "name": "heartbeat-empty",
-      "headerHex": "5244465400010004000000000000000000000000000000000000000000000000",
-      "metadataHex": "",
+      "name": "heartbeat-sequence-7",
+      "headerHex": "5244465400010004000000010000000d00000000000000000000000000000000",
+      "metadataHex": "a20107021b00000192cc091400",
       "payloadHex": "",
       "expected": {
         "version": 1,
         "messageType": 4,
-        "flags": 0,
-        "metadataLength": 0,
+        "flags": 1,
+        "metadataLength": 13,
         "payloadLength": 0,
-        "streamId": 0
+        "streamId": 0,
+        "sequence": 7,
+        "timestampMs": 1730000000000
       }
+    },
+    {
+      "name": "heartbeat-ack-sequence-7",
+      "headerHex": "5244465400010005000000020000000d00000000000000000000000000000000",
+      "metadataHex": "a20107021b00000192cc091400",
+      "payloadHex": "",
+      "expected": {
+        "version": 1,
+        "messageType": 5,
+        "flags": 2,
+        "metadataLength": 13,
+        "payloadLength": 0,
+        "streamId": 0,
+        "sequence": 7,
+        "timestampMs": 1730000000000
+      }
+    },
+    {
+      "name": "heartbeat-zero-timestamp",
+      "metadataHex": "a201070200",
+      "messageType": 4,
+      "expectedCodecError": "InvalidTimestamp"
     },
     {
       "name": "file-chunk-three-bytes-no-metadata",

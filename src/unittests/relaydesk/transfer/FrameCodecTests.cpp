@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 #include "relaydesk/transfer/FrameCodec.h"
+#include "relaydesk/transfer/SessionMessageCodec.h"
 
 #include <QTest>
 #include <QtEndian>
@@ -34,12 +35,20 @@ void FrameCodecTests::matchesFrozenHeartbeatVector()
 {
   Frame frame;
   frame.type = MessageType::Heartbeat;
+  frame.flags = AckRequired;
+  frame.metadata = SessionMessageCodec::encodeHeartbeat(
+      MessageType::Heartbeat, HeartbeatMessage{.sequence = 7, .timestampMs = 1'730'000'000'000ULL}
+  );
 
   QString error;
   const QByteArray encoded = FrameCodec::encode(frame, {}, &error);
 
   QVERIFY2(!encoded.isEmpty(), qPrintable(error));
-  QCOMPARE(encoded.toHex(), QByteArrayLiteral("5244465400010004000000000000000000000000000000000000000000000000"));
+  QCOMPARE(
+      encoded.toHex(),
+      QByteArrayLiteral("5244465400010004000000010000000d00000000000000000000000000000000"
+                        "a20107021b00000192cc091400")
+  );
 }
 
 void FrameCodecTests::matchesFrozenFileChunkVector()

@@ -82,6 +82,21 @@ Exact offsets:
 
 Unknown values are protocol errors in v1 unless a future capability explicitly declares an extension range.
 
+### Session liveness
+
+`HEARTBEAT` and `HEARTBEAT_ACK` share the deterministic CBOR map
+`{1: sequence, 2: timestampMs}`. `sequence` is in `0..2^63-1` and
+`timestampMs` is UTC milliseconds in `1..2^63-1`. Both messages use
+`streamId=0`, empty payload, and no metadata fields other than keys 1 and 2.
+`HEARTBEAT` carries only `AckRequired`; `HEARTBEAT_ACK` carries only
+`Response` and echoes both values byte-for-byte.
+
+The sender starts at sequence 0 on each TLS connection and increments by one.
+The receiver idempotently re-acknowledges the current sequence. A lower stale
+sequence is ignored; a skipped sequence or an ACK whose fields do not match the
+outstanding heartbeat is a session protocol error. Heartbeat state never
+survives reconnect.
+
 ## IDs
 
 - UUID fields are 16-byte CBOR byte strings.
