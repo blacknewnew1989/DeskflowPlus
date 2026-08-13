@@ -128,7 +128,7 @@ private:
       FileTlsConnection &connection, FileTransferRuntimeError error, FileTlsError transportError,
       QString diagnostic
   );
-  [[nodiscard]] bool publishFileEndpoint(quint16 port, QString *diagnostic = nullptr);
+  [[nodiscard]] bool publishFileEndpoint(QString *diagnostic = nullptr);
   [[nodiscard]] bool sendPeerFrame(
       const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
       QString *diagnostic = nullptr

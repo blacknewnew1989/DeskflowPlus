@@ -304,7 +304,7 @@ bool FileTransferRuntime::start(QString *diagnostic)
 
   m_listener = std::move(listener);
   QString publishDiagnostic;
-  if (!publishFileEndpoint(m_listener->serverPort(), &publishDiagnostic)) {
+  if (!publishFileEndpoint(&publishDiagnostic)) {
     Q_EMIT errorOccurred(
         FileTransferRuntimeError::DiscoveryPublishFailed, FileTlsError::None, publishDiagnostic
     );
@@ -336,7 +336,7 @@ void FileTransferRuntime::stop()
   m_listener.reset();
 
   QString publishDiagnostic;
-  if (!publishFileEndpoint(0, &publishDiagnostic)) {
+  if (!publishFileEndpoint(&publishDiagnostic)) {
     Q_EMIT errorOccurred(
         FileTransferRuntimeError::DiscoveryPublishFailed, FileTlsError::None, publishDiagnostic
     );
@@ -1335,20 +1335,12 @@ void FileTransferRuntime::failConnection(
   connection.close();
 }
 
-bool FileTransferRuntime::publishFileEndpoint(quint16 port, QString *diagnostic)
+bool FileTransferRuntime::publishFileEndpoint(QString *diagnostic)
 {
-  const auto &features = m_options.localCapabilities.features;
-  return m_discoveryRuntime.setFileEndpoint(
-      port == 0
-          ? FileEndpointAnnouncement::disabled()
-          : FileEndpointAnnouncement{
-                .port = port,
-                .fileV1 = true,
-                .folderV1 = features.contains(QStringLiteral("folder.v1")),
-                .resumeV1 = features.contains(QStringLiteral("resume.v1")),
-            },
-      diagnostic
-  );
+  // A discovery file endpoint promises an executable incoming transfer path. The listener remains
+  // available for the independent file channel and outgoing loopback coverage, but the receiver
+  // handler is not composed yet, so none of its capabilities may be advertised.
+  return m_discoveryRuntime.setFileEndpoint(FileEndpointAnnouncement::disabled(), diagnostic);
 }
 
 } // namespace deskflow::relaydesk

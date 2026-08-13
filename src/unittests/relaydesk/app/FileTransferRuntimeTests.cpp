@@ -64,6 +64,7 @@ private Q_SLOTS:
   void routesPostCapabilityFramesAfterPinning();
   void outgoingSingleFileStreamsThroughWorkerPump();
   void runtimeSourceUsesCanonicalSenderBoundary();
+  void runtimeSourceDoesNotAdvertiseUnwiredReceiver();
   void invalidIdentityFailsWithoutPublishingAListener();
 };
 
@@ -92,8 +93,8 @@ void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
   QVERIFY(runtime.isRunning());
   const quint16 firstPort = runtime.listeningPort();
   QVERIFY(firstPort != 0);
-  QCOMPARE(discovery.service().localDevice().filePort, firstPort);
-  QVERIFY(discovery.service().localDevice().capabilities.fileV1);
+  QCOMPARE(discovery.service().localDevice().filePort, quint16{0});
+  QVERIFY(!discovery.service().localDevice().capabilities.fileV1);
   QVERIFY(!discovery.service().localDevice().capabilities.folderV1);
   QVERIFY(!discovery.service().localDevice().capabilities.resumeV1);
   QCOMPARE(started.count(), 1);
@@ -113,6 +114,11 @@ void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
 
   QVERIFY2(runtime.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY(runtime.isRunning());
+  QVERIFY(runtime.listeningPort() != 0);
+  QCOMPARE(discovery.service().localDevice().filePort, quint16{0});
+  QVERIFY(!discovery.service().localDevice().capabilities.fileV1);
+  QVERIFY(!discovery.service().localDevice().capabilities.folderV1);
+  QVERIFY(!discovery.service().localDevice().capabilities.resumeV1);
   QCOMPARE(started.count(), 2);
   QCOMPARE(errors.count(), 0);
 }
@@ -147,9 +153,10 @@ void FileTransferRuntimeTests::trustedPeersNegotiateIndependentFileChannel()
   QString diagnostic;
   QVERIFY2(first.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY2(second.start(&diagnostic), qPrintable(diagnostic));
-  QVERIFY(firstDiscovery.registry().observeAdvertisement(
-      secondDiscovery.service().localDevice(), QHostAddress::LocalHost
-  ));
+  auto directPeer = secondDiscovery.service().localDevice();
+  directPeer.filePort = second.listeningPort();
+  directPeer.capabilities.fileV1 = true;
+  QVERIFY(firstDiscovery.registry().observeAdvertisement(directPeer, QHostAddress::LocalHost));
 
   bool firstReady = false;
   bool secondReady = false;
@@ -466,6 +473,20 @@ void FileTransferRuntimeTests::runtimeSourceUsesCanonicalSenderBoundary()
   QVERIFY(!contents.contains("CapturingFrameSink"));
   QVERIFY(!contents.contains("writeHighWaterBytes() / 2"));
   QVERIFY(!contents.contains("singleShot(5"));
+#endif
+}
+
+void FileTransferRuntimeTests::runtimeSourceDoesNotAdvertiseUnwiredReceiver()
+{
+#if !defined(RELAYDESK_FILE_TRANSFER_RUNTIME_SOURCE_PATH)
+  QFAIL("runtime source path compile definition is missing");
+#else
+  QFile source(QString::fromUtf8(RELAYDESK_FILE_TRANSFER_RUNTIME_SOURCE_PATH));
+  QVERIFY2(source.open(QIODevice::ReadOnly), qPrintable(source.errorString()));
+  const QByteArray contents = source.readAll();
+  QVERIFY(contents.contains("setFileEndpoint(FileEndpointAnnouncement::disabled()"));
+  QVERIFY(!contents.contains("FileEndpointAnnouncement{"));
+  QVERIFY(!contents.contains("case MessageType::TransferOffer:"));
 #endif
 }
 
