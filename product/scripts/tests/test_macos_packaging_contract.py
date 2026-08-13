@@ -47,6 +47,17 @@ class MacosPackagingContractTests(unittest.TestCase):
         for forbidden in ("AC_PASSWORD", "APPLE_ID_PASSWORD", "--password", "-maxdepth"):
             self.assertNotIn(forbidden, script)
 
+    def test_package_script_reuses_a_prepared_toolchain(self) -> None:
+        script = (ROOT / "product/scripts/package-macos.sh").read_text(encoding="utf-8")
+
+        self.assertIn('ENV_FILE="$REPO_ROOT/.relaydesk-toolchain-macos.env"', script)
+        self.assertIn('if [[ ! -f "$ENV_FILE" ]]; then', script)
+        self.assertIn('"$SCRIPT_DIR/setup-macos.sh" --repo "$REPO_ROOT"', script)
+        self.assertLess(
+            script.index('if [[ ! -f "$ENV_FILE" ]]; then'),
+            script.index('"$SCRIPT_DIR/setup-macos.sh" --repo "$REPO_ROOT"'),
+        )
+
     def test_bundle_and_dmg_use_central_brand_and_signature_variant(self) -> None:
         deploy = (ROOT / "deploy/mac/deploy.cmake").read_text(encoding="utf-8")
         dmg_layout = (ROOT / "deploy/mac/generate_ds_store.applescript").read_text(

@@ -19,6 +19,7 @@ done
 REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$REPO_ROOT/.relaydesk-toolchain-macos.env"
 
 PACKAGE_VARIANT="adhoc"
 if [[ -n "$SIGNING_IDENTITY" ]]; then
@@ -49,7 +50,9 @@ if [[ "$PLAN_ONLY" == "true" ]]; then
   exit 0
 fi
 
-"$SCRIPT_DIR/setup-macos.sh" --repo "$REPO_ROOT"
+if [[ ! -f "$ENV_FILE" ]]; then
+  "$SCRIPT_DIR/setup-macos.sh" --repo "$REPO_ROOT"
+fi
 BUILD_ARGS=(
   --repo "$REPO_ROOT"
   --config "$CONFIG"
