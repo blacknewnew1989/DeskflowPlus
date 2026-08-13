@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: (C) 2026 RelayDesk Developers
 # SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
+find_package(Qt6 ${REQUIRED_QT_VERSION} REQUIRED COMPONENTS Concurrent)
+
 add_library(relaydesk_app STATIC
   DeviceDiscoveryRuntime.cpp
   DeviceDiscoveryRuntime.h
@@ -23,6 +25,7 @@ target_link_libraries(
     relaydesk_trust
     relaydesk_widgets
     Qt6::Core
+    Qt6::Concurrent
     Qt6::Network
     Qt6::Widgets
 )

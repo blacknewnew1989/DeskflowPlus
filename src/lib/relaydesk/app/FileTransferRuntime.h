@@ -9,6 +9,9 @@
 #include "relaydesk/device/DeviceId.h"
 #include "relaydesk/filetransport/FileTlsTransport.h"
 #include "relaydesk/transfer/CapabilityCodec.h"
+#include "relaydesk/transfer/IFileTransferService.h"
+#include "relaydesk/transfer/ManifestBuilder.h"
+#include "relaydesk/transfer/TransferSender.h"
 
 #include <QHash>
 #include <QHostAddress>
@@ -16,6 +19,8 @@
 
 #include <memory>
 #include <optional>
+
+class QThreadPool;
 
 namespace deskflow::relaydesk {
 
@@ -54,7 +59,7 @@ enum class FileTransferRuntimeError
 
 // Owns the independent RDFT listener and the application-level dependencies
 // that later transfer slices compose. No Deskflow input socket is shared.
-class FileTransferRuntime final : public QObject
+class FileTransferRuntime final : public IFileTransferService
 {
   Q_OBJECT
 
@@ -75,6 +80,21 @@ public:
   [[nodiscard]] bool isPeerReady(const DeviceId &peerDeviceId) const;
   [[nodiscard]] std::optional<::relaydesk::transfer::NegotiatedCapabilities>
   negotiatedCapabilities(const DeviceId &peerDeviceId) const;
+
+  [[nodiscard]] ::relaydesk::transfer::TransferId send(
+      const DeviceId &target, const QList<QUrl> &localItems,
+      const ::relaydesk::transfer::SendOptions &options
+  ) override;
+  void accept(
+      const ::relaydesk::transfer::TransferId &transferId,
+      const ::relaydesk::transfer::ReceiveOptions &options
+  ) override;
+  void reject(const ::relaydesk::transfer::TransferId &transferId, int reasonCode) override;
+  void pause(const ::relaydesk::transfer::TransferId &transferId) override;
+  void resume(const ::relaydesk::transfer::TransferId &transferId) override;
+  void cancel(const ::relaydesk::transfer::TransferId &transferId, bool keepPartial) override;
+  void retry(const ::relaydesk::transfer::TransferId &transferId) override;
+  [[nodiscard]] QList<::relaydesk::transfer::TransferSnapshot> activeTransfers() const override;
 
 Q_SIGNALS:
   void started(quint16 port);
@@ -99,17 +119,43 @@ private:
     std::optional<DeviceId> peer;
     std::optional<::relaydesk::transfer::NegotiatedCapabilities> negotiated;
   };
+  struct OutgoingSession;
 
   [[nodiscard]] bool onOwningThread(QString *diagnostic);
   void attachConnection(FileTlsConnection &connection, std::optional<DeviceId> expectedPeer = std::nullopt);
   void handleAuthenticated(FileTlsConnection &connection);
   void handleFrame(FileTlsConnection &connection, ::relaydesk::transfer::Frame frame);
+  void routeTransferFrame(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
   void removeConnection(FileTlsConnection &connection);
   void failConnection(
       FileTlsConnection &connection, FileTransferRuntimeError error, FileTlsError transportError,
       QString diagnostic
   );
   [[nodiscard]] bool publishFileEndpoint(quint16 port, QString *diagnostic = nullptr);
+  [[nodiscard]] bool sendPeerFrame(
+      const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
+      QString *diagnostic = nullptr
+  );
+  void prepareOutgoing(const ::relaydesk::transfer::TransferId &transferId);
+  void finishManifestPreparation(
+      const ::relaydesk::transfer::TransferId &transferId,
+      ::relaydesk::transfer::TransferManifestBuildResult result
+  );
+  void offerPreparedTransfers(const DeviceId &peerDeviceId);
+  void sendOffer(OutgoingSession &session);
+  void handleOfferResponse(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
+  void sendNextManifestPage(const ::relaydesk::transfer::TransferId &transferId);
+  void startNextOutgoingFile(OutgoingSession &session);
+  void scheduleSenderPump(const ::relaydesk::transfer::TransferId &transferId);
+  void dispatchSenderPumpResult(
+      const ::relaydesk::transfer::TransferId &transferId, const ::relaydesk::transfer::SenderPumpResult &result,
+      std::optional<::relaydesk::transfer::Frame> frame, quint64 bytesProduced
+  );
+  void handleFileResult(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
+  void updateOutgoingProgress(OutgoingSession &session);
+  void completeOutgoing(OutgoingSession &session);
+  void failOutgoing(OutgoingSession &session, int errorCode, QString errorMessageKey, QString diagnostic = {});
+  [[nodiscard]] OutgoingSession *outgoing(const ::relaydesk::transfer::TransferId &transferId) const;
 
   DeviceId m_localDeviceId;
   const TrustedDeviceStore &m_trustedDevices;
@@ -120,6 +166,8 @@ private:
   QHash<FileTlsConnection *, ConnectionContext> m_connections;
   QHash<DeviceId, FileTlsConnection *> m_peerConnections;
   QHash<DeviceId, FileTlsClient *> m_clients;
+  QHash<::relaydesk::transfer::TransferId, OutgoingSession *> m_outgoing;
+  std::unique_ptr<QThreadPool> m_workerPool;
 };
 
 } // namespace deskflow::relaydesk
