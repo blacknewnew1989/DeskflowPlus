@@ -131,6 +131,7 @@ jobs:
             echo "Expected exactly one deployed app bundle in $stage" >&2
             exit 1
           fi
+          /usr/bin/codesign --verify --deep --strict --verbose=4 "${apps[0]}"
           echo "RELAYDESK_EXPLICIT_APP=${apps[0]}" >> "$GITHUB_ENV"
 
       - name: Run tests and keep diagnostics

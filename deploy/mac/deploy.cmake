@@ -35,19 +35,6 @@ if (OSX_BUNDLE)
     set(RELAYDESK_MACDEPLOYQT_CODESIGN "-")
     set(RELAYDESK_MACDEPLOYQT_HARDENED "")
   endif()
-  install(CODE "
-    execute_process(
-      COMMAND \"${DEPLOYQT}\"
-              \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\"
-              \"-timestamp\"
-              \"-codesign=${RELAYDESK_MACDEPLOYQT_CODESIGN}\"
-              ${RELAYDESK_MACDEPLOYQT_HARDENED}
-      RESULT_VARIABLE relaydesk_macdeployqt_result
-    )
-    if(NOT relaydesk_macdeployqt_result EQUAL 0)
-      message(FATAL_ERROR \"macdeployqt failed while deploying the RelayDesk app bundle\")
-    endif()
-  ")
   set(CPACK_PACKAGE_ICON "${MY_DIR}/dmg-volume.icns")
   set(CPACK_DMG_BACKGROUND_IMAGE "${MY_DIR}/dmg-background.tiff")
   set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/generate_ds_store.applescript")
@@ -64,4 +51,20 @@ if (OSX_BUNDLE)
     FILES "${CMAKE_CURRENT_BINARY_DIR}/README-macOS.txt"
     DESTINATION "${CMAKE_INSTALL_LICENSE_DIR}"
   )
+
+  # Keep this as the final app-bundle install rule: macdeployqt signs the
+  # completed bundle, so later resource writes would invalidate CodeResources.
+  install(CODE "
+    execute_process(
+      COMMAND \"${DEPLOYQT}\"
+              \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\"
+              \"-timestamp\"
+              \"-codesign=${RELAYDESK_MACDEPLOYQT_CODESIGN}\"
+              ${RELAYDESK_MACDEPLOYQT_HARDENED}
+      RESULT_VARIABLE relaydesk_macdeployqt_result
+    )
+    if(NOT relaydesk_macdeployqt_result EQUAL 0)
+      message(FATAL_ERROR \"macdeployqt failed while deploying the RelayDesk app bundle\")
+    endif()
+  ")
 endif()
