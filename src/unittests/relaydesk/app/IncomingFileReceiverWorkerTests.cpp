@@ -114,6 +114,7 @@ private Q_SLOTS:
   void rejectsPlatformSafetyFailureBeforeCreatingPart();
   void rejectsCrossThreadReuse();
   void retainsPartWhenPlatformCommitFails();
+  void checkpointsAndResumesPartOnDiskWorker();
 };
 
 void IncomingFileReceiverWorkerTests::ownsCompleteFileReceiverLifecycleOnDiskWorker()
@@ -280,6 +281,102 @@ void IncomingFileReceiverWorkerTests::retainsPartWhenPlatformCommitFails()
   QCOMPARE(result.finish.fileResult->code, FileResultCode::TargetExists);
   QCOMPARE(result.snapshot.state, FileReceiverState::Failed);
   QVERIFY(QFile::exists(result.snapshot.partPath));
+  QCOMPARE(safety.commitRequests.size(), 1);
+}
+
+void IncomingFileReceiverWorkerTests::checkpointsAndResumesPartOnDiskWorker()
+{
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const QByteArray bytes(1024U * 1024U + 17U, '\x4d');
+  auto request = requestFor(root.path(), bytes);
+  FakeFileSafety safety;
+  ResumeStore store(root.filePath(QStringLiteral("resume/active")));
+  QThreadPool pool;
+  pool.setMaxThreadCount(1);
+
+  ResumeState state{
+      .transferId = request.begin.transferId,
+      .peerDeviceId = deskflow::relaydesk::DeviceId::generate(),
+      .manifestSha256 = request.manifestSha256,
+      .direction = ResumeDirection::Receiving,
+      .files =
+          {
+              {
+                  .fileId = request.begin.fileId,
+                  .relativeProtocolPath = request.entry.relativeProtocolPath,
+                  .durableOffset = 0,
+                  .totalBytes = request.entry.size,
+                  .partRelativePath =
+                      QStringLiteral(".incoming/%1/%2.part")
+                          .arg(request.begin.transferId.toString(), request.begin.fileId.toString()),
+              },
+          },
+      .updatedUtc = QDateTime::currentDateTimeUtc(),
+  };
+  const qsizetype firstBytes = static_cast<qsizetype>(request.begin.chunkBytes);
+
+  auto checkpointFuture = QtConcurrent::run(&pool, [&]() {
+    IncomingFileReceiverWorker worker(safety);
+    const auto begun = worker.begin(request);
+    if (!begun.ok()) {
+      return DurableCheckpointResult{
+          .error = DurableCheckpointError::InvalidReceiverState,
+          .diagnostic = begun.diagnostic,
+      };
+    }
+    const auto appended = worker.append(
+        {.transferId = request.begin.transferId, .fileId = request.begin.fileId},
+        QByteArrayView(bytes).first(firstBytes)
+    );
+    if (!appended.ok()) {
+      return DurableCheckpointResult{
+          .error = DurableCheckpointError::InvalidReceiverState,
+          .diagnostic = appended.diagnostic,
+      };
+    }
+    return worker.checkpoint(store, state);
+  });
+  checkpointFuture.waitForFinished();
+  const auto checkpoint = checkpointFuture.result();
+  QVERIFY2(checkpoint.ok(), qPrintable(checkpoint.diagnostic));
+  QCOMPARE(checkpoint.message->durableOffset, static_cast<quint64>(firstBytes));
+  QCOMPARE(state.files.constFirst().durableOffset, static_cast<quint64>(firstBytes));
+  const auto persisted = store.load(request.begin.transferId);
+  QVERIFY2(persisted.ok(), qPrintable(persisted.diagnostic));
+  QCOMPARE(*persisted.state, state);
+
+  request.begin.startOffset = static_cast<quint64>(firstBytes);
+  auto resumeFuture = QtConcurrent::run(&pool, [&]() {
+    IncomingFileReceiverWorker worker(safety);
+    WorkerResult result;
+    result.begin = worker.resume(request, state);
+    result.secondAppend = worker.append(
+        {
+            .transferId = request.begin.transferId,
+            .fileId = request.begin.fileId,
+            .offset = static_cast<quint64>(firstBytes),
+        },
+        QByteArrayView(bytes).sliced(firstBytes)
+    );
+    result.finish = worker.finish({
+        .transferId = request.begin.transferId,
+        .fileId = request.begin.fileId,
+        .size = request.begin.size,
+        .sha256 = request.begin.expectedSha256,
+    });
+    result.snapshot = worker.snapshot();
+    return result;
+  });
+  resumeFuture.waitForFinished();
+  const auto resumed = resumeFuture.result();
+  QVERIFY2(resumed.begin.ok(), qPrintable(resumed.begin.diagnostic));
+  QVERIFY2(resumed.secondAppend.ok(), qPrintable(resumed.secondAppend.diagnostic));
+  QVERIFY2(resumed.finish.ok(), qPrintable(resumed.finish.diagnostic));
+  QCOMPARE(resumed.snapshot.state, FileReceiverState::Completed);
+  QFile committed(resumed.snapshot.committedPath);
+  QVERIFY(committed.open(QIODevice::ReadOnly));
+  QCOMPARE(committed.readAll(), bytes);
   QCOMPARE(safety.commitRequests.size(), 1);
 }
 
