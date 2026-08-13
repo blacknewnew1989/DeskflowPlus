@@ -8,6 +8,7 @@ on:
       - "release/**"
     tags:
       - "relaydesk-phase*"
+      - "relaydesk-protocol-v1-*"
       - "v*"
 
 permissions:
