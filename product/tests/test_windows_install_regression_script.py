@@ -26,6 +26,8 @@ class WindowsInstallRegressionScriptTests(unittest.TestCase):
         self.assertIn('"relaydesk-test005-" + [guid]::NewGuid()', SCRIPT)
         self.assertIn("TEST005_UNSAFE_TEST_ROOT", SCRIPT)
         self.assertNotIn("Remove-Item", SCRIPT)
+        self.assertIn("$ExistingRegistrations = @(Get-ProductRegistrationsByName", SCRIPT)
+        self.assertIn("$ExistingFirewallRules = @(Get-RelayDeskFirewallRules", SCRIPT)
 
     def test_exercises_real_install_repair_and_uninstall(self) -> None:
         self.assertIn('"/i", (Quote-ProcessArgument $MsiPath)', SCRIPT)
