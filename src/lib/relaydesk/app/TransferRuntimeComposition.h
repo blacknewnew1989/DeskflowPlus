@@ -22,6 +22,7 @@ class TransferCenterDock;
 namespace deskflow::relaydesk {
 
 class IFileTransferService;
+class TransferHistoryRuntime;
 
 struct TransferRuntimeLifecycle
 {
@@ -41,6 +42,7 @@ public:
       std::unique_ptr<IFileTransferService> service, TransferRuntimeLifecycle lifecycle,
       widgets::DevicesDock &devicesDock, widgets::TransferCenterDock &transferCenterDock,
       model::IncomingOfferSettingsSnapshot incomingOfferSettings,
+      QString historyPath = {},
       TransferUiRuntime::CompletionResolver completionResolver = {},
       TransferUiRuntime::UrlOpener urlOpener = {}, QObject *parent = nullptr
   );
@@ -59,6 +61,7 @@ private:
   TransferRuntimeLifecycle m_lifecycle;
   model::IncomingOfferModel m_incomingOffers;
   TransferUiRuntime m_uiRuntime;
+  std::unique_ptr<TransferHistoryRuntime> m_historyRuntime;
   bool m_running = false;
 };
 
