@@ -59,7 +59,7 @@
 | 0 仓库/基线 | PASS | A0/A1/A4/A5/A7 | tag `relaydesk-phase0-20260812-01`, run `31602699800` |
 | 1 产品基础 | PASS | A2/A3/A0 | tag `relaydesk-phase1-20260813-04`; run `31623677270`; local Release asset SHA verification PASS |
 | 2 文件传输 | PASS | A2/A6/A0 | tag `relaydesk-phase2-20260813-04`; run `31655013105`; Win 74/74, Mac 75/75; four assets triple-digest verified |
-| 3 可靠性/UI | PASS | A3/A6/A7 | MainWindow/history/multi-file/folder/resume/conflict/reconnect composed; physical Win↔Mac remains final acceptance |
+| 3 可靠性/UI | PASS | A3/A6/A7 | tag `relaydesk-phase3-20260813-01`; run `31691378517` SUCCESS; Win 88/88, Mac 89/89; physical Win↔Mac remains final acceptance |
 | 4 平台/发布 | PASS | A4/A5/A7 | tag `relaydesk-phase4-20260813-02`; run `31688962563`; exact-tag unsigned MSI/7Z/App ZIP/DMG downloaded and SHA-256 verified |
 | 5 增强 | NOT_STARTED | A3/A4/A5 | 按价值推进 |
 
