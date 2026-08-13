@@ -152,4 +152,18 @@ COLLECT_ARGS=(
 [[ "$NOTARIZED" == "true" ]] && COLLECT_ARGS+=(--notarized)
 python3 "${COLLECT_ARGS[@]}"
 
+if [[ "$PACKAGE_VARIANT" == "adhoc" ]]; then
+  LIFECYCLE_REPORT="$OUT_DIR/TEST-005-macos-report.json"
+  RUNNER_TEMP="$PACKAGE_TEMP" python3 \
+    "$REPO_ROOT/product/scripts/test-macos-install-regression.py" \
+    --artifact-dir "$OUT_DIR" \
+    --expected-commit "$FULL_SHA" \
+    --report "$LIFECYCLE_REPORT"
+  echo "MACOS_INSTALL_LIFECYCLE_STATUS=PASS"
+  echo "MACOS_INSTALL_LIFECYCLE_REPORT=$LIFECYCLE_REPORT"
+else
+  echo "MACOS_INSTALL_LIFECYCLE_STATUS=NOT_RUN"
+  echo "MACOS_INSTALL_LIFECYCLE_DIAGNOSTIC=signed package lifecycle requires a signed-package regression contract"
+fi
+
 echo "MACOS_ARTIFACTS=$OUT_DIR"
