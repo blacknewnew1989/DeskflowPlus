@@ -59,9 +59,11 @@ Status: `PASS`; the immutable protocol tag and its Windows/macOS Actions artifac
 - Windows artifact contents were downloaded and rehashed locally. The unsigned MSI SHA-256 is
   `0d6d859c296e71d9dddb3b5d78a3873104633c32da05f046bc48f7958d0b82ec`; the portable 7Z SHA-256 is
   `ff8597fbbc181b60a25a3f596427c946aadb441d4b1cbf5147cbeb79e70cf14d`.
-- The draft internal Release for the same tag contains the ad-hoc App ZIP SHA-256
-  `3b2ca7be8206325e373f29c9ed471ae2eedd821b95ce46081574199e74af5b70` and DMG SHA-256
-  `08e11b4d6f3cf30b9600b5499558dca92cf4cd55366c3a9a460cf8c3dcb71a66`.
+- The draft internal Release App ZIP and DMG were downloaded separately after retrying truncated
+  transfers; final byte counts and local SHA-256 values match the Release API. The ad-hoc App ZIP is
+  28,667,093 bytes with SHA-256
+  `3b2ca7be8206325e373f29c9ed471ae2eedd821b95ce46081574199e74af5b70`; the DMG is 28,904,749 bytes
+  with SHA-256 `08e11b4d6f3cf30b9600b5499558dca92cf4cd55366c3a9a460cf8c3dcb71a66`.
 
 The first conflict-test launch returned Windows `0xc0000139` before Qt test initialization. Root-cause
 evidence showed Qt's `mingw_64/bin` contained an older 2021 `libstdc++-6.dll`; the test executable was
