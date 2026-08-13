@@ -14,7 +14,8 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-const TransferId kTransferId(QStringLiteral("11111111-2222-4333-8444-555555555555"));
+const TransferId kTransferId =
+    *TransferId::fromString(QStringLiteral("11111111-2222-4333-8444-555555555555"));
 
 QByteArray encodeFrame(const TransferCommandMessage &message)
 {
@@ -87,10 +88,6 @@ void TransferCommandCodecTests::roundTripsCommands()
 void TransferCommandCodecTests::rejectsInvalidEncodeValues()
 {
   QString error;
-  QVERIFY(TransferCommandCodec::encode(TransferPauseMessage{}, &error).isEmpty());
-  QVERIFY(!error.isEmpty());
-  QVERIFY(TransferCommandCodec::encode(TransferResumeMessage{}, &error).isEmpty());
-  QVERIFY(TransferCommandCodec::encode(TransferCancelMessage{}, &error).isEmpty());
   QVERIFY(
       TransferCommandCodec::encode(
           TransferCancelMessage{

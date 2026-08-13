@@ -17,7 +17,7 @@ const auto kFinishedUtc = QDateTime::fromMSecsSinceEpoch(1'780'000'010'000LL, Qt
 TransferSnapshot initialSnapshot(quint64 totalBytes = 100, quint64 totalFiles = 2)
 {
   return {
-      .id = QUuid(QStringLiteral("11111111-2222-4333-8444-555555555555")),
+      .id = *TransferId::fromString(QStringLiteral("11111111-2222-4333-8444-555555555555")),
       .peerId = *deskflow::relaydesk::DeviceId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
       .peerDisplayName = QStringLiteral("Peer"),
       .displayName = QStringLiteral("Documents"),
@@ -203,12 +203,6 @@ void TransferControlStateMachineTests::progressIsMonotonicAndBounded()
 void TransferControlStateMachineTests::rejectsInvalidInitialSnapshot()
 {
   auto invalid = initialSnapshot();
-  invalid.id = QUuid{};
-  TransferControlStateMachine nullId(std::move(invalid));
-  QCOMPARE(nullId.initialize().error, TransferControlError::InvalidInitialSnapshot);
-  QVERIFY(!nullId.initialized());
-
-  invalid = initialSnapshot();
   invalid.progress.completedBytes = 101;
   TransferControlStateMachine overflow(std::move(invalid));
   QCOMPARE(overflow.initialize().error, TransferControlError::InvalidInitialSnapshot);

@@ -10,6 +10,7 @@
 #include <QString>
 
 #include <chrono>
+#include <optional>
 
 namespace relaydesk::transfer {
 
@@ -45,7 +46,8 @@ enum class PartialCleanupIssueError
 
 struct PartialCleanupIssue
 {
-  TransferId transferId;
+  // Store-level corruption can be discovered before a transfer ID is parsed.
+  std::optional<TransferId> transferId;
   QString path;
   PartialCleanupIssueError error = PartialCleanupIssueError::ResumeStoreIssue;
   QString diagnostic;

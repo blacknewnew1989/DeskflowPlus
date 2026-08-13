@@ -63,8 +63,8 @@ void FrameCodecTests::matchesFrozenFileChunkVector()
   frame.flags = AckRequired;
   frame.streamId = 42;
   frame.metadata = FileMessageCodec::encode(FileChunkMessage{
-      .transferId = QUuid(QStringLiteral("11111111-2222-4333-8444-555555555555")),
-      .fileId = QUuid(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
+      .transferId = *TransferId::fromString(QStringLiteral("11111111-2222-4333-8444-555555555555")),
+      .fileId = *FileId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
   });
   frame.payload = QByteArrayLiteral("ABC");
 

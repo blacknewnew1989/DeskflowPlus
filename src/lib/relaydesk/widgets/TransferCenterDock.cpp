@@ -25,10 +25,22 @@
 #include <QStringList>
 #include <QVBoxLayout>
 
+#include <optional>
+
 namespace deskflow::relaydesk::widgets {
 namespace {
 
 using i18n::Text;
+
+std::optional<::relaydesk::transfer::TransferId> transferIdForIndex(const QModelIndex &index)
+{
+  if (!index.isValid()) {
+    return std::nullopt;
+  }
+  return ::relaydesk::transfer::TransferId::fromString(
+      index.data(model::TransferCenterModel::TransferIdRole).toString()
+  );
+}
 
 class TransferRowDelegate final : public QStyledItemDelegate
 {
@@ -180,34 +192,28 @@ TransferCenterDock::TransferCenterDock(model::TransferCenterModel &transfers, QW
   });
   connect(m_detailsButton, &QPushButton::clicked, this, &TransferCenterDock::showHistoryDetails);
   connect(m_openFolderButton, &QPushButton::clicked, this, [this]() {
-    const auto index = m_list->currentIndex();
-    if (index.isValid())
-      (void)m_transfers.requestOpenFolder(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+    if (const auto id = transferIdForIndex(m_list->currentIndex()); id.has_value())
+      (void)m_transfers.requestOpenFolder(*id);
   });
   connect(m_openFileButton, &QPushButton::clicked, this, [this]() {
-    const auto index = m_list->currentIndex();
-    if (index.isValid())
-      (void)m_transfers.requestOpenFile(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+    if (const auto id = transferIdForIndex(m_list->currentIndex()); id.has_value())
+      (void)m_transfers.requestOpenFile(*id);
   });
   connect(m_retryButton, &QPushButton::clicked, this, [this]() {
-    const auto index = m_list->currentIndex();
-    if (index.isValid())
-      (void)m_transfers.requestRetry(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+    if (const auto id = transferIdForIndex(m_list->currentIndex()); id.has_value())
+      (void)m_transfers.requestRetry(*id);
   });
   connect(m_pauseButton, &QPushButton::clicked, this, [this]() {
-    const auto index = m_list->currentIndex();
-    if (index.isValid())
-      (void)m_transfers.requestPause(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+    if (const auto id = transferIdForIndex(m_list->currentIndex()); id.has_value())
+      (void)m_transfers.requestPause(*id);
   });
   connect(m_resumeButton, &QPushButton::clicked, this, [this]() {
-    const auto index = m_list->currentIndex();
-    if (index.isValid())
-      (void)m_transfers.requestResume(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+    if (const auto id = transferIdForIndex(m_list->currentIndex()); id.has_value())
+      (void)m_transfers.requestResume(*id);
   });
   connect(m_cancelButton, &QPushButton::clicked, this, [this]() {
-    const auto index = m_list->currentIndex();
-    if (index.isValid())
-      (void)m_transfers.requestCancel(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+    if (const auto id = transferIdForIndex(m_list->currentIndex()); id.has_value())
+      (void)m_transfers.requestCancel(*id);
   });
   updateText();
   updateEmptyState();
@@ -290,7 +296,10 @@ void TransferCenterDock::showHistoryDetails()
   const auto index = m_list->currentIndex();
   if (!index.isValid() || !index.data(model::TransferCenterModel::HasHistoryDetailsRole).toBool())
     return;
-  const auto record = m_transfers.historyRecord(QUuid(index.data(model::TransferCenterModel::TransferIdRole).toString()));
+  const auto transferId = transferIdForIndex(index);
+  if (!transferId.has_value())
+    return;
+  const auto record = m_transfers.historyRecord(*transferId);
   if (!record.has_value())
     return;
   auto *dialog = new TransferHistoryDetailsDialog(*record, this);

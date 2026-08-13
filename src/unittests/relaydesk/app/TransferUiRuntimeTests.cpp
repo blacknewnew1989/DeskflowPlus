@@ -54,7 +54,7 @@ IncomingOffer incomingOffer()
       .peerDisplayName = QStringLiteral("Studio Mac"),
       .offer =
           {
-              .transferId = QUuid::createUuid(),
+              .transferId = TransferId::generate(),
               .displayName = QStringLiteral("Project"),
               .totalBytes = 2048,
               .fileCount = 2,
@@ -71,7 +71,7 @@ TransferSnapshot transferSnapshot(const QString &id, TransferState state)
 {
   const auto terminal = TransferControlStateMachine::isTerminal(state);
   return {
-      .id = QUuid(id),
+      .id = *TransferId::fromString(id),
       .peerId = DeviceId::generate(),
       .peerDisplayName = QStringLiteral("Studio Mac"),
       .displayName = QStringLiteral("Project"),
@@ -101,7 +101,7 @@ TransferHistoryRecord historyRecord(
 )
 {
   return {
-      .transferId = QUuid(id),
+      .transferId = *TransferId::fromString(id),
       .peerDeviceId = DeviceId::generate(),
       .peerDisplayName = QStringLiteral("History peer"),
       .displayName = QStringLiteral("Archive"),

@@ -15,7 +15,7 @@ namespace {
 TransferSnapshot initialSnapshot(quint64 totalBytes = 10'000)
 {
   return {
-      .id = QUuid::createUuid(),
+      .id = TransferId::generate(),
       .peerId = deskflow::relaydesk::DeviceId::generate(),
       .state = TransferState::Preparing,
       .progress = {.totalBytes = totalBytes, .totalFiles = 1},

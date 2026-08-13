@@ -17,7 +17,7 @@ TransferHistoryRecord record(const QString &id, int secondsAgo, HistoryStatus st
 {
   const bool failed = status == HistoryStatus::Failed;
   return {
-      .transferId = QUuid(id),
+      .transferId = *TransferId::fromString(id),
       .peerDeviceId =
           *deskflow::relaydesk::DeviceId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
       .peerDisplayName = QStringLiteral("Peer"),
@@ -168,9 +168,6 @@ void TransferHistoryStoreTests::rejectsInvalidRecordsAndLimits()
   QVERIFY(temporary.isValid());
   TransferHistoryStore store(temporary.filePath(QStringLiteral("history.jsonl")), {}, [] { return kNow; });
   auto invalid = record(QStringLiteral("10000000-0000-4000-8000-000000000001"), 10);
-  invalid.transferId = QUuid{};
-  QCOMPARE(store.append(invalid).error, TransferHistoryError::InvalidRecord);
-  invalid = record(QStringLiteral("10000000-0000-4000-8000-000000000001"), 10);
   invalid.finishedUtc = invalid.startedUtc.addSecs(-1);
   QCOMPARE(store.append(invalid).error, TransferHistoryError::InvalidRecord);
   invalid = record(QStringLiteral("10000000-0000-4000-8000-000000000001"), 10);

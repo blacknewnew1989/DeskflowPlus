@@ -200,7 +200,7 @@ void TransferOfferStateMachine::reset()
 OfferStateResult TransferOfferStateMachine::validateOffer(const TransferOffer &offer) const
 {
   const bool entryCountOverflows = offer.fileCount > std::numeric_limits<quint64>::max() - offer.directoryCount;
-  if (offer.transferId.isNull() || offer.displayName.isEmpty() ||
+  if (offer.displayName.isEmpty() ||
       offer.displayName.toUtf8().size() > kMaxControlStringUtf8Bytes || offer.manifestSha256.size() != kSha256Bytes ||
       offer.manifestPageCount == 0 || entryCountOverflows ||
       offer.fileCount + offer.directoryCount > m_capabilities.maxManifestEntries) {

@@ -30,7 +30,7 @@ NegotiatedCapabilities capabilities()
 TransferOffer offer()
 {
   return {
-      .transferId = QUuid::createUuid(),
+      .transferId = TransferId::generate(),
       .displayName = QStringLiteral("Project"),
       .totalBytes = 1024,
       .fileCount = 2,
@@ -126,7 +126,7 @@ void TransferOfferStateMachineTests::rejectsTransferIdMismatch()
   const auto source = offer();
   QVERIFY(machine.beginOutgoing(source).ok());
   QCOMPARE(
-      machine.receiveAccept({QUuid::createUuid(), ConflictPolicy::Ask, QStringLiteral("Downloads"), 4096, false}).error,
+      machine.receiveAccept({TransferId::generate(), ConflictPolicy::Ask, QStringLiteral("Downloads"), 4096, false}).error,
       OfferStateError::TransferIdMismatch
   );
   QCOMPARE(machine.snapshot()->state, OfferState::AwaitingPeerDecision);

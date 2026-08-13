@@ -111,7 +111,7 @@ void insertUnsigned(QCborMap &map, qint64 field, quint64 value)
 QCborMap entryMap(const ManifestEntry &entry)
 {
   QCborMap map;
-  map.insert(QCborValue(1), QCborValue(entry.id.toRfc4122()));
+  map.insert(QCborValue(1), QCborValue(entry.id.toBytes()));
   map.insert(QCborValue(2), QCborValue(entry.relativeProtocolPath));
   insertUnsigned(map, 3, static_cast<quint8>(entry.type));
   insertUnsigned(map, 4, entry.size);
@@ -136,15 +136,11 @@ bool entryLess(const ManifestEntry &left, const ManifestEntry &right)
   if (left.type != right.type) {
     return left.type < right.type;
   }
-  return left.id.toRfc4122() < right.id.toRfc4122();
+  return left.id.toBytes() < right.id.toBytes();
 }
 
 ManifestPageError validateEntry(const ManifestEntry &entry, const PathLimits &pathLimits, QString &diagnostic)
 {
-  if (entry.id.isNull() || entry.id.toRfc4122().size() != kUuidBytes) {
-    diagnostic = QStringLiteral("manifest fileId must be a non-null 16-byte UUID");
-    return ManifestPageError::InvalidManifestEntry;
-  }
   const PathValidationResult path = PathPolicy::validateRelative(entry.relativeProtocolPath, pathLimits);
   if (!path.ok || path.normalized != entry.relativeProtocolPath) {
     diagnostic = QStringLiteral("manifest path must already be a safe normalized RDFT/1 path");
@@ -180,23 +176,25 @@ quint64 pageEnvelopeBytes(quint64 pageIndex, quint64 pageCount, quint64 entryCou
 
 ManifestPage pageForRange(const TransferManifest &manifest, const ManifestPagePlan &plan, quint64 pageIndex)
 {
-  ManifestPage page;
-  page.transferId = plan.transferId;
-  page.pageIndex = pageIndex;
-  page.pageCount = plan.pageCount();
   const ManifestPageRange &range = plan.ranges.at(static_cast<qsizetype>(pageIndex));
-  page.entries.reserve(range.entryCount);
+  QList<ManifestEntry> entries;
+  entries.reserve(range.entryCount);
   for (qsizetype offset = 0; offset < range.entryCount; ++offset) {
-    page.entries.append(manifest.entries.at(range.firstEntry + offset).entry);
+    entries.append(manifest.entries.at(range.firstEntry + offset).entry);
   }
-  return page;
+  return {
+      .transferId = plan.transferId,
+      .pageIndex = pageIndex,
+      .pageCount = plan.pageCount(),
+      .entries = std::move(entries),
+  };
 }
 
 bool planMatchesManifest(
     const TransferManifest &manifest, const ManifestPagePlan &plan, const ManifestPagingLimits &limits
 )
 {
-  if (plan.transferId.isNull() || plan.transferId != manifest.summary.id || plan.ranges.isEmpty() ||
+  if (plan.transferId != manifest.summary.id || plan.ranges.isEmpty() ||
       plan.pageCount() > limits.maxPages || plan.entryCount != static_cast<quint64>(manifest.entries.size())) {
     return false;
   }
@@ -265,87 +263,107 @@ bool readUnsigned(const QCborMap &map, qint64 field, quint64 &output, ManifestPa
   return true;
 }
 
-bool readUuid(const QCborMap &map, qint64 field, QUuid &output, ManifestPageDecodeResult &failure)
+template <typename Id>
+std::optional<Id> readUuid(const QCborMap &map, qint64 field, ManifestPageDecodeResult &failure)
 {
   const auto value = requiredValue(map, field);
   if (!value.has_value()) {
     failure = decodeFailure(ManifestPageError::MissingField, QStringLiteral("required field %1 is missing").arg(field));
-    return false;
+    return std::nullopt;
   }
   if (!value->isByteArray()) {
     failure = invalidType(field, QStringLiteral("a 16-byte UUID byte string"));
-    return false;
+    return std::nullopt;
   }
   const QByteArray bytes = value->toByteArray();
-  if (bytes.size() != kUuidBytes || QUuid::fromRfc4122(bytes).isNull()) {
+  if (bytes.size() != kUuidBytes) {
     failure = invalidValue(field, QStringLiteral("UUID must contain 16 non-null bytes"));
-    return false;
+    return std::nullopt;
   }
-  output = QUuid::fromRfc4122(bytes);
-  return true;
+  const auto output = Id::fromBytes(bytes);
+  if (!output.has_value()) {
+    failure = invalidValue(field, QStringLiteral("UUID must contain 16 non-null bytes"));
+  }
+  return output;
 }
 
-ManifestPageDecodeResult decodeEntry(const QCborValue &value, const ManifestPagingLimits &limits)
+bool decodeEntry(
+    const QCborValue &value, const ManifestPagingLimits &limits, std::optional<ManifestEntry> &output,
+    ManifestPageDecodeResult &failure
+)
 {
   if (!value.isMap()) {
-    return decodeFailure(ManifestPageError::InvalidFieldType, QStringLiteral("manifest entry must be a CBOR map"));
+    failure = decodeFailure(ManifestPageError::InvalidFieldType, QStringLiteral("manifest entry must be a CBOR map"));
+    return false;
   }
   const QCborMap map = value.toMap();
   if (!mapKeysAreIntegers(map)) {
-    return decodeFailure(
+    failure = decodeFailure(
         ManifestPageError::NonIntegerKey, QStringLiteral("manifest entry keys must be non-negative integers")
     );
+    return false;
   }
 
-  ManifestEntry entry;
-  ManifestPageDecodeResult failure;
+  const auto fileId = readUuid<FileId>(map, 1, failure);
+  if (!fileId.has_value()) {
+    return false;
+  }
   quint64 type = 0;
+  quint64 size = 0;
   quint64 modifiedAtMs = 0;
   quint64 flags = 0;
-  if (!readUuid(map, 1, entry.id, failure)) {
-    return failure;
-  }
   const auto path = requiredValue(map, 2);
   if (!path.has_value()) {
-    return decodeFailure(ManifestPageError::MissingField, QStringLiteral("required field 2 is missing"));
+    failure = decodeFailure(ManifestPageError::MissingField, QStringLiteral("required field 2 is missing"));
+    return false;
   }
   if (!path->isString()) {
-    return invalidType(2, QStringLiteral("a UTF-8 text string"));
+    failure = invalidType(2, QStringLiteral("a UTF-8 text string"));
+    return false;
   }
-  entry.relativeProtocolPath = path->toString();
-  if (!readUnsigned(map, 3, type, failure) || !readUnsigned(map, 4, entry.size, failure) ||
+  if (!readUnsigned(map, 3, type, failure) || !readUnsigned(map, 4, size, failure) ||
       !readUnsigned(map, 5, modifiedAtMs, failure)) {
-    return failure;
+    return false;
   }
   if (type > static_cast<quint64>(ManifestEntryType::Directory)) {
-    return invalidValue(3, QStringLiteral("entry type is not defined by RDFT/1"));
+    failure = invalidValue(3, QStringLiteral("entry type is not defined by RDFT/1"));
+    return false;
   }
-  entry.type = static_cast<ManifestEntryType>(type);
-  entry.modifiedUtc = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(modifiedAtMs), QTimeZone::UTC);
+  QByteArray sha256;
   if (map.contains(QCborValue(6))) {
     const QCborValue sha = map.value(QCborValue(6));
     if (!sha.isByteArray()) {
-      return invalidType(6, QStringLiteral("a byte string"));
+      failure = invalidType(6, QStringLiteral("a byte string"));
+      return false;
     }
-    entry.sha256 = sha.toByteArray();
+    sha256 = sha.toByteArray();
   }
   if (map.contains(QCborValue(7))) {
     if (!readUnsigned(map, 7, flags, failure)) {
-      return failure;
+      return false;
     }
     if (flags > std::numeric_limits<quint32>::max()) {
-      return invalidValue(7, QStringLiteral("flags exceed uint32"));
+      failure = invalidValue(7, QStringLiteral("flags exceed uint32"));
+      return false;
     }
-    entry.flags = static_cast<quint32>(flags);
   }
 
+  ManifestEntry entry{
+      .id = *fileId,
+      .relativeProtocolPath = path->toString(),
+      .type = static_cast<ManifestEntryType>(type),
+      .size = size,
+      .modifiedUtc = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(modifiedAtMs), QTimeZone::UTC),
+      .sha256 = std::move(sha256),
+      .flags = static_cast<quint32>(flags),
+  };
   QString diagnostic;
   if (validateEntry(entry, limits.pathLimits, diagnostic) != ManifestPageError::None) {
-    return decodeFailure(ManifestPageError::InvalidManifestEntry, diagnostic);
+    failure = decodeFailure(ManifestPageError::InvalidManifestEntry, diagnostic);
+    return false;
   }
-  ManifestPage synthetic;
-  synthetic.entries.append(std::move(entry));
-  return {.page = std::move(synthetic)};
+  output = std::move(entry);
+  return true;
 }
 
 } // namespace
@@ -354,9 +372,6 @@ ManifestPagePlanResult ManifestPageCodec::plan(const TransferManifest &manifest,
 {
   if (!limitsAreValid(limits)) {
     return planFailure(ManifestPageError::InvalidLimits, QStringLiteral("manifest paging limits exceed RDFT/1"));
-  }
-  if (manifest.summary.id.isNull()) {
-    return planFailure(ManifestPageError::InvalidManifestEntry, QStringLiteral("transferId must not be null"));
   }
   if (manifest.entries.isEmpty()) {
     return planFailure(ManifestPageError::EmptyManifest, QStringLiteral("manifest must contain at least one entry"));
@@ -397,7 +412,7 @@ ManifestPagePlanResult ManifestPageCodec::plan(const TransferManifest &manifest,
       );
     }
     collisionKeys.insert(path.collisionKey);
-    const QByteArray fileId = prepared.entry.id.toRfc4122();
+    const QByteArray fileId = prepared.entry.id.toBytes();
     if (fileIds.contains(fileId)) {
       return planFailure(ManifestPageError::DuplicateFileId, QStringLiteral("manifest contains a duplicate fileId"));
     }
@@ -439,9 +454,10 @@ ManifestPagePlanResult ManifestPageCodec::plan(const TransferManifest &manifest,
     );
   }
 
-  ManifestPagePlan output;
-  output.transferId = manifest.summary.id;
-  output.entryCount = static_cast<quint64>(manifest.entries.size());
+  ManifestPagePlan output{
+      .transferId = manifest.summary.id,
+      .entryCount = static_cast<quint64>(manifest.entries.size()),
+  };
   const quint64 conservativeIndex = limits.maxPages - 1;
   qsizetype first = 0;
   while (first < encodedEntrySizes.size()) {
@@ -516,8 +532,7 @@ QByteArray ManifestPageCodec::encode(const ManifestPage &page, const ManifestPag
     setDiagnostic(error, QStringLiteral("manifest paging limits exceed RDFT/1"));
     return {};
   }
-  if (page.transferId.isNull() || page.pageCount == 0 || page.pageCount > limits.maxPages ||
-      page.pageIndex >= page.pageCount) {
+  if (page.pageCount == 0 || page.pageCount > limits.maxPages || page.pageIndex >= page.pageCount) {
     setDiagnostic(error, QStringLiteral("manifest page identity or index is invalid"));
     return {};
   }
@@ -536,7 +551,7 @@ QByteArray ManifestPageCodec::encode(const ManifestPage &page, const ManifestPag
     entries.append(entryMap(entry));
   }
   QCborMap map;
-  map.insert(QCborValue(1), QCborValue(page.transferId.toRfc4122()));
+  map.insert(QCborValue(1), QCborValue(page.transferId.toBytes()));
   insertUnsigned(map, 2, page.pageIndex);
   insertUnsigned(map, 3, page.pageCount);
   map.insert(QCborValue(4), entries);
@@ -581,16 +596,18 @@ ManifestPageCodec::decode(quint16 protocolVersion, const QByteArray &metadata, c
     );
   }
 
-  ManifestPage page;
   ManifestPageDecodeResult failure;
-  if (!readUuid(map, 1, page.transferId, failure) || !readUnsigned(map, 2, page.pageIndex, failure) ||
-      !readUnsigned(map, 3, page.pageCount, failure)) {
+  const auto transferId = readUuid<TransferId>(map, 1, failure);
+  quint64 pageIndex = 0;
+  quint64 pageCount = 0;
+  if (!transferId.has_value() || !readUnsigned(map, 2, pageIndex, failure) ||
+      !readUnsigned(map, 3, pageCount, failure)) {
     return failure;
   }
-  if (page.pageCount == 0 || page.pageCount > limits.maxPages) {
+  if (pageCount == 0 || pageCount > limits.maxPages) {
     return invalidValue(3, QStringLiteral("page count is zero or exceeds the local limit"));
   }
-  if (page.pageIndex >= page.pageCount) {
+  if (pageIndex >= pageCount) {
     return invalidValue(2, QStringLiteral("page index must be less than page count"));
   }
   const auto entriesValue = requiredValue(map, 4);
@@ -605,14 +622,21 @@ ManifestPageCodec::decode(quint16 protocolVersion, const QByteArray &metadata, c
       static_cast<quint64>(entries.size()) > limits.maxEntries) {
     return invalidValue(4, QStringLiteral("page entry count exceeds the local limit"));
   }
-  page.entries.reserve(entries.size());
+  QList<ManifestEntry> decodedEntries;
+  decodedEntries.reserve(entries.size());
   for (const QCborValue &encodedEntry : entries) {
-    ManifestPageDecodeResult decoded = decodeEntry(encodedEntry, limits);
-    if (!decoded.ok()) {
-      return decoded;
+    std::optional<ManifestEntry> decodedEntry;
+    if (!decodeEntry(encodedEntry, limits, decodedEntry, failure)) {
+      return failure;
     }
-    page.entries.append(std::move(decoded.page->entries.front()));
+    decodedEntries.append(std::move(*decodedEntry));
   }
+  ManifestPage page{
+      .transferId = *transferId,
+      .pageIndex = pageIndex,
+      .pageCount = pageCount,
+      .entries = std::move(decodedEntries),
+  };
   return {.page = std::move(page)};
 }
 
@@ -621,16 +645,12 @@ QByteArray ManifestPageCodec::encodeComplete(const ManifestComplete &message, QS
   if (error != nullptr) {
     error->clear();
   }
-  if (message.transferId.isNull()) {
-    setDiagnostic(error, QStringLiteral("manifest complete transferId is null"));
-    return {};
-  }
   if (message.canonicalSha256.size() != kSha256Bytes) {
     setDiagnostic(error, QStringLiteral("manifest complete digest must contain 32 bytes"));
     return {};
   }
   QCborMap map;
-  map.insert(QCborValue(1), QCborValue(message.transferId.toRfc4122()));
+  map.insert(QCborValue(1), QCborValue(message.transferId.toBytes()));
   map.insert(QCborValue(2), QCborValue(message.canonicalSha256));
   return QCborValue(map).toCbor(QCborValue::SortKeysInMaps);
 }
@@ -666,9 +686,9 @@ ManifestCompleteDecodeResult ManifestPageCodec::decodeComplete(quint16 protocolV
     );
   }
 
-  ManifestComplete message;
   ManifestPageDecodeResult failure;
-  if (!readUuid(map, 1, message.transferId, failure)) {
+  const auto transferId = readUuid<TransferId>(map, 1, failure);
+  if (!transferId.has_value()) {
     return completeDecodeFailure(failure.error, std::move(failure.diagnostic));
   }
   const auto digest = requiredValue(map, 2);
@@ -680,13 +700,13 @@ ManifestCompleteDecodeResult ManifestPageCodec::decodeComplete(quint16 protocolV
         ManifestPageError::InvalidFieldType, QStringLiteral("field 2 must be a 32-byte SHA-256 byte string")
     );
   }
-  message.canonicalSha256 = digest->toByteArray();
-  if (message.canonicalSha256.size() != kSha256Bytes) {
+  const QByteArray canonicalSha256 = digest->toByteArray();
+  if (canonicalSha256.size() != kSha256Bytes) {
     return completeDecodeFailure(
         ManifestPageError::InvalidFieldValue, QStringLiteral("field 2 must contain exactly 32 bytes")
     );
   }
-  return {.message = std::move(message)};
+  return {.message = ManifestComplete{.transferId = *transferId, .canonicalSha256 = canonicalSha256}};
 }
 
 QByteArray ManifestPageCodec::canonicalSha256(const QList<ManifestEntry> &entries, QString *error)
@@ -802,7 +822,7 @@ ManifestPageReassembler::addPageWithEncodedBytes(const ManifestPage &page, quint
     setDiagnostic(diagnostic, QStringLiteral("manifest reassembly is already complete"));
     return ManifestPageError::AlreadyComplete;
   }
-  if (!limitsAreValid(m_limits) || m_expectedTransferId.isNull() || m_expectedPageCount == 0 ||
+  if (!limitsAreValid(m_limits) || m_expectedPageCount == 0 ||
       m_expectedPageCount > m_limits.maxPages || m_expectedEntryCount > m_limits.maxEntries ||
       m_expectedCanonicalSha256.size() != kSha256Bytes) {
     setDiagnostic(diagnostic, QStringLiteral("expected manifest parameters exceed RDFT/1 limits"));
@@ -852,7 +872,7 @@ ManifestPageReassembler::addPageWithEncodedBytes(const ManifestPage &page, quint
       setDiagnostic(diagnostic, QStringLiteral("manifest contains a portable path collision"));
       return ManifestPageError::ProtocolPathCollision;
     }
-    const QByteArray fileId = entry.id.toRfc4122();
+    const QByteArray fileId = entry.id.toBytes();
     if (m_fileIds.contains(fileId) || pageFileIds.contains(fileId)) {
       setDiagnostic(diagnostic, QStringLiteral("manifest contains a duplicate fileId"));
       return ManifestPageError::DuplicateFileId;
@@ -865,7 +885,7 @@ ManifestPageReassembler::addPageWithEncodedBytes(const ManifestPage &page, quint
   for (const ManifestEntry &entry : page.entries) {
     const PathValidationResult path = PathPolicy::validateRelative(entry.relativeProtocolPath, m_limits.pathLimits);
     m_collisionKeys.insert(path.collisionKey);
-    m_fileIds.insert(entry.id.toRfc4122());
+    m_fileIds.insert(entry.id.toBytes());
     m_entries.append(entry);
   }
   m_receivedMetadataBytes += encodedBytes;

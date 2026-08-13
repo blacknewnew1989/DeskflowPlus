@@ -98,8 +98,8 @@ FileReceiverResult FileReceiver::beginInternal(const FileReceiveRequest &request
         QStringLiteral("this receiver slice supports only the default auto-rename policy")
     );
   }
-  if (request.entry.type != ManifestEntryType::File || request.entry.id.isNull() || request.begin.transferId.isNull() ||
-      request.begin.fileId != request.entry.id || request.begin.size != request.entry.size ||
+  if (request.entry.type != ManifestEntryType::File || request.begin.fileId != request.entry.id ||
+      request.begin.size != request.entry.size ||
       request.begin.size > static_cast<quint64>(std::numeric_limits<qint64>::max()) ||
       request.begin.startOffset > request.begin.size || request.begin.chunkBytes == 0 ||
       request.begin.chunkBytes > kMaximumChunkBytes || request.entry.sha256.size() != kSha256Bytes ||
@@ -119,8 +119,7 @@ FileReceiverResult FileReceiver::beginInternal(const FileReceiveRequest &request
 
   const QString stagingRelative = QStringLiteral(".incoming/%1/%2.part")
                                       .arg(
-                                          request.begin.transferId.toString(QUuid::WithoutBraces),
-                                          request.begin.fileId.toString(QUuid::WithoutBraces)
+                                          request.begin.transferId.toString(), request.begin.fileId.toString()
                                       );
   QString partPath;
   const auto stagingPath =
@@ -223,10 +222,10 @@ FileReceiverResult FileReceiver::append(const FileChunkMessage &chunk, QByteArra
   if (m_snapshot.state != FileReceiverState::Receiving) {
     return failure(FileReceiverError::InvalidState, QStringLiteral("file receiver is not accepting chunks"));
   }
-  if (chunk.transferId != m_snapshot.transferId) {
+  if (!m_snapshot.transferId.has_value() || chunk.transferId != *m_snapshot.transferId) {
     return fail(FileReceiverError::TransferIdMismatch, FileResultCode::IoError, QStringLiteral("TRANSFER_ID_MISMATCH"));
   }
-  if (chunk.fileId != m_snapshot.fileId) {
+  if (!m_snapshot.fileId.has_value() || chunk.fileId != *m_snapshot.fileId) {
     return fail(FileReceiverError::FileIdMismatch, FileResultCode::IoError, QStringLiteral("FILE_ID_MISMATCH"));
   }
   if (chunk.offset != m_snapshot.receivedBytes) {
@@ -263,10 +262,10 @@ FileReceiverResult FileReceiver::finish(const FileEndMessage &end)
   if (m_snapshot.state != FileReceiverState::Receiving) {
     return failure(FileReceiverError::InvalidState, QStringLiteral("file receiver is not awaiting FILE_END"));
   }
-  if (end.transferId != m_snapshot.transferId) {
+  if (!m_snapshot.transferId.has_value() || end.transferId != *m_snapshot.transferId) {
     return fail(FileReceiverError::TransferIdMismatch, FileResultCode::IoError, QStringLiteral("TRANSFER_ID_MISMATCH"));
   }
-  if (end.fileId != m_snapshot.fileId) {
+  if (!m_snapshot.fileId.has_value() || end.fileId != *m_snapshot.fileId) {
     return fail(FileReceiverError::FileIdMismatch, FileResultCode::IoError, QStringLiteral("FILE_ID_MISMATCH"));
   }
   if (end.size != m_snapshot.expectedSize || m_snapshot.receivedBytes != m_snapshot.expectedSize) {
@@ -310,8 +309,8 @@ FileReceiverResult FileReceiver::cancel(bool keepPartial)
     return failure(FileReceiverError::InvalidState, QStringLiteral("a committed file cannot be cancelled"));
   }
   if (m_snapshot.state == FileReceiverState::Cancelled) {
-    return m_snapshot.transferId.isNull() ? FileReceiverResult{}
-                                          : result(FileResultCode::Cancelled, QStringLiteral("CANCELLED"));
+    return m_snapshot.transferId.has_value() ? result(FileResultCode::Cancelled, QStringLiteral("CANCELLED"))
+                                             : FileReceiverResult{};
   }
   if (m_partFile.isOpen()) {
     m_partFile.close();
@@ -320,8 +319,8 @@ FileReceiverResult FileReceiver::cancel(bool keepPartial)
     QFile::remove(m_snapshot.partPath);
   }
   m_snapshot.state = FileReceiverState::Cancelled;
-  return m_snapshot.transferId.isNull() ? FileReceiverResult{}
-                                        : result(FileResultCode::Cancelled, QStringLiteral("CANCELLED"));
+  return m_snapshot.transferId.has_value() ? result(FileResultCode::Cancelled, QStringLiteral("CANCELLED"))
+                                           : FileReceiverResult{};
 }
 
 DurableCheckpointResult FileReceiver::checkpoint(const ResumeStore &store, ResumeState &state, QDateTime updatedUtc)
@@ -331,7 +330,8 @@ DurableCheckpointResult FileReceiver::checkpoint(const ResumeStore &store, Resum
         DurableCheckpointError::InvalidReceiverState, QStringLiteral("file receiver is not checkpointable")
     );
   }
-  if (state.transferId != m_snapshot.transferId || state.direction != ResumeDirection::Receiving ||
+  if (!m_snapshot.transferId.has_value() || state.transferId != *m_snapshot.transferId ||
+      state.direction != ResumeDirection::Receiving ||
       state.manifestSha256.size() != kSha256Bytes) {
     return checkpointFailure(
         DurableCheckpointError::ResumeStateMismatch, QStringLiteral("resume state does not match the receiver")
@@ -340,7 +340,7 @@ DurableCheckpointResult FileReceiver::checkpoint(const ResumeStore &store, Resum
 
   auto matching = state.files.end();
   for (auto iterator = state.files.begin(); iterator != state.files.end(); ++iterator) {
-    if (iterator->fileId == m_snapshot.fileId) {
+    if (m_snapshot.fileId.has_value() && iterator->fileId == *m_snapshot.fileId) {
       if (matching != state.files.end()) {
         return checkpointFailure(
             DurableCheckpointError::ResumeStateMismatch, QStringLiteral("resume state contains duplicate file IDs")
@@ -373,7 +373,7 @@ DurableCheckpointResult FileReceiver::checkpoint(const ResumeStore &store, Resum
 
   ResumeState candidate = state;
   for (auto &file : candidate.files) {
-    if (file.fileId == m_snapshot.fileId) {
+    if (m_snapshot.fileId.has_value() && file.fileId == *m_snapshot.fileId) {
       file.durableOffset = m_snapshot.receivedBytes;
       break;
     }
@@ -390,8 +390,8 @@ DurableCheckpointResult FileReceiver::checkpoint(const ResumeStore &store, Resum
   state = std::move(candidate);
   return {
       .message = FileCheckpointMessage{
-          .transferId = m_snapshot.transferId,
-          .fileId = m_snapshot.fileId,
+          .transferId = *m_snapshot.transferId,
+          .fileId = *m_snapshot.fileId,
           .durableOffset = m_snapshot.receivedBytes,
       },
   };
@@ -417,10 +417,10 @@ FileReceiverResult FileReceiver::fail(FileReceiverError error, FileResultCode co
 FileReceiverResult FileReceiver::result(FileResultCode code, QString diagnostic) const
 {
   FileReceiverResult receiverResult;
-  if (!m_snapshot.transferId.isNull() && !m_snapshot.fileId.isNull()) {
+  if (m_snapshot.transferId.has_value() && m_snapshot.fileId.has_value()) {
     receiverResult.fileResult = FileResultMessage{
-        .transferId = m_snapshot.transferId,
-        .fileId = m_snapshot.fileId,
+        .transferId = *m_snapshot.transferId,
+        .fileId = *m_snapshot.fileId,
         .code = code,
         .diagnostic = std::move(diagnostic),
     };

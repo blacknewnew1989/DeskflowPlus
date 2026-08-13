@@ -11,8 +11,9 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-const QUuid kTransferId(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
-const QUuid kFileId(QStringLiteral("fedcba98-7654-4321-9234-56789abcdef0"));
+const TransferId kTransferId =
+    *TransferId::fromString(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
+const FileId kFileId = *FileId::fromString(QStringLiteral("fedcba98-7654-4321-9234-56789abcdef0"));
 
 QByteArray mutate(const QByteArray &encoded, const std::function<void(QCborMap &)> &mutation)
 {
@@ -101,11 +102,6 @@ void FileMessageCodecTests::resultRoundTrip()
 void FileMessageCodecTests::encodingRejectsInvalidMessages()
 {
   QString error;
-  QVERIFY(FileMessageCodec::encode(
-              FileControlMessage(FileBeginMessage{QUuid{}, kFileId, 1, 0, 1024, QByteArray(32, '\x01')}), &error
-  )
-              .isEmpty());
-  QVERIFY(!error.isEmpty());
   QVERIFY(FileMessageCodec::encode(
               FileControlMessage(FileResultMessage{kTransferId, kFileId, FileResultCode::Ok, QStringLiteral("error")}),
               &error

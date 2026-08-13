@@ -65,8 +65,7 @@ std::optional<TransferId> readTransferId(const QCborValue &value)
   if (!value.isByteArray() || value.toByteArray().size() != kUuidBytes) {
     return std::nullopt;
   }
-  const TransferId id = QUuid::fromRfc4122(value.toByteArray());
-  return id.isNull() ? std::nullopt : std::optional<TransferId>{id};
+  return TransferId::fromBytes(value.toByteArray());
 }
 
 std::optional<quint64> readWireInteger(const QCborValue &value)
@@ -91,10 +90,6 @@ bool knownResultCode(TransferResultCode code)
 
 QByteArray encodeComplete(const TransferCompleteMessage &message, QString *error)
 {
-  if (message.transferId.isNull()) {
-    setError(error, QStringLiteral("TRANSFER_COMPLETE requires a non-null transfer ID"));
-    return {};
-  }
   if (message.completedFiles > kMaximumCompletedTransferFiles ||
       message.skippedFiles > kMaximumCompletedTransferFiles ||
       message.completedFiles + message.skippedFiles > kMaximumCompletedTransferFiles) {
@@ -106,7 +101,7 @@ QByteArray encodeComplete(const TransferCompleteMessage &message, QString *error
     return {};
   }
   const QCborMap map = {
-      {key(TransferIdKey), message.transferId.toRfc4122()},
+      {key(TransferIdKey), message.transferId.toBytes()},
       {key(CompletedFilesOrResultCodeKey), static_cast<qint64>(message.completedFiles)},
       {key(SkippedFilesOrDiagnosticKey), static_cast<qint64>(message.skippedFiles)},
       {key(TotalBytesKey), static_cast<qint64>(message.totalBytes)},
@@ -116,10 +111,6 @@ QByteArray encodeComplete(const TransferCompleteMessage &message, QString *error
 
 QByteArray encodeResult(const TransferResultMessage &message, QString *error)
 {
-  if (message.transferId.isNull()) {
-    setError(error, QStringLiteral("TRANSFER_RESULT requires a non-null transfer ID"));
-    return {};
-  }
   if (!knownResultCode(message.code)) {
     setError(error, QStringLiteral("TRANSFER_RESULT code is unknown"));
     return {};
@@ -134,7 +125,7 @@ QByteArray encodeResult(const TransferResultMessage &message, QString *error)
   }
 
   QCborMap map = {
-      {key(TransferIdKey), message.transferId.toRfc4122()},
+      {key(TransferIdKey), message.transferId.toBytes()},
       {key(CompletedFilesOrResultCodeKey), static_cast<qint64>(message.code)},
   };
   if (!successful) {

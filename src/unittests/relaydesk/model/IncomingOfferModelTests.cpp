@@ -32,7 +32,7 @@ NegotiatedCapabilities capabilities()
 TransferOffer transferOffer()
 {
   return {
-      .transferId = QUuid::createUuid(),
+      .transferId = TransferId::generate(),
       .displayName = QStringLiteral("Project"),
       .totalBytes = 2048,
       .fileCount = 2,

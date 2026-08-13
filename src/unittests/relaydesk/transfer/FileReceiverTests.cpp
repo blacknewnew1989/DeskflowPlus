@@ -42,8 +42,8 @@ bool writeFile(const QString &path, QByteArrayView bytes)
 struct Fixture
 {
   QTemporaryDir directory;
-  TransferId transferId = QUuid::createUuid();
-  FileId fileId = QUuid::createUuid();
+  TransferId transferId = TransferId::generate();
+  FileId fileId = FileId::generate();
   QByteArray contents = QByteArrayLiteral("first chunk|second chunk");
 
   FileReceiveRequest request(QString relativePath = QStringLiteral("资料/报告.txt"), quint32 chunkBytes = 12) const
@@ -183,7 +183,7 @@ void FileReceiverTests::rejectsOutOfOrderAndWrongIdentity()
   FileReceiver wrongTransfer;
   QVERIFY(wrongTransfer.begin(fixture.request()).ok());
   QCOMPARE(
-      wrongTransfer.append({QUuid::createUuid(), fixture.fileId, 0, 0}, QByteArrayLiteral("x")).error,
+      wrongTransfer.append({TransferId::generate(), fixture.fileId, 0, 0}, QByteArrayLiteral("x")).error,
       FileReceiverError::TransferIdMismatch
   );
   QCOMPARE(wrongTransfer.snapshot().state, FileReceiverState::Failed);
@@ -193,10 +193,10 @@ void FileReceiverTests::rejectsOutOfOrderAndWrongIdentity()
   // Use another transfer so its deterministic staging path does not collide
   // with the retained failed partial from the previous receiver.
   auto independent = secondRequest;
-  independent.begin.transferId = QUuid::createUuid();
+  independent.begin.transferId = TransferId::generate();
   QVERIFY(wrongFile.begin(independent).ok());
   QCOMPARE(
-      wrongFile.append({independent.begin.transferId, QUuid::createUuid(), 0, 0}, QByteArrayLiteral("x")).error,
+      wrongFile.append({independent.begin.transferId, FileId::generate(), 0, 0}, QByteArrayLiteral("x")).error,
       FileReceiverError::FileIdMismatch
   );
 
@@ -378,7 +378,7 @@ void FileReceiverTests::rejectsMismatchedCheckpointState()
   auto state = resumeStateFor(fixture, receiver.snapshot());
 
   auto wrongTransfer = state;
-  wrongTransfer.transferId = QUuid::createUuid();
+  wrongTransfer.transferId = TransferId::generate();
   QCOMPARE(receiver.checkpoint(store, wrongTransfer).error, DurableCheckpointError::ResumeStateMismatch);
   auto wrongPart = state;
   wrongPart.files[0].partRelativePath = QStringLiteral("different.part");
@@ -582,8 +582,8 @@ void FileReceiverTests::senderReceiverRestartRoundTrip()
   }
   const QString sourcePath = directory.filePath(QStringLiteral("source-重启.bin"));
   QVERIFY(writeFile(sourcePath, contents));
-  const TransferId transferId = QUuid::createUuid();
-  const FileId fileId = QUuid::createUuid();
+  const TransferId transferId = TransferId::generate();
+  const FileId fileId = FileId::generate();
   const auto built = ManifestBuilder::buildSingleFile({
       .sourcePath = sourcePath,
       .relativeProtocolPath = QStringLiteral("received/重启.bin"),

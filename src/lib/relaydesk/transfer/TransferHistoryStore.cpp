@@ -89,7 +89,7 @@ bool validLimits(const TransferHistoryLimits &limits)
 
 bool validRecord(const TransferHistoryRecord &record)
 {
-  if (record.transferId.isNull() || record.peerDeviceId.value().isNull() || record.displayName.isEmpty() ||
+  if (record.peerDeviceId.value().isNull() || record.displayName.isEmpty() ||
       record.displayName.toUtf8().size() > kMaximumDisplayNameUtf8Bytes ||
       record.peerDisplayName.toUtf8().size() > kMaximumDisplayNameUtf8Bytes || !record.startedUtc.isValid() ||
       !record.finishedUtc.isValid() || record.startedUtc.toMSecsSinceEpoch() <= 0 ||
@@ -114,7 +114,7 @@ QByteArray encodeRecord(const TransferHistoryRecord &record)
 {
   const QJsonObject object{
       {QStringLiteral("schemaVersion"), static_cast<qint64>(kTransferHistorySchemaVersion)},
-      {QStringLiteral("transferId"), record.transferId.toString(QUuid::WithoutBraces)},
+      {QStringLiteral("transferId"), record.transferId.toString()},
       {QStringLiteral("peerDeviceId"), record.peerDeviceId.toString()},
       {QStringLiteral("peerDisplayName"), record.peerDisplayName},
       {QStringLiteral("displayName"), record.displayName},
@@ -181,17 +181,17 @@ std::optional<TransferHistoryRecord> decodeRecord(QByteArrayView line)
     return std::nullopt;
   }
 
-  const auto transferId = QUuid(object.value(QStringLiteral("transferId")).toString());
+  const auto transferId = TransferId::fromString(object.value(QStringLiteral("transferId")).toString());
   const auto peerDeviceId =
       deskflow::relaydesk::DeviceId::fromString(object.value(QStringLiteral("peerDeviceId")).toString());
   const auto direction = parseDirection(object.value(QStringLiteral("direction")).toString());
   const auto status = parseStatus(object.value(QStringLiteral("status")).toString());
-  if (transferId.isNull() || !peerDeviceId.has_value() || !direction.has_value() || !status.has_value()) {
+  if (!transferId.has_value() || !peerDeviceId.has_value() || !direction.has_value() || !status.has_value()) {
     return std::nullopt;
   }
 
   TransferHistoryRecord record{
-      .transferId = transferId,
+      .transferId = *transferId,
       .peerDeviceId = *peerDeviceId,
       .peerDisplayName = object.value(QStringLiteral("peerDisplayName")).toString(),
       .displayName = object.value(QStringLiteral("displayName")).toString(),
@@ -212,7 +212,7 @@ bool newestFirst(const TransferHistoryRecord &left, const TransferHistoryRecord 
   if (left.finishedUtc != right.finishedUtc) {
     return left.finishedUtc > right.finishedUtc;
   }
-  return left.transferId.toRfc4122() < right.transferId.toRfc4122();
+  return left.transferId.toBytes() < right.transferId.toBytes();
 }
 
 } // namespace

@@ -160,7 +160,7 @@ ResumeState resumeState(
       .files =
           {
               {
-                  .fileId = snapshot.fileId,
+                  .fileId = snapshot.fileId.value(),
                   .relativeProtocolPath = snapshot.relativeProtocolPath,
                   .durableOffset = 0,
                   .totalBytes = snapshot.expectedSize,
@@ -435,8 +435,8 @@ void TransferRecoveryMatrixTests::networkLossAndProcessRestart()
   QVERIFY(temporary.isValid());
   const QString sourcePath = temporary.filePath(QStringLiteral("source/网络恢复 😀.bin"));
   QVERIFY(writeFile(sourcePath, contents));
-  const TransferId transferId = QUuid::createUuid();
-  const FileId fileId = QUuid::createUuid();
+  const TransferId transferId = TransferId::generate();
+  const FileId fileId = FileId::generate();
   const auto manifest = ManifestBuilder::buildSingleFile({
       .sourcePath = sourcePath,
       .relativeProtocolPath = QStringLiteral("网络/恢复 😀.bin"),
@@ -469,12 +469,12 @@ void TransferRecoveryMatrixTests::pauseResumeStopsAndRestartsProduction()
   QByteArray contents(3 * static_cast<qsizetype>(kTestChunkBytes), '\x41');
   const QString sourcePath = temporary.filePath(QStringLiteral("source/pause.bin"));
   QVERIFY(writeFile(sourcePath, contents));
-  const TransferId transferId = QUuid::createUuid();
+  const TransferId transferId = TransferId::generate();
   const auto manifest = ManifestBuilder::buildSingleFile({
       .sourcePath = sourcePath,
       .relativeProtocolPath = QStringLiteral("暂停/继续.bin"),
       .transferId = transferId,
-      .fileId = QUuid::createUuid(),
+      .fileId = FileId::generate(),
   });
   QVERIFY2(manifest.ok(), qPrintable(manifest.diagnostic));
   const PreparedManifestEntry source{
@@ -549,12 +549,12 @@ void TransferRecoveryMatrixTests::cancelPolicy()
   const QByteArray contents(2 * static_cast<qsizetype>(kTestChunkBytes), '\x55');
   const QString sourcePath = temporary.filePath(QStringLiteral("source/cancel.bin"));
   QVERIFY(writeFile(sourcePath, contents));
-  const TransferId transferId = QUuid::createUuid();
+  const TransferId transferId = TransferId::generate();
   const auto manifest = ManifestBuilder::buildSingleFile({
       .sourcePath = sourcePath,
       .relativeProtocolPath = QStringLiteral("取消/partial.bin"),
       .transferId = transferId,
-      .fileId = QUuid::createUuid(),
+      .fileId = FileId::generate(),
   });
   QVERIFY2(manifest.ok(), qPrintable(manifest.diagnostic));
   const PreparedManifestEntry source{
@@ -609,7 +609,7 @@ void TransferRecoveryMatrixTests::unicodeFolderAndMultipleFilesRecover()
   const QByteArray unicodeContents(2 * static_cast<qsizetype>(kTestChunkBytes) + 7, '\x6a');
   QVERIFY(writeFile(QDir(sourceRoot).filePath(QStringLiteral("资料/报告 😀.txt")), unicodeContents));
   QVERIFY(writeFile(QDir(sourceRoot).filePath(QStringLiteral("零字节.dat")), {}));
-  const TransferId transferId = QUuid::createUuid();
+  const TransferId transferId = TransferId::generate();
   const auto manifest = ManifestBuilder::buildTransfer({
       .sources = {{sourceRoot, QStringLiteral("共享 📁")}},
       .transferId = transferId,

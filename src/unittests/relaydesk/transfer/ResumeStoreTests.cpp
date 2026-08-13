@@ -16,7 +16,7 @@ namespace {
 ResumeState makeState(const QString &suffix = QStringLiteral("alpha"))
 {
   return {
-      .transferId = QUuid(QStringLiteral("11111111-2222-4333-8444-555555555555")),
+      .transferId = *TransferId::fromString(QStringLiteral("11111111-2222-4333-8444-555555555555")),
       .peerDeviceId =
           *deskflow::relaydesk::DeviceId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
       .manifestSha256 = QByteArray(32, '\x5a'),
@@ -24,14 +24,14 @@ ResumeState makeState(const QString &suffix = QStringLiteral("alpha"))
       .files =
           {
               {
-                  .fileId = QUuid(QStringLiteral("12345678-1234-4234-8234-1234567890ab")),
+                  .fileId = *FileId::fromString(QStringLiteral("12345678-1234-4234-8234-1234567890ab")),
                   .relativeProtocolPath = QStringLiteral("资料/%1.bin").arg(suffix),
                   .durableOffset = 8U * 1024U * 1024U,
                   .totalBytes = 20U * 1024U * 1024U,
                   .partRelativePath = QStringLiteral("12345678-1234-4234-8234-1234567890ab.part"),
               },
               {
-                  .fileId = QUuid(QStringLiteral("87654321-4321-4321-8321-ba0987654321")),
+                  .fileId = *FileId::fromString(QStringLiteral("87654321-4321-4321-8321-ba0987654321")),
                   .relativeProtocolPath = QStringLiteral("empty.txt"),
                   .durableOffset = 0,
                   .totalBytes = 0,
@@ -144,10 +144,6 @@ void ResumeStoreTests::rejectsInvalidStateBeforeWriting()
   QTemporaryDir temporary;
   QVERIFY(temporary.isValid());
   ResumeStore store(temporary.filePath(QStringLiteral("active")));
-
-  auto nullTransfer = makeState();
-  nullTransfer.transferId = QUuid{};
-  QCOMPARE(store.save(nullTransfer).error, ResumeStoreError::InvalidState);
 
   auto hash = makeState();
   hash.manifestSha256.chop(1);

@@ -25,14 +25,14 @@ bool writeBytes(const QString &path, qsizetype count)
 ResumeState stateAt(const QString &partRelativePath, quint64 offset, QDateTime updatedUtc)
 {
   return {
-      .transferId = QUuid::createUuid(),
+      .transferId = TransferId::generate(),
       .peerDeviceId = deskflow::relaydesk::DeviceId::generate(),
       .manifestSha256 = QByteArray(32, '\x3b'),
       .direction = ResumeDirection::Receiving,
       .files =
           {
               {
-                  .fileId = QUuid::createUuid(),
+                  .fileId = FileId::generate(),
                   .relativeProtocolPath = QStringLiteral("资料/a.bin"),
                   .durableOffset = offset,
                   .totalBytes = 1024,

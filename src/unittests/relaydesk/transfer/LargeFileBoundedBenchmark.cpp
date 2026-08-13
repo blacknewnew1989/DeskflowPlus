@@ -75,8 +75,8 @@ void LargeFileBoundedBenchmark::tenGiBLogicalSourceKeepsOwnedBuffersBounded()
   info.refresh();
   QCOMPARE(static_cast<quint64>(info.size()), kLogicalBytes);
 
-  const TransferId transferId = QUuid::createUuid();
-  const FileId fileId = QUuid::createUuid();
+  const TransferId transferId = TransferId::generate();
+  const FileId fileId = FileId::generate();
   MeasuringBoundedSink sink;
   TransferSenderPump pump(
       {

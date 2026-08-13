@@ -13,8 +13,9 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-const QUuid kTransferId(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
-const QUuid kFileId(QStringLiteral("fedcba98-7654-4321-9234-56789abcdef0"));
+const TransferId kTransferId =
+    *TransferId::fromString(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
+const FileId kFileId = *FileId::fromString(QStringLiteral("fedcba98-7654-4321-9234-56789abcdef0"));
 
 ControlMessageDecodeResult roundTrip(const ControlMessage &source)
 {
@@ -33,7 +34,7 @@ ControlMessageDecodeResult roundTrip(const ControlMessage &source)
 QCborMap validOfferMap()
 {
   QCborMap map;
-  map.insert(QCborValue(1), QCborValue(kTransferId.toRfc4122()));
+  map.insert(QCborValue(1), QCborValue(kTransferId.toBytes()));
   map.insert(QCborValue(2), QCborValue(QStringLiteral("Project")));
   map.insert(QCborValue(3), QCborValue(1234));
   map.insert(QCborValue(4), QCborValue(2));
@@ -72,16 +73,17 @@ private Q_SLOTS:
 
 void ControlMessageCodecTests::offerRoundTrip()
 {
-  TransferOffer source;
-  source.transferId = kTransferId;
-  source.displayName = QStringLiteral("设计资料 📁");
-  source.totalBytes = 12'345'678'901ULL;
-  source.fileCount = 42;
-  source.directoryCount = 8;
-  source.manifestSha256 = QByteArray(kSha256Bytes, '\x42');
-  source.manifestPageCount = 3;
-  source.requestedConflictPolicy = ConflictPolicy::Ask;
-  source.createdAtMs = 1'730'000'000'000ULL;
+  TransferOffer source{
+      .transferId = kTransferId,
+      .displayName = QStringLiteral("设计资料 📁"),
+      .totalBytes = 12'345'678'901ULL,
+      .fileCount = 42,
+      .directoryCount = 8,
+      .manifestSha256 = QByteArray(kSha256Bytes, '\x42'),
+      .manifestPageCount = 3,
+      .requestedConflictPolicy = ConflictPolicy::Ask,
+      .createdAtMs = 1'730'000'000'000ULL,
+  };
 
   const auto result = roundTrip(ControlMessage(source));
 
@@ -93,12 +95,13 @@ void ControlMessageCodecTests::offerRoundTrip()
 
 void ControlMessageCodecTests::acceptRoundTripPreservesUnicodePathMetadata()
 {
-  TransferAccept source;
-  source.transferId = kTransferId;
-  source.effectiveConflictPolicy = ConflictPolicy::AutoRename;
-  source.logicalDestination = QStringLiteral("下载/RelayDesk/客户资料 📁");
-  source.freeBytes = 98'765'432'100ULL;
-  source.autoAccepted = true;
+  TransferAccept source{
+      .transferId = kTransferId,
+      .effectiveConflictPolicy = ConflictPolicy::AutoRename,
+      .logicalDestination = QStringLiteral("下载/RelayDesk/客户资料 📁"),
+      .freeBytes = 98'765'432'100ULL,
+      .autoAccepted = true,
+  };
 
   const auto result = roundTrip(ControlMessage(source));
 
@@ -128,7 +131,7 @@ void ControlMessageCodecTests::rejectRoundTripSupportsOptionalDiagnostic()
 void ControlMessageCodecTests::rejectsUnknownRejectReason()
 {
   QCborMap map;
-  map.insert(QCborValue(1), QCborValue(kTransferId.toRfc4122()));
+  map.insert(QCborValue(1), QCborValue(kTransferId.toBytes()));
   map.insert(QCborValue(2), QCborValue(99));
 
   const auto result =

@@ -16,7 +16,8 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-const TransferId kTransferId(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
+const TransferId kTransferId =
+    *TransferId::fromString(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
 const qint64 kModifiedAtMs = 1'730'000'000'000LL;
 
 ManifestEntry makeEntry(
@@ -24,21 +25,18 @@ ManifestEntry makeEntry(
     const QByteArray &sha256 = QByteArray(32, '\x42')
 )
 {
-  ManifestEntry entry;
-  entry.id = QUuid(uuid);
-  entry.relativeProtocolPath = path;
-  entry.type = type;
-  entry.size = type == ManifestEntryType::Directory ? 0 : size;
-  entry.modifiedUtc = QDateTime::fromMSecsSinceEpoch(kModifiedAtMs, QTimeZone::UTC);
-  entry.sha256 = type == ManifestEntryType::Directory ? QByteArray() : sha256;
-  return entry;
+  return {
+      .id = *FileId::fromString(uuid),
+      .relativeProtocolPath = path,
+      .type = type,
+      .size = type == ManifestEntryType::Directory ? 0 : size,
+      .modifiedUtc = QDateTime::fromMSecsSinceEpoch(kModifiedAtMs, QTimeZone::UTC),
+      .sha256 = type == ManifestEntryType::Directory ? QByteArray() : sha256,
+  };
 }
 
 TransferManifest makeManifest()
 {
-  TransferManifest manifest;
-  manifest.summary.id = kTransferId;
-  manifest.summary.displayName = QStringLiteral("Root");
   const QList<ManifestEntry> entries{
       makeEntry(
           QStringLiteral("Root"), QStringLiteral("10000000-0000-8000-8000-000000000001"), ManifestEntryType::Directory
@@ -49,14 +47,22 @@ TransferManifest makeManifest()
           ManifestEntryType::File, 4, QByteArray(32, '\x24')
       ),
   };
+  QList<PreparedManifestEntry> prepared;
   for (const ManifestEntry &entry : entries) {
-    manifest.entries.append({.entry = entry});
+    prepared.append({.entry = entry});
   }
-  manifest.summary.fileCount = 2;
-  manifest.summary.directoryCount = 1;
-  manifest.summary.totalBytes = 7;
-  manifest.summary.canonicalSha256 = ManifestPageCodec::canonicalSha256(entries);
-  return manifest;
+  return {
+      .entries = std::move(prepared),
+      .summary =
+          {
+              .id = kTransferId,
+              .displayName = QStringLiteral("Root"),
+              .totalBytes = 7,
+              .fileCount = 2,
+              .directoryCount = 1,
+              .canonicalSha256 = ManifestPageCodec::canonicalSha256(entries),
+          },
+  };
 }
 
 ManifestPagingLimits twoEntryPages()
@@ -161,17 +167,21 @@ void ManifestPageCodecTests::plansDeterministicBoundedPagesAndReassembles()
 
 void ManifestPageCodecTests::encodedPageMatchesFrozenVector()
 {
-  TransferManifest manifest;
-  manifest.summary.id = kTransferId;
-  manifest.summary.displayName = QStringLiteral("vector.txt");
   const ManifestEntry entry = makeEntry(
       QStringLiteral("vector.txt"), QStringLiteral("fedcba98-7654-4321-9234-56789abcdef0"), ManifestEntryType::File, 3,
       QByteArray::fromHex(QByteArrayLiteral("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"))
   );
-  manifest.entries.append({.entry = entry});
-  manifest.summary.fileCount = 1;
-  manifest.summary.totalBytes = 3;
-  manifest.summary.canonicalSha256 = ManifestPageCodec::canonicalSha256({entry});
+  TransferManifest manifest{
+      .entries = {{.entry = entry}},
+      .summary =
+          {
+              .id = kTransferId,
+              .displayName = QStringLiteral("vector.txt"),
+              .totalBytes = 3,
+              .fileCount = 1,
+              .canonicalSha256 = ManifestPageCodec::canonicalSha256({entry}),
+          },
+  };
   const auto plan = ManifestPageCodec::plan(manifest);
   QVERIFY2(plan.ok(), qPrintable(plan.diagnostic));
 
@@ -229,9 +239,10 @@ void ManifestPageCodecTests::plannerEnforcesEntryPageAndMetadataLimits()
 void ManifestPageCodecTests::encoderRejectsForgedPagePlan()
 {
   const TransferManifest manifest = makeManifest();
-  ManifestPagePlan forged;
-  forged.transferId = kTransferId;
-  forged.entryCount = manifest.entries.size();
+  ManifestPagePlan forged{
+      .transferId = kTransferId,
+      .entryCount = static_cast<quint64>(manifest.entries.size()),
+  };
   forged.ranges.append({.firstEntry = 2, .entryCount = 2});
   QString error;
 
@@ -316,7 +327,8 @@ void ManifestPageCodecTests::manifestCompleteRoundTripsAndFinalizes()
       kTransferId, plan.plan->pageCount(), manifest.entries.size(), manifest.summary.canonicalSha256, limits
   );
   ManifestComplete wrongTransfer = complete;
-  wrongTransfer.transferId = QUuid(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"));
+  wrongTransfer.transferId =
+      *TransferId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"));
   QCOMPARE(wrongComplete.finish(wrongTransfer).error, ManifestPageError::TransferMismatch);
   ManifestComplete wrongDigest = complete;
   wrongDigest.canonicalSha256 = QByteArray(32, '\x11');
@@ -417,7 +429,8 @@ void ManifestPageCodecTests::reassemblerRejectsIdentityCountDigestAndTotalMetada
   const QList<QByteArray> pages = encodePlannedPages(manifest, *plan.plan, limits);
 
   ManifestPageReassembler wrongTransfer(
-      QUuid(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")), plan.plan->pageCount(), manifest.entries.size(),
+      *TransferId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")), plan.plan->pageCount(),
+      manifest.entries.size(),
       manifest.summary.canonicalSha256, limits
   );
   QCOMPARE(wrongTransfer.addEncodedPage(kProtocolMajorVersion, pages.at(0)), ManifestPageError::TransferMismatch);
@@ -478,12 +491,10 @@ void ManifestPageCodecTests::reassemblerRejectsPathCollisionsAndDuplicateFileIds
 void ManifestPageCodecTests::pagesThousandsOfEntriesWithinBounds()
 {
   constexpr qsizetype kEntryCount = 5'000;
-  TransferManifest manifest;
-  manifest.summary.id = kTransferId;
-  manifest.summary.displayName = QStringLiteral("bulk");
   QList<ManifestEntry> entries;
   entries.reserve(kEntryCount);
-  manifest.entries.reserve(kEntryCount);
+  QList<PreparedManifestEntry> prepared;
+  prepared.reserve(kEntryCount);
   for (qsizetype index = 0; index < kEntryCount; ++index) {
     const QString suffix = QStringLiteral("%1").arg(index + 1, 12, 16, QLatin1Char('0'));
     ManifestEntry entry = makeEntry(
@@ -492,10 +503,18 @@ void ManifestPageCodecTests::pagesThousandsOfEntriesWithinBounds()
         QByteArray(32, static_cast<char>(index & 0xff))
     );
     entries.append(entry);
-    manifest.entries.append({.entry = std::move(entry)});
+    prepared.append({.entry = std::move(entry)});
   }
-  manifest.summary.fileCount = kEntryCount;
-  manifest.summary.canonicalSha256 = ManifestPageCodec::canonicalSha256(entries);
+  TransferManifest manifest{
+      .entries = std::move(prepared),
+      .summary =
+          {
+              .id = kTransferId,
+              .displayName = QStringLiteral("bulk"),
+              .fileCount = kEntryCount,
+              .canonicalSha256 = ManifestPageCodec::canonicalSha256(entries),
+          },
+  };
 
   ManifestPagingLimits limits;
   limits.maxEntriesPerPage = 128;
