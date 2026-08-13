@@ -52,8 +52,24 @@ class MacosPackagingContractTests(unittest.TestCase):
             "/private/tmp/relaydesk-package.XXXXXX",
             'cpack --config "$BUILD_DIR/CPackConfig.cmake" -B "$PACKAGE_TEMP"',
             '--build-dir "$PACKAGE_TEMP"',
+            'RUNNER_TEMP="$PACKAGE_TEMP" python3',
+            'test-macos-install-regression.py',
+            '--artifact-dir "$OUT_DIR"',
+            '--expected-commit "$FULL_SHA"',
+            'TEST-005-macos-report.json',
+            'MACOS_INSTALL_LIFECYCLE_STATUS=PASS',
+            'MACOS_INSTALL_LIFECYCLE_STATUS=NOT_RUN',
         ):
             self.assertIn(required, script)
+
+        self.assertLess(
+            script.index('python3 "${COLLECT_ARGS[@]}"'),
+            script.index('test-macos-install-regression.py'),
+        )
+        self.assertLess(
+            script.index('test-macos-install-regression.py'),
+            script.index('echo "MACOS_ARTIFACTS=$OUT_DIR"'),
+        )
 
         for forbidden in ("AC_PASSWORD", "APPLE_ID_PASSWORD", "--password", "-maxdepth"):
             self.assertNotIn(forbidden, script)
