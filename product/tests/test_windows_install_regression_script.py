@@ -58,6 +58,10 @@ class WindowsInstallRegressionScriptTests(unittest.TestCase):
         self.assertIn("TEST005_PREVIOUS_PRODUCT_REMAINS_AFTER_UPGRADE", SCRIPT)
         self.assertIn('AllowSameVersionUpgrades="yes"', SCRIPT)
         self.assertIn("-PreviousMsiPath or -GeneratePreviousPackage", SCRIPT)
+        self.assertIn("$View.Execute() | Out-Null", SCRIPT)
+        self.assertIn("$View.Close() | Out-Null", SCRIPT)
+        self.assertIn("$Database.Commit() | Out-Null", SCRIPT)
+        self.assertIn("$Summary.Persist() | Out-Null", SCRIPT)
 
     def test_launches_installed_and_portable_executables_for_dependencies(self) -> None:
         self.assertIn("$PortableCore.FullName", SCRIPT)

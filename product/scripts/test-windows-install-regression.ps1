@@ -139,7 +139,7 @@ function Get-MsiProperty {
         $View = $Database.OpenView(
             "SELECT `Value` FROM `Property` WHERE `Property` = '$PropertyName'"
         )
-        $View.Execute()
+        $View.Execute() | Out-Null
         $Record = $View.Fetch()
         if ($null -eq $Record) { throw "TEST005_MSI_PROPERTY_MISSING: $PropertyName" }
         return [string]$Record.StringData(1)
@@ -149,7 +149,7 @@ function Get-MsiProperty {
             [Runtime.InteropServices.Marshal]::FinalReleaseComObject($Record) | Out-Null
         }
         if ($null -ne $View) {
-            $View.Close()
+            $View.Close() | Out-Null
             [Runtime.InteropServices.Marshal]::FinalReleaseComObject($View) | Out-Null
         }
         if ($null -ne $Database) {
@@ -209,8 +209,8 @@ function New-SyntheticPreviousMsi {
                     "UPDATE `Property` SET `Value` = '$($Update.Value)' " +
                     "WHERE `Property` = '$($Update.Property)'"
                 )
-                $View.Execute()
-                $View.Close()
+                $View.Execute() | Out-Null
+                $View.Close() | Out-Null
             }
             finally {
                 if ($null -ne $View) {
@@ -218,14 +218,14 @@ function New-SyntheticPreviousMsi {
                 }
             }
         }
-        $Database.Commit()
+        $Database.Commit() | Out-Null
         [Runtime.InteropServices.Marshal]::FinalReleaseComObject($Database) | Out-Null
         $Database = $null
 
         $Summary = $Installer.SummaryInformation($DestinationPath, 20)
         try {
             $Summary.Property(9) = $PreviousPackageCode
-            $Summary.Persist()
+            $Summary.Persist() | Out-Null
         }
         finally {
             if ($null -ne $Summary) {
