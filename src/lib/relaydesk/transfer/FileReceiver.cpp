@@ -259,6 +259,35 @@ FileReceiverResult FileReceiver::append(const FileChunkMessage &chunk, QByteArra
 
 FileReceiverResult FileReceiver::finish(const FileEndMessage &end)
 {
+  const auto staged = finishStaging(end);
+  if (!staged.ok()) {
+    return staged;
+  }
+  if (!QDir().mkpath(QFileInfo(m_requestedTarget).absolutePath())) {
+    return failCommit(
+        FileReceiverError::DirectoryCreateFailed, FileResultCode::IoError,
+        QStringLiteral("TARGET_DIRECTORY_CREATE_FAILED")
+    );
+  }
+
+  const QString committedPath = chooseAutoRenameTarget(m_requestedTarget);
+  if (committedPath.isEmpty()) {
+    return failCommit(
+        FileReceiverError::TargetExists, FileResultCode::TargetExists,
+        QStringLiteral("TARGET_NAME_UNAVAILABLE")
+    );
+  }
+  if (!QFile::rename(m_snapshot.partPath, committedPath)) {
+    return failCommit(
+        FileReceiverError::CommitFailed, FileResultCode::IoError,
+        QStringLiteral("ATOMIC_COMMIT_FAILED")
+    );
+  }
+  return confirmCommitted(committedPath);
+}
+
+FileReceiverResult FileReceiver::finishStaging(const FileEndMessage &end)
+{
   if (m_snapshot.state != FileReceiverState::Receiving) {
     return failure(FileReceiverError::InvalidState, QStringLiteral("file receiver is not awaiting FILE_END"));
   }
@@ -281,26 +310,28 @@ FileReceiverResult FileReceiver::finish(const FileEndMessage &end)
   if (m_hash.result() != m_expectedSha256) {
     return fail(FileReceiverError::HashMismatch, FileResultCode::HashMismatch, QStringLiteral("FILE_HASH_MISMATCH"));
   }
-  if (!QDir().mkpath(QFileInfo(m_requestedTarget).absolutePath())) {
-    return fail(
-        FileReceiverError::DirectoryCreateFailed, FileResultCode::IoError,
-        QStringLiteral("TARGET_DIRECTORY_CREATE_FAILED")
+  return {};
+}
+
+FileReceiverResult FileReceiver::confirmCommitted(QString committedPath)
+{
+  if (m_snapshot.state != FileReceiverState::Receiving || committedPath.isEmpty() ||
+      QFileInfo::exists(m_snapshot.partPath)) {
+    return failCommit(
+        FileReceiverError::CommitFailed, FileResultCode::IoError,
+        QStringLiteral("ATOMIC_COMMIT_CONFIRMATION_FAILED")
     );
   }
-
-  const QString committedPath = chooseAutoRenameTarget(m_requestedTarget);
-  if (committedPath.isEmpty()) {
-    return fail(
-        FileReceiverError::TargetExists, FileResultCode::TargetExists, QStringLiteral("TARGET_NAME_UNAVAILABLE")
-    );
-  }
-  if (!QFile::rename(m_snapshot.partPath, committedPath)) {
-    return fail(FileReceiverError::CommitFailed, FileResultCode::IoError, QStringLiteral("ATOMIC_COMMIT_FAILED"));
-  }
-
-  m_snapshot.committedPath = committedPath;
+  m_snapshot.committedPath = std::move(committedPath);
   m_snapshot.state = FileReceiverState::Completed;
   return result(FileResultCode::Ok);
+}
+
+FileReceiverResult FileReceiver::failCommit(
+    FileReceiverError error, FileResultCode code, QString diagnostic
+)
+{
+  return fail(error, code, std::move(diagnostic));
 }
 
 FileReceiverResult FileReceiver::cancel(PartialDisposition disposition)
