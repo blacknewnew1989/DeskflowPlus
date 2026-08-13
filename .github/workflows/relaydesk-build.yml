@@ -50,7 +50,10 @@ jobs:
           - name: macos-arm64
             runs-on: macos-15
             arch: arm64
-            qt-version: 6.10.1
+            # Qt 6.10.2 contains the upstream macdeployqt fix that signs the
+            # main app binary after nested helpers ("nested code is modified
+            # or invalid").
+            qt-version: 6.10.2
             vcpkg-triplet: ""
             package_variant: adhoc
             config-args: >-

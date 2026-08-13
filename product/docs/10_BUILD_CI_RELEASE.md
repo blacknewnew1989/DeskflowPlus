@@ -17,7 +17,7 @@ Qt:                  6.7+
 OpenSSL:             3.0+
 C++:                 20
 Windows CI Qt:       6.10.1
-macOS arm64 CI Qt:   6.10.1
+macOS arm64 CI Qt:   6.10.2
 WiX:                 5.0.2
 macOS arm64 target:  14+
 ```
