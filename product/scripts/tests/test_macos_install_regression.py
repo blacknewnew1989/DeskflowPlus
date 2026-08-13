@@ -6,10 +6,12 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "test-macos-install-regression.py"
@@ -22,6 +24,18 @@ SPEC.loader.exec_module(MODULE)
 
 
 class MacosInstallRegressionTests(unittest.TestCase):
+    @staticmethod
+    def _bundle_info(root: Path) -> MODULE.BundleInfo:
+        app = root / "RelayDesk.app"
+        return MODULE.BundleInfo(
+            path=app,
+            identifier="local.relaydesk.desktop",
+            executable_name="RelayDesk",
+            version="1.26.0",
+            executable=app / "Contents/MacOS/RelayDesk",
+            core_executable=app / "Contents/MacOS/deskflow-core",
+        )
+
     @staticmethod
     def _write_artifacts(root: Path, commit: str = "a" * 40) -> Path:
         artifact_dir = root / "artifact"
@@ -88,6 +102,36 @@ class MacosInstallRegressionTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.RegressionError, "PACKAGE_VARIANT"):
                 MODULE.validate_artifacts(artifacts, commit)
 
+    def test_rejects_non_arm64_bundle_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            completed = subprocess.CompletedProcess([], 0, stdout="x86_64\n", stderr="")
+            with mock.patch.object(MODULE, "run_command", return_value=completed):
+                with self.assertRaisesRegex(
+                    MODULE.RegressionError, "TEST005_ARCHITECTURES_INVALID"
+                ):
+                    MODULE.verify_bundle_platform(
+                        self._bundle_info(Path(directory)), mock.Mock()
+                    )
+
+    def test_rejects_wrong_macos_minimum_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            commands = [
+                subprocess.CompletedProcess([], 0, stdout="arm64\n", stderr=""),
+                subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout="platform MACOS\nminos 13.0\n",
+                    stderr="",
+                ),
+            ]
+            with mock.patch.object(MODULE, "run_command", side_effect=commands):
+                with self.assertRaisesRegex(
+                    MODULE.RegressionError, "TEST005_MINIMUM_MACOS_INVALID"
+                ):
+                    MODULE.verify_bundle_platform(
+                        self._bundle_info(Path(directory)), mock.Mock()
+                    )
+
     def test_test_root_must_be_unique_and_beneath_runner_temp(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -145,6 +189,10 @@ class MacosInstallRegressionTests(unittest.TestCase):
             '"accessibility": {"status": "NOT_RUN"',
             '"inputMonitoring": {"status": "NOT_RUN"',
             '"localNetwork": {"status": "NOT_RUN"',
+            '"/usr/bin/lipo", "-archs"',
+            '"/usr/bin/xcrun", "vtool", "-show-build"',
+            'EXPECTED_MACOS_ARCHITECTURES = ["arm64"]',
+            'EXPECTED_MACOS_MINIMUM_VERSION = "14.0"',
         ):
             self.assertIn(required, script)
         self.assertNotIn('Path("/Applications")', script)

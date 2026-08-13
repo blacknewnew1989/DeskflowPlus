@@ -29,6 +29,8 @@ from typing import IO, Any, Iterable
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 TEST_ROOT_PREFIX = "relaydesk-test005-macos-"
 EXPECTED_BONJOUR_SERVICES = ["_relaydesk._udp"]
+EXPECTED_MACOS_ARCHITECTURES = ["arm64"]
+EXPECTED_MACOS_MINIMUM_VERSION = "14.0"
 PERMISSION_NOT_RUN_REASON = (
     "hosted runners cannot grant or observe the macOS System Settings consent UI"
 )
@@ -328,6 +330,29 @@ def verify_adhoc_bundle(app: Path, log: IO[str]) -> None:
         raise RegressionError(f"TEST005_ADHOC_HAS_AUTHORITY: {app.name}")
 
 
+def verify_bundle_platform(bundle: BundleInfo, log: IO[str]) -> None:
+    for executable in (bundle.executable, bundle.core_executable):
+        architectures = run_command(
+            ["/usr/bin/lipo", "-archs", executable], log
+        ).stdout.split()
+        if architectures != EXPECTED_MACOS_ARCHITECTURES:
+            raise RegressionError(
+                f"TEST005_ARCHITECTURES_INVALID: {executable.name}: {architectures}"
+            )
+
+        build = run_command(
+            ["/usr/bin/xcrun", "vtool", "-show-build", executable], log
+        ).stdout
+        if re.search(r"^\s*platform\s+MACOS\s*$", build, re.MULTILINE) is None:
+            raise RegressionError(f"TEST005_PLATFORM_INVALID: {executable.name}")
+        minimum = re.search(r"^\s*minos\s+(\S+)\s*$", build, re.MULTILINE)
+        if minimum is None or minimum.group(1) != EXPECTED_MACOS_MINIMUM_VERSION:
+            found = minimum.group(1) if minimum is not None else "missing"
+            raise RegressionError(
+                f"TEST005_MINIMUM_MACOS_INVALID: {executable.name}: {found}"
+            )
+
+
 def assert_same_bundle(left: BundleInfo, right: BundleInfo) -> None:
     left_identity = (left.identifier, left.executable_name, left.version)
     right_identity = (right.identifier, right.executable_name, right.version)
@@ -504,6 +529,8 @@ def run_regression(args: argparse.Namespace) -> int:
             zip_app = find_single_app(extraction, "TEST005_APP_ZIP_STRUCTURE")
             zip_info = read_bundle_info(zip_app)
             result["checks"]["appZipStructure"] = "PASS"
+            verify_bundle_platform(zip_info, log)
+            result["checks"]["appZipPlatform"] = "PASS"
             verify_adhoc_bundle(zip_app, log)
             result["checks"]["appZipCodesign"] = "PASS"
 
@@ -529,6 +556,8 @@ def run_regression(args: argparse.Namespace) -> int:
             result["checks"]["dmgAttach"] = "PASS"
             dmg_app = find_single_app(mount_point, "TEST005_DMG_STRUCTURE")
             dmg_info = read_bundle_info(dmg_app)
+            verify_bundle_platform(dmg_info, log)
+            result["checks"]["dmgAppPlatform"] = "PASS"
             verify_adhoc_bundle(dmg_app, log)
             result["checks"]["dmgAppCodesign"] = "PASS"
             assert_same_bundle(zip_info, dmg_info)
