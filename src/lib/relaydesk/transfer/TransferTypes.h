@@ -94,6 +94,15 @@ struct SendOptions
   [[nodiscard]] bool operator==(const SendOptions &) const = default;
 };
 
+struct ReceiveOptions
+{
+  QString destinationRoot;
+  ConflictPolicy conflictPolicy = ConflictPolicy::AutoRename;
+  bool keepPartialOnFailure = true;
+
+  [[nodiscard]] bool operator==(const ReceiveOptions &) const = default;
+};
+
 struct IncomingOffer
 {
   deskflow::relaydesk::DeviceId peerDeviceId;
@@ -110,4 +119,5 @@ struct IncomingOffer
 } // namespace relaydesk::transfer
 
 Q_DECLARE_METATYPE(relaydesk::transfer::SendOptions)
+Q_DECLARE_METATYPE(relaydesk::transfer::ReceiveOptions)
 Q_DECLARE_METATYPE(relaydesk::transfer::IncomingOffer)

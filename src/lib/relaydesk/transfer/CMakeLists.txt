@@ -10,6 +10,7 @@ add_library(relaydesk_transfer STATIC
   ConflictResolver.h
   FrameCodec.cpp
   FrameCodec.h
+  IFileTransferService.h
   FileMessageCodec.cpp
   FileMessageCodec.h
   FileReceiver.cpp

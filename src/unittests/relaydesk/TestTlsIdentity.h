@@ -1,0 +1,72 @@
+/*
+ * Deskflow -- mouse and keyboard sharing utility
+ * SPDX-FileCopyrightText: (C) 2026 RelayDesk Developers
+ * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+ */
+
+#pragma once
+
+#include <QFile>
+#include <QString>
+#include <QTemporaryDir>
+
+namespace relaydesk::test {
+
+inline constexpr char kCombinedPem[] = R"PEM(-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCPMBaQGIlbqZK5
+IIKnfUtBH8nK6KniFRKcleDyT7rHgvvPMpNtflXhDudIRaTMAXiWoN7JS4txsZy7
+iZpE9Vvlrs0GO32fAz/v5qZWChCW1MNbDe9Stvu8hGkC7hR03EzrqeJlwmNdFN6O
+Z1u9d4p5rjBUwF8Hn861L8/0VHADCEzENcBWAxH6qr51HPNwymE/O8xJahLQoxNe
+c9WBTUnj7ZEv+JQnwbZtgxSC3xPx8JMNF9RjC2WtJcGtdyOawCoecNPP7U0JuG90
+16wR4A6l01+bccwx22OnqQ57Phnm4SduQBowF/u7ryBjRg1xcQjl8ZR3V9S4B3vI
+8BiO0Y0zAgMBAAECggEACTPZ/2DUUyPO3j8Mpp8S2xij63qQkIsyKwYm8uvU4UW1
+0Vc6ymq4MkK28ponQUVG7sdgCifkymXT4OmzFIOAaH6XhrMEG9gln9F/F0CGWGtM
+MunuW66O90q7RQjwH6KY/vxoJIodwLm6pARYjRDFwZREXu4OLXtD2bk88EMM/+TM
+CNt7qZkw7a2ErUG9GP0nDLFzZXQBl5IAHSzbKm0pdkr+b5qy13nJdseNyKbWXXKi
+XFuwhgpEqwplXj9NqpZ8YG1ph2OxqEi1ZkFptRWOjim8jyxWln4MUi6jPtjuzwsI
+336/mnAbqPqTKJgCYhutS2jeCmya8kNs01vqIUrxYQKBgQDHbH04Q3KEZSNo36Sc
+UJEtd2KB+yMtno/2t0GwrGI0LcbX9/87XftGGuEn2OvQlu1ohntoXCNy5Bj/QxeL
+BVufEKMuVVgrVtquneLu38D5oVSZYxNAwggPhMx26dVvoxXJg5nzBdjKHLbgFImq
+jivNC/94AJ+PbnfXEUZJ/1WvNQKBgQC3z1zYelKl9t54Lj4XwA5pZZmWteFUz6NM
+Wo5Dgf8G6iZvo9kbZB1qsluhSScbOWba2GqHow8rG8QLEVpAtEJTsJThuP0fBpjZ
+dQ2J/WkCzQwaCh94i4B/o8af/JyXTaZrIlhpOF10p5YGQO3NABNueYp0weyzPnoP
+wwty1TFPxwKBgAtzVEFNxh6J/B2Ccd4z1hIpP7O86sksyJFe9luhmkXqtvchmzsa
+a1ocIv95uhiRAfK1fhKA79wh8rl9bbWiyh75ApWfet+KLiZGlIgoutjahZQFF07p
+lTLm6iKNzJ6LW63la4qDtG3udiWpqDntzeAJJ1MJnh/LNQBZUpLfIVldAoGALH8F
+Ud5izYxylJNVMriqhHc09Bf5gWd2d5BgahU5IHpkbZgzgX795AtjRSsJTXza2lWT
+jFw72sqw7aD4wTsh51KS6AW5ON6G9/VvHp1641Ox/0e+EJdstvl1ptsnKTWB+ONq
+laYwcYH0PnVPW9YN3iuMCfG8FDQmplQoHFdhxZcCgYBW3zNDl1kQiWYRhCbBfMNM
+gOe7cw+T31ra7jUXMqX42ppZYBQWv54ENRRtptSewGNMALKYMYP91Qm9AQMn8dUV
+oPEH6Aynt46oeLmcXqr5UGK2s9fxAQARnBZgI5HF97WMejy1vZMerxMJp1Amz/U0
+DVoEoTyMhhPjPpLbwxHeSw==
+-----END PRIVATE KEY-----
+-----BEGIN CERTIFICATE-----
+MIICyzCCAbOgAwIBAgIBATANBgkqhkiG9w0BAQsFADApMScwJQYDVQQDDB5SZWxh
+eURlc2sgVExTIExvb3BiYWNrIEZpeHR1cmUwHhcNMjYwMTAxMDAwMDAwWhcNMzYw
+MTAxMDAwMDAwWjApMScwJQYDVQQDDB5SZWxheURlc2sgVExTIExvb3BiYWNrIEZp
+eHR1cmUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCPMBaQGIlbqZK5
+IIKnfUtBH8nK6KniFRKcleDyT7rHgvvPMpNtflXhDudIRaTMAXiWoN7JS4txsZy7
+iZpE9Vvlrs0GO32fAz/v5qZWChCW1MNbDe9Stvu8hGkC7hR03EzrqeJlwmNdFN6O
+Z1u9d4p5rjBUwF8Hn861L8/0VHADCEzENcBWAxH6qr51HPNwymE/O8xJahLQoxNe
+c9WBTUnj7ZEv+JQnwbZtgxSC3xPx8JMNF9RjC2WtJcGtdyOawCoecNPP7U0JuG90
+16wR4A6l01+bccwx22OnqQ57Phnm4SduQBowF/u7ryBjRg1xcQjl8ZR3V9S4B3vI
+8BiO0Y0zAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAByUZKn5L62l1FxFIdPhEHAx
+9rgH2nJEscUmhlfeWh298BI8SkKthZqmlOM94UHBmIVmIFRvolfZHoU6GONrdmaj
+J4oGwrEeXABfrwLRpXE+3gAbsHNVTWjZdXknTzwQUs1Au0tSuXEamiEPZz+VAtmt
+xL8Ub7Qaggrc0cESMVBxe4GyWfwRahqQ7JaTZTwTegQhnZUySeZzwYJoUMAYy3if
+ByoB0jkeKSaXDYjUfiZQwnMd0yj2ns7TK6QEa7zyw6mx54bPo7tBAqxspsURQ6o1
+l3LleIfL3NLZTxQD0wHjbfFGfcJZL8WACMGUDTs9CQcexljJQXqsvNYdAdIXcGE=
+-----END CERTIFICATE-----
+)PEM";
+
+inline QString writeTlsIdentity(const QTemporaryDir &directory)
+{
+  const QString path = directory.filePath(QStringLiteral("deskflow.pem"));
+  QFile file(path);
+  if (!file.open(QIODevice::WriteOnly) || file.write(kCombinedPem, sizeof(kCombinedPem) - 1) != sizeof(kCombinedPem) - 1) {
+    return {};
+  }
+  return path;
+}
+
+} // namespace relaydesk::test
