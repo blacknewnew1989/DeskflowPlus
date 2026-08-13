@@ -24,6 +24,9 @@ add_library(relaydesk_transfer STATIC
   PartialCleanupPolicy.cpp
   PartialCleanupPolicy.h
   Protocol.h
+  ProtocolMessageRegistry.cpp
+  ProtocolMessageRegistry.def
+  ProtocolMessageRegistry.h
   ResumeStore.cpp
   ResumeStore.h
   ResumeMessageCodec.cpp

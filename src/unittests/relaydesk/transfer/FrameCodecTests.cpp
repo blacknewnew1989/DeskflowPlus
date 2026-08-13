@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 #include "relaydesk/transfer/FrameCodec.h"
+#include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/SessionMessageCodec.h"
 
 #include <QTest>
@@ -29,6 +30,10 @@ private Q_SLOTS:
   void rejectsPayloadOnControlMessage();
   void rejectsFrameAboveAggregateLimit();
   void rejectsLengthOverflow();
+  void rejectsUnknownFlagBit();
+  void rejectsWrongFlagCombination();
+  void rejectsInvalidControlAndFileStreams();
+  void rejectsMissingMetadataAndPayload();
 };
 
 void FrameCodecTests::matchesFrozenHeartbeatVector()
@@ -57,6 +62,10 @@ void FrameCodecTests::matchesFrozenFileChunkVector()
   frame.type = MessageType::FileChunk;
   frame.flags = AckRequired;
   frame.streamId = 42;
+  frame.metadata = FileMessageCodec::encode(FileChunkMessage{
+      .transferId = QUuid(QStringLiteral("11111111-2222-4333-8444-555555555555")),
+      .fileId = QUuid(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
+  });
   frame.payload = QByteArrayLiteral("ABC");
 
   QString error;
@@ -64,7 +73,10 @@ void FrameCodecTests::matchesFrozenFileChunkVector()
 
   QVERIFY2(!encoded.isEmpty(), qPrintable(error));
   QCOMPARE(
-      encoded.toHex(), QByteArrayLiteral("524446540001020100000001000000000000000000000003000000000000002a414243")
+      encoded.toHex(),
+      QByteArrayLiteral("524446540001020100000001000000290000000000000003000000000000002a"
+                        "a40150111111112222433384445555555555550250aaaaaaaabbbb4ccc8dddeeeeeeeeeeee"
+                        "03000400414243")
   );
 }
 
@@ -73,7 +85,7 @@ void FrameCodecTests::roundTripControlMetadata()
   Frame source;
   source.type = MessageType::TransferOffer;
   source.flags = AckRequired;
-  source.streamId = 7;
+  source.streamId = 0;
   source.metadata = QByteArray::fromHex("a101500123456789abcdef8123456789abcdef");
 
   QByteArray buffer = FrameCodec::encode(source);
@@ -121,9 +133,14 @@ void FrameCodecTests::stickyFramesConsumeExactlyOne()
 {
   Frame first;
   first.type = MessageType::Heartbeat;
+  first.flags = AckRequired;
+  first.metadata = SessionMessageCodec::encodeHeartbeat(
+      MessageType::Heartbeat, HeartbeatMessage{.sequence = 1, .timestampMs = 1}
+  );
   Frame second;
   second.type = MessageType::FileChunk;
   second.streamId = 42;
+  second.metadata = QByteArrayLiteral("metadata");
   second.payload = QByteArrayLiteral("ABC");
   const QByteArray secondEncoded = FrameCodec::encode(second);
   QByteArray buffer = FrameCodec::encode(first) + secondEncoded;
@@ -194,7 +211,13 @@ void FrameCodecTests::rejectsDataPayloadAboveLimit()
 
 void FrameCodecTests::rejectsPayloadOnControlMessage()
 {
-  QByteArray buffer = FrameCodec::encode(Frame{});
+  Frame heartbeat;
+  heartbeat.type = MessageType::Heartbeat;
+  heartbeat.flags = AckRequired;
+  heartbeat.metadata = SessionMessageCodec::encodeHeartbeat(
+      MessageType::Heartbeat, HeartbeatMessage{.sequence = 1, .timestampMs = 1}
+  );
+  QByteArray buffer = FrameCodec::encode(heartbeat);
   qToBigEndian<quint64>(1, reinterpret_cast<uchar *>(buffer.data() + 16));
   Frame output;
   const auto result = FrameCodec::tryDecode(buffer, output);
@@ -207,6 +230,9 @@ void FrameCodecTests::rejectsFrameAboveAggregateLimit()
 {
   Frame frame;
   frame.type = MessageType::FileChunk;
+  frame.streamId = 1;
+  frame.metadata = QByteArrayLiteral("m");
+  frame.payload = QByteArrayLiteral("p");
   QByteArray buffer = FrameCodec::encode(frame);
   qToBigEndian<quint32>(4, reinterpret_cast<uchar *>(buffer.data() + 12));
   qToBigEndian<quint64>(4, reinterpret_cast<uchar *>(buffer.data() + 16));
@@ -225,6 +251,9 @@ void FrameCodecTests::rejectsLengthOverflow()
 {
   Frame frame;
   frame.type = MessageType::FileChunk;
+  frame.streamId = 1;
+  frame.metadata = QByteArrayLiteral("m");
+  frame.payload = QByteArrayLiteral("p");
   QByteArray buffer = FrameCodec::encode(frame);
   qToBigEndian<quint64>(std::numeric_limits<quint64>::max(), reinterpret_cast<uchar *>(buffer.data() + 16));
   ProtocolLimits limits;
@@ -235,6 +264,80 @@ void FrameCodecTests::rejectsLengthOverflow()
 
   QVERIFY(result.status == FrameDecodeStatus::ProtocolError);
   QVERIFY(result.error == FrameDecodeError::LengthOverflow);
+}
+
+void FrameCodecTests::rejectsUnknownFlagBit()
+{
+  Frame frame;
+  frame.type = MessageType::Heartbeat;
+  frame.flags = AckRequired;
+  frame.metadata = SessionMessageCodec::encodeHeartbeat(
+      MessageType::Heartbeat, HeartbeatMessage{.sequence = 1, .timestampMs = 1}
+  );
+  QByteArray buffer = FrameCodec::encode(frame);
+  qToBigEndian<quint32>(AckRequired | 0x80000000U, reinterpret_cast<uchar *>(buffer.data() + 8));
+  Frame output;
+  QCOMPARE(FrameCodec::tryDecode(buffer, output).error, FrameDecodeError::InvalidFlags);
+}
+
+void FrameCodecTests::rejectsWrongFlagCombination()
+{
+  Frame frame;
+  frame.type = MessageType::Heartbeat;
+  frame.flags = AckRequired;
+  frame.metadata = SessionMessageCodec::encodeHeartbeat(
+      MessageType::Heartbeat, HeartbeatMessage{.sequence = 1, .timestampMs = 1}
+  );
+  QByteArray buffer = FrameCodec::encode(frame);
+  qToBigEndian<quint32>(Response | Final, reinterpret_cast<uchar *>(buffer.data() + 8));
+  Frame output;
+  QCOMPARE(FrameCodec::tryDecode(buffer, output).error, FrameDecodeError::InvalidFlags);
+}
+
+void FrameCodecTests::rejectsInvalidControlAndFileStreams()
+{
+  Frame heartbeat;
+  heartbeat.type = MessageType::Heartbeat;
+  heartbeat.flags = AckRequired;
+  heartbeat.metadata = SessionMessageCodec::encodeHeartbeat(
+      MessageType::Heartbeat, HeartbeatMessage{.sequence = 1, .timestampMs = 1}
+  );
+  QByteArray control = FrameCodec::encode(heartbeat);
+  qToBigEndian<quint64>(1, reinterpret_cast<uchar *>(control.data() + 24));
+  Frame output;
+  QCOMPARE(FrameCodec::tryDecode(control, output).error, FrameDecodeError::InvalidStreamId);
+
+  Frame chunk;
+  chunk.type = MessageType::FileChunk;
+  chunk.streamId = 1;
+  chunk.metadata = QByteArrayLiteral("m");
+  chunk.payload = QByteArrayLiteral("p");
+  QByteArray file = FrameCodec::encode(chunk);
+  qToBigEndian<quint64>(0, reinterpret_cast<uchar *>(file.data() + 24));
+  QCOMPARE(FrameCodec::tryDecode(file, output).error, FrameDecodeError::InvalidStreamId);
+}
+
+void FrameCodecTests::rejectsMissingMetadataAndPayload()
+{
+  Frame heartbeat;
+  heartbeat.type = MessageType::Heartbeat;
+  heartbeat.flags = AckRequired;
+  heartbeat.metadata = QByteArrayLiteral("m");
+  QByteArray missingMetadata = FrameCodec::encode(heartbeat);
+  qToBigEndian<quint32>(0, reinterpret_cast<uchar *>(missingMetadata.data() + 12));
+  missingMetadata.chop(1);
+  Frame output;
+  QCOMPARE(FrameCodec::tryDecode(missingMetadata, output).error, FrameDecodeError::MissingMetadata);
+
+  Frame chunk;
+  chunk.type = MessageType::FileChunk;
+  chunk.streamId = 1;
+  chunk.metadata = QByteArrayLiteral("m");
+  chunk.payload = QByteArrayLiteral("p");
+  QByteArray missingPayload = FrameCodec::encode(chunk);
+  qToBigEndian<quint64>(0, reinterpret_cast<uchar *>(missingPayload.data() + 16));
+  missingPayload.chop(1);
+  QCOMPARE(FrameCodec::tryDecode(missingPayload, output).error, FrameDecodeError::MissingPayload);
 }
 
 QTEST_MAIN(FrameCodecTests)

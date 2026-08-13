@@ -172,6 +172,7 @@ void FileTlsConnection::handleEncrypted()
 
   Frame hello;
   hello.type = MessageType::Hello;
+  hello.flags = ::relaydesk::transfer::AckRequired;
   QString encodeError;
   hello.metadata = SessionMessageCodec::encodeHello(
       HelloMessage{
@@ -268,6 +269,7 @@ void FileTlsConnection::handleFrame(Frame frame)
     QString encodeError;
     Frame resultFrame;
     resultFrame.type = MessageType::AuthResult;
+    resultFrame.flags = ::relaydesk::transfer::Response;
     resultFrame.metadata = SessionMessageCodec::encodeAuthResult(AuthResultMessage{.accepted = true}, &encodeError);
     QByteArray encoded = FrameCodec::encode(resultFrame, m_settings.protocolLimits, &encodeError);
     if (resultFrame.metadata.isEmpty() || encoded.isEmpty() || !writeEncoded(std::move(encoded), &encodeError)) {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 #include "relaydesk/transfer/FrameCodec.h"
+#include "relaydesk/transfer/ProtocolMessageRegistry.h"
 
 #include <QtEndian>
 
@@ -57,8 +58,8 @@ bool checkedFrameBytes(quint32 metadataBytes, quint64 payloadBytes, quint64 &tot
 }
 
 bool validateLengths(
-    MessageType type, quint32 metadataBytes, quint64 payloadBytes, const ProtocolLimits &limits,
-    FrameDecodeResult &failure, quint64 &frameBytes
+    quint32 metadataBytes, quint64 payloadBytes, const ProtocolLimits &limits, FrameDecodeResult &failure,
+    quint64 &frameBytes
 )
 {
   if (metadataBytes > limits.maxControlMetadataBytes) {
@@ -70,12 +71,6 @@ bool validateLengths(
   if (payloadBytes > limits.maxDataPayloadBytes) {
     failure =
         protocolError(FrameDecodeError::DataPayloadTooLarge, QStringLiteral("data payload exceeds the local limit"));
-    return false;
-  }
-  if (payloadBytes != 0 && type != MessageType::FileChunk) {
-    failure = protocolError(
-        FrameDecodeError::UnexpectedPayload, QStringLiteral("only FILE_CHUNK may carry a binary payload in RDFT/1")
-    );
     return false;
   }
   if (!checkedFrameBytes(metadataBytes, payloadBytes, frameBytes)) {
@@ -93,6 +88,31 @@ bool validateLengths(
     return false;
   }
   return true;
+}
+
+FrameDecodeError frameError(ProtocolEnvelopeError error)
+{
+  switch (error) {
+  case ProtocolEnvelopeError::None:
+    return FrameDecodeError::None;
+  case ProtocolEnvelopeError::UnknownMessageType:
+    return FrameDecodeError::UnknownMessageType;
+  case ProtocolEnvelopeError::ReservedMessageType:
+    return FrameDecodeError::ReservedMessageType;
+  case ProtocolEnvelopeError::InvalidFlags:
+    return FrameDecodeError::InvalidFlags;
+  case ProtocolEnvelopeError::InvalidStreamId:
+    return FrameDecodeError::InvalidStreamId;
+  case ProtocolEnvelopeError::MissingMetadata:
+    return FrameDecodeError::MissingMetadata;
+  case ProtocolEnvelopeError::UnexpectedMetadata:
+    return FrameDecodeError::UnexpectedMetadata;
+  case ProtocolEnvelopeError::MissingPayload:
+    return FrameDecodeError::MissingPayload;
+  case ProtocolEnvelopeError::UnexpectedPayload:
+    return FrameDecodeError::UnexpectedPayload;
+  }
+  return FrameDecodeError::UnknownMessageType;
 }
 
 } // namespace
@@ -121,9 +141,14 @@ QByteArray FrameCodec::encode(const Frame &frame, const ProtocolLimits &limits, 
 
   const auto metadataBytes = static_cast<quint32>(frame.metadata.size());
   const auto payloadBytes = static_cast<quint64>(frame.payload.size());
+  const auto envelope =
+      validateProtocolEnvelope(frame.type, frame.flags, frame.streamId, metadataBytes, payloadBytes);
+  if (!envelope.ok()) {
+    return fail(envelope.diagnostic);
+  }
   FrameDecodeResult failure;
   quint64 frameBytes = 0;
-  if (!validateLengths(frame.type, metadataBytes, payloadBytes, limits, failure, frameBytes)) {
+  if (!validateLengths(metadataBytes, payloadBytes, limits, failure, frameBytes)) {
     return fail(failure.diagnostic);
   }
 
@@ -176,8 +201,15 @@ FrameDecodeResult FrameCodec::tryDecode(QByteArray &buffer, Frame &output, const
   const quint64 payloadBytes = readBigEndian<quint64>(header + 16);
   FrameDecodeResult failure;
   quint64 frameBytes = 0;
-  if (!validateLengths(type, metadataBytes, payloadBytes, limits, failure, frameBytes)) {
+  if (!validateLengths(metadataBytes, payloadBytes, limits, failure, frameBytes)) {
     return failure;
+  }
+
+  const quint32 flags = readBigEndian<quint32>(header + 8);
+  const quint64 streamId = readBigEndian<quint64>(header + 24);
+  const auto envelope = validateProtocolEnvelope(type, flags, streamId, metadataBytes, payloadBytes);
+  if (!envelope.ok()) {
+    return protocolError(frameError(envelope.error), envelope.diagnostic);
   }
 
   const auto localFrameBytes = static_cast<qsizetype>(frameBytes);
@@ -190,8 +222,8 @@ FrameDecodeResult FrameCodec::tryDecode(QByteArray &buffer, Frame &output, const
   Frame decoded;
   decoded.version = version;
   decoded.type = type;
-  decoded.flags = readBigEndian<quint32>(header + 8);
-  decoded.streamId = readBigEndian<quint64>(header + 24);
+  decoded.flags = flags;
+  decoded.streamId = streamId;
   decoded.metadata = QByteArray(header + kFixedHeaderBytes, localMetadataBytes);
   decoded.payload = QByteArray(header + kFixedHeaderBytes + localMetadataBytes, localPayloadBytes);
 

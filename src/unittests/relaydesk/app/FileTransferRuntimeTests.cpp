@@ -11,6 +11,7 @@
 #include "relaydesk/transfer/ControlMessageCodec.h"
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
+#include "relaydesk/transfer/SessionMessageCodec.h"
 #include "relaydesk/trust/TlsIdentityAdapter.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
 #include "../TestTlsIdentity.h"
@@ -237,7 +238,13 @@ void FileTransferRuntimeTests::routesPostCapabilityFramesAfterPinning()
       ready && capabilitiesSent, qPrintable(errors.join(QStringLiteral("; "))), 5'000
   );
 
-  const Frame heartbeat{.type = MessageType::Heartbeat, .streamId = 73};
+  const Frame heartbeat{
+      .type = MessageType::Heartbeat,
+      .flags = AckRequired,
+      .metadata = SessionMessageCodec::encodeHeartbeat(
+          MessageType::Heartbeat, HeartbeatMessage{.sequence = 1, .timestampMs = 1}
+      ),
+  };
   QCOMPARE(client.connection()->sendFrame(heartbeat, &diagnostic), FileTlsError::None);
   QTRY_VERIFY2_WITH_TIMEOUT(routed.has_value(), qPrintable(errors.join(QStringLiteral("; "))), 2'000);
   QCOMPARE(*routed, heartbeat);
@@ -328,6 +335,7 @@ void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()
         };
         Frame response{
             .type = MessageType::TransferAccept,
+            .flags = Response,
             .metadata = ControlMessageCodec::encode(
                 kProtocolMajorVersion, ControlMessage{acceptance}, &encodeDiagnostic
             ),
@@ -390,6 +398,8 @@ void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()
         };
         Frame response{
             .type = MessageType::FileResult,
+            .flags = Response | Final,
+            .streamId = frame.streamId,
             .metadata = FileMessageCodec::encode(FileControlMessage{result}, &encodeDiagnostic),
         };
         if (response.metadata.isEmpty() ||

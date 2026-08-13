@@ -25,36 +25,17 @@ using FileId = QUuid;
 
 enum class MessageType : quint16
 {
-  Hello = 0x0001,
-  AuthResult = 0x0002,
-  Capabilities = 0x0003,
-  Heartbeat = 0x0004,
-  HeartbeatAck = 0x0005,
-
-  TransferOffer = 0x0100,
-  TransferAccept = 0x0101,
-  TransferReject = 0x0102,
-  ManifestPage = 0x0103,
-  ManifestComplete = 0x0104,
-
-  FileBegin = 0x0200,
-  FileChunk = 0x0201,
-  FileCheckpoint = 0x0202,
-  FileEnd = 0x0203,
-  FileResult = 0x0204,
-
-  TransferPause = 0x0300,
-  TransferResume = 0x0301,
-  TransferCancel = 0x0302,
-  TransferComplete = 0x0303,
-  TransferResult = 0x0304,
-
-  ResumeQuery = 0x0400,
-  ResumeResponse = 0x0401,
-
-  Error = 0x7ffe,
-  Goodbye = 0x7fff,
+#define RDFT_MESSAGE(name, value, ...) name = value,
+#include "relaydesk/transfer/ProtocolMessageRegistry.def"
+#undef RDFT_MESSAGE
 };
+
+inline constexpr qsizetype kProtocolMessageTypeCount =
+    0
+#define RDFT_MESSAGE(...) +1
+#include "relaydesk/transfer/ProtocolMessageRegistry.def"
+#undef RDFT_MESSAGE
+    ;
 
 enum FrameFlag : quint32
 {
@@ -168,37 +149,7 @@ struct Frame
   [[nodiscard]] bool operator==(const Frame &) const = default;
 };
 
-[[nodiscard]] inline bool isKnownMessageType(MessageType type) noexcept
-{
-  switch (type) {
-  case MessageType::Hello:
-  case MessageType::AuthResult:
-  case MessageType::Capabilities:
-  case MessageType::Heartbeat:
-  case MessageType::HeartbeatAck:
-  case MessageType::TransferOffer:
-  case MessageType::TransferAccept:
-  case MessageType::TransferReject:
-  case MessageType::ManifestPage:
-  case MessageType::ManifestComplete:
-  case MessageType::FileBegin:
-  case MessageType::FileChunk:
-  case MessageType::FileCheckpoint:
-  case MessageType::FileEnd:
-  case MessageType::FileResult:
-  case MessageType::TransferPause:
-  case MessageType::TransferResume:
-  case MessageType::TransferCancel:
-  case MessageType::TransferComplete:
-  case MessageType::TransferResult:
-  case MessageType::ResumeQuery:
-  case MessageType::ResumeResponse:
-  case MessageType::Error:
-  case MessageType::Goodbye:
-    return true;
-  }
-  return false;
-}
+[[nodiscard]] bool isKnownMessageType(MessageType type) noexcept;
 
 [[nodiscard]] inline MessageType messageType(const ControlMessage &message) noexcept
 {

@@ -23,6 +23,30 @@ create_test(
 )
 
 create_test(
+  NAME RelayDeskProtocolMessageRegistryTests
+  DEPENDS relaydesk_transfer
+  SOURCE ProtocolMessageRegistryTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
+target_compile_definitions(
+  RelayDeskProtocolMessageRegistryTests
+  PRIVATE
+    RELAYDESK_PROTOCOL_CDDL_PATH="${CMAKE_SOURCE_DIR}/product/spec/protocol/messages.cddl"
+    RELAYDESK_PROTOCOL_TEST_VECTORS_PATH="${CMAKE_SOURCE_DIR}/product/spec/protocol/test-vectors.json"
+)
+
+create_test(
+  NAME RelayDeskProtocolVectorTests
+  DEPENDS relaydesk_transfer
+  SOURCE ProtocolVectorTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
+target_compile_definitions(
+  RelayDeskProtocolVectorTests
+  PRIVATE RELAYDESK_PROTOCOL_TEST_VECTORS_PATH="${CMAKE_SOURCE_DIR}/product/spec/protocol/test-vectors.json"
+)
+
+create_test(
   NAME RelayDeskPathPolicyTests
   DEPENDS relaydesk_transfer
   SOURCE PathPolicyTests.cpp
