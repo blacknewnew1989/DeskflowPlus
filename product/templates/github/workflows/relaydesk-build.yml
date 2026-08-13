@@ -161,6 +161,30 @@ jobs:
           fi
           python product/scripts/collect-ci-artifacts.py "${args[@]}"
 
+      - name: Exercise Windows install, repair, major upgrade and uninstall
+        id: windows_install_regression
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $msi = @(Get-ChildItem -LiteralPath dist/windows-x64 -File -Filter '*-unsigned.msi')
+          $portable = @(Get-ChildItem -LiteralPath dist/windows-x64 -File | Where-Object {
+            $_.Name -match '-unsigned-portable\.(7z|zip)$'
+          })
+          if ($msi.Count -ne 1) {
+            throw "TEST005_WORKFLOW_MSI_COUNT: $($msi.Count)"
+          }
+          if ($portable.Count -ne 1) {
+            throw "TEST005_WORKFLOW_PORTABLE_COUNT: $($portable.Count)"
+          }
+          & product/scripts/test-windows-install-regression.ps1 `
+            -MsiPath $msi[0].FullName `
+            -PortablePath $portable[0].FullName `
+            -RepoRoot $PWD `
+            -ReportPath dist/windows-x64/test005-windows-install-regression.json `
+            -GeneratePreviousPackage `
+            -AllowSystemInstall
+
       - name: Write job summary
         if: always()
         shell: bash
@@ -170,6 +194,7 @@ jobs:
             echo "- Commit: \`${{ github.sha }}\`"
             echo "- Package step: \`${{ steps.package.outcome }}\`"
             echo "- Test step: \`${{ steps.tests.outcome }}\`"
+            echo "- Windows installer regression: \`${{ steps.windows_install_regression.outcome }}\`"
             echo "- Tests are diagnostic during development; this workflow is not a required check."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -183,11 +208,16 @@ jobs:
           retention-days: 30
 
       - name: Report package or test failure
-        if: always() && (steps.package.outcome != 'success' || steps.tests.outcome != 'success')
+        if: >-
+          always() &&
+          (steps.package.outcome != 'success' ||
+           steps.tests.outcome != 'success' ||
+           (runner.os == 'Windows' && steps.windows_install_regression.outcome != 'success'))
         shell: bash
         run: |
           echo "Package outcome: ${{ steps.package.outcome }}"
           echo "Test outcome: ${{ steps.tests.outcome }}"
+          echo "Windows installer regression outcome: ${{ steps.windows_install_regression.outcome }}"
           exit 1
 
   macos-install-regression:
