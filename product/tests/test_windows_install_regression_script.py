@@ -50,6 +50,10 @@ class WindowsInstallRegressionScriptTests(unittest.TestCase):
         self.assertIn("$UserConfigBackup", SCRIPT)
         self.assertIn("backup-append-restore", SCRIPT)
         self.assertIn("[IO.File]::Copy($UserConfigBackup, $UserConfigPath, $true)", SCRIPT)
+        self.assertIn("Test-ByteSubsequence", SCRIPT)
+        self.assertIn("TEST005_PREEXISTING_CONFIG_CONTENT_REMOVED", SCRIPT)
+        self.assertIn("preexistingConfigPreserved", SCRIPT)
+        self.assertIn("unrelatedUserDataHashPreserved", SCRIPT)
 
     def test_exercises_same_upgrade_code_lower_version_major_upgrade(self) -> None:
         self.assertIn("New-SyntheticPreviousMsi", SCRIPT)

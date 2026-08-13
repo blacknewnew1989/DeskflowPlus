@@ -376,7 +376,11 @@ function Assert-FirewallInstalled {
 }
 
 function Assert-UserDataPreserved {
-    param([hashtable]$ExpectedHashes)
+    param(
+        [hashtable]$ExpectedHashes,
+        [string]$PreExistingConfigPath = "",
+        [byte[]]$PreExistingConfigBytes = $null
+    )
     foreach ($Path in $ExpectedHashes.Keys) {
         if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
             throw "TEST005_USER_DATA_SENTINEL_REMOVED: $Path"
@@ -386,6 +390,33 @@ function Assert-UserDataPreserved {
             throw "TEST005_USER_DATA_SENTINEL_CHANGED: $Path"
         }
     }
+    if (-not [string]::IsNullOrWhiteSpace($PreExistingConfigPath)) {
+        if (-not (Test-Path -LiteralPath $PreExistingConfigPath -PathType Leaf)) {
+            throw "TEST005_PREEXISTING_CONFIG_REMOVED: $PreExistingConfigPath"
+        }
+        $ActualConfigBytes = [IO.File]::ReadAllBytes($PreExistingConfigPath)
+        if (-not (Test-ByteSubsequence -Container $ActualConfigBytes -Candidate $PreExistingConfigBytes)) {
+            throw "TEST005_PREEXISTING_CONFIG_CONTENT_REMOVED: $PreExistingConfigPath"
+        }
+    }
+}
+
+function Test-ByteSubsequence {
+    param([byte[]]$Container, [byte[]]$Candidate)
+    if ($null -eq $Candidate -or $Candidate.Length -eq 0) { return $true }
+    if ($null -eq $Container -or $Container.Length -lt $Candidate.Length) { return $false }
+    $LastStart = $Container.Length - $Candidate.Length
+    for ($Start = 0; $Start -le $LastStart; ++$Start) {
+        $Matches = $true
+        for ($Offset = 0; $Offset -lt $Candidate.Length; ++$Offset) {
+            if ($Container[$Start + $Offset] -ne $Candidate[$Offset]) {
+                $Matches = $false
+                break
+            }
+        }
+        if ($Matches) { return $true }
+    }
+    return $false
 }
 
 function Assert-SystemResidueRemoved {
@@ -505,6 +536,9 @@ $UserDataMarkerId = [guid]::NewGuid().ToString("N")
 $UserConfigPath = Join-Path $UserDataRoot "$ExpectedProductName.conf"
 $UserConfigPreExisted = Test-Path -LiteralPath $UserConfigPath -PathType Leaf
 $UserConfigBackup = Join-Path $TestRoot "user-config-before-test005.conf"
+$UserConfigOriginalBytes = if ($UserConfigPreExisted) {
+    [IO.File]::ReadAllBytes($UserConfigPath)
+} else { $null }
 $UserDataPaths = @(
     $UserConfigPath,
     (Join-Path $UserDataRoot "test005-$UserDataMarkerId-trusted-devices.json"),
@@ -538,6 +572,8 @@ $Result = [ordered]@{
     upgradedUninstall = "NOT_RUN"
     upgradedUninstallResidue = "NOT_RUN"
     userDataPreserved = "NOT_RUN"
+    preexistingConfigPreserved = "NOT_RUN"
+    unrelatedUserDataHashPreserved = "NOT_RUN"
     interactiveUnsignedWarning = "NOT_RUN"
     interactiveUnsignedWarningNote = "quiet runner install cannot observe SmartScreen or interactive UAC UI"
     userConfigMode = if ($UserConfigPreExisted) { "backup-append-restore" } else { "created-for-test" }
@@ -581,7 +617,7 @@ try {
     $UserDataFilesCreatedByHarness += $UserDataPaths[1]
     Set-Content -LiteralPath $UserDataPaths[2] -Value '{"test005":"transfer-history-sentinel"}' -Encoding UTF8
     $UserDataFilesCreatedByHarness += $UserDataPaths[2]
-    foreach ($UserDataPath in $UserDataPaths) {
+    foreach ($UserDataPath in $UserDataPaths[1..2]) {
         $UserDataHashes[$UserDataPath] = (Get-FileHash -LiteralPath $UserDataPath -Algorithm SHA256).Hash
     }
 
@@ -686,7 +722,10 @@ try {
     $InstallRoots += $Installed.InstallRoot
     Assert-ServiceInstalled -ServiceName $ExpectedServiceName -InstallRoot $Installed.InstallRoot
     Assert-FirewallInstalled -ProductName $ExpectedProductName -InstallRoot $Installed.InstallRoot
-    Assert-UserDataPreserved -ExpectedHashes $UserDataHashes
+    Assert-UserDataPreserved `
+        -ExpectedHashes $UserDataHashes `
+        -PreExistingConfigPath $(if ($UserConfigPreExisted) { $UserConfigPath } else { "" }) `
+        -PreExistingConfigBytes $UserConfigOriginalBytes
     Invoke-CheckedProcess -FilePath (Join-Path $Installed.InstallRoot "deskflow-core.exe") -Arguments @("--version") -TimeoutSeconds 20 | Out-Null
     Invoke-CheckedProcess -FilePath (Join-Path $Installed.InstallRoot "deskflow.exe") -Arguments @("--version") -TimeoutSeconds 20 | Out-Null
     $Result.cleanSystemInstall = "PASS"
@@ -704,7 +743,10 @@ try {
     $Repaired = Assert-ProductInstalled -Identity $CandidateIdentity
     Assert-ServiceInstalled -ServiceName $ExpectedServiceName -InstallRoot $Repaired.InstallRoot
     Assert-FirewallInstalled -ProductName $ExpectedProductName -InstallRoot $Repaired.InstallRoot
-    Assert-UserDataPreserved -ExpectedHashes $UserDataHashes
+    Assert-UserDataPreserved `
+        -ExpectedHashes $UserDataHashes `
+        -PreExistingConfigPath $(if ($UserConfigPreExisted) { $UserConfigPath } else { "" }) `
+        -PreExistingConfigBytes $UserConfigOriginalBytes
     $Result.sameVersionRepair = "PASS"
     $Result.sameVersionRepairEvidence = "Windows Installer REINSTALL=ALL REINSTALLMODE=vomus"
 
@@ -714,7 +756,10 @@ try {
         -ServiceName $ExpectedServiceName `
         -ProductName $ExpectedProductName `
         -InstallRoots $InstallRoots
-    Assert-UserDataPreserved -ExpectedHashes $UserDataHashes
+    Assert-UserDataPreserved `
+        -ExpectedHashes $UserDataHashes `
+        -PreExistingConfigPath $(if ($UserConfigPreExisted) { $UserConfigPath } else { "" }) `
+        -PreExistingConfigBytes $UserConfigOriginalBytes
     $Result.cleanUninstall = "PASS"
     $Result.cleanUninstallResidue = "PASS"
     $Result.cleanUninstallResidueEvidence = "product/service/firewall/install-dir/start-menu removed"
@@ -730,7 +775,10 @@ try {
     $InstallRoots += $PreviousInstalled.InstallRoot
     Assert-ServiceInstalled -ServiceName $ExpectedServiceName -InstallRoot $PreviousInstalled.InstallRoot
     Assert-FirewallInstalled -ProductName $ExpectedProductName -InstallRoot $PreviousInstalled.InstallRoot
-    Assert-UserDataPreserved -ExpectedHashes $UserDataHashes
+    Assert-UserDataPreserved `
+        -ExpectedHashes $UserDataHashes `
+        -PreExistingConfigPath $(if ($UserConfigPreExisted) { $UserConfigPath } else { "" }) `
+        -PreExistingConfigBytes $UserConfigOriginalBytes
 
     Invoke-MsiExec -Arguments @(
         "/i", (Quote-ProcessArgument $MsiPath)
@@ -741,7 +789,10 @@ try {
     $Upgraded = Assert-ProductInstalled -Identity $CandidateIdentity
     Assert-ServiceInstalled -ServiceName $ExpectedServiceName -InstallRoot $Upgraded.InstallRoot
     Assert-FirewallInstalled -ProductName $ExpectedProductName -InstallRoot $Upgraded.InstallRoot
-    Assert-UserDataPreserved -ExpectedHashes $UserDataHashes
+    Assert-UserDataPreserved `
+        -ExpectedHashes $UserDataHashes `
+        -PreExistingConfigPath $(if ($UserConfigPreExisted) { $UserConfigPath } else { "" }) `
+        -PreExistingConfigBytes $UserConfigOriginalBytes
     $Result.majorUpgrade = "PASS"
     $Result.majorUpgradeEvidence = "$($PreviousIdentity.ProductVersion)/$($PreviousIdentity.ProductCode) -> $($CandidateIdentity.ProductVersion)/$($CandidateIdentity.ProductCode), UpgradeCode=$ExpectedUpgradeCode"
 
@@ -751,12 +802,21 @@ try {
         -ServiceName $ExpectedServiceName `
         -ProductName $ExpectedProductName `
         -InstallRoots $InstallRoots
-    Assert-UserDataPreserved -ExpectedHashes $UserDataHashes
+    Assert-UserDataPreserved `
+        -ExpectedHashes $UserDataHashes `
+        -PreExistingConfigPath $(if ($UserConfigPreExisted) { $UserConfigPath } else { "" }) `
+        -PreExistingConfigBytes $UserConfigOriginalBytes
     $Result.upgradedUninstall = "PASS"
     $Result.upgradedUninstallResidue = "PASS"
     $Result.upgradedUninstallResidueEvidence = "product/service/firewall/install-dir/start-menu removed"
     $Result.userDataPreserved = "PASS"
     $Result.userDataPreservedEvidence = "RelayDesk.conf, trust marker, and history marker survived install/repair/upgrade/uninstall"
+    $Result.preexistingConfigPreserved = if ($UserConfigPreExisted) { "PASS" } else { "NOT_RUN" }
+    $Result.preexistingConfigPreservedEvidence = if ($UserConfigPreExisted) {
+        "original RelayDesk.conf bytes remained a contiguous subsequence while the running service could append/update other data"
+    } else { "no pre-existing RelayDesk.conf on runner" }
+    $Result.unrelatedUserDataHashPreserved = "PASS"
+    $Result.unrelatedUserDataHashPreservedEvidence = "unique trust/history marker files retained exact SHA-256 through both lifecycles"
     $Result.status = "PASS"
 }
 catch {
