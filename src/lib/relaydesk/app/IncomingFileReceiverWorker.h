@@ -30,12 +30,20 @@ public:
 
   [[nodiscard]] ::relaydesk::transfer::FileReceiverResult
   begin(const ::relaydesk::transfer::FileReceiveRequest &request);
+  [[nodiscard]] ::relaydesk::transfer::FileReceiverResult resume(
+      const ::relaydesk::transfer::FileReceiveRequest &request,
+      const ::relaydesk::transfer::ResumeState &state
+  );
   [[nodiscard]] ::relaydesk::transfer::FileReceiverResult append(
       const ::relaydesk::transfer::FileChunkMessage &chunk, QByteArrayView payload
   );
   [[nodiscard]] ::relaydesk::transfer::FileReceiverResult
   finish(const ::relaydesk::transfer::FileEndMessage &end);
   [[nodiscard]] ::relaydesk::transfer::FileReceiverSnapshot snapshot() const;
+  [[nodiscard]] ::relaydesk::transfer::DurableCheckpointResult checkpoint(
+      const ::relaydesk::transfer::ResumeStore &store,
+      ::relaydesk::transfer::ResumeState &state
+  );
 
   [[nodiscard]] static constexpr bool platformCommitWired() noexcept
   {
@@ -47,6 +55,10 @@ private:
   [[nodiscard]] ::relaydesk::transfer::FileReceiverResult wrongThread() const;
   [[nodiscard]] ::relaydesk::transfer::FileReceiverResult
   safetyFailure(const FileSafetyResult &result) const;
+  [[nodiscard]] ::relaydesk::transfer::FileReceiverResult beginInternal(
+      const ::relaydesk::transfer::FileReceiveRequest &request,
+      const ::relaydesk::transfer::ResumeState *resumeState
+  );
 
   IPlatformFileSafety &m_fileSafety;
   QThread *m_ownerThread = nullptr;
