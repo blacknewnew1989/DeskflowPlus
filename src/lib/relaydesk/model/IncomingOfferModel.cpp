@@ -20,6 +20,7 @@ namespace {
 
 using i18n::Text;
 using ::relaydesk::transfer::ConflictPolicy;
+using ::relaydesk::transfer::AcceptanceOrigin;
 using ::relaydesk::transfer::OfferStateError;
 using ::relaydesk::transfer::RejectReason;
 
@@ -89,7 +90,7 @@ bool IncomingOfferModel::receiveOffer(const ::relaydesk::transfer::IncomingOffer
   updateSafeError();
 
   if (offer.peerTrusted && offer.mayAutoAccept && m_settings.autoAcceptTrustedDevices && canAccept())
-    return acceptInternal(true);
+    return acceptInternal(AcceptanceOrigin::TrustedDevicePolicy);
 
   scheduleExpiry();
   Q_EMIT changed();
@@ -100,16 +101,16 @@ bool IncomingOfferModel::accept()
 {
   if (expireIfNeeded())
     return false;
-  return acceptInternal(false);
+  return acceptInternal(AcceptanceOrigin::UserDecision);
 }
 
-bool IncomingOfferModel::acceptInternal(bool autoAccepted)
+bool IncomingOfferModel::acceptInternal(AcceptanceOrigin origin)
 {
   if (!canAccept())
     return false;
 
   const auto result = m_stateMachine.acceptIncoming(
-      ConflictPolicy::AutoRename, m_settings.destinationRoot, m_settings.availableBytes, autoAccepted
+      ConflictPolicy::AutoRename, m_settings.destinationRoot, m_settings.availableBytes, origin
   );
   if (!result.ok()) {
     m_errorText = stateErrorText(result.error);

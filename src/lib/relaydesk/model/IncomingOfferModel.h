@@ -85,7 +85,7 @@ Q_SIGNALS:
   void rejectionReady();
 
 private:
-  [[nodiscard]] bool acceptInternal(bool autoAccepted);
+  [[nodiscard]] bool acceptInternal(::relaydesk::transfer::AcceptanceOrigin origin);
   void scheduleExpiry();
   void updateSafeError();
   [[nodiscard]] QString stateErrorText(::relaydesk::transfer::OfferStateError error) const;

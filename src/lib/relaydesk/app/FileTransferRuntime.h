@@ -87,8 +87,8 @@ public:
   void pause(const ::relaydesk::transfer::TransferId &transferId) override;
   void resume(const ::relaydesk::transfer::TransferId &transferId) override;
   void cancel(
-      const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::TransferCancelReason reason,
-      bool keepPartial
+      const ::relaydesk::transfer::TransferId &transferId,
+      const ::relaydesk::transfer::TransferCancelOptions &options
   ) override;
   void retry(const ::relaydesk::transfer::TransferId &transferId) override;
   [[nodiscard]] QList<::relaydesk::transfer::TransferSnapshot> activeTransfers() const override;

@@ -472,7 +472,8 @@ void FileTransferRuntime::resume(const ::relaydesk::transfer::TransferId &transf
 }
 
 void FileTransferRuntime::cancel(
-    const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::TransferCancelReason, bool
+    const ::relaydesk::transfer::TransferId &transferId,
+    const ::relaydesk::transfer::TransferCancelOptions &
 )
 {
   using ::relaydesk::transfer::TransferState;

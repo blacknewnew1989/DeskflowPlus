@@ -92,7 +92,14 @@ void TransferOfferStateMachineTests::incomingOfferProducesAcceptance()
   const auto source = offer();
   QVERIFY(machine.receiveIncoming(source).ok());
   QCOMPARE(machine.snapshot()->direction, OfferDirection::Incoming);
-  QVERIFY(machine.acceptIncoming(ConflictPolicy::AutoRename, QStringLiteral(" Downloads/RelayDesk "), 4096, true).ok());
+  QVERIFY(
+      machine
+          .acceptIncoming(
+              ConflictPolicy::AutoRename, QStringLiteral(" Downloads/RelayDesk "), 4096,
+              AcceptanceOrigin::TrustedDevicePolicy
+          )
+          .ok()
+  );
   QCOMPARE(machine.snapshot()->state, OfferState::Accepted);
   QCOMPARE(machine.snapshot()->acceptance->transferId, source.transferId);
   QCOMPARE(machine.snapshot()->acceptance->logicalDestination, QStringLiteral("Downloads/RelayDesk"));
@@ -157,13 +164,25 @@ void TransferOfferStateMachineTests::rejectsInvalidDestinationAndFreeSpace()
   TransferOfferStateMachine machine(capabilities());
   const auto source = offer();
   QVERIFY(machine.receiveIncoming(source).ok());
-  QCOMPARE(machine.acceptIncoming(ConflictPolicy::Ask, {}, 4096, false).error, OfferStateError::InvalidResponse);
   QCOMPARE(
-      machine.acceptIncoming(ConflictPolicy::Ask, QStringLiteral("Downloads"), 100, false).error,
+      machine.acceptIncoming(ConflictPolicy::Ask, {}, 4096, AcceptanceOrigin::UserDecision).error,
       OfferStateError::InvalidResponse
   );
   QCOMPARE(
-      machine.acceptIncoming(ConflictPolicy::Overwrite, QStringLiteral("Downloads"), 4096, false).error,
+      machine
+          .acceptIncoming(
+              ConflictPolicy::Ask, QStringLiteral("Downloads"), 100, AcceptanceOrigin::UserDecision
+          )
+          .error,
+      OfferStateError::InvalidResponse
+  );
+  QCOMPARE(
+      machine
+          .acceptIncoming(
+              ConflictPolicy::Overwrite, QStringLiteral("Downloads"), 4096,
+              AcceptanceOrigin::UserDecision
+          )
+          .error,
       OfferStateError::ConflictPolicyUnavailable
   );
   QCOMPARE(machine.snapshot()->state, OfferState::AwaitingLocalDecision);

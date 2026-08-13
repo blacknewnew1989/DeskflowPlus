@@ -5,6 +5,7 @@
 
 #include "relaydesk/transfer/CapabilityCodec.h"
 #include "relaydesk/transfer/Protocol.h"
+#include "relaydesk/transfer/TransferTypes.h"
 
 #include <QString>
 
@@ -78,7 +79,10 @@ public:
   [[nodiscard]] OfferStateResult receiveAccept(const TransferAccept &acceptance);
   [[nodiscard]] OfferStateResult receiveReject(const TransferReject &rejection);
   [[nodiscard]] OfferStateResult
-  acceptIncoming(ConflictPolicy effectivePolicy, QString logicalDestination, quint64 freeBytes, bool autoAccepted);
+  acceptIncoming(
+      ConflictPolicy effectivePolicy, QString logicalDestination, quint64 freeBytes,
+      AcceptanceOrigin origin
+  );
   [[nodiscard]] OfferStateResult rejectIncoming(RejectReason reason, QString diagnostic = {});
   [[nodiscard]] OfferStateResult fail(QString errorMessageKey);
 

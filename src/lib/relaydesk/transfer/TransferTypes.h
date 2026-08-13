@@ -126,6 +126,26 @@ struct ReceiveOptions
   [[nodiscard]] bool operator==(const ReceiveOptions &) const = default;
 };
 
+enum class PartialDisposition : quint8
+{
+  Keep = 0,
+  Remove = 1,
+};
+
+struct TransferCancelOptions
+{
+  TransferCancelReason reason = TransferCancelReason::UserRequested;
+  PartialDisposition partialDisposition = PartialDisposition::Keep;
+
+  [[nodiscard]] bool operator==(const TransferCancelOptions &) const = default;
+};
+
+enum class AcceptanceOrigin : quint8
+{
+  UserDecision = 0,
+  TrustedDevicePolicy = 1,
+};
+
 struct IncomingOffer
 {
   deskflow::relaydesk::DeviceId peerDeviceId;
@@ -143,6 +163,9 @@ struct IncomingOffer
 
 Q_DECLARE_METATYPE(relaydesk::transfer::SendOptions)
 Q_DECLARE_METATYPE(relaydesk::transfer::ReceiveOptions)
+Q_DECLARE_METATYPE(relaydesk::transfer::PartialDisposition)
+Q_DECLARE_METATYPE(relaydesk::transfer::TransferCancelOptions)
+Q_DECLARE_METATYPE(relaydesk::transfer::AcceptanceOrigin)
 Q_DECLARE_METATYPE(relaydesk::transfer::IncomingOffer)
 Q_DECLARE_METATYPE(relaydesk::transfer::TransferStartError)
 Q_DECLARE_METATYPE(relaydesk::transfer::TransferStartResult)
