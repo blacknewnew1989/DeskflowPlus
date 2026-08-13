@@ -35,6 +35,20 @@ create_test(
   SOURCE FileTransferRuntimeTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
 )
+
+create_test(
+  NAME RelayDeskIncomingFileReceiverWorkerTests
+  DEPENDS relaydesk_app
+  SOURCE IncomingFileReceiverWorkerTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+)
+
+create_test(
+  NAME RelayDeskIncomingTransferRuntimeTests
+  DEPENDS relaydesk_app
+  SOURCE IncomingTransferRuntimeTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+)
 target_compile_definitions(
   RelayDeskFileTransferRuntimeTests
   PRIVATE RELAYDESK_FILE_TRANSFER_RUNTIME_SOURCE_PATH="${CMAKE_SOURCE_DIR}/src/lib/relaydesk/app/FileTransferRuntime.cpp"

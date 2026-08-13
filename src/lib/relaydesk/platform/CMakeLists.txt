@@ -19,6 +19,21 @@ target_link_libraries(
   INTERFACE Qt6::Core
 )
 
+if(WIN32)
+  add_library(relaydesk_windows_file_safety STATIC
+    WindowsFileSafety.cpp
+    WindowsFileSafety.h
+  )
+  target_include_directories(
+    relaydesk_windows_file_safety
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+  )
+  target_link_libraries(
+    relaydesk_windows_file_safety
+    PUBLIC relaydesk_platform_contract Qt6::Core
+  )
+endif()
+
 add_library(relaydesk_macos_permissions STATIC
   MacLocalNetworkStatus.cpp
   MacLocalNetworkStatus.h
