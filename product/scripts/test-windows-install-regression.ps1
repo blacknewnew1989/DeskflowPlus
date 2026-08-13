@@ -195,6 +195,7 @@ function New-SyntheticPreviousMsi {
     $PreviousPackageCode = Format-MsiGuid ([guid]::NewGuid())
     $Installer = $null
     $Database = $null
+    $Summary = $null
     try {
         $Installer = New-Object -ComObject WindowsInstaller.Installer
         $Database = $Installer.OpenDatabase($DestinationPath, 1)
@@ -227,7 +228,10 @@ function New-SyntheticPreviousMsi {
             $Summary.Persist()
         }
         finally {
-            [Runtime.InteropServices.Marshal]::FinalReleaseComObject($Summary) | Out-Null
+            if ($null -ne $Summary) {
+                [Runtime.InteropServices.Marshal]::FinalReleaseComObject($Summary) | Out-Null
+                $Summary = $null
+            }
         }
     }
     finally {
@@ -503,6 +507,7 @@ $UserDataPaths = @(
     (Join-Path $UserDataRoot "test005-transfer-history.json")
 )
 $UserDataHashes = @{}
+$UserDataFilesCreatedByHarness = @()
 $CandidateIdentity = $null
 $PreviousIdentity = $null
 $InstallRoots = @()
@@ -556,8 +561,11 @@ try {
     Set-Content -LiteralPath $UserDataPaths[0] -Value @(
         "[test005]", "sentinel=$([guid]::NewGuid().ToString('D'))"
     ) -Encoding UTF8
+    $UserDataFilesCreatedByHarness += $UserDataPaths[0]
     Set-Content -LiteralPath $UserDataPaths[1] -Value '{"test005":"trusted-device-sentinel"}' -Encoding UTF8
+    $UserDataFilesCreatedByHarness += $UserDataPaths[1]
     Set-Content -LiteralPath $UserDataPaths[2] -Value '{"test005":"transfer-history-sentinel"}' -Encoding UTF8
+    $UserDataFilesCreatedByHarness += $UserDataPaths[2]
     foreach ($UserDataPath in $UserDataPaths) {
         $UserDataHashes[$UserDataPath] = (Get-FileHash -LiteralPath $UserDataPath -Algorithm SHA256).Hash
     }
@@ -770,7 +778,7 @@ finally {
     }
     $Result | ConvertTo-Json -Depth 6
 
-    foreach ($UserDataPath in $UserDataPaths) {
+    foreach ($UserDataPath in $UserDataFilesCreatedByHarness) {
         if (Test-Path -LiteralPath $UserDataPath -PathType Leaf) {
             [IO.File]::Delete($UserDataPath)
         }
