@@ -23,17 +23,19 @@
    `.github/workflows/relaydesk-build.yml`。
 8. 双平台 PASS 后通知 A4/A5 从标签提交或其后继创建 service 平台分支。
 
-## 当前已确认的缺口
+## 已关闭的协议缺口
 
-下列消息在 `Protocol.h` 已注册，但截至本通知基线没有独立 wire codec/handler contract：
+下列消息在通知基线缺少独立 wire contract；当前候选已全部具有 codec、正负向量与 direct Qt tests：
 
 - `Heartbeat` / `HeartbeatAck`；
 - `TransferPause` / `TransferResume` / `TransferCancel`；
 - `TransferComplete` / `TransferResult`；
 - `Goodbye`。
 
-本地 pause/resume/cancel 状态机和 `IFileTransferService` 方法不能替代 wire schema。
-这些消息必须补齐，或明确标为 v1 reserved 并从运行时发送路径排除。
+此外已关闭：24/24 registry 自动审计、60-vector typed canonical roundtrip、stable wire/pairing/
+transfer errors、强 TransferId/FileId、唯一 typed UI/service 边界、control operation result、queued
+QThread boundary、actual TLS reconnect identity、directional `file.receive.v1` capability truth、单一
+sender sink/backpressure、typed conflict-to-platform commit disposition。
 
 ## 完成证据
 

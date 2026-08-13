@@ -66,18 +66,22 @@ artifacts 都存在后，才可替换下表占位值；占位值本身不是发�
 ## 4. 当前共享 interface headers
 
 下表是最终 freeze candidate 中需要由 Windows 与 macOS 共同消费的 header 索引。
-Strong ID、`TransferStartResult` 与 file-safety boundary 已进入当前产品集成分支；本索引
-不以文档示例替代真实 header。UI 最终签名仍由 A0 在最终填充时按届时真实 header 核对。
+下表只索引真实、可编译的 authoritative headers；不以文档示例替代声明。UI、service、
+运行时、queued values、sender/receiver、恢复、冲突和平台 boundary 均已在冻结测试中核对。
 
 | Boundary | Current shared headers |
 |---|---|
 | Device | [`DeviceId.h`](../../src/lib/relaydesk/device/DeviceId.h), [`DeviceInfo.h`](../../src/lib/relaydesk/device/DeviceInfo.h), [`DeviceSnapshot.h`](../../src/lib/relaydesk/device/DeviceSnapshot.h) |
 | Discovery | [`DiscoveryService.h`](../../src/lib/relaydesk/discovery/DiscoveryService.h), [`DiscoveryRegistry.h`](../../src/lib/relaydesk/discovery/DiscoveryRegistry.h), [`DiscoverySettings.h`](../../src/lib/relaydesk/discovery/DiscoverySettings.h), [`AddressCandidateProvider.h`](../../src/lib/relaydesk/discovery/AddressCandidateProvider.h), [`FileEndpointAnnouncement.h`](../../src/lib/relaydesk/discovery/FileEndpointAnnouncement.h) |
-| Pairing | [`PairingOperation.h`](../../src/lib/relaydesk/pairing/PairingOperation.h), [`IPairingService.h`](../../src/lib/relaydesk/pairing/IPairingService.h) |
+| Pairing | [`PairingOperation.h`](../../src/lib/relaydesk/pairing/PairingOperation.h), [`PairingMessageCodec.h`](../../src/lib/relaydesk/pairing/PairingMessageCodec.h), [`PairingStateMachine.h`](../../src/lib/relaydesk/pairing/PairingStateMachine.h), [`IPairingService.h`](../../src/lib/relaydesk/pairing/IPairingService.h), [`PairingTrustRuntime.h`](../../src/lib/relaydesk/app/PairingTrustRuntime.h) |
 | Reconnect | [`AutoReconnectCoordinator.h`](../../src/lib/relaydesk/reconnect/AutoReconnectCoordinator.h) |
 | Permission | [`PermissionSnapshot.h`](../../src/lib/relaydesk/platform/PermissionSnapshot.h), [`IPlatformPermissions.h`](../../src/lib/relaydesk/platform/IPlatformPermissions.h) |
 | File identity | [`TransferId.h`](../../src/lib/relaydesk/transfer/TransferId.h), [`FileId.h`](../../src/lib/relaydesk/transfer/FileId.h) |
-| File service | [`TransferTypes.h`](../../src/lib/relaydesk/transfer/TransferTypes.h)（`TransferStartResult`）, [`IFileTransferService.h`](../../src/lib/relaydesk/transfer/IFileTransferService.h) |
+| File wire/capability | [`Protocol.h`](../../src/lib/relaydesk/transfer/Protocol.h), [`CapabilityCodec.h`](../../src/lib/relaydesk/transfer/CapabilityCodec.h), [`SessionMessageCodec.h`](../../src/lib/relaydesk/transfer/SessionMessageCodec.h) 及第 3 节列出的 codec headers |
+| File service/runtime | [`TransferTypes.h`](../../src/lib/relaydesk/transfer/TransferTypes.h), [`TransferError.h`](../../src/lib/relaydesk/transfer/TransferError.h), [`IFileTransferService.h`](../../src/lib/relaydesk/transfer/IFileTransferService.h), [`FileTransferRuntime.h`](../../src/lib/relaydesk/app/FileTransferRuntime.h), [`TransferUiRuntime.h`](../../src/lib/relaydesk/app/TransferUiRuntime.h) |
+| File live/history | [`TransferControlStateMachine.h`](../../src/lib/relaydesk/transfer/TransferControlStateMachine.h), [`TransferProgressPublisher.h`](../../src/lib/relaydesk/transfer/TransferProgressPublisher.h), [`TransferHistoryStore.h`](../../src/lib/relaydesk/transfer/TransferHistoryStore.h) |
+| File sender/transport | [`TransferSender.h`](../../src/lib/relaydesk/transfer/TransferSender.h), [`FileTlsFrameSink.h`](../../src/lib/relaydesk/filetransport/FileTlsFrameSink.h), [`FileTlsTransport.h`](../../src/lib/relaydesk/filetransport/FileTlsTransport.h) |
+| File receiver/recovery | [`FileReceiver.h`](../../src/lib/relaydesk/transfer/FileReceiver.h), [`ResumeStore.h`](../../src/lib/relaydesk/transfer/ResumeStore.h), [`ResumeMessageCodec.h`](../../src/lib/relaydesk/transfer/ResumeMessageCodec.h), [`ConflictResolver.h`](../../src/lib/relaydesk/transfer/ConflictResolver.h) |
 | File safety | [`IPlatformFileSafety.h`](../../src/lib/relaydesk/platform/IPlatformFileSafety.h) |
 
 后续接口冻结提交应更新本索引，而不是在 Windows/macOS 各建一份镜像声明。
@@ -105,8 +109,8 @@ Strong ID、`TransferStartResult` 与 file-safety boundary 已进入当前产品
 | Trust/discovery -> automatic reconnect | `NOT_WIRED` | `AutoReconnectCoordinator` 有共享实现和测试，但 `MainWindow` 未创建或驱动它 |
 | Windows firewall permission probe -> permission model | `NOT_WIRED` | `WindowsFirewallProbe` 实现 `IPlatformPermissions`，但当前 `MainWindow` 只在 macOS 创建 `MacPermissionProbe` |
 | GUI send/control intents -> `IFileTransferService` | `NOT_WIRED` | `TransferUiRuntime` 与 `FileTransferRuntime` 存在，但 `MainWindow` 未拥有或连接二者 |
-| Trusted discovery -> dedicated file TLS runtime | `NOT_WIRED` | `FileTransferRuntime` 可拥有 listener/client 并发布 endpoint，但产品启动路径未创建该 runtime |
-| Incoming offer -> receive/accept/reject/resume/commit | `NOT_WIRED` | 当前 runtime 的 `accept()`/`reject()` 尚无 receiver composition，incoming transfer frames 也没有完整 dispatcher |
+| Trusted discovery -> dedicated file TLS runtime | `NOT_WIRED` | `FileTransferRuntime` 可拥有 listener/client，但产品启动路径未创建它；在 receiver 组合前 discovery endpoint disabled |
+| Incoming offer -> receive/accept/reject/resume/commit | `NOT_WIRED` | 当前 runtime 不声明 `file.receive.v1`，收到未协商 offer会断开；`accept()`/`reject()` 只发布 typed unknown-transfer result |
 | `FileReceiver` staged commit -> `IPlatformFileSafety` | `NOT_WIRED` | 共享 file-safety contract 与 contract test 已存在；其 header 明确标注 receiver 接线仍未完成 |
 | Transfer progress/history -> Transfer Center | `NOT_WIRED` | model/dock 和共享 publisher/history store 存在，但产品启动路径没有 file service 向其发布状态 |
 
@@ -123,8 +127,8 @@ baseline 的 `NOT_WIRED` 结论。真实 Windows↔macOS 发现、配对、重�
 3. Control family 的 unknown non-negative integer extension-key 行为以共享 codec 为准；
    不得推广到其他 codec family，也不得把未覆盖行为误报为 JSON vector contract。
 4. 共享 interface header 变更必须先由 owner 提交，再由 Windows/macOS 从同一 commit
-   消费；strong ID、`TransferStartResult` 和 file safety 以表中真实 header 为准，UI
-   最终签名由 A0 在最终填充时核对。
+   消费；strong ID、typed service/UI intents、stable errors、queued values 和 file safety
+   以表中真实 header 与 `RelayDeskSharedInterfaceFreezeTests` 为准。
 5. 每次新的 freeze candidate 使用新的 `relaydesk-protocol-v1-*` tag，不移动、覆盖或
    force-update 既有 tag。
 
