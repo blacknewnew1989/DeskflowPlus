@@ -317,13 +317,18 @@ void IncomingTransferRuntimeTests::receivesAcceptedFileThroughAtomicCommit()
     latest = snapshot;
   });
   std::optional<FileResultMessage> fileResult;
+  std::optional<FileCheckpointMessage> checkpoint;
   connect(&runtime, &IncomingTransferRuntime::responseReady, this, [&](auto responsePeer, const Frame &frame) {
     QCOMPARE(responsePeer, peer);
     QCOMPARE(frame.streamId, quint32{1});
     const auto decoded = FileMessageCodec::decode(frame.type, frame.metadata);
     QVERIFY(decoded.ok());
     if (decoded.ok()) {
-      fileResult = std::get<FileResultMessage>(*decoded.message);
+      if (const auto *received = std::get_if<FileResultMessage>(&*decoded.message)) {
+        fileResult = *received;
+      } else if (const auto *received = std::get_if<FileCheckpointMessage>(&*decoded.message)) {
+        checkpoint = *received;
+      }
     }
   });
 
@@ -409,6 +414,8 @@ void IncomingTransferRuntimeTests::receivesAcceptedFileThroughAtomicCommit()
   );
   QVERIFY(fileResult.has_value());
   QCOMPARE(fileResult->code, FileResultCode::Ok);
+  QVERIFY(checkpoint.has_value());
+  QCOMPARE(checkpoint->durableOffset, quint64{1024U * 1024U});
   QVERIFY(safety.commitRequest.has_value());
   QCOMPARE(safety.commitRequest->disposition, CommitDisposition::FailIfExists);
   QFile committed(root.filePath(QStringLiteral("received.bin")));

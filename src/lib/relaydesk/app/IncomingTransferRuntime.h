@@ -54,6 +54,10 @@ public:
       const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
       QString *diagnostic = nullptr
   );
+  [[nodiscard]] bool receiveResumeQuery(
+      const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
+      QString *diagnostic = nullptr
+  );
   void peerDisconnected(const DeviceId &peerDeviceId);
   [[nodiscard]] bool contains(const ::relaydesk::transfer::TransferId &transferId) const;
   [[nodiscard]] QList<::relaydesk::transfer::TransferSnapshot> activeTransfers() const;

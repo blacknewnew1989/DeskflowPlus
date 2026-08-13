@@ -139,14 +139,16 @@ private:
   );
   void offerPreparedTransfers(const DeviceId &peerDeviceId);
   void sendOffer(OutgoingSession &session);
+  void sendResumeQuery(OutgoingSession &session);
   void handleOfferResponse(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
+  void handleResumeResponse(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
   void sendNextManifestPage(const ::relaydesk::transfer::TransferId &transferId);
   void startNextOutgoingFile(OutgoingSession &session);
   void schedulePeerSenders(const DeviceId &peerDeviceId);
   void scheduleSenderPump(const ::relaydesk::transfer::TransferId &transferId);
   void dispatchSenderPumpResult(
       const ::relaydesk::transfer::TransferId &transferId,
-      const ::relaydesk::transfer::SenderPumpResult &result
+      quint64 generation, const ::relaydesk::transfer::SenderPumpResult &result
   );
   void handleFileResult(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
   void updateOutgoingProgress(OutgoingSession &session);
