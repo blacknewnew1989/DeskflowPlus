@@ -40,6 +40,8 @@ add_library(${target} STATIC
   VersionChecker.cpp
   VersionChecker.h
   config/IServerConfig.h
+  config/RelayDeskInputLayout.cpp
+  config/RelayDeskInputLayout.h
   config/Screen.cpp
   config/Screen.h
   config/ScreenConfig.cpp

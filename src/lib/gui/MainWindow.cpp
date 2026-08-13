@@ -26,6 +26,7 @@
 #include "common/VersionInfo.h"
 #include "gui/Messages.h"
 #include "gui/TlsUtility.h"
+#include "gui/config/RelayDeskInputLayout.h"
 #include "gui/core/CoreProcess.h"
 #include "gui/ipc/DaemonIpcClient.h"
 #include "gui/widgets/LogDock.h"
@@ -329,6 +330,22 @@ void MainWindow::setupRelayDeskDiscovery()
       }
   );
   connect(
+      m_relayDeskPairing, &deskflow::relaydesk::PairingTrustRuntime::pairingChanged, this,
+      [this](const deskflow::relaydesk::PairingSnapshot &snapshot) {
+        if (snapshot.state == deskflow::relaydesk::PairingState::Completed) {
+          syncRelayDeskInputLayout(snapshot.peer.id);
+        }
+      }
+  );
+  connect(
+      &m_relayDeskDiscovery->registry(), &deskflow::relaydesk::DiscoveryRegistry::deviceAdded, this,
+      [this](const deskflow::relaydesk::DeviceSnapshot &snapshot) { syncRelayDeskInputLayout(snapshot.id); }
+  );
+  connect(
+      &m_relayDeskDiscovery->registry(), &deskflow::relaydesk::DiscoveryRegistry::deviceChanged, this,
+      [this](const deskflow::relaydesk::DeviceSnapshot &snapshot) { syncRelayDeskInputLayout(snapshot.id); }
+  );
+  connect(
       m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::pairingRequested, this,
       [this](const deskflow::relaydesk::DeviceId &peerDeviceId) {
         const auto result = m_relayDeskPairing->startPairing(peerDeviceId);
@@ -343,6 +360,37 @@ void MainWindow::setupRelayDeskDiscovery()
     qWarning().noquote() << "RelayDesk discovery could not start:" << diagnostic;
   }
   setupRelayDeskTransfer(*deviceId);
+}
+
+void MainWindow::syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &peerDeviceId)
+{
+  if (m_relayDeskDeviceModel == nullptr) {
+    return;
+  }
+  const auto peer = m_relayDeskDeviceModel->snapshot(peerDeviceId);
+  if (!peer.has_value()) {
+    return;
+  }
+
+  using deskflow::gui::RelayDeskInputLayoutResult;
+  const auto result = deskflow::gui::syncRelayDeskInputScreen(m_serverConfig, *peer);
+  if (result == RelayDeskInputLayoutResult::Added) {
+    m_serverConfig.commit();
+    Settings::save();
+    qInfo().noquote() << "RelayDesk added trusted input peer to screen layout:" << peer->displayName;
+    if (m_coreProcess.mode() == CoreMode::Server && m_coreProcess.isStarted()) {
+      m_coreProcess.restart();
+    }
+  } else if (result == RelayDeskInputLayoutResult::InvalidScreenName) {
+    qWarning().noquote() << "RelayDesk could not add paired input peer with invalid screen name:"
+                         << peer->displayName;
+  } else if (result == RelayDeskInputLayoutResult::ExternalConfigActive) {
+    qWarning().noquote() << "RelayDesk did not modify the active external server configuration for:"
+                         << peer->displayName;
+  } else if (result == RelayDeskInputLayoutResult::LayoutFull) {
+    qWarning().noquote() << "RelayDesk screen layout is full; paired input peer was not added:"
+                         << peer->displayName;
+  }
 }
 
 void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &localDeviceId)
