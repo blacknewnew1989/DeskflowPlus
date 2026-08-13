@@ -515,9 +515,15 @@ bool TransferCenterModel::requestResume(const TransferId &transferId)
   return requestControl(transferId, CanResumeRole, &TransferCenterModel::resumeRequested);
 }
 
-bool TransferCenterModel::requestCancel(const TransferId &transferId)
+bool TransferCenterModel::requestCancel(
+    const TransferId &transferId, const ::relaydesk::transfer::TransferCancelOptions &options
+)
 {
-  return requestControl(transferId, CanCancelRole, &TransferCenterModel::cancelRequested);
+  const auto row = indexOf(transferId);
+  if (row < 0 || !data(index(row, 0), CanCancelRole).toBool())
+    return false;
+  Q_EMIT cancelRequested(transferId, options);
+  return true;
 }
 
 bool TransferCenterModel::requestRetry(const TransferId &transferId)
@@ -528,9 +534,9 @@ bool TransferCenterModel::requestRetry(const TransferId &transferId)
 
   const auto &entry = m_entries.at(row);
   if (entry.history.has_value())
-    Q_EMIT historyRetryRequested(*entry.history);
+    Q_EMIT historyRetryRequested(transferId);
   else
-    Q_EMIT retryRequested(entry.snapshot);
+    Q_EMIT retryRequested(transferId);
   return true;
 }
 
@@ -735,13 +741,13 @@ void TransferCenterModel::flushNotification()
 }
 
 bool TransferCenterModel::requestControl(
-    const TransferId &transferId, Role allowedRole, void (TransferCenterModel::*signal)(TransferSnapshot)
+    const TransferId &transferId, Role allowedRole, void (TransferCenterModel::*signal)(TransferId)
 )
 {
   const auto row = indexOf(transferId);
   if (row < 0 || !data(index(row, 0), allowedRole).toBool())
     return false;
-  Q_EMIT(this->*signal)(m_entries.at(row).snapshot);
+  Q_EMIT(this->*signal)(transferId);
   return true;
 }
 

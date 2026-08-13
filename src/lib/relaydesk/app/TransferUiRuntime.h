@@ -6,8 +6,6 @@
 
 #pragma once
 
-#include "relaydesk/device/DeviceSnapshot.h"
-#include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/transfer/TransferHistoryStore.h"
 #include "relaydesk/transfer/TransferTypes.h"
 
@@ -29,6 +27,8 @@ class TransferCenterDock;
 } // namespace deskflow::relaydesk::widgets
 
 namespace deskflow::relaydesk {
+
+class IFileTransferService;
 
 struct ResolvedTransferCompletion
 {
@@ -73,7 +73,8 @@ public:
   using UrlOpener = std::function<bool(const QUrl &url)>;
 
   explicit TransferUiRuntime(
-      widgets::DevicesDock &devicesDock, widgets::TransferCenterDock &transferCenterDock,
+      IFileTransferService &service, widgets::DevicesDock &devicesDock,
+      widgets::TransferCenterDock &transferCenterDock,
       model::IncomingOfferModel &incomingOffers, CompletionResolver completionResolver = {}, UrlOpener urlOpener = {},
       QObject *parent = nullptr
   );
@@ -81,14 +82,6 @@ public:
   Q_DISABLE_COPY_MOVE(TransferUiRuntime)
 
 Q_SIGNALS:
-  void sendItemsRequested(DeviceSnapshot peer, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options);
-  void incomingOfferAccepted(::relaydesk::transfer::TransferAccept acceptance);
-  void incomingOfferRejected(::relaydesk::transfer::TransferReject rejection);
-  void pauseRequested(::relaydesk::transfer::TransferSnapshot snapshot);
-  void resumeRequested(::relaydesk::transfer::TransferSnapshot snapshot);
-  void cancelRequested(::relaydesk::transfer::TransferSnapshot snapshot);
-  void retryRequested(::relaydesk::transfer::TransferSnapshot snapshot);
-  void historyRetryRequested(::relaydesk::transfer::TransferHistoryRecord record);
   void completionOpened(::relaydesk::transfer::TransferId transferId, OpenTarget target, QUrl url);
   void completionOpenRejected(::relaydesk::transfer::TransferId transferId, OpenTarget target, OpenError error);
 

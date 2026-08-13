@@ -117,11 +117,18 @@ struct SendOptions
   [[nodiscard]] bool operator==(const SendOptions &) const = default;
 };
 
+enum class AcceptanceOrigin : quint8
+{
+  UserDecision = 0,
+  TrustedDevicePolicy = 1,
+};
+
 struct ReceiveOptions
 {
   QString destinationRoot;
   ConflictPolicy conflictPolicy = ConflictPolicy::AutoRename;
   bool keepPartialOnFailure = true;
+  AcceptanceOrigin acceptanceOrigin = AcceptanceOrigin::UserDecision;
 
   [[nodiscard]] bool operator==(const ReceiveOptions &) const = default;
 };
@@ -138,12 +145,6 @@ struct TransferCancelOptions
   PartialDisposition partialDisposition = PartialDisposition::Keep;
 
   [[nodiscard]] bool operator==(const TransferCancelOptions &) const = default;
-};
-
-enum class AcceptanceOrigin : quint8
-{
-  UserDecision = 0,
-  TrustedDevicePolicy = 1,
 };
 
 struct IncomingOffer

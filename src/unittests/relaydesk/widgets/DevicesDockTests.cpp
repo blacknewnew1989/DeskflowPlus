@@ -69,21 +69,6 @@ PairingSnapshot pairingSnapshot(
   };
 }
 
-::relaydesk::transfer::NegotiatedCapabilities transferCapabilities()
-{
-  using namespace ::relaydesk::transfer;
-  return {
-      .protocolMajorVersion = kProtocolMajorVersion,
-      .features = {QStringLiteral("file.v1"), QStringLiteral("folder.v1")},
-      .chunkBytes = 1024,
-      .maxPayloadBytes = 4096,
-      .maxConcurrentTransfers = 2,
-      .maxConcurrentFiles = 2,
-      .maxManifestEntries = 1000,
-      .conflictPolicies = {ConflictPolicy::AutoRename, ConflictPolicy::Ask},
-  };
-}
-
 ::relaydesk::transfer::IncomingOffer incomingTransfer(bool trusted = true)
 {
   using namespace ::relaydesk::transfer;
@@ -395,11 +380,8 @@ void DevicesDockTests::choosesFilesAndFolderAndPublishesImmutableIntent()
   QTest::keyClick(sendFiles, Qt::Key_Space);
   QCOMPARE(requested.count(), 1);
   auto arguments = requested.takeFirst();
-  QCOMPARE(arguments.at(0).metaType(), QMetaType::fromType<DeviceSnapshot>());
-  const auto *emittedPeer = static_cast<const DeviceSnapshot *>(arguments.at(0).constData());
-  QVERIFY(emittedPeer != nullptr);
-  QCOMPARE(emittedPeer->id, peer.id);
-  QCOMPARE(emittedPeer->presence, DevicePresence::Online);
+  QCOMPARE(arguments.at(0).metaType(), QMetaType::fromType<DeviceId>());
+  QCOMPARE(*static_cast<const DeviceId *>(arguments.at(0).constData()), peer.id);
   QCOMPARE(arguments.at(1).value<QList<QUrl>>(), files);
   QCOMPARE(
       arguments.at(2).value<::relaydesk::transfer::SendOptions>().conflictPolicy,
@@ -408,7 +390,6 @@ void DevicesDockTests::choosesFilesAndFolderAndPublishesImmutableIntent()
 
   peer.presence = DevicePresence::Offline;
   fixture.devices.upsertRemoteDevice(peer);
-  QCOMPARE(emittedPeer->presence, DevicePresence::Online);
   QVERIFY(!sendFiles->isEnabled());
 
   peer.presence = DevicePresence::Online;
@@ -509,9 +490,7 @@ void DevicesDockTests::acceptsLocalUrlDropOnlyForEligiblePeer()
 void DevicesDockTests::rendersNonBlockingIncomingOfferAndKeyboardDecisions()
 {
   Fixture fixture;
-  ::relaydesk::transfer::TransferOfferStateMachine stateMachine(transferCapabilities());
   IncomingOfferModel incomingModel(
-      stateMachine,
       {
           .destinationRoot = QStringLiteral("Downloads/RelayDesk"),
           .availableBytes = 1'000'000,
@@ -562,21 +541,22 @@ void DevicesDockTests::rendersNonBlockingIncomingOfferAndKeyboardDecisions()
   QTest::keyClick(changeSettings, Qt::Key_Space);
   QCOMPARE(settingsRequested.count(), 1);
 
-  QSignalSpy accepted(&incomingModel, &IncomingOfferModel::acceptanceReady);
+  QSignalSpy accepted(&incomingModel, &IncomingOfferModel::acceptRequested);
   accept->setFocus();
   QTest::keyClick(accept, Qt::Key_Space);
   QCOMPARE(accepted.count(), 1);
   QVERIFY(!panel->isVisible());
-  QVERIFY(incomingModel.acceptance().has_value());
+  QCOMPARE(
+      *static_cast<const ::relaydesk::transfer::TransferId *>(accepted.constFirst().at(0).constData()),
+      incomingModel.offer()->offer.transferId
+  );
 }
 
 void DevicesDockTests::rendersUntrustedAndExpiredOfferSafely()
 {
   qint64 now = 1000;
   Fixture fixture;
-  ::relaydesk::transfer::TransferOfferStateMachine stateMachine(transferCapabilities());
   IncomingOfferModel incomingModel(
-      stateMachine,
       {
           .destinationRoot = QStringLiteral("Downloads/RelayDesk"),
           .availableBytes = 1'000'000,

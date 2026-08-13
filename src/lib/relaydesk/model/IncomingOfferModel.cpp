@@ -19,9 +19,8 @@ namespace deskflow::relaydesk::model {
 namespace {
 
 using i18n::Text;
-using ::relaydesk::transfer::ConflictPolicy;
 using ::relaydesk::transfer::AcceptanceOrigin;
-using ::relaydesk::transfer::OfferStateError;
+using ::relaydesk::transfer::ConflictPolicy;
 using ::relaydesk::transfer::RejectReason;
 
 qint64 systemClockMs()
@@ -39,19 +38,16 @@ QString formattedBytes(quint64 bytes)
 } // namespace
 
 IncomingOfferModel::IncomingOfferModel(
-    ::relaydesk::transfer::TransferOfferStateMachine &stateMachine, IncomingOfferSettingsSnapshot settings,
-    QObject *parent
+    IncomingOfferSettingsSnapshot settings, QObject *parent
 )
-    : IncomingOfferModel(stateMachine, std::move(settings), systemClockMs, parent)
+    : IncomingOfferModel(std::move(settings), systemClockMs, parent)
 {
 }
 
 IncomingOfferModel::IncomingOfferModel(
-    ::relaydesk::transfer::TransferOfferStateMachine &stateMachine, IncomingOfferSettingsSnapshot settings,
-    Clock clock, QObject *parent
+    IncomingOfferSettingsSnapshot settings, Clock clock, QObject *parent
 )
     : QObject(parent),
-      m_stateMachine(stateMachine),
       m_settings(std::move(settings)),
       m_clock(clock ? std::move(clock) : Clock(systemClockMs))
 {
@@ -70,19 +66,10 @@ bool IncomingOfferModel::receiveOffer(const ::relaydesk::transfer::IncomingOffer
     return false;
 
   m_expiryTimer.stop();
-  m_stateMachine.reset();
   m_offer.reset();
   m_status = Status::Idle;
   m_errorText.clear();
   m_dismissed = false;
-
-  const auto result = m_stateMachine.receiveIncoming(offer.offer);
-  if (!result.ok()) {
-    m_status = Status::Error;
-    m_errorText = stateErrorText(result.error);
-    Q_EMIT changed();
-    return false;
-  }
 
   m_offer = offer;
   m_status = Status::AwaitingDecision;
@@ -109,20 +96,19 @@ bool IncomingOfferModel::acceptInternal(AcceptanceOrigin origin)
   if (!canAccept())
     return false;
 
-  const auto result = m_stateMachine.acceptIncoming(
-      ConflictPolicy::AutoRename, m_settings.destinationRoot, m_settings.availableBytes, origin
-  );
-  if (!result.ok()) {
-    m_errorText = stateErrorText(result.error);
-    Q_EMIT changed();
-    return false;
-  }
-
   m_expiryTimer.stop();
   m_status = Status::Accepted;
   m_errorText.clear();
   Q_EMIT changed();
-  Q_EMIT acceptanceReady();
+  Q_EMIT acceptRequested(
+      m_offer->offer.transferId,
+      {
+          .destinationRoot = m_settings.destinationRoot,
+          .conflictPolicy = ConflictPolicy::AutoRename,
+          .keepPartialOnFailure = true,
+          .acceptanceOrigin = origin,
+      }
+  );
   return true;
 }
 
@@ -130,18 +116,12 @@ bool IncomingOfferModel::reject()
 {
   if (expireIfNeeded() || !active())
     return false;
-  const auto result = m_stateMachine.rejectIncoming(RejectReason::UserDeclined);
-  if (!result.ok()) {
-    m_errorText = stateErrorText(result.error);
-    Q_EMIT changed();
-    return false;
-  }
 
   m_expiryTimer.stop();
   m_status = Status::Rejected;
   m_errorText.clear();
   Q_EMIT changed();
-  Q_EMIT rejectionReady();
+  Q_EMIT rejectRequested(m_offer->offer.transferId, RejectReason::UserDeclined);
   return true;
 }
 
@@ -154,18 +134,11 @@ bool IncomingOfferModel::expireIfNeeded()
   if (elapsed < timeout)
     return false;
 
-  const auto result = m_stateMachine.rejectIncoming(RejectReason::PolicyDenied);
-  if (!result.ok()) {
-    m_errorText = stateErrorText(result.error);
-    Q_EMIT changed();
-    return false;
-  }
-
   m_expiryTimer.stop();
   m_status = Status::Expired;
   m_errorText = i18n::translate(Text::TransferIncomingExpired);
   Q_EMIT changed();
-  Q_EMIT rejectionReady();
+  Q_EMIT rejectRequested(m_offer->offer.transferId, RejectReason::PolicyDenied);
   return true;
 }
 
@@ -265,18 +238,6 @@ std::optional<::relaydesk::transfer::IncomingOffer> IncomingOfferModel::offer() 
   return m_offer;
 }
 
-std::optional<::relaydesk::transfer::TransferAccept> IncomingOfferModel::acceptance() const
-{
-  const auto snapshot = m_stateMachine.snapshot();
-  return snapshot.has_value() ? snapshot->acceptance : std::nullopt;
-}
-
-std::optional<::relaydesk::transfer::TransferReject> IncomingOfferModel::rejection() const
-{
-  const auto snapshot = m_stateMachine.snapshot();
-  return snapshot.has_value() ? snapshot->rejection : std::nullopt;
-}
-
 void IncomingOfferModel::scheduleExpiry()
 {
   m_expiryTimer.stop();
@@ -302,25 +263,6 @@ void IncomingOfferModel::updateSafeError()
   } else {
     m_errorText.clear();
   }
-}
-
-QString IncomingOfferModel::stateErrorText(OfferStateError error) const
-{
-  switch (error) {
-  case OfferStateError::InvalidOffer:
-  case OfferStateError::CapabilityUnavailable:
-    return i18n::translate(Text::TransferIncomingInvalid);
-  case OfferStateError::ActiveOfferExists:
-    return i18n::translate(Text::TransferIncomingBusy);
-  case OfferStateError::None:
-    return {};
-  case OfferStateError::InvalidState:
-  case OfferStateError::TransferIdMismatch:
-  case OfferStateError::ConflictPolicyUnavailable:
-  case OfferStateError::InvalidResponse:
-    return i18n::translate(Text::TransferIncomingDecisionUnavailable);
-  }
-  return i18n::translate(Text::TransferIncomingDecisionUnavailable);
 }
 
 } // namespace deskflow::relaydesk::model

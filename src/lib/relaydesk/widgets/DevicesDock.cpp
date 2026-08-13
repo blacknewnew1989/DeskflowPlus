@@ -659,12 +659,11 @@ QModelIndex DevicesDock::targetIndexAt(const QPoint &position) const
   return m_deviceList->indexAt(m_deviceList->viewport()->mapFrom(this, position));
 }
 
-std::optional<DeviceSnapshot> DevicesDock::sendTarget(const QModelIndex &index) const
+std::optional<DeviceId> DevicesDock::sendTarget(const QModelIndex &index) const
 {
   if (!index.isValid() || !index.data(model::DeviceHomeModel::CanSendItemsRole).toBool())
     return std::nullopt;
-  const auto id = DeviceId::fromString(index.data(model::DeviceHomeModel::DeviceIdRole).toString());
-  return id.has_value() ? m_devices.snapshot(*id) : std::nullopt;
+  return DeviceId::fromString(index.data(model::DeviceHomeModel::DeviceIdRole).toString());
 }
 
 QString DevicesDock::validateLocalItems(const QList<QUrl> &items) const

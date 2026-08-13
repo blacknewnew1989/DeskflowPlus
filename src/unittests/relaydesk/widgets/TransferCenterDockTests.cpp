@@ -78,7 +78,8 @@ private Q_SLOTS:
 
 void TransferCenterDockTests::showsEmptyAndUsesKeyboardAccessibleControls()
 {
-  qRegisterMetaType<TransferSnapshot>();
+  qRegisterMetaType<TransferId>();
+  qRegisterMetaType<TransferCancelOptions>();
   TransferCenterModel model;
   TransferCenterDock dock(model);
   dock.resize(480, 420);
@@ -144,15 +145,15 @@ void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents(
 
   std::optional<TransferHistoryRecord> folderIntent;
   std::optional<TransferHistoryRecord> fileIntent;
-  std::optional<TransferHistoryRecord> retryIntent;
+  std::optional<TransferId> retryIntent;
   connect(&model, &TransferCenterModel::openFolderRequested, this, [&](TransferHistoryRecord record) {
     folderIntent = std::move(record);
   });
   connect(&model, &TransferCenterModel::openFileRequested, this, [&](TransferHistoryRecord record) {
     fileIntent = std::move(record);
   });
-  connect(&model, &TransferCenterModel::historyRetryRequested, this, [&](TransferHistoryRecord record) {
-    retryIntent = std::move(record);
+  connect(&model, &TransferCenterModel::historyRetryRequested, this, [&](TransferId transferId) {
+    retryIntent = transferId;
   });
 
   list->setCurrentIndex(model.index(model.indexOf(completed.transferId), 0));
@@ -205,7 +206,7 @@ void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents(
   retry->setFocus();
   QTest::keyClick(retry, Qt::Key_Space);
   QVERIFY(retryIntent.has_value());
-  QCOMPARE(*retryIntent, failed);
+  QCOMPARE(*retryIntent, failed.transferId);
 
   details->setFocus();
   QTest::keyClick(details, Qt::Key_Space);

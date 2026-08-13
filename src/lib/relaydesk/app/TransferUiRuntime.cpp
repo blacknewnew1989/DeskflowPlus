@@ -8,6 +8,7 @@
 
 #include "relaydesk/model/IncomingOfferModel.h"
 #include "relaydesk/model/TransferCenterModel.h"
+#include "relaydesk/transfer/IFileTransferService.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 
@@ -30,7 +31,8 @@ bool isUnderRoot(const QString &canonicalRoot, const QString &canonicalPath)
 } // namespace
 
 TransferUiRuntime::TransferUiRuntime(
-    widgets::DevicesDock &devicesDock, widgets::TransferCenterDock &transferCenterDock,
+    IFileTransferService &service, widgets::DevicesDock &devicesDock,
+    widgets::TransferCenterDock &transferCenterDock,
     model::IncomingOfferModel &incomingOffers, CompletionResolver completionResolver, UrlOpener urlOpener,
     QObject *parent
 )
@@ -40,26 +42,59 @@ TransferUiRuntime::TransferUiRuntime(
 {
   devicesDock.setIncomingOfferModel(&incomingOffers);
 
-  connect(&devicesDock, &widgets::DevicesDock::sendItemsRequested, this, &TransferUiRuntime::sendItemsRequested);
-  connect(&incomingOffers, &model::IncomingOfferModel::acceptanceReady, this, [this, &incomingOffers]() {
-    const auto acceptance = incomingOffers.acceptance();
-    if (acceptance.has_value())
-      Q_EMIT incomingOfferAccepted(*acceptance);
-  });
-  connect(&incomingOffers, &model::IncomingOfferModel::rejectionReady, this, [this, &incomingOffers]() {
-    const auto rejection = incomingOffers.rejection();
-    if (rejection.has_value())
-      Q_EMIT incomingOfferRejected(*rejection);
-  });
+  connect(
+      &devicesDock, &widgets::DevicesDock::sendItemsRequested, &service,
+      [&service](const DeviceId &peerDeviceId, const QList<QUrl> &localItems,
+                 const ::relaydesk::transfer::SendOptions &options) {
+        (void)service.send(peerDeviceId, localItems, options);
+      }
+  );
+  connect(
+      &incomingOffers, &model::IncomingOfferModel::acceptRequested, &service,
+      [&service](const ::relaydesk::transfer::TransferId &transferId,
+                 const ::relaydesk::transfer::ReceiveOptions &options) {
+        service.accept(transferId, options);
+      }
+  );
+  connect(
+      &incomingOffers, &model::IncomingOfferModel::rejectRequested, &service,
+      [&service](const ::relaydesk::transfer::TransferId &transferId,
+                 ::relaydesk::transfer::RejectReason reason) { service.reject(transferId, reason); }
+  );
 
   auto &transfers = transferCenterDock.transferModel();
-  connect(&transfers, &model::TransferCenterModel::pauseRequested, this, &TransferUiRuntime::pauseRequested);
-  connect(&transfers, &model::TransferCenterModel::resumeRequested, this, &TransferUiRuntime::resumeRequested);
-  connect(&transfers, &model::TransferCenterModel::cancelRequested, this, &TransferUiRuntime::cancelRequested);
-  connect(&transfers, &model::TransferCenterModel::retryRequested, this, &TransferUiRuntime::retryRequested);
+  connect(&transfers, &model::TransferCenterModel::pauseRequested, &service, &IFileTransferService::pause);
+  connect(&transfers, &model::TransferCenterModel::resumeRequested, &service, &IFileTransferService::resume);
+  connect(&transfers, &model::TransferCenterModel::cancelRequested, &service, &IFileTransferService::cancel);
+  connect(&transfers, &model::TransferCenterModel::retryRequested, &service, &IFileTransferService::retry);
   connect(
-      &transfers, &model::TransferCenterModel::historyRetryRequested, this, &TransferUiRuntime::historyRetryRequested
+      &transfers, &model::TransferCenterModel::historyRetryRequested, &service, &IFileTransferService::retry
   );
+  connect(
+      &service, &IFileTransferService::incomingOffer, &incomingOffers,
+      [&incomingOffers](const ::relaydesk::transfer::IncomingOffer &offer) {
+        (void)incomingOffers.receiveOffer(offer);
+      }
+  );
+  connect(
+      &service, &IFileTransferService::transferAdded, &transfers,
+      [&transfers](const ::relaydesk::transfer::TransferSnapshot &snapshot) {
+        (void)transfers.upsertTransfer(snapshot);
+      }
+  );
+  connect(
+      &service, &IFileTransferService::transferChanged, &transfers,
+      [&transfers](const ::relaydesk::transfer::TransferSnapshot &snapshot) {
+        (void)transfers.upsertTransfer(snapshot);
+      }
+  );
+  connect(
+      &service, &IFileTransferService::transferRemoved, &transfers,
+      [&transfers](const ::relaydesk::transfer::TransferId &transferId) {
+        (void)transfers.removeTransfer(transferId);
+      }
+  );
+  transfers.setTransfers(service.activeTransfers());
   connect(
       &transfers, &model::TransferCenterModel::openFolderRequested, this,
       [this](const ::relaydesk::transfer::TransferHistoryRecord &record) { openCompletion(record, OpenTarget::Folder); }
