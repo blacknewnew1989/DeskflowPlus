@@ -42,6 +42,8 @@ class WindowsInstallRegressionScriptTests(unittest.TestCase):
         self.assertIn("Join-Path $env:APPDATA $ExpectedProductName", SCRIPT)
         self.assertIn("TEST005_USER_DATA_SENTINEL_REMOVED", SCRIPT)
         self.assertIn("RelayDesk.conf, trust marker, and history marker", SCRIPT)
+        self.assertIn("$UserDataFilesCreatedByHarness", SCRIPT)
+        self.assertIn("foreach ($UserDataPath in $UserDataFilesCreatedByHarness)", SCRIPT)
 
     def test_exercises_same_upgrade_code_lower_version_major_upgrade(self) -> None:
         self.assertIn("New-SyntheticPreviousMsi", SCRIPT)
