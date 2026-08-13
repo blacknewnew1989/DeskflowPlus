@@ -5,6 +5,7 @@
  */
 
 #include "relaydesk/app/FileTransferRuntime.h"
+#include "relaydesk/app/DeviceDiscoveryRuntime.h"
 
 #include "relaydesk/device/DeviceInfo.h"
 #include "relaydesk/device/DeviceSnapshot.h"
@@ -32,6 +33,8 @@ using ActiveTransfersMethod = QList<TransferSnapshot> (IFileTransferService::*)(
 using IncomingOfferSignal = void (IFileTransferService::*)(IncomingOffer);
 using TransferSnapshotSignal = void (IFileTransferService::*)(TransferSnapshot);
 using TransferRemovedSignal = void (IFileTransferService::*)(TransferId);
+using DiscoveryEndpointMethod = bool (DiscoveryService::*)(FileEndpointAnnouncement, QString *);
+using DiscoveryRuntimeEndpointMethod = bool (DeviceDiscoveryRuntime::*)(FileEndpointAnnouncement, QString *);
 
 static_assert(std::is_abstract_v<IFileTransferService>);
 static_assert(std::is_base_of_v<IFileTransferService, FileTransferRuntime>);
@@ -51,6 +54,10 @@ static_assert(std::is_same_v<decltype(&IFileTransferService::incomingOffer), Inc
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferAdded), TransferSnapshotSignal>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferChanged), TransferSnapshotSignal>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferRemoved), TransferRemovedSignal>);
+static_assert(std::is_same_v<decltype(&DiscoveryService::setFileEndpoint), DiscoveryEndpointMethod>);
+static_assert(
+    std::is_same_v<decltype(&DeviceDiscoveryRuntime::setFileEndpoint), DiscoveryRuntimeEndpointMethod>
+);
 
 static_assert(std::is_same_v<std::underlying_type_t<RejectReason>, quint32>);
 static_assert(static_cast<quint32>(RejectReason::UserDeclined) == 1);
@@ -75,6 +82,11 @@ static_assert(std::is_copy_constructible_v<TransferHistoryRecord>);
 static_assert(std::is_copy_constructible_v<SendOptions>);
 static_assert(std::is_copy_constructible_v<ReceiveOptions>);
 static_assert(std::is_copy_constructible_v<PermissionSnapshot>);
+static_assert(std::is_copy_constructible_v<FileEndpointAnnouncement>);
+static_assert(FileEndpointAnnouncement::disabled().isDisabled());
+static_assert(FileEndpointAnnouncement::disabled().isValid());
+static_assert(!FileEndpointAnnouncement{.port = 24801}.isValid());
+static_assert(FileEndpointAnnouncement{.port = 24801, .fileV1 = true}.isValid());
 
 } // namespace
 
@@ -106,6 +118,7 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaType::fromType<RejectReason>().isValid());
   QVERIFY(QMetaType::fromType<TransferCancelReason>().isValid());
   QVERIFY(QMetaType::fromType<PermissionSnapshot>().isValid());
+  QVERIFY(QMetaType::fromType<FileEndpointAnnouncement>().isValid());
 }
 
 void SharedInterfaceFreezeTests::defaultRuntimeCapabilitiesAreHonest()

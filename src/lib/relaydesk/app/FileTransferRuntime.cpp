@@ -1213,7 +1213,14 @@ bool FileTransferRuntime::publishFileEndpoint(quint16 port, QString *diagnostic)
 {
   const auto &features = m_options.localCapabilities.features;
   return m_discoveryRuntime.setFileEndpoint(
-      port, features.contains(QStringLiteral("folder.v1")), features.contains(QStringLiteral("resume.v1")),
+      port == 0
+          ? FileEndpointAnnouncement::disabled()
+          : FileEndpointAnnouncement{
+                .port = port,
+                .fileV1 = true,
+                .folderV1 = features.contains(QStringLiteral("folder.v1")),
+                .resumeV1 = features.contains(QStringLiteral("resume.v1")),
+            },
       diagnostic
   );
 }

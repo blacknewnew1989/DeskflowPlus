@@ -53,6 +53,7 @@ private Q_SLOTS:
   void unusableAndDuplicateInterfacesAreSkipped();
   void sendFailureIsDiagnosable();
   void invalidSettingsAndBindFailureAreDiagnosable();
+  void fileEndpointAnnouncementIsValidatedAndApplied();
   void startStopAndLoopbackReceive();
   void invalidLoopbackDatagramIsReported();
 };
@@ -195,6 +196,49 @@ void DiscoveryServiceTests::invalidSettingsAndBindFailureAreDiagnosable()
   QVERIFY(!occupiedPort.start(&diagnostic));
   QVERIFY(diagnostic.contains(QString::number(occupiedSocket.localPort())));
   QCOMPARE(bindErrors.first().at(0).value<DiscoveryServiceError>(), DiscoveryServiceError::BindFailed);
+}
+
+void DiscoveryServiceTests::fileEndpointAnnouncementIsValidatedAndApplied()
+{
+  DiscoveryService service(exampleDevice());
+  QSignalSpy errors(&service, &DiscoveryService::errorOccurred);
+
+  const FileEndpointAnnouncement enabled{
+      .port = 32481,
+      .fileV1 = true,
+      .folderV1 = true,
+      .resumeV1 = true,
+  };
+  QVERIFY(enabled.isValid());
+  QVERIFY(!enabled.isDisabled());
+  QVERIFY(service.setFileEndpoint(enabled));
+  QCOMPARE(service.localDevice().filePort, enabled.port);
+  QCOMPARE(service.localDevice().capabilities.fileV1, enabled.fileV1);
+  QCOMPARE(service.localDevice().capabilities.folderV1, enabled.folderV1);
+  QCOMPARE(service.localDevice().capabilities.resumeV1, enabled.resumeV1);
+
+  const FileEndpointAnnouncement invalid{
+      .port = 0,
+      .fileV1 = false,
+      .folderV1 = true,
+  };
+  QVERIFY(!invalid.isValid());
+  QString diagnostic;
+  QVERIFY(!service.setFileEndpoint(invalid, &diagnostic));
+  QVERIFY(!diagnostic.isEmpty());
+  QCOMPARE(errors.size(), 1);
+  QCOMPARE(errors.constFirst().constFirst().value<DiscoveryServiceError>(), DiscoveryServiceError::InvalidSettings);
+  QCOMPARE(service.localDevice().filePort, enabled.port);
+  QVERIFY(service.localDevice().capabilities.folderV1);
+
+  const auto disabled = FileEndpointAnnouncement::disabled();
+  QVERIFY(disabled.isValid());
+  QVERIFY(disabled.isDisabled());
+  QVERIFY(service.setFileEndpoint(disabled));
+  QCOMPARE(service.localDevice().filePort, quint16{0});
+  QVERIFY(!service.localDevice().capabilities.fileV1);
+  QVERIFY(!service.localDevice().capabilities.folderV1);
+  QVERIFY(!service.localDevice().capabilities.resumeV1);
 }
 
 void DiscoveryServiceTests::startStopAndLoopbackReceive()

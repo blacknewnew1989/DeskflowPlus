@@ -12,6 +12,7 @@ add_library(relaydesk_discovery STATIC
   DiscoverySettings.h
   DiscoveryService.cpp
   DiscoveryService.h
+  FileEndpointAnnouncement.h
 )
 
 target_include_directories(

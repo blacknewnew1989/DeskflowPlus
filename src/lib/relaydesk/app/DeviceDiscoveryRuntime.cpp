@@ -85,14 +85,12 @@ void DeviceDiscoveryRuntime::stop()
   }
 }
 
-bool DeviceDiscoveryRuntime::setFileEndpoint(
-    quint16 port, bool folderV1, bool resumeV1, QString *diagnostic
-)
+bool DeviceDiscoveryRuntime::setFileEndpoint(FileEndpointAnnouncement announcement, QString *diagnostic)
 {
   if (!onOwningThread(diagnostic)) {
     return false;
   }
-  return m_service->setFileEndpoint(port, folderV1, resumeV1, diagnostic);
+  return m_service->setFileEndpoint(announcement, diagnostic);
 }
 
 bool DeviceDiscoveryRuntime::isRunning() const
