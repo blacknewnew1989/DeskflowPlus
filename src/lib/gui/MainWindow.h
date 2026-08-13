@@ -64,6 +64,7 @@ class DeviceId;
 class MacPermissionProbe;
 class PairingTrustRuntime;
 class TransferRuntimeComposition;
+class WindowsFirewallProbe;
 namespace model {
 class DeviceHomeModel;
 class PairingWizardModel;
@@ -234,6 +235,7 @@ private:
   deskflow::relaydesk::PairingTrustRuntime *m_relayDeskPairing = nullptr;
   deskflow::relaydesk::TransferRuntimeComposition *m_relayDeskTransfer = nullptr;
   deskflow::relaydesk::MacPermissionProbe *m_macPermissionProbe = nullptr;
+  deskflow::relaydesk::WindowsFirewallProbe *m_windowsFirewallProbe = nullptr;
   deskflow::relaydesk::model::DeviceHomeModel *m_relayDeskDeviceModel = nullptr;
   deskflow::relaydesk::model::PairingWizardModel *m_relayDeskPairingModel = nullptr;
   deskflow::relaydesk::model::PermissionStatusModel *m_relayDeskPermissionModel = nullptr;
