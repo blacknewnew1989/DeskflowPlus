@@ -21,8 +21,8 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last product implementation commit: `22619d8d584a2966ae0a82f69a960dbf066a8bbe`
-- Current implementation: COMP-002 pairing/trust and COMP-003 UI intents are integrated; the safe COMP-004 outgoing slice is integrated through `b87dde214`; further service expansion is paused while all RDFT v1 messages, vectors, envelopes, and shared interfaces are frozen.
+- Last product implementation commit: `bb4bdc4ac7e25a046a6a6415c507501ba765efdf`
+- Current implementation: PROTO-FREEZE-001 code contracts are complete at candidate level: 24-message registry, 60 shared vectors, stable wire/pairing/transfer errors, strong IDs, typed UI/service/control boundaries, queued values, directional receive capability, canonical sender sink, and typed conflict commit disposition. Further service expansion remains paused until the freeze tag Actions evidence is recorded.
 - Last verified stage tag: `relaydesk-phase2-20260813-04` (`d14a92335cc326f00c3bd12869585d48201d1bc0`)
 
 ## 自动执行状态
@@ -42,6 +42,7 @@
 | Draft Release publication | PASS | Phase 2 tag run `31655013105`; four delivery binaries downloaded and API/manifest/local SHA-256 agree |
 | Windows installer lifecycle | PASS | TEST-005 run `31657498852`; real clean install/repair/major-upgrade/two uninstalls and residue checks PASS; report `product/docs/reports/TEST-005_WINDOWS_INSTALL_LIFECYCLE.md` |
 | Final macOS bundle seal/lifecycle | PASS | TEST-005 run `31657596578`; symlink-preserving App ZIP, strict ad-hoc codesign, DMG verify/mount, isolated install/upgrade/uninstall and user-data preservation PASS |
+| Protocol/interface freeze candidate | IN_PROGRESS | candidate contracts through `bb4bdc4ac`; final docs/tag and same-commit Windows/macOS Actions evidence pending |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 

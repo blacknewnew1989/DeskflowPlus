@@ -142,6 +142,11 @@ Manifest authority 为 `TransferTypes.h`、`ManifestBuilder.h` 和 `ManifestPage
 `AcceptanceOrigin` 区分用户决定与可信设备策略；`TransferAccept::autoAccepted` 只由 service/state-machine
 在 wire 边界从该 enum 映射，不能作为跨层业务 bool。
 
+Capability token 由同一 `CapabilitiesMessage` 传输：`file.v1` 只表示 RDFT/1 基础协议，
+`sha256` 表示摘要能力，`file.receive.v1` 是 endpoint 可执行 incoming `TransferOffer` 的单向事实。
+发送方必须检查 `NegotiatedCapabilities::peerCanReceiveFiles`；当前尚未组合 receiver 的 runtime
+不得声明 `file.receive.v1`，并保持 discovery file endpoint disabled。
+
 ## 6. IFileTransferService 与应用边界
 
 Authority：
@@ -170,6 +175,16 @@ UI intent 恰好一次调用到 `IFileTransferService`，并把 service offer/sn
 `FileTransferRuntime` 实现 `IFileTransferService`，拥有独立于 Deskflow input channel 的 RDFT
 listener/client、连接认证、capability negotiation 和应用线程生命周期。raw protocol frame 是内部
 路由细节，不能作为 GUI 或平台代理业务入口。
+
+所有 control intent 都以异步 `TransferOperationResult` 结束：`operation` 标识
+Accept/Reject/Pause/Resume/Cancel/Retry，`outcome` 只有 Applied/Idempotent/Rejected，
+`error` 只有 None/UnknownTransfer/UnsupportedOperation/InvalidState/StartFailed。每次 intent
+恰好发布一次 result；unknown ID 必须 Rejected，重复当前 pause/resume/cancel 必须 Idempotent，
+terminal 或矛盾状态必须 InvalidState。`diagnostic` 只用于日志。
+
+`FileTransferRuntime::start()`/`connectPeer()` 的同步 bool 只表示 owning-thread 上监听或连接动作是否
+已启动；失败分类的唯一权威是同次 `errorOccurred(FileTransferRuntimeError, FileTlsError, diagnostic)`。
+平台不得从 diagnostic 文本推断类别。已启动连接后续失败也只经 typed signal 发布。
 
 ## 7. Sender、receiver、resume、conflict 与 backpressure
 
@@ -227,6 +242,12 @@ Authority：
 - history retry intent 只携带 TransferId，durable retry recipe 属于 service/store；
 - history store 的同步文件操作必须由 disk worker 调用。
 
+`TransferSnapshot` 与 schema v2 `TransferHistoryRecord` 只存 `TransferErrorCode`：None=0，
+ManifestBuildFailed=1001，OfferFailed=1002，SenderFailed=1003，PeerRejected=1004，
+PeerFileFailed=1005，DiskFull=1006，UnsafePath=1007，SourceUnreadable=1008，
+ConnectionLost=1009，HashMismatch=1010，InternalError=1011。历史 schema v1 的任意
+`errorMessageKey` 只迁移为 InternalError；不会进入 UI、schema v2 或兼容性分支。
+
 ## 9. Permission 与平台文件安全
 
 ### 9.1 Permission
@@ -256,10 +277,11 @@ Windows/macOS 只实现 adapter，不各自实现 transfer 状态机、PathPolic
 
 RelayDesk v1 不定义一个包办所有层的 `ProductError`。稳定错误由实际 boundary 的 enum 管理，例如：
 
-- codec/frame：各 `*CodecError`、`FrameError`；
-- pairing：`PairingOperationError` 及嵌套 message/state/trust error；
+- codec/frame：各 `*CodecError`、`FrameError`、`AuthResultErrorCode`、`ProtocolErrorCode`；
+- pairing：`PairingFailureReason`、`PairingOperationError` 及嵌套 transport/state/trust error；
 - reconnect/pinning：`AutoReconnectConnectError`、`PeerPinningError`；
-- service start/control：`TransferStartError`、`RejectReason`、typed cancel options；
+- service start/control：`TransferStartError`、`TransferOperationResult`、`TransferErrorCode`、
+  `RejectReason`、typed cancel options；
 - platform：`PermissionErrorCode`、`PermissionOpenError`、`FileSafetyError`；
 - receiver/resume/conflict/history：对应共享 header 中的稳定 enum。
 
@@ -283,7 +305,8 @@ service 接收不可变 settings snapshot。已存在的 discovery user settings
 
 以下跨 QObject/线程边界使用的值必须保持 copyable 且有 `Q_DECLARE_METATYPE`：DeviceId、
 TransferId、FileId、DeviceSnapshot、IncomingOffer、TransferSnapshot、TransferHistoryRecord、
-SendOptions、ReceiveOptions、PermissionSnapshot 及 service options/results。
+SendOptions、ReceiveOptions、TransferCancelOptions、TransferOperationResult、PermissionSnapshot、
+NegotiatedCapabilities 及其他公开 service options/results。
 
 冻结测试必须包含真实 `Qt::QueuedConnection` 跨 `QThread` smoke，而不只检查
 `QMetaType::isValid()`。
@@ -305,7 +328,7 @@ SendOptions、ReceiveOptions、PermissionSnapshot 及 service options/results。
 | AutoReconnectCoordinator | `NOT_WIRED` | 接口/测试存在，MainWindow 尚未拥有 |
 | GUI transfer intents → IFileTransferService | `NOT_WIRED` | typed adapter/service 存在，组合根尚未连接 |
 | outgoing manifest/offer/sender core | `IMPLEMENTED` | runtime slice 已有定向 E2E；产品入口尚未组合 |
-| incoming receiver/resume/conflict/history/progress | `NOT_WIRED` | 共享 core 存在，FileTransferRuntime 尚未组合 |
+| incoming receiver/resume/conflict/history/progress | `NOT_WIRED` | 共享 core 存在；runtime 明确不发布 `file.receive.v1` 且 discovery file endpoint disabled |
 | Windows permission → UI model | `NOT_WIRED` | adapter 已实现，MainWindow 尚未创建 |
 | IPlatformFileSafety Windows/macOS implementations | `NOT_IMPLEMENTED` | 只冻结共同接口 |
 
