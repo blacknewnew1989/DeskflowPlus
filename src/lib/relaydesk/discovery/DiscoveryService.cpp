@@ -195,6 +195,18 @@ qint64 DiscoveryService::sendPeerDatagram(
   return written;
 }
 
+bool DiscoveryService::setFileEndpoint(quint16 port, bool folderV1, bool resumeV1, QString *errorMessage)
+{
+  if (errorMessage != nullptr) {
+    errorMessage->clear();
+  }
+  m_localDevice.filePort = port;
+  m_localDevice.capabilities.fileV1 = port != 0;
+  m_localDevice.capabilities.folderV1 = port != 0 && folderV1;
+  m_localDevice.capabilities.resumeV1 = port != 0 && resumeV1;
+  return !isRunning() || announceNow(errorMessage);
+}
+
 bool DiscoveryService::isRunning() const
 {
   return m_receiveSocket.state() == QAbstractSocket::BoundState;

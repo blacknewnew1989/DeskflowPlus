@@ -43,6 +43,9 @@ public:
 
   [[nodiscard]] bool start(QString *diagnostic = nullptr);
   void stop();
+  [[nodiscard]] bool setFileEndpoint(
+      quint16 port, bool folderV1, bool resumeV1, QString *diagnostic = nullptr
+  );
   [[nodiscard]] bool isRunning() const;
   [[nodiscard]] DiscoveryService &service() const;
   [[nodiscard]] DiscoveryRegistry &registry() const;

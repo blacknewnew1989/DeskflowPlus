@@ -77,6 +77,9 @@ public:
       const QByteArray &datagram, const QHostAddress &destination, quint16 port,
       QString *errorMessage = nullptr
   );
+  [[nodiscard]] bool setFileEndpoint(
+      quint16 port, bool folderV1, bool resumeV1, QString *errorMessage = nullptr
+  );
 
   [[nodiscard]] bool isRunning() const;
   [[nodiscard]] quint16 boundPort() const;
