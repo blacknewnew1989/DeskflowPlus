@@ -15,6 +15,10 @@
 
 #include <optional>
 
+namespace deskflow::relaydesk {
+class IncomingFileReceiverWorker;
+}
+
 namespace relaydesk::transfer {
 
 enum class FileReceiverState
@@ -134,8 +138,15 @@ public:
   [[nodiscard]] FileReceiverSnapshot snapshot() const;
 
 private:
+  friend class deskflow::relaydesk::IncomingFileReceiverWorker;
+
   [[nodiscard]] FileReceiverResult fail(FileReceiverError error, FileResultCode code, QString diagnostic);
   [[nodiscard]] FileReceiverResult beginInternal(const FileReceiveRequest &request, const ResumeState *resumeState);
+  [[nodiscard]] FileReceiverResult finishStaging(const FileEndMessage &end);
+  [[nodiscard]] FileReceiverResult confirmCommitted(QString committedPath);
+  [[nodiscard]] FileReceiverResult failCommit(
+      FileReceiverError error, FileResultCode code, QString diagnostic
+  );
   [[nodiscard]] FileReceiverResult result(FileResultCode code, QString diagnostic = {}) const;
   [[nodiscard]] QString chooseAutoRenameTarget(const QString &requestedTarget) const;
   void resetSession();

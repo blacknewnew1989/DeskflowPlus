@@ -7,17 +7,19 @@
 #pragma once
 
 #include "relaydesk/platform/IPlatformFileSafety.h"
+#include "relaydesk/transfer/ConflictResolver.h"
 #include "relaydesk/transfer/FileReceiver.h"
+
+#include <optional>
 
 class QThread;
 
 namespace deskflow::relaydesk {
 
 // One-file receive lifecycle that must be constructed and consumed on the
-// same disk worker. Platform root/link inspection is composed here. The final
-// IPlatformFileSafety::commitStagedFile boundary remains intentionally
-// NOT_WIRED until both platform adapters are integrated; FileReceiver retains
-// its existing shared-core commit behavior in this intermediate slice.
+// same disk worker. Platform root/link inspection and the final typed atomic
+// commit are composed here; success is published only after the injected
+// platform adapter has moved the verified .part file to its reserved target.
 class IncomingFileReceiverWorker final
 {
 public:
@@ -37,7 +39,7 @@ public:
 
   [[nodiscard]] static constexpr bool platformCommitWired() noexcept
   {
-    return false;
+    return true;
   }
 
 private:
@@ -49,7 +51,9 @@ private:
   IPlatformFileSafety &m_fileSafety;
   QThread *m_ownerThread = nullptr;
   ::relaydesk::transfer::FileReceiver m_receiver;
+  ::relaydesk::transfer::ConflictResolver m_conflicts;
+  std::optional<::relaydesk::transfer::UseTarget> m_target;
+  QString m_receiveRoot;
 };
 
 } // namespace deskflow::relaydesk
-

@@ -8,6 +8,8 @@
 
 #include "relaydesk/transfer/PathPolicy.h"
 
+#include <QDir>
+#include <QFileInfo>
 #include <QThread>
 
 namespace deskflow::relaydesk {
@@ -31,21 +33,40 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
     return safetyFailure(root);
   }
 
-  QString targetPath;
-  const auto target = PathPolicy::joinLexicallyUnderRoot(
-      request.receiveRoot, request.entry.relativeProtocolPath, targetPath, request.pathLimits
-  );
-  if (!target.ok) {
+  const auto decision = m_conflicts.resolve({
+      .targetRoot = request.receiveRoot,
+      .relativeProtocolPath = request.entry.relativeProtocolPath,
+      .policy = request.conflictPolicy,
+      .pathLimits = request.pathLimits,
+  });
+  const auto *target = std::get_if<UseTarget>(&decision);
+  if (target == nullptr) {
+    if (const auto *failure = std::get_if<ConflictFailure>(&decision)) {
+      return {
+          .error = failure->error == ConflictResolverError::UnsafePath
+                       ? FileReceiverError::UnsafePath
+                       : FileReceiverError::UnsupportedConflictPolicy,
+          .pathError = failure->pathError,
+          .diagnostic = failure->diagnostic,
+      };
+    }
     return {
-        .error = FileReceiverError::UnsafePath,
-        .pathError = target.error,
-        .diagnostic = target.diagnostic,
+        .error = FileReceiverError::UnsupportedConflictPolicy,
+        .diagnostic = QStringLiteral("conflict policy requires a decision before receiving file bytes"),
+    };
+  }
+  if (!QDir().mkpath(QFileInfo(target->absolutePath).absolutePath())) {
+    (void)m_conflicts.release(target->reservationId);
+    return {
+        .error = FileReceiverError::DirectoryCreateFailed,
+        .diagnostic = QStringLiteral("could not create the reserved target directory"),
     };
   }
   const auto safeTarget = m_fileSafety.verifyNoLinkTraversal(
-      {.receiveRoot = request.receiveRoot, .candidatePath = targetPath}
+      {.receiveRoot = request.receiveRoot, .candidatePath = target->absolutePath}
   );
   if (!safeTarget.ok()) {
+    (void)m_conflicts.release(target->reservationId);
     return safetyFailure(safeTarget);
   }
 
@@ -59,6 +80,7 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
       request.receiveRoot, stagingRelative, stagingPath, request.pathLimits
   );
   if (!staging.ok) {
+    (void)m_conflicts.release(target->reservationId);
     return {
         .error = FileReceiverError::UnsafePath,
         .pathError = staging.error,
@@ -69,9 +91,17 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
       {.receiveRoot = request.receiveRoot, .candidatePath = stagingPath}
   );
   if (!safeStaging.ok()) {
+    (void)m_conflicts.release(target->reservationId);
     return safetyFailure(safeStaging);
   }
-  return m_receiver.begin(request);
+  const auto begun = m_receiver.begin(request);
+  if (!begun.ok()) {
+    (void)m_conflicts.release(target->reservationId);
+    return begun;
+  }
+  m_target = *target;
+  m_receiveRoot = request.receiveRoot;
+  return begun;
 }
 
 ::relaydesk::transfer::FileReceiverResult IncomingFileReceiverWorker::append(
@@ -84,7 +114,57 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
 ::relaydesk::transfer::FileReceiverResult
 IncomingFileReceiverWorker::finish(const ::relaydesk::transfer::FileEndMessage &end)
 {
-  return isOwningThread() ? m_receiver.finish(end) : wrongThread();
+  using namespace ::relaydesk::transfer;
+
+  if (!isOwningThread()) {
+    return wrongThread();
+  }
+  if (!m_target.has_value() || m_receiveRoot.isEmpty()) {
+    return {
+        .error = FileReceiverError::InvalidState,
+        .diagnostic = QStringLiteral("file receiver has no reserved commit target"),
+    };
+  }
+  const auto staged = m_receiver.finishStaging(end);
+  if (!staged.ok()) {
+    (void)m_conflicts.release(m_target->reservationId);
+    m_target.reset();
+    return staged;
+  }
+
+  static_assert(
+      static_cast<int>(TargetCommitDisposition::FailIfExists) ==
+      static_cast<int>(CommitDisposition::FailIfExists)
+  );
+  static_assert(
+      static_cast<int>(TargetCommitDisposition::ReplaceExisting) ==
+      static_cast<int>(CommitDisposition::ReplaceExisting)
+  );
+  const auto commit = m_fileSafety.commitStagedFile({
+      .receiveRoot = m_receiveRoot,
+      .stagingPath = m_receiver.m_snapshot.partPath,
+      .destinationPath = m_target->absolutePath,
+      .disposition = static_cast<CommitDisposition>(m_target->commitDisposition),
+  });
+  const QString committedPath = m_target->absolutePath;
+  (void)m_conflicts.release(m_target->reservationId);
+  m_target.reset();
+  if (!commit.ok()) {
+    const auto receiverError = commit.error == FileSafetyError::DestinationExists
+                                   ? FileReceiverError::TargetExists
+                                   : commit.error == FileSafetyError::LinkTraversalDetected ||
+                                             commit.error == FileSafetyError::DestinationInvalid
+                                         ? FileReceiverError::UnsafePath
+                                         : FileReceiverError::CommitFailed;
+    const auto resultCode = commit.error == FileSafetyError::DestinationExists
+                                ? FileResultCode::TargetExists
+                                : commit.error == FileSafetyError::LinkTraversalDetected ||
+                                          commit.error == FileSafetyError::DestinationInvalid
+                                      ? FileResultCode::PathInvalid
+                                      : FileResultCode::IoError;
+    return m_receiver.failCommit(receiverError, resultCode, commit.diagnostic);
+  }
+  return m_receiver.confirmCommitted(committedPath);
 }
 
 ::relaydesk::transfer::FileReceiverSnapshot IncomingFileReceiverWorker::snapshot() const
@@ -118,4 +198,3 @@ IncomingFileReceiverWorker::safetyFailure(const FileSafetyResult &result) const
 }
 
 } // namespace deskflow::relaydesk
-
