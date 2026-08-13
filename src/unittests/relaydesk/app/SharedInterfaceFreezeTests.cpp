@@ -14,7 +14,9 @@
 #include "relaydesk/model/TransferCenterModel.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/platform/PermissionSnapshot.h"
+#include "relaydesk/platform/IPlatformFileSafety.h"
 #include "relaydesk/transfer/TransferHistoryStore.h"
+#include "relaydesk/transfer/ConflictResolver.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
 #include "relaydesk/widgets/DevicesDock.h"
 
@@ -279,6 +281,17 @@ static_assert(static_cast<quint32>(TransferErrorCode::SourceUnreadable) == 1008)
 static_assert(static_cast<quint32>(TransferErrorCode::ConnectionLost) == 1009);
 static_assert(static_cast<quint32>(TransferErrorCode::HashMismatch) == 1010);
 static_assert(static_cast<quint32>(TransferErrorCode::InternalError) == 1011);
+static_assert(std::is_same_v<std::underlying_type_t<TargetCommitDisposition>, quint8>);
+static_assert(static_cast<quint8>(TargetCommitDisposition::FailIfExists) == 0);
+static_assert(static_cast<quint8>(TargetCommitDisposition::ReplaceExisting) == 1);
+static_assert(
+    static_cast<int>(TargetCommitDisposition::FailIfExists) ==
+    static_cast<int>(CommitDisposition::FailIfExists)
+);
+static_assert(
+    static_cast<int>(TargetCommitDisposition::ReplaceExisting) ==
+    static_cast<int>(CommitDisposition::ReplaceExisting)
+);
 
 static_assert(std::is_copy_constructible_v<DeviceId>);
 static_assert(std::is_copy_constructible_v<DeviceInfo>);
@@ -349,6 +362,7 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaType::fromType<TransferOperationError>().isValid());
   QVERIFY(QMetaType::fromType<TransferOperationResult>().isValid());
   QVERIFY(QMetaType::fromType<TransferErrorCode>().isValid());
+  QVERIFY(QMetaType::fromType<TargetCommitDisposition>().isValid());
   QVERIFY(QMetaType::fromType<PermissionSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<FileEndpointAnnouncement>().isValid());
   QVERIFY(QMetaType::fromType<NegotiatedCapabilities>().isValid());

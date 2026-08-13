@@ -200,7 +200,9 @@ Authority：
 `PathPolicy` 负责 protocol path、NFC/case-fold collision key 和 lexical containment；
 `IPlatformFileSafety` 在 disk worker 上负责真实 root、link/reparse traversal 与最终 atomic move/replace。
 `CommitStagedFileRequest` 使用具名 receiveRoot/stagingPath/destinationPath 和
-`CommitDisposition`，不接受含义不明的 bool。
+`CommitDisposition`，不接受含义不明的 bool。`ConflictResolver::UseTarget` 对应字段为
+`TargetCommitDisposition`：`FailIfExists=0`、`ReplaceExisting=1`，其数值与平台
+`CommitDisposition` 完全一致并由 compile-time assertion 冻结；组合层只能做这组一一映射。
 
 在实际组合前，`FileReceiver` 不得宣告已消费 `ConflictResolver` 或 `IPlatformFileSafety`。缺失或损坏
 resume state、part size/hash 不匹配时不能盲续；成功必须在 SHA-256、flush/close、冲突决策和原子

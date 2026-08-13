@@ -186,7 +186,7 @@ void ConflictResolverTests::resolvesSkipAskAndOverwriteWithoutMutatingTarget()
        .policy = ConflictPolicy::Overwrite}
   );
   QVERIFY(std::holds_alternative<UseTarget>(overwrite));
-  QVERIFY(use(overwrite).replaceExisting);
+  QCOMPARE(use(overwrite).commitDisposition, TargetCommitDisposition::ReplaceExisting);
   QVERIFY(QFileInfo::exists(target));
   QVERIFY(resolver.release(use(overwrite).reservationId));
 }
@@ -200,7 +200,7 @@ void ConflictResolverTests::nonAutoPoliciesUseUnoccupiedTarget()
         {.targetRoot = root.path(), .relativeProtocolPath = QStringLiteral("free.txt"), .policy = policy}
     );
     QVERIFY(std::holds_alternative<UseTarget>(decision));
-    QVERIFY(!use(decision).replaceExisting);
+    QCOMPARE(use(decision).commitDisposition, TargetCommitDisposition::FailIfExists);
     QVERIFY(resolver.release(use(decision).reservationId));
   }
 }

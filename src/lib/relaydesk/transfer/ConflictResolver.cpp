@@ -149,7 +149,9 @@ ConflictDecision ConflictResolver::resolveLocked(const ConflictResolveRequest &r
         request.policy == ConflictPolicy::Overwrite && !existingPath.isEmpty() ? existingPath : absoluteCandidate,
         candidate.normalized,
         reservationId,
-        request.policy == ConflictPolicy::Overwrite && !existingPath.isEmpty(),
+        request.policy == ConflictPolicy::Overwrite && !existingPath.isEmpty()
+            ? TargetCommitDisposition::ReplaceExisting
+            : TargetCommitDisposition::FailIfExists,
     };
   }
   return fail(
