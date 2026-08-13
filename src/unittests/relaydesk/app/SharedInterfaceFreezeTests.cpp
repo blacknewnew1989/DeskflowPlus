@@ -13,14 +13,123 @@
 #include "relaydesk/transfer/TransferHistoryStore.h"
 
 #include <QMetaMethod>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QSignalSpy>
+#include <QThread>
 #include <QtTest>
 
+#include <optional>
 #include <type_traits>
+#include <utility>
 
 using namespace deskflow::relaydesk;
 using namespace relaydesk::transfer;
 
+class QueuedBoundaryReceiver final : public QObject
+{
+  Q_OBJECT
+
+public:
+  std::optional<DeviceId> deviceId;
+  std::optional<TransferId> transferId;
+  std::optional<FileId> fileId;
+  std::optional<IncomingOffer> incomingOffer;
+  std::optional<TransferSnapshot> transferSnapshot;
+  std::optional<TransferHistoryRecord> historyRecord;
+  std::optional<SendOptions> sendOptions;
+  std::optional<ReceiveOptions> receiveOptions;
+  std::optional<TransferCancelOptions> cancelOptions;
+  std::optional<PermissionSnapshot> permissionSnapshot;
+  QThread *deliveryThread = nullptr;
+
+public Q_SLOTS:
+  void receive(
+      DeviceId receivedDeviceId, TransferId receivedTransferId, FileId receivedFileId,
+      IncomingOffer receivedIncomingOffer, TransferSnapshot receivedTransferSnapshot,
+      TransferHistoryRecord receivedHistoryRecord, SendOptions receivedSendOptions,
+      ReceiveOptions receivedReceiveOptions, TransferCancelOptions receivedCancelOptions,
+      PermissionSnapshot receivedPermissionSnapshot
+  )
+  {
+    deviceId = std::move(receivedDeviceId);
+    transferId = std::move(receivedTransferId);
+    fileId = std::move(receivedFileId);
+    incomingOffer = std::move(receivedIncomingOffer);
+    transferSnapshot = std::move(receivedTransferSnapshot);
+    historyRecord = std::move(receivedHistoryRecord);
+    sendOptions = std::move(receivedSendOptions);
+    receiveOptions = std::move(receivedReceiveOptions);
+    cancelOptions = std::move(receivedCancelOptions);
+    permissionSnapshot = std::move(receivedPermissionSnapshot);
+    deliveryThread = QThread::currentThread();
+    Q_EMIT delivered();
+  }
+
+Q_SIGNALS:
+  void delivered();
+};
+
 namespace {
+
+struct CapturedQtMessages
+{
+  QMutex mutex;
+  QStringList messages;
+};
+
+CapturedQtMessages *g_capturedQtMessages = nullptr;
+
+void captureQtMessage(QtMsgType, const QMessageLogContext &, const QString &message)
+{
+  if (g_capturedQtMessages == nullptr)
+    return;
+  const QMutexLocker locker(&g_capturedQtMessages->mutex);
+  g_capturedQtMessages->messages.append(message);
+}
+
+class ScopedMessageCapture final
+{
+public:
+  explicit ScopedMessageCapture(CapturedQtMessages &capture) : m_previous(qInstallMessageHandler(captureQtMessage))
+  {
+    g_capturedQtMessages = &capture;
+  }
+
+  ~ScopedMessageCapture()
+  {
+    g_capturedQtMessages = nullptr;
+    qInstallMessageHandler(m_previous);
+  }
+
+private:
+  QtMessageHandler m_previous;
+};
+
+class ScopedReceiverThread final
+{
+public:
+  ScopedReceiverThread(QThread &thread, QueuedBoundaryReceiver &receiver)
+      : m_thread(thread), m_receiver(receiver), m_ownerThread(QThread::currentThread())
+  {
+  }
+
+  ~ScopedReceiverThread()
+  {
+    if (m_thread.isRunning()) {
+      QMetaObject::invokeMethod(
+          &m_receiver, [this]() { m_receiver.moveToThread(m_ownerThread); }, Qt::BlockingQueuedConnection
+      );
+      m_thread.quit();
+      m_thread.wait();
+    }
+  }
+
+private:
+  QThread &m_thread;
+  QueuedBoundaryReceiver &m_receiver;
+  QThread *m_ownerThread;
+};
 
 using SendMethod = TransferStartResult (IFileTransferService::*)(
     const DeviceId &, const QList<QUrl> &, const SendOptions &
@@ -110,7 +219,16 @@ class SharedInterfaceFreezeTests final : public QObject
 
 private Q_SLOTS:
   void freezesServiceSignalsAndMetaTypes();
+  void queuesSharedValuesAcrossThreadWithoutLoss();
   void defaultRuntimeCapabilitiesAreHonest();
+
+Q_SIGNALS:
+  void sharedValuesReady(
+      DeviceId deviceId, TransferId transferId, FileId fileId, IncomingOffer incomingOffer,
+      TransferSnapshot transferSnapshot, TransferHistoryRecord historyRecord, SendOptions sendOptions,
+      ReceiveOptions receiveOptions, TransferCancelOptions cancelOptions,
+      PermissionSnapshot permissionSnapshot
+  );
 };
 
 void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
@@ -138,6 +256,108 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaType::fromType<TransferStartResult>().isValid());
   QVERIFY(QMetaType::fromType<PermissionSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<FileEndpointAnnouncement>().isValid());
+}
+
+void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
+{
+  const auto deviceId = DeviceId::generate();
+  const auto transferId = TransferId::generate();
+  const auto fileId = FileId::generate();
+  const IncomingOffer incomingOffer{
+      .peerDeviceId = deviceId,
+      .peerDisplayName = QStringLiteral("Studio Mac"),
+      .offer =
+          {
+              .transferId = transferId,
+              .displayName = QStringLiteral("Project"),
+              .totalBytes = 2048,
+              .fileCount = 1,
+              .manifestSha256 = QByteArray(kSha256Bytes, '\x2a'),
+              .manifestPageCount = 1,
+              .requestedConflictPolicy = ConflictPolicy::AutoRename,
+          },
+      .peerTrusted = true,
+      .mayAutoAccept = true,
+  };
+  const auto now = QDateTime::fromMSecsSinceEpoch(1'780'000'000'000LL, Qt::UTC);
+  const TransferSnapshot transferSnapshot{
+      .id = transferId,
+      .peerId = deviceId,
+      .peerDisplayName = QStringLiteral("Studio Mac"),
+      .displayName = QStringLiteral("Project"),
+      .direction = TransferDirection::Receiving,
+      .state = TransferState::Transferring,
+      .progress = {.completedBytes = 512, .totalBytes = 2048, .totalFiles = 1, .bytesPerSecond = 128.0},
+      .currentRelativeDisplayPath = QStringLiteral("Project/report.txt"),
+      .canPause = true,
+      .canCancel = true,
+      .createdUtc = now,
+  };
+  const TransferHistoryRecord historyRecord{
+      .transferId = transferId,
+      .peerDeviceId = deviceId,
+      .peerDisplayName = QStringLiteral("Studio Mac"),
+      .displayName = QStringLiteral("Project"),
+      .direction = HistoryDirection::Receiving,
+      .fileCount = 1,
+      .totalBytes = 2048,
+      .startedUtc = now,
+      .finishedUtc = now.addSecs(16),
+      .status = HistoryStatus::Completed,
+  };
+  const SendOptions sendOptions{.conflictPolicy = ConflictPolicy::Ask};
+  const ReceiveOptions receiveOptions{
+      .destinationRoot = QStringLiteral("Downloads/RelayDesk"),
+      .conflictPolicy = ConflictPolicy::AutoRename,
+      .failurePartialDisposition = PartialDisposition::Remove,
+      .acceptanceOrigin = AcceptanceOrigin::TrustedDevicePolicy,
+  };
+  const TransferCancelOptions cancelOptions{
+      .reason = TransferCancelReason::ApplicationShutdown,
+      .partialDisposition = PartialDisposition::Remove,
+  };
+  const PermissionSnapshot permissionSnapshot{
+      .platform = PermissionPlatform::MacOS,
+      .entries = {{PermissionKind::MacLocalNetwork, PermissionState::Granted}},
+      .checkedAtUtc = now,
+  };
+
+  QThread worker;
+  QueuedBoundaryReceiver receiver;
+  receiver.moveToThread(&worker);
+  ScopedReceiverThread threadCleanup(worker, receiver);
+  QVERIFY(connect(
+      this, &SharedInterfaceFreezeTests::sharedValuesReady, &receiver, &QueuedBoundaryReceiver::receive,
+      Qt::QueuedConnection
+  ));
+  QSignalSpy delivered(&receiver, &QueuedBoundaryReceiver::delivered);
+  QVERIFY(delivered.isValid());
+  worker.start();
+
+  CapturedQtMessages captured;
+  {
+    ScopedMessageCapture capture(captured);
+    Q_EMIT sharedValuesReady(
+        deviceId, transferId, fileId, incomingOffer, transferSnapshot, historyRecord, sendOptions,
+        receiveOptions, cancelOptions, permissionSnapshot
+    );
+    QTRY_COMPARE_WITH_TIMEOUT(delivered.count(), 1, 5000);
+  }
+
+  QCOMPARE(receiver.deliveryThread, &worker);
+  QCOMPARE(receiver.deviceId, std::optional<DeviceId>{deviceId});
+  QCOMPARE(receiver.transferId, std::optional<TransferId>{transferId});
+  QCOMPARE(receiver.fileId, std::optional<FileId>{fileId});
+  QCOMPARE(receiver.incomingOffer, std::optional<IncomingOffer>{incomingOffer});
+  QCOMPARE(receiver.transferSnapshot, std::optional<TransferSnapshot>{transferSnapshot});
+  QCOMPARE(receiver.historyRecord, std::optional<TransferHistoryRecord>{historyRecord});
+  QCOMPARE(receiver.sendOptions, std::optional<SendOptions>{sendOptions});
+  QCOMPARE(receiver.receiveOptions, std::optional<ReceiveOptions>{receiveOptions});
+  QCOMPARE(receiver.cancelOptions, std::optional<TransferCancelOptions>{cancelOptions});
+  QCOMPARE(receiver.permissionSnapshot, std::optional<PermissionSnapshot>{permissionSnapshot});
+  const QMutexLocker locker(&captured.mutex);
+  for (const auto &message : captured.messages)
+    QVERIFY2(!message.contains(QStringLiteral("Cannot queue arguments")), qPrintable(message));
 }
 
 void SharedInterfaceFreezeTests::defaultRuntimeCapabilitiesAreHonest()
