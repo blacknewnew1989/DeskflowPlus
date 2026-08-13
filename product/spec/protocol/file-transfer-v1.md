@@ -135,6 +135,19 @@ before all files finish, or any new command after a terminal result is a stable
 transfer-state error. `TRANSFER_COMPLETE` means sender-side exhaustion;
 `TRANSFER_RESULT(Ok)` is the authoritative receiver commit confirmation.
 
+### Session close
+
+`GOODBYE` is exactly `{1: reason}` for `Normal=0`,
+`ApplicationShutdown=1`, or `IdleTimeout=3`. `ProtocolError=2` is exactly
+`{1: 2, 2: diagnostic}` with a 1..512 UTF-8 byte diagnostic. It uses
+`streamId=0`, empty payload, and only `Final`; there is no response frame.
+
+The first valid goodbye moves the connection into draining state: no new
+business frame may be queued, already queued bytes may drain, then TLS closes.
+A frame received after goodbye is a session protocol error. A TCP/TLS close
+without goodbye is an interruption eligible for resume, never an implicit
+cancel. Duplicate goodbye bytes observed while draining are idempotent.
+
 ## IDs
 
 - UUID fields are 16-byte CBOR byte strings.

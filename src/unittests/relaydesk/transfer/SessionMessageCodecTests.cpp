@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 #include "relaydesk/transfer/SessionMessageCodec.h"
+#include "relaydesk/transfer/FrameCodec.h"
 
 #include <QCborArray>
 #include <QCborMap>
@@ -43,6 +44,7 @@ private Q_SLOTS:
   void helloRoundTrip();
   void authResultRoundTrip();
   void heartbeatAndAckMatchFrozenVectors();
+  void goodbyeMatchesFrozenVectorAndRoundTrips();
   void deterministicEncoding();
   void rejectsWrongMessageTypes();
   void rejectsMalformedAndTrailingCbor();
@@ -50,6 +52,7 @@ private Q_SLOTS:
   void rejectsInvalidVersions();
   void rejectsUnsafeAuthCombinations();
   void rejectsInvalidHeartbeatMetadata();
+  void rejectsInvalidGoodbyeMetadata();
 };
 
 void SessionMessageCodecTests::helloRoundTrip()
@@ -84,6 +87,32 @@ void SessionMessageCodecTests::heartbeatAndAckMatchFrozenVectors()
     QCOMPARE(encoded.toHex(), QByteArrayLiteral("a20107021b00000192cc091400"));
 
     const auto decoded = SessionMessageCodec::decodeHeartbeat(kProtocolMajorVersion, type, encoded);
+    QVERIFY2(decoded.ok(), qPrintable(decoded.diagnostic));
+    QCOMPARE(*decoded.message, expected);
+  }
+}
+
+void SessionMessageCodecTests::goodbyeMatchesFrozenVectorAndRoundTrips()
+{
+  const GoodbyeMessage shutdown{.reason = GoodbyeReason::ApplicationShutdown};
+  Frame frame;
+  frame.type = MessageType::Goodbye;
+  frame.flags = Final;
+  frame.metadata = SessionMessageCodec::encodeGoodbye(shutdown);
+  QCOMPARE(
+      FrameCodec::encode(frame).toHex(),
+      QByteArrayLiteral("5244465400017fff000000040000000300000000000000000000000000000000a10101")
+  );
+
+  const QList<GoodbyeMessage> messages = {
+      {.reason = GoodbyeReason::Normal},
+      shutdown,
+      {.reason = GoodbyeReason::ProtocolError, .diagnostic = QStringLiteral("invalid frame")},
+      {.reason = GoodbyeReason::IdleTimeout},
+  };
+  for (const auto &expected : messages) {
+    const QByteArray encoded = SessionMessageCodec::encodeGoodbye(expected);
+    const auto decoded = SessionMessageCodec::decodeGoodbye(kProtocolMajorVersion, MessageType::Goodbye, encoded);
     QVERIFY2(decoded.ok(), qPrintable(decoded.diagnostic));
     QCOMPARE(*decoded.message, expected);
   }
@@ -247,6 +276,67 @@ void SessionMessageCodecTests::rejectsInvalidHeartbeatMetadata()
   auto overflow = valid;
   overflow.sequence = static_cast<quint64>(std::numeric_limits<qint64>::max()) + 1;
   QVERIFY(SessionMessageCodec::encodeHeartbeat(MessageType::Heartbeat, overflow, &error).isEmpty());
+}
+
+void SessionMessageCodecTests::rejectsInvalidGoodbyeMetadata()
+{
+  const QByteArray valid = SessionMessageCodec::encodeGoodbye({.reason = GoodbyeReason::ApplicationShutdown});
+  QCOMPARE(
+      SessionMessageCodec::decodeGoodbye(2, MessageType::Goodbye, valid).error,
+      SessionMessageError::UnsupportedVersion
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeGoodbye(kProtocolMajorVersion, MessageType::Heartbeat, valid).error,
+      SessionMessageError::UnsupportedMessageType
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeGoodbye(kProtocolMajorVersion, MessageType::Goodbye, {}).error,
+      SessionMessageError::TooLarge
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeGoodbye(kProtocolMajorVersion, MessageType::Goodbye, valid + '\0').error,
+      SessionMessageError::MalformedCbor
+  );
+  QCOMPARE(
+      SessionMessageCodec::decodeGoodbye(
+          kProtocolMajorVersion, MessageType::Goodbye,
+          mutate(valid, [](QCborMap &map) { map.insert(9, true); })
+      ).error,
+      SessionMessageError::InvalidFields
+  );
+  const QByteArray invalidReason = mutate(valid, [](QCborMap &map) { map.insert(1, 99); });
+  QCOMPARE(invalidReason.toHex(), QByteArrayLiteral("a1011863"));
+  QCOMPARE(
+      SessionMessageCodec::decodeGoodbye(kProtocolMajorVersion, MessageType::Goodbye, invalidReason).error,
+      SessionMessageError::InvalidGoodbyeReason
+  );
+  const QByteArray missingDiagnostic = mutate(valid, [](QCborMap &map) { map.insert(1, 2); });
+  QCOMPARE(missingDiagnostic.toHex(), QByteArrayLiteral("a10102"));
+  QCOMPARE(
+      SessionMessageCodec::decodeGoodbye(kProtocolMajorVersion, MessageType::Goodbye, missingDiagnostic).error,
+      SessionMessageError::InvalidDiagnostic
+  );
+  const QByteArray unexpectedDiagnostic = mutate(valid, [](QCborMap &map) { map.insert(2, QStringLiteral("stop")); });
+  QCOMPARE(
+      SessionMessageCodec::decodeGoodbye(kProtocolMajorVersion, MessageType::Goodbye, unexpectedDiagnostic).error,
+      SessionMessageError::InvalidDiagnostic
+  );
+
+  QString error;
+  QVERIFY(
+      SessionMessageCodec::encodeGoodbye(
+          {.reason = static_cast<GoodbyeReason>(99), .diagnostic = QStringLiteral("unknown")}, &error
+      )
+          .isEmpty()
+  );
+  QVERIFY(!error.isEmpty());
+  QVERIFY(SessionMessageCodec::encodeGoodbye({.reason = GoodbyeReason::ProtocolError}, &error).isEmpty());
+  QVERIFY(
+      SessionMessageCodec::encodeGoodbye(
+          {.reason = GoodbyeReason::Normal, .diagnostic = QStringLiteral("unexpected")}, &error
+      )
+          .isEmpty()
+  );
 }
 
 QTEST_MAIN(SessionMessageCodecTests)

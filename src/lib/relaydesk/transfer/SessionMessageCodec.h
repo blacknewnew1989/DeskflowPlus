@@ -45,6 +45,22 @@ struct HeartbeatMessage
   [[nodiscard]] bool operator==(const HeartbeatMessage &) const = default;
 };
 
+enum class GoodbyeReason : quint32
+{
+  Normal = 0,
+  ApplicationShutdown = 1,
+  ProtocolError = 2,
+  IdleTimeout = 3,
+};
+
+struct GoodbyeMessage
+{
+  GoodbyeReason reason = GoodbyeReason::Normal;
+  QString diagnostic;
+
+  [[nodiscard]] bool operator==(const GoodbyeMessage &) const = default;
+};
+
 enum class SessionMessageError
 {
   None,
@@ -62,6 +78,8 @@ enum class SessionMessageError
   InvalidTimestamp,
   InvalidAuthResult,
   InvalidSequence,
+  InvalidGoodbyeReason,
+  InvalidDiagnostic,
 };
 
 template <typename Message> struct SessionMessageDecodeResult
@@ -79,6 +97,7 @@ template <typename Message> struct SessionMessageDecodeResult
 using HelloDecodeResult = SessionMessageDecodeResult<HelloMessage>;
 using AuthResultDecodeResult = SessionMessageDecodeResult<AuthResultMessage>;
 using HeartbeatDecodeResult = SessionMessageDecodeResult<HeartbeatMessage>;
+using GoodbyeDecodeResult = SessionMessageDecodeResult<GoodbyeMessage>;
 
 class SessionMessageCodec final
 {
@@ -95,6 +114,10 @@ public:
   encodeHeartbeat(MessageType type, const HeartbeatMessage &message, QString *error = nullptr);
   [[nodiscard]] static HeartbeatDecodeResult
   decodeHeartbeat(quint16 protocolVersion, MessageType type, QByteArrayView metadata);
+
+  [[nodiscard]] static QByteArray encodeGoodbye(const GoodbyeMessage &message, QString *error = nullptr);
+  [[nodiscard]] static GoodbyeDecodeResult
+  decodeGoodbye(quint16 protocolVersion, MessageType type, QByteArrayView metadata);
 };
 
 } // namespace relaydesk::transfer
