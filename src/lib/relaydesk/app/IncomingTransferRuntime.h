@@ -9,6 +9,7 @@
 #include "relaydesk/device/DeviceId.h"
 #include "relaydesk/platform/IPlatformFileSafety.h"
 #include "relaydesk/transfer/CapabilityCodec.h"
+#include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/transfer/TransferOfferStateMachine.h"
 
 #include <QHash>
@@ -49,6 +50,11 @@ public:
       const ::relaydesk::transfer::TransferId &transferId,
       ::relaydesk::transfer::RejectReason reason
   );
+  [[nodiscard]] bool enqueueFrame(
+      const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
+      QString *diagnostic = nullptr
+  );
+  void peerDisconnected(const DeviceId &peerDeviceId);
 
 Q_SIGNALS:
   void incomingOffer(::relaydesk::transfer::IncomingOffer offer);
@@ -61,10 +67,16 @@ Q_SIGNALS:
       ::relaydesk::transfer::TransferReject rejection
   );
   void transferOperationFinished(::relaydesk::transfer::TransferOperationResult result);
+  void responseReady(
+      deskflow::relaydesk::DeviceId peerDeviceId, ::relaydesk::transfer::Frame frame
+  );
+  void transferAdded(::relaydesk::transfer::TransferSnapshot transfer);
+  void transferChanged(::relaydesk::transfer::TransferSnapshot transfer);
 
 private:
   struct Session;
   struct AcceptPreflightResult;
+  class ReceivePipeline;
 
   void finishAcceptPreflight(
       const ::relaydesk::transfer::TransferId &transferId,
