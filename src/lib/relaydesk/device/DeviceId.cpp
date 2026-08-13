@@ -13,10 +13,14 @@
 namespace deskflow::relaydesk {
 
 namespace {
-const auto kCanonicalUuidPattern = QRegularExpression(
-    QStringLiteral("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
-    QRegularExpression::CaseInsensitiveOption
-);
+const QRegularExpression &canonicalUuidPattern()
+{
+  static const QRegularExpression pattern(
+      QStringLiteral("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+      QRegularExpression::CaseInsensitiveOption
+  );
+  return pattern;
+}
 } // namespace
 
 DeviceId::DeviceId(QUuid value) : m_value(std::move(value))
@@ -44,7 +48,7 @@ std::optional<DeviceId> DeviceId::fromBytes(QByteArrayView bytes)
 
 std::optional<DeviceId> DeviceId::fromString(const QString &text)
 {
-  if (!kCanonicalUuidPattern.match(text).hasMatch()) {
+  if (!canonicalUuidPattern().match(text).hasMatch()) {
     return std::nullopt;
   }
 
