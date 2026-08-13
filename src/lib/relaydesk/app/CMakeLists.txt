@@ -8,6 +8,8 @@ add_library(relaydesk_app STATIC
   DeviceDiscoveryRuntime.h
   FileTransferRuntime.cpp
   FileTransferRuntime.h
+  IncomingTransferRuntime.cpp
+  IncomingTransferRuntime.h
   PairingTrustRuntime.cpp
   PairingTrustRuntime.h
   TransferUiRuntime.cpp
