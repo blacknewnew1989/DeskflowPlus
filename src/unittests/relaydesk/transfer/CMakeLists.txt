@@ -41,6 +41,13 @@ create_test(
   SOURCE ProtocolVectorTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
 )
+
+create_test(
+  NAME RelayDeskStrongIdTests
+  DEPENDS relaydesk_transfer
+  SOURCE StrongIdTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
 target_compile_definitions(
   RelayDeskProtocolVectorTests
   PRIVATE RELAYDESK_PROTOCOL_TEST_VECTORS_PATH="${CMAKE_SOURCE_DIR}/product/spec/protocol/test-vectors.json"

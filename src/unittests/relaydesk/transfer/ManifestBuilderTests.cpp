@@ -12,8 +12,9 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-const TransferId kTransferId(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
-const FileId kFileId(QStringLiteral("fedcba98-7654-4321-9234-56789abcdef0"));
+const TransferId kTransferId =
+    *TransferId::fromString(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
+const FileId kFileId = *FileId::fromString(QStringLiteral("fedcba98-7654-4321-9234-56789abcdef0"));
 const qint64 kFixedModifiedAtMs = 1'730'000'000'000LL;
 
 QString createFile(
@@ -89,7 +90,6 @@ private Q_SLOTS:
   void hashesInBoundedChunks();
   void rejectsInvalidChunkOptions();
   void rejectsUnsafeLogicalPath();
-  void rejectsNullIdentifiers();
   void rejectsMissingSourceAndDirectory();
   void skipsSymbolicLinkWhenSupported();
   void detectsSourceSizeChangeDuringHash();
@@ -239,20 +239,6 @@ void ManifestBuilderTests::rejectsUnsafeLogicalPath()
   QCOMPARE(result.pathError, PathError::ParentTraversal);
 }
 
-void ManifestBuilderTests::rejectsNullIdentifiers()
-{
-  QTemporaryDir directory;
-  QVERIFY(directory.isValid());
-  const QString path = createFile(directory, QStringLiteral("source.txt"), QByteArrayLiteral("data"));
-  auto request = requestFor(path);
-  request.transferId = QUuid();
-  QCOMPARE(ManifestBuilder::buildSingleFile(request).error, ManifestBuildError::InvalidTransferId);
-
-  request = requestFor(path);
-  request.fileId = QUuid();
-  QCOMPARE(ManifestBuilder::buildSingleFile(request).error, ManifestBuildError::InvalidFileId);
-}
-
 void ManifestBuilderTests::rejectsMissingSourceAndDirectory()
 {
   QTemporaryDir directory;
@@ -352,7 +338,8 @@ void ManifestBuilderTests::canonicalDigestExcludesLocalPathAndTransferId()
 
   auto firstRequest = requestFor(firstPath);
   auto secondRequest = requestFor(secondPath);
-  secondRequest.transferId = QUuid(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"));
+  secondRequest.transferId =
+      *TransferId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"));
   const auto first = ManifestBuilder::buildSingleFile(firstRequest);
   const auto second = ManifestBuilder::buildSingleFile(secondRequest);
 
@@ -426,7 +413,8 @@ void ManifestBuilderTests::buildsMultipleSourcesWithStableOrderAndDigest()
   const auto forward =
       ManifestBuilder::buildTransfer(transferRequestFor({betaSource, alphaSource}, QStringLiteral("Batch")));
   auto reverseRequest = transferRequestFor({alphaSource, betaSource}, QStringLiteral("Batch"));
-  reverseRequest.transferId = QUuid(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"));
+  reverseRequest.transferId =
+      *TransferId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"));
   const auto reverse = ManifestBuilder::buildTransfer(reverseRequest);
 
   QVERIFY2(forward.ok(), qPrintable(forward.diagnostic));

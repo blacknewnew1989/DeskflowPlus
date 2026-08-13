@@ -14,7 +14,8 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-const TransferId kTransferId(QStringLiteral("11111111-2222-4333-8444-555555555555"));
+const TransferId kTransferId =
+    *TransferId::fromString(QStringLiteral("11111111-2222-4333-8444-555555555555"));
 
 QByteArray encodeFrame(const TransferCompletionMessage &message)
 {
@@ -99,10 +100,6 @@ void TransferCompletionCodecTests::roundTripsCompletionMessages()
 void TransferCompletionCodecTests::rejectsInvalidEncodeValues()
 {
   QString error;
-  QVERIFY(TransferCompletionCodec::encode(TransferCompleteMessage{}, &error).isEmpty());
-  QVERIFY(!error.isEmpty());
-  QVERIFY(TransferCompletionCodec::encode(TransferResultMessage{}, &error).isEmpty());
-
   auto tooManyFiles = TransferCompleteMessage{.transferId = kTransferId};
   tooManyFiles.completedFiles = kMaximumCompletedTransferFiles;
   tooManyFiles.skippedFiles = 1;

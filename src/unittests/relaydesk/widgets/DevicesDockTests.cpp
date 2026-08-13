@@ -72,7 +72,7 @@ DeviceSnapshot peerSnapshot(DevicePresence presence = DevicePresence::Discovered
       .peerDeviceId = DeviceId::generate(),
       .peerDisplayName = QStringLiteral("<b>Studio Mac</b>"),
       .offer = {
-          .transferId = QUuid::createUuid(),
+          .transferId = TransferId::generate(),
           .displayName = QStringLiteral("<img src=x> Project"),
           .totalBytes = 4096,
           .fileCount = 2,

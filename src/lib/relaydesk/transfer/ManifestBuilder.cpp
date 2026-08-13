@@ -152,7 +152,7 @@ DirectoryListResult listDirectory(
   return DirectoryListResult::Ok;
 }
 
-FileId stableEntryId(const QString &normalizedProtocolPath, ManifestEntryType type)
+std::optional<FileId> stableEntryId(const QString &normalizedProtocolPath, ManifestEntryType type)
 {
   QCryptographicHash hash(QCryptographicHash::Sha256);
   hash.addData(QByteArrayView("RDFT/1 manifest entry id\0", 25));
@@ -165,7 +165,7 @@ FileId stableEntryId(const QString &normalizedProtocolPath, ManifestEntryType ty
   // canonical path and entry type rather than a local absolute path.
   uuidBytes[6] = static_cast<char>((static_cast<unsigned char>(uuidBytes.at(6)) & 0x0fU) | 0x80U);
   uuidBytes[8] = static_cast<char>((static_cast<unsigned char>(uuidBytes.at(8)) & 0x3fU) | 0x80U);
-  return QUuid::fromRfc4122(uuidBytes);
+  return FileId::fromBytes(uuidBytes);
 }
 
 qsizetype cborArrayHeaderBytes(quint64 count)
@@ -264,12 +264,6 @@ HashFileResult hashScannedFile(
 ManifestBuildResult
 ManifestBuilder::buildSingleFile(const SingleFileManifestRequest &request, const ManifestBuildOptions &options)
 {
-  if (request.transferId.isNull()) {
-    return fail(ManifestBuildError::InvalidTransferId, QStringLiteral("transferId must not be null"));
-  }
-  if (request.fileId.isNull()) {
-    return fail(ManifestBuildError::InvalidFileId, QStringLiteral("fileId must not be null"));
-  }
   if (!optionsAreValid(options)) {
     return fail(ManifestBuildError::InvalidOptions, QStringLiteral("manifest build options exceed local limits"));
   }
@@ -317,47 +311,53 @@ ManifestBuilder::buildSingleFile(const SingleFileManifestRequest &request, const
   }
 
   const quint64 expectedBytes = static_cast<quint64>(initialInfo.size());
-  ScannedEntry scanned;
-  scanned.prepared.canonicalSourcePath = canonicalSourcePath;
-  scanned.size = initialInfo.size();
-  scanned.modifiedAtMs = modifiedAtMs;
-  scanned.kind = ManifestEntryKind::RegularFile;
+  ManifestEntry entry{
+      .id = request.fileId,
+      .relativeProtocolPath = path.normalized,
+      .type = ManifestEntryType::File,
+      .size = expectedBytes,
+      .modifiedUtc = QDateTime::fromMSecsSinceEpoch(modifiedAtMs, QTimeZone::UTC),
+      .sha256 = {},
+      .flags = 0,
+  };
+  ScannedEntry scanned{
+      .prepared =
+          {
+              .canonicalSourcePath = canonicalSourcePath,
+              .protocolCollisionKey = path.collisionKey,
+              .entry = entry,
+          },
+      .pathUtf8 = path.normalized.toUtf8(),
+      .size = initialInfo.size(),
+      .modifiedAtMs = modifiedAtMs,
+      .kind = ManifestEntryKind::RegularFile,
+  };
   const HashFileResult hash = hashScannedFile(scanned, options, 0, expectedBytes);
   if (hash.error != ManifestBuildError::None) {
     return fail(hash.error, hash.diagnostic);
   }
 
-  ManifestEntry entry;
-  entry.id = request.fileId;
-  entry.relativeProtocolPath = path.normalized;
-  entry.type = ManifestEntryType::File;
-  entry.size = expectedBytes;
-  entry.modifiedUtc = QDateTime::fromMSecsSinceEpoch(modifiedAtMs, QTimeZone::UTC);
   entry.sha256 = hash.sha256;
-  entry.flags = 0;
-
-  TransferManifestSummary summary;
-  summary.id = request.transferId;
-  summary.displayName = path.normalized;
-  summary.totalBytes = expectedBytes;
-  summary.fileCount = 1;
-  summary.directoryCount = 0;
-  summary.canonicalSha256 = ManifestPageCodec::canonicalSha256({entry});
-
-  SingleFileManifest manifest;
-  manifest.canonicalSourcePath = canonicalSourcePath;
-  manifest.protocolCollisionKey = path.collisionKey;
-  manifest.entry = std::move(entry);
-  manifest.summary = std::move(summary);
+  TransferManifestSummary summary{
+      .id = request.transferId,
+      .displayName = path.normalized,
+      .totalBytes = expectedBytes,
+      .fileCount = 1,
+      .directoryCount = 0,
+      .canonicalSha256 = ManifestPageCodec::canonicalSha256({entry}),
+  };
+  SingleFileManifest manifest{
+      .canonicalSourcePath = canonicalSourcePath,
+      .protocolCollisionKey = path.collisionKey,
+      .entry = std::move(entry),
+      .summary = std::move(summary),
+  };
   return {.manifest = std::move(manifest)};
 }
 
 TransferManifestBuildResult
 ManifestBuilder::buildTransfer(const TransferManifestRequest &request, const ManifestBuildOptions &options)
 {
-  if (request.transferId.isNull()) {
-    return failTransfer(ManifestBuildError::InvalidTransferId, QStringLiteral("transferId must not be null"));
-  }
   if (!optionsAreValid(options)) {
     return failTransfer(
         ManifestBuildError::InvalidOptions, QStringLiteral("manifest build options exceed local limits")
@@ -448,11 +448,21 @@ ManifestBuilder::buildTransfer(const TransferManifestRequest &request, const Man
       );
     }
 
-    ManifestEntry entry;
-    entry.relativeProtocolPath = path.normalized;
-    entry.type = kind == ManifestEntryKind::Directory ? ManifestEntryType::Directory : ManifestEntryType::File;
-    entry.id = stableEntryId(entry.relativeProtocolPath, entry.type);
-    entry.modifiedUtc = QDateTime::fromMSecsSinceEpoch(modifiedAtMs, QTimeZone::UTC);
+    const ManifestEntryType entryType =
+        kind == ManifestEntryKind::Directory ? ManifestEntryType::Directory : ManifestEntryType::File;
+    const auto entryId = stableEntryId(path.normalized, entryType);
+    if (!entryId.has_value()) {
+      return failTransfer(ManifestBuildError::InvalidFileId, QStringLiteral("derived fileId is invalid"));
+    }
+    ManifestEntry entry{
+        .id = *entryId,
+        .relativeProtocolPath = path.normalized,
+        .type = entryType,
+        .size = 0,
+        .modifiedUtc = QDateTime::fromMSecsSinceEpoch(modifiedAtMs, QTimeZone::UTC),
+        .sha256 = {},
+        .flags = 0,
+    };
     if (kind == ManifestEntryKind::RegularFile) {
       if (info.size() < 0) {
         return failTransfer(ManifestBuildError::SourceChanged, QStringLiteral("source size is invalid"));
@@ -530,7 +540,7 @@ ManifestBuilder::buildTransfer(const TransferManifestRequest &request, const Man
     if (left.prepared.entry.type != right.prepared.entry.type) {
       return left.prepared.entry.type < right.prepared.entry.type;
     }
-    return left.prepared.entry.id.toRfc4122() < right.prepared.entry.id.toRfc4122();
+    return left.prepared.entry.id.toBytes() < right.prepared.entry.id.toBytes();
   });
 
   quint64 completedBytes = 0;
@@ -576,8 +586,8 @@ ManifestBuilder::buildTransfer(const TransferManifestRequest &request, const Man
     }
   }
 
-  TransferManifest manifest;
-  manifest.entries.reserve(scannedEntries.size());
+  QList<PreparedManifestEntry> entries;
+  entries.reserve(scannedEntries.size());
   quint64 fileCount = 0;
   quint64 directoryCount = 0;
   for (ScannedEntry &scanned : scannedEntries) {
@@ -586,20 +596,25 @@ ManifestBuilder::buildTransfer(const TransferManifestRequest &request, const Man
     } else {
       ++directoryCount;
     }
-    manifest.entries.append(std::move(scanned.prepared));
+    entries.append(std::move(scanned.prepared));
   }
   std::sort(warnings.begin(), warnings.end(), [](const ManifestBuildWarning &left, const ManifestBuildWarning &right) {
     return left.relativeProtocolPath.toUtf8() < right.relativeProtocolPath.toUtf8();
   });
-  manifest.warnings = std::move(warnings);
-
-  manifest.summary.id = request.transferId;
-  manifest.summary.displayName =
-      request.displayName.isEmpty() ? manifest.entries.constFirst().entry.relativeProtocolPath : request.displayName;
-  manifest.summary.totalBytes = totalBytes;
-  manifest.summary.fileCount = fileCount;
-  manifest.summary.directoryCount = directoryCount;
-  manifest.summary.canonicalSha256 = ManifestPageCodec::canonicalSha256(manifest.entries);
+  TransferManifestSummary summary{
+      .id = request.transferId,
+      .displayName = request.displayName.isEmpty() ? entries.constFirst().entry.relativeProtocolPath
+                                                   : request.displayName,
+      .totalBytes = totalBytes,
+      .fileCount = fileCount,
+      .directoryCount = directoryCount,
+      .canonicalSha256 = ManifestPageCodec::canonicalSha256(entries),
+  };
+  TransferManifest manifest{
+      .entries = std::move(entries),
+      .warnings = std::move(warnings),
+      .summary = std::move(summary),
+  };
   return {.manifest = std::move(manifest)};
 }
 

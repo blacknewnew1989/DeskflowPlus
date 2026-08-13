@@ -13,6 +13,8 @@ add_library(relaydesk_transfer STATIC
   IFileTransferService.h
   FileMessageCodec.cpp
   FileMessageCodec.h
+  FileId.cpp
+  FileId.h
   FileReceiver.cpp
   FileReceiver.h
   ManifestBuilder.cpp
@@ -45,6 +47,8 @@ add_library(relaydesk_transfer STATIC
   TransferCompletionCodec.h
   TransferHistoryStore.cpp
   TransferHistoryStore.h
+  TransferId.cpp
+  TransferId.h
   TransferSender.cpp
   TransferSender.h
   TransferTypes.h

@@ -29,7 +29,7 @@ namespace {
 TransferSnapshot snapshot()
 {
   return {
-      .id = QUuid(QStringLiteral("11111111-1111-4111-8111-111111111111")),
+      .id = *TransferId::fromString(QStringLiteral("11111111-1111-4111-8111-111111111111")),
       .peerId = *DeviceId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
       .peerDisplayName = QStringLiteral("Studio Mac"),
       .displayName = QStringLiteral("Project"),
@@ -48,7 +48,7 @@ TransferHistoryRecord historyRecord(
 {
   const auto started = QDateTime::fromMSecsSinceEpoch(1'780'000'000'000LL, Qt::UTC).addSecs(finishedOffset);
   return {
-      .transferId = QUuid(id),
+      .transferId = *TransferId::fromString(id),
       .peerDeviceId = *DeviceId::fromString(QStringLiteral("bbbbbbbb-cccc-4ddd-8eee-ffffffffffff")),
       .peerDisplayName = QStringLiteral("History peer"),
       .displayName = QStringLiteral("Archive"),

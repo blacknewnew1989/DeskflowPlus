@@ -80,7 +80,7 @@ ResumePlanResult planFailure(ResumeNegotiationError error, QString diagnostic)
 
 bool validQuery(const ResumeQueryMessage &query)
 {
-  return !query.transferId.isNull() && query.manifestSha256.size() == kSha256Bytes;
+  return query.manifestSha256.size() == kSha256Bytes;
 }
 
 bool validWireOffset(quint64 offset)
@@ -93,15 +93,11 @@ bool strictlyOrdered(const QList<ResumeFileOffset> &files, QString *error)
   QByteArray previous;
   QSet<QByteArray> seen;
   for (const auto &file : files) {
-    if (file.fileId.isNull()) {
-      setError(error, QStringLiteral("resume response contains a null file ID"));
-      return false;
-    }
     if (!validWireOffset(file.durableOffset)) {
       setError(error, QStringLiteral("resume response offset exceeds the wire integer range"));
       return false;
     }
-    const QByteArray current = file.fileId.toRfc4122();
+    const QByteArray current = file.fileId.toBytes();
     if (seen.contains(current)) {
       setError(error, QStringLiteral("resume response contains a duplicate file ID"));
       return false;
@@ -123,7 +119,7 @@ QByteArray encodeQuery(const ResumeQueryMessage &query, QString *error)
     return {};
   }
   const QCborMap map = {
-      {key(TransferIdKey), query.transferId.toRfc4122()},
+      {key(TransferIdKey), query.transferId.toBytes()},
       {key(ManifestHashKey), query.manifestSha256},
   };
   return QCborValue(map).toCbor(QCborValue::EncodingOption::SortKeysInMaps);
@@ -131,7 +127,7 @@ QByteArray encodeQuery(const ResumeQueryMessage &query, QString *error)
 
 QByteArray encodeResponse(const ResumeResponseMessage &response, QString *error)
 {
-  if (response.transferId.isNull() || response.manifestSha256.size() != kSha256Bytes) {
+  if (response.manifestSha256.size() != kSha256Bytes) {
     setError(error, QStringLiteral("resume response requires a transfer ID and SHA-256 manifest hash"));
     return {};
   }
@@ -146,12 +142,12 @@ QByteArray encodeResponse(const ResumeResponseMessage &response, QString *error)
   QCborArray files;
   for (const auto &file : response.files) {
     files.append(QCborMap{
-        {key(FileIdKey), file.fileId.toRfc4122()},
+        {key(FileIdKey), file.fileId.toBytes()},
         {key(DurableOffsetKey), static_cast<qint64>(file.durableOffset)},
     });
   }
   const QCborMap map = {
-      {key(TransferIdKey), response.transferId.toRfc4122()},
+      {key(TransferIdKey), response.transferId.toBytes()},
       {key(ManifestHashKey), response.manifestSha256},
       {key(FilesKey), files},
   };
@@ -163,13 +159,12 @@ QByteArray encodeResponse(const ResumeResponseMessage &response, QString *error)
   return encoded;
 }
 
-std::optional<QUuid> readUuid(const QCborValue &value)
+template <typename Id> std::optional<Id> readUuid(const QCborValue &value)
 {
   if (!value.isByteArray() || value.toByteArray().size() != kUuidBytes) {
     return std::nullopt;
   }
-  const auto id = QUuid::fromRfc4122(value.toByteArray());
-  return id.isNull() ? std::nullopt : std::optional<QUuid>{id};
+  return Id::fromBytes(value.toByteArray());
 }
 
 } // namespace
@@ -221,7 +216,7 @@ ResumeMessageDecodeResult ResumeMessageCodec::decode(quint16 protocolVersion, Me
     );
   }
 
-  const auto transferId = readUuid(valueFor(map, TransferIdKey));
+  const auto transferId = readUuid<TransferId>(valueFor(map, TransferIdKey));
   if (!transferId.has_value()) {
     return decodeFailure(ResumeMessageCodecError::InvalidTransferId, QStringLiteral("resume transfer ID is invalid"));
   }
@@ -259,7 +254,7 @@ ResumeMessageDecodeResult ResumeMessageCodec::decode(quint16 protocolVersion, Me
       return decodeFailure(ResumeMessageCodecError::InvalidFields, QStringLiteral("resume offset entry is invalid"));
     }
     const auto fileMap = encodedFile.toMap();
-    const auto fileId = readUuid(valueFor(fileMap, FileIdKey));
+    const auto fileId = readUuid<FileId>(valueFor(fileMap, FileIdKey));
     if (!fileId.has_value()) {
       return decodeFailure(ResumeMessageCodecError::InvalidFileId, QStringLiteral("resume file ID is invalid"));
     }
@@ -267,7 +262,7 @@ ResumeMessageDecodeResult ResumeMessageCodec::decode(quint16 protocolVersion, Me
     if (!offset.isInteger() || offset.toInteger() < 0) {
       return decodeFailure(ResumeMessageCodecError::InvalidOffset, QStringLiteral("resume offset is invalid"));
     }
-    const QByteArray current = fileId->toRfc4122();
+    const QByteArray current = fileId->toBytes();
     if (seen.contains(current)) {
       return decodeFailure(ResumeMessageCodecError::DuplicateFileId, QStringLiteral("resume file ID is duplicated"));
     }
@@ -322,7 +317,7 @@ ResumeResponseBuildResult ResumeNegotiator::buildResponse(const ResumeStore &sto
     files.append({.fileId = file.fileId, .durableOffset = file.durableOffset});
   }
   std::sort(files.begin(), files.end(), [](const ResumeFileOffset &left, const ResumeFileOffset &right) {
-    return left.fileId.toRfc4122() < right.fileId.toRfc4122();
+    return left.fileId.toBytes() < right.fileId.toBytes();
   });
   ResumeResponseMessage response{
       .transferId = query.transferId,
@@ -360,8 +355,8 @@ ResumePlanResult ResumeNegotiator::validateResponse(
 
   QHash<QByteArray, quint64> sizes;
   for (const auto &entry : manifestEntries) {
-    if (entry.type == ManifestEntryType::File && !entry.id.isNull()) {
-      const QByteArray fileId = entry.id.toRfc4122();
+    if (entry.type == ManifestEntryType::File) {
+      const QByteArray fileId = entry.id.toBytes();
       if (sizes.contains(fileId)) {
         return planFailure(
             ResumeNegotiationError::DuplicateFile, QStringLiteral("sender manifest contains duplicate file IDs")
@@ -371,7 +366,7 @@ ResumePlanResult ResumeNegotiator::validateResponse(
     }
   }
   for (const auto &file : response.files) {
-    const auto size = sizes.constFind(file.fileId.toRfc4122());
+    const auto size = sizes.constFind(file.fileId.toBytes());
     if (size == sizes.cend()) {
       return planFailure(
           ResumeNegotiationError::UnknownFile, QStringLiteral("resume response references an unknown file")

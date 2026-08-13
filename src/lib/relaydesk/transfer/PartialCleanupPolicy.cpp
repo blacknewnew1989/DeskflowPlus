@@ -111,7 +111,7 @@ PartialCleanupPolicy::apply(const ExpiredPartialTransfer &listed, PartialCleanup
   if (choice == PartialCleanupChoice::Keep) {
     return {};
   }
-  if (listed.transferId.isNull() || listed.files.isEmpty()) {
+  if (listed.files.isEmpty()) {
     return {
         .error = PartialCleanupApplyError::NotListed,
         .diagnostic = QStringLiteral("cleanup requires a listed transfer with managed partials"),

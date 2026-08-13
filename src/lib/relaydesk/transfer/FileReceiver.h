@@ -79,8 +79,8 @@ struct FileReceiverResult
 struct FileReceiverSnapshot
 {
   FileReceiverState state = FileReceiverState::Idle;
-  TransferId transferId;
-  FileId fileId;
+  std::optional<TransferId> transferId;
+  std::optional<FileId> fileId;
   quint64 expectedSize = 0;
   quint64 receivedBytes = 0;
   quint64 nextSequence = 0;

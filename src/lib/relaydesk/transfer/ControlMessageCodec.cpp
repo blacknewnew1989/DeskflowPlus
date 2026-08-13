@@ -32,11 +32,6 @@ bool isValidString(const QString &value, bool allowEmpty = false)
   return (allowEmpty || !value.isEmpty()) && value.toUtf8().size() <= kMaxControlStringUtf8Bytes;
 }
 
-bool isValidUuid(const QUuid &value)
-{
-  return !value.isNull() && value.toRfc4122().size() == kUuidBytes;
-}
-
 bool isWireInteger(quint64 value)
 {
   return value <= static_cast<quint64>(std::numeric_limits<qint64>::max());
@@ -93,9 +88,7 @@ bool isKnownRejectReason(RejectReason reason)
 
 bool validate(const TransferOffer &message, QString &error)
 {
-  if (!isValidUuid(message.transferId)) {
-    error = QStringLiteral("transferId must be a non-null UUID");
-  } else if (!isValidString(message.displayName)) {
+  if (!isValidString(message.displayName)) {
     error = QStringLiteral("displayName must be non-empty and at most 4096 UTF-8 bytes");
   } else if (!isWireInteger(message.totalBytes) || !isWireInteger(message.fileCount) ||
              !isWireInteger(message.directoryCount) || !isWireInteger(message.manifestPageCount) ||
@@ -113,9 +106,7 @@ bool validate(const TransferOffer &message, QString &error)
 
 bool validate(const TransferAccept &message, QString &error)
 {
-  if (!isValidUuid(message.transferId)) {
-    error = QStringLiteral("transferId must be a non-null UUID");
-  } else if (!isValidString(message.logicalDestination)) {
+  if (!isValidString(message.logicalDestination)) {
     error = QStringLiteral("logicalDestination must be non-empty and at most 4096 UTF-8 bytes");
   } else if (!isWireInteger(message.freeBytes)) {
     error = QStringLiteral("freeBytes exceeds the Qt CBOR integer range");
@@ -127,9 +118,7 @@ bool validate(const TransferAccept &message, QString &error)
 
 bool validate(const TransferReject &message, QString &error)
 {
-  if (!isValidUuid(message.transferId)) {
-    error = QStringLiteral("transferId must be a non-null UUID");
-  } else if (!isKnownRejectReason(message.reason)) {
+  if (!isKnownRejectReason(message.reason)) {
     error = QStringLiteral("reject reason is unsupported");
   } else if (!isValidString(message.diagnostic, true)) {
     error = QStringLiteral("diagnostic must be at most 4096 UTF-8 bytes");
@@ -145,19 +134,15 @@ bool validate(const ErrorMessage &message, QString &error)
     error = QStringLiteral("error code must be a positive CBOR integer");
   } else if (!isValidString(message.diagnostic)) {
     error = QStringLiteral("diagnostic must be non-empty and at most 4096 UTF-8 bytes");
-  } else if (message.transferId.has_value() && !isValidUuid(*message.transferId)) {
-    error = QStringLiteral("optional transferId must be a non-null UUID");
-  } else if (message.fileId.has_value() && !isValidUuid(*message.fileId)) {
-    error = QStringLiteral("optional fileId must be a non-null UUID");
   } else {
     return true;
   }
   return false;
 }
 
-void insertUuid(QCborMap &map, qint64 field, const QUuid &value)
+template <typename Id> void insertUuid(QCborMap &map, qint64 field, const Id &value)
 {
-  map.insert(key(field), QCborValue(value.toRfc4122()));
+  map.insert(key(field), QCborValue(value.toBytes()));
 }
 
 void insertUnsigned(QCborMap &map, qint64 field, quint64 value)
@@ -257,28 +242,29 @@ std::optional<QCborValue> requiredValue(const QCborMap &map, qint64 field)
   return map.value(fieldKey);
 }
 
-bool readUuid(const QCborMap &map, qint64 field, QUuid &output, ControlMessageDecodeResult &failure)
+template <typename Id>
+std::optional<Id> readUuid(const QCborMap &map, qint64 field, ControlMessageDecodeResult &failure)
 {
   const auto value = requiredValue(map, field);
   if (!value.has_value()) {
     failure = missingField(field);
-    return false;
+    return std::nullopt;
   }
   if (!value->isByteArray()) {
     failure = invalidType(field, QStringLiteral("a 16-byte UUID byte string"));
-    return false;
+    return std::nullopt;
   }
   const QByteArray bytes = value->toByteArray();
   if (bytes.size() != kUuidBytes) {
     failure = invalidValue(field, QStringLiteral("UUID byte string must contain 16 bytes"));
-    return false;
+    return std::nullopt;
   }
-  output = QUuid::fromRfc4122(bytes);
-  if (output.isNull()) {
+  const auto output = Id::fromBytes(bytes);
+  if (!output.has_value()) {
     failure = invalidValue(field, QStringLiteral("UUID must not be null"));
-    return false;
+    return std::nullopt;
   }
-  return true;
+  return output;
 }
 
 bool readUnsigned(const QCborMap &map, qint64 field, quint64 &output, ControlMessageDecodeResult &failure)
@@ -392,81 +378,125 @@ bool readConflictPolicy(const QCborMap &map, qint64 field, ConflictPolicy &outpu
 
 ControlMessageDecodeResult decodeTransferOffer(const QCborMap &map)
 {
-  TransferOffer message;
   ControlMessageDecodeResult failure;
-  if (!readUuid(map, 1, message.transferId, failure) || !readString(map, 2, message.displayName, failure) ||
-      !readUnsigned(map, 3, message.totalBytes, failure) || !readUnsigned(map, 4, message.fileCount, failure) ||
-      !readUnsigned(map, 5, message.directoryCount, failure) ||
-      !readBytes(map, 6, kSha256Bytes, message.manifestSha256, failure) ||
-      !readUnsigned(map, 7, message.manifestPageCount, failure) ||
-      !readConflictPolicy(map, 8, message.requestedConflictPolicy, failure) ||
-      !readUnsigned(map, 9, message.createdAtMs, failure)) {
+  const auto transferId = readUuid<TransferId>(map, 1, failure);
+  QString displayName;
+  quint64 totalBytes = 0;
+  quint64 fileCount = 0;
+  quint64 directoryCount = 0;
+  QByteArray manifestSha256;
+  quint64 manifestPageCount = 0;
+  ConflictPolicy requestedConflictPolicy = ConflictPolicy::Ask;
+  quint64 createdAtMs = 0;
+  if (!transferId.has_value() || !readString(map, 2, displayName, failure) ||
+      !readUnsigned(map, 3, totalBytes, failure) || !readUnsigned(map, 4, fileCount, failure) ||
+      !readUnsigned(map, 5, directoryCount, failure) ||
+      !readBytes(map, 6, kSha256Bytes, manifestSha256, failure) ||
+      !readUnsigned(map, 7, manifestPageCount, failure) ||
+      !readConflictPolicy(map, 8, requestedConflictPolicy, failure) ||
+      !readUnsigned(map, 9, createdAtMs, failure)) {
     return failure;
   }
-  if (message.manifestPageCount == 0) {
+  if (manifestPageCount == 0) {
     return invalidValue(7, QStringLiteral("manifest page count must be greater than zero"));
   }
+  TransferOffer message{
+      .transferId = *transferId,
+      .displayName = std::move(displayName),
+      .totalBytes = totalBytes,
+      .fileCount = fileCount,
+      .directoryCount = directoryCount,
+      .manifestSha256 = std::move(manifestSha256),
+      .manifestPageCount = manifestPageCount,
+      .requestedConflictPolicy = requestedConflictPolicy,
+      .createdAtMs = createdAtMs,
+  };
   return {.message = ControlMessage(std::move(message))};
 }
 
 ControlMessageDecodeResult decodeTransferAccept(const QCborMap &map)
 {
-  TransferAccept message;
   ControlMessageDecodeResult failure;
-  if (!readUuid(map, 1, message.transferId, failure) ||
-      !readConflictPolicy(map, 2, message.effectiveConflictPolicy, failure) ||
-      !readString(map, 3, message.logicalDestination, failure) || !readUnsigned(map, 4, message.freeBytes, failure) ||
-      !readBool(map, 5, message.autoAccepted, failure)) {
+  const auto transferId = readUuid<TransferId>(map, 1, failure);
+  ConflictPolicy effectiveConflictPolicy = ConflictPolicy::AutoRename;
+  QString logicalDestination;
+  quint64 freeBytes = 0;
+  bool autoAccepted = false;
+  if (!transferId.has_value() || !readConflictPolicy(map, 2, effectiveConflictPolicy, failure) ||
+      !readString(map, 3, logicalDestination, failure) || !readUnsigned(map, 4, freeBytes, failure) ||
+      !readBool(map, 5, autoAccepted, failure)) {
     return failure;
   }
+  TransferAccept message{
+      .transferId = *transferId,
+      .effectiveConflictPolicy = effectiveConflictPolicy,
+      .logicalDestination = std::move(logicalDestination),
+      .freeBytes = freeBytes,
+      .autoAccepted = autoAccepted,
+  };
   return {.message = ControlMessage(std::move(message))};
 }
 
 ControlMessageDecodeResult decodeTransferReject(const QCborMap &map)
 {
-  TransferReject message;
   quint64 encodedReason = 0;
+  QString diagnostic;
   ControlMessageDecodeResult failure;
-  if (!readUuid(map, 1, message.transferId, failure) || !readUnsigned(map, 2, encodedReason, failure) ||
-      !readOptionalString(map, 3, message.diagnostic, failure)) {
+  const auto transferId = readUuid<TransferId>(map, 1, failure);
+  if (!transferId.has_value() || !readUnsigned(map, 2, encodedReason, failure) ||
+      !readOptionalString(map, 3, diagnostic, failure)) {
     return failure;
   }
   if (encodedReason > std::numeric_limits<quint32>::max()) {
     return invalidValue(2, QStringLiteral("reject reason exceeds uint32"));
   }
-  message.reason = static_cast<RejectReason>(encodedReason);
-  if (!isKnownRejectReason(message.reason)) {
+  const auto reason = static_cast<RejectReason>(encodedReason);
+  if (!isKnownRejectReason(reason)) {
     return invalidValue(2, QStringLiteral("unsupported reject reason"));
   }
+  TransferReject message{
+      .transferId = *transferId,
+      .reason = reason,
+      .diagnostic = std::move(diagnostic),
+  };
   return {.message = ControlMessage(std::move(message))};
 }
 
 ControlMessageDecodeResult decodeProtocolError(const QCborMap &map)
 {
-  ErrorMessage message;
   ControlMessageDecodeResult failure;
-  if (!readUnsigned(map, 1, message.code, failure) || !readString(map, 2, message.diagnostic, failure) ||
-      !readBool(map, 3, message.retryable, failure)) {
+  quint64 code = 0;
+  QString diagnostic;
+  bool retryable = false;
+  if (!readUnsigned(map, 1, code, failure) || !readString(map, 2, diagnostic, failure) ||
+      !readBool(map, 3, retryable, failure)) {
     return failure;
   }
-  if (message.code == 0) {
+  if (code == 0) {
     return invalidValue(1, QStringLiteral("error code must be positive"));
   }
 
+  std::optional<TransferId> transferId;
   if (map.contains(key(4))) {
-    QUuid transferId;
-    if (!readUuid(map, 4, transferId, failure)) {
+    transferId = readUuid<TransferId>(map, 4, failure);
+    if (!transferId.has_value()) {
       return failure;
     }
-    message.transferId = transferId;
   }
+  std::optional<FileId> fileId;
   if (map.contains(key(5))) {
-    QUuid fileId;
-    if (!readUuid(map, 5, fileId, failure)) {
+    fileId = readUuid<FileId>(map, 5, failure);
+    if (!fileId.has_value()) {
       return failure;
     }
-    message.fileId = fileId;
   }
+  ErrorMessage message{
+      .code = code,
+      .diagnostic = std::move(diagnostic),
+      .retryable = retryable,
+      .transferId = std::move(transferId),
+      .fileId = std::move(fileId),
+  };
   return {.message = ControlMessage(std::move(message))};
 }
 

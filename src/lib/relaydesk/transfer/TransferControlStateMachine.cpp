@@ -34,7 +34,7 @@ TransferControlResult TransferControlStateMachine::initialize()
   if (m_initialized) {
     return {};
   }
-  if (m_snapshot.id.isNull() || m_snapshot.peerId.value().isNull() || m_snapshot.displayName.isEmpty() ||
+  if (m_snapshot.peerId.value().isNull() || m_snapshot.displayName.isEmpty() ||
       m_snapshot.state != TransferState::Preparing || !validProgress(m_snapshot.progress) ||
       !m_snapshot.createdUtc.isValid() || m_snapshot.createdUtc.toMSecsSinceEpoch() <= 0 ||
       m_snapshot.finishedUtc.isValid() || !m_snapshot.errorMessageKey.isEmpty() || m_snapshot.errorCode != 0) {

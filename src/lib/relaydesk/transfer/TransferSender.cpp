@@ -82,7 +82,7 @@ public:
 std::optional<TransferSenderError> TransferSender::Impl::validate(QString &diagnostic) const
 {
   const ManifestEntry &entry = request.source.entry;
-  if (request.transferId.isNull() || entry.id.isNull() || request.streamId == 0 || request.chunkBytes == 0 ||
+  if (request.streamId == 0 || request.chunkBytes == 0 ||
       request.chunkBytes > kMaxSenderChunkBytes || request.chunkBytes > ProtocolLimits{}.maxDataPayloadBytes) {
     diagnostic = QStringLiteral("sender identifiers, stream, or chunk size are invalid");
     return TransferSenderError::InvalidRequest;

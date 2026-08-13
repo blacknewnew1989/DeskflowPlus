@@ -3,10 +3,12 @@
 
 #pragma once
 
+#include "relaydesk/transfer/FileId.h"
+#include "relaydesk/transfer/TransferId.h"
+
 #include <QByteArray>
 #include <QMetaType>
 #include <QString>
-#include <QUuid>
 #include <QtGlobal>
 
 #include <optional>
@@ -20,9 +22,6 @@ inline constexpr qsizetype kFixedHeaderBytes = 32;
 inline constexpr qsizetype kUuidBytes = 16;
 inline constexpr qsizetype kSha256Bytes = 32;
 inline constexpr qsizetype kMaxControlStringUtf8Bytes = 4096;
-
-using TransferId = QUuid;
-using FileId = QUuid;
 
 enum class MessageType : quint16
 {

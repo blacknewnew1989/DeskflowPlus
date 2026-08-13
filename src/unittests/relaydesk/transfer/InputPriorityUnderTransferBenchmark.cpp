@@ -145,14 +145,14 @@ void InputPriorityUnderTransferBenchmark::inputTasksPreemptSaturatedTransferWork
   info.refresh();
 
   ProbedSenderWorker worker({
-      .transferId = QUuid::createUuid(),
+      .transferId = TransferId::generate(),
       .source =
           {
               .canonicalSourcePath = info.canonicalFilePath(),
               .protocolCollisionKey = QStringLiteral("priority-sparse.bin"),
               .entry =
                   {
-                      .id = QUuid::createUuid(),
+                      .id = FileId::generate(),
                       .relativeProtocolPath = QStringLiteral("priority-sparse.bin"),
                       .type = ManifestEntryType::File,
                       .size = logicalBytes,

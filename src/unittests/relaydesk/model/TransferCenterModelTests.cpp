@@ -28,7 +28,7 @@ TransferSnapshot transferSnapshot(
 {
   const auto terminal = TransferControlStateMachine::isTerminal(state);
   return {
-      .id = QUuid(id),
+      .id = *TransferId::fromString(id),
       .peerId = *DeviceId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
       .peerDisplayName = direction == TransferDirection::Sending ? QStringLiteral("Studio Mac")
                                                                 : QStringLiteral("Windows PC"),
@@ -58,7 +58,7 @@ TransferSnapshot transferSnapshot(
 TransferHistoryRecord historyRecord(const QString &id, HistoryStatus status = HistoryStatus::Completed)
 {
   return {
-      .transferId = QUuid(id),
+      .transferId = *TransferId::fromString(id),
       .peerDeviceId = *DeviceId::fromString(QStringLiteral("bbbbbbbb-cccc-4ddd-8eee-ffffffffffff")),
       .peerDisplayName = QStringLiteral("History peer"),
       .displayName = QStringLiteral("Archive"),
@@ -113,7 +113,7 @@ void TransferCenterModelTests::obeysAbstractItemModelContractAndUnifiesDirection
 
   QCOMPARE(model.rowCount(), 3);
   QCOMPARE(model.data(model.index(0, 0), TransferCenterModel::TransferIdRole).toString(),
-           newerReceiving.id.toString(QUuid::WithoutBraces));
+           newerReceiving.id.toString());
   QCOMPARE(model.data(model.index(0, 0), TransferCenterModel::DirectionTextRole).toString(),
            QStringLiteral("Receiving"));
   QCOMPARE(model.data(model.index(1, 0), TransferCenterModel::DirectionTextRole).toString(),
@@ -301,7 +301,9 @@ void TransferCenterModelTests::emitsValidatedHistoryOpenAndRetryIntents()
   QVERIFY(!model.requestOpenFile(failed.transferId));
   QVERIFY(!model.requestOpenFolder(liveFailed.id));
   QVERIFY(!model.requestOpenFile(liveFailed.id));
-  QVERIFY(!model.requestRetry(QUuid(QStringLiteral("44444444-4444-4444-8444-444444444444"))));
+  QVERIFY(!model.requestRetry(
+      *TransferId::fromString(QStringLiteral("44444444-4444-4444-8444-444444444444"))
+  ));
 }
 
 void TransferCenterModelTests::mapsStateAndErrorsToSafeVisibleStrings()

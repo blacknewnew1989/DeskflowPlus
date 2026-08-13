@@ -64,8 +64,7 @@ std::optional<TransferId> readTransferId(const QCborValue &value)
   if (!value.isByteArray() || value.toByteArray().size() != kUuidBytes) {
     return std::nullopt;
   }
-  const TransferId id = QUuid::fromRfc4122(value.toByteArray());
-  return id.isNull() ? std::nullopt : std::optional<TransferId>{id};
+  return TransferId::fromBytes(value.toByteArray());
 }
 
 bool validCancelReason(TransferCancelReason reason)
@@ -75,11 +74,7 @@ bool validCancelReason(TransferCancelReason reason)
 
 QByteArray encodeTransferId(const TransferId &transferId, QString *error)
 {
-  if (transferId.isNull()) {
-    setError(error, QStringLiteral("transfer command requires a non-null transfer ID"));
-    return {};
-  }
-  return QCborValue(QCborMap{{key(TransferIdKey), transferId.toRfc4122()}})
+  return QCborValue(QCborMap{{key(TransferIdKey), transferId.toBytes()}})
       .toCbor(QCborValue::EncodingOption::SortKeysInMaps);
 }
 
@@ -97,16 +92,12 @@ QByteArray TransferCommandCodec::encode(const TransferCommandMessage &message, Q
                       std::is_same_v<Message, TransferResumeMessage>) {
           return encodeTransferId(typed.transferId, error);
         } else {
-          if (typed.transferId.isNull()) {
-            setError(error, QStringLiteral("TRANSFER_CANCEL requires a non-null transfer ID"));
-            return {};
-          }
           if (!validCancelReason(typed.reason)) {
             setError(error, QStringLiteral("TRANSFER_CANCEL reason is unknown"));
             return {};
           }
           const QCborMap map = {
-              {key(TransferIdKey), typed.transferId.toRfc4122()},
+              {key(TransferIdKey), typed.transferId.toBytes()},
               {key(ReasonKey), static_cast<qint64>(typed.reason)},
               {key(KeepPartialKey), typed.keepPartial},
           };

@@ -39,11 +39,6 @@ FileMessageDecodeResult failure(FileMessageCodecError error, QString diagnostic)
   return {.error = error, .diagnostic = std::move(diagnostic)};
 }
 
-bool validUuid(const QUuid &value)
-{
-  return !value.isNull();
-}
-
 bool wireInteger(quint64 value)
 {
   return value <= static_cast<quint64>(std::numeric_limits<qint64>::max());
@@ -69,9 +64,7 @@ bool knownResultCode(FileResultCode code)
 
 bool validate(const FileBeginMessage &message, QString *error)
 {
-  if (!validUuid(message.transferId) || !validUuid(message.fileId)) {
-    setError(error, QStringLiteral("FILE_BEGIN identifiers must be non-null UUIDs"));
-  } else if (!wireInteger(message.size) || !wireInteger(message.startOffset) || message.startOffset > message.size) {
+  if (!wireInteger(message.size) || !wireInteger(message.startOffset) || message.startOffset > message.size) {
     setError(error, QStringLiteral("FILE_BEGIN size and offset are invalid"));
   } else if (message.chunkBytes == 0 || message.chunkBytes > kMaximumChunkBytes) {
     setError(error, QStringLiteral("FILE_BEGIN chunk bytes exceed the RDFT hard limit"));
@@ -85,9 +78,7 @@ bool validate(const FileBeginMessage &message, QString *error)
 
 bool validate(const FileChunkMessage &message, QString *error)
 {
-  if (!validUuid(message.transferId) || !validUuid(message.fileId)) {
-    setError(error, QStringLiteral("FILE_CHUNK identifiers must be non-null UUIDs"));
-  } else if (!wireInteger(message.offset) || !wireInteger(message.sequence)) {
+  if (!wireInteger(message.offset) || !wireInteger(message.sequence)) {
     setError(error, QStringLiteral("FILE_CHUNK offset or sequence exceeds the wire integer range"));
   } else {
     return true;
@@ -97,9 +88,7 @@ bool validate(const FileChunkMessage &message, QString *error)
 
 bool validate(const FileCheckpointMessage &message, QString *error)
 {
-  if (!validUuid(message.transferId) || !validUuid(message.fileId)) {
-    setError(error, QStringLiteral("FILE_CHECKPOINT identifiers must be non-null UUIDs"));
-  } else if (!wireInteger(message.durableOffset)) {
+  if (!wireInteger(message.durableOffset)) {
     setError(error, QStringLiteral("FILE_CHECKPOINT durable offset exceeds the wire integer range"));
   } else {
     return true;
@@ -109,9 +98,7 @@ bool validate(const FileCheckpointMessage &message, QString *error)
 
 bool validate(const FileEndMessage &message, QString *error)
 {
-  if (!validUuid(message.transferId) || !validUuid(message.fileId)) {
-    setError(error, QStringLiteral("FILE_END identifiers must be non-null UUIDs"));
-  } else if (!wireInteger(message.size)) {
+  if (!wireInteger(message.size)) {
     setError(error, QStringLiteral("FILE_END size exceeds the wire integer range"));
   } else if (message.sha256.size() != kSha256Bytes) {
     setError(error, QStringLiteral("FILE_END hash must be SHA-256"));
@@ -123,9 +110,7 @@ bool validate(const FileEndMessage &message, QString *error)
 
 bool validate(const FileResultMessage &message, QString *error)
 {
-  if (!validUuid(message.transferId) || !validUuid(message.fileId)) {
-    setError(error, QStringLiteral("FILE_RESULT identifiers must be non-null UUIDs"));
-  } else if (!knownResultCode(message.code)) {
+  if (!knownResultCode(message.code)) {
     setError(error, QStringLiteral("FILE_RESULT code is unknown"));
   } else if (message.code == FileResultCode::Ok && !message.diagnostic.isEmpty()) {
     setError(error, QStringLiteral("successful FILE_RESULT cannot contain a diagnostic"));
@@ -138,9 +123,9 @@ bool validate(const FileResultMessage &message, QString *error)
   return false;
 }
 
-void insertUuid(QCborMap &map, qint64 field, const QUuid &value)
+template <typename Id> void insertUuid(QCborMap &map, qint64 field, const Id &value)
 {
-  map.insert(key(field), value.toRfc4122());
+  map.insert(key(field), value.toBytes());
 }
 
 void insertUnsigned(QCborMap &map, qint64 field, quint64 value)
@@ -161,14 +146,13 @@ bool hasExactKeys(const QCborMap &map, const QSet<qint64> &expected)
   return true;
 }
 
-std::optional<QUuid> readUuid(const QCborMap &map, qint64 field)
+template <typename Id> std::optional<Id> readUuid(const QCborMap &map, qint64 field)
 {
   const auto value = valueFor(map, field);
   if (!value.isByteArray() || value.toByteArray().size() != kUuidBytes) {
     return std::nullopt;
   }
-  const auto uuid = QUuid::fromRfc4122(value.toByteArray());
-  return uuid.isNull() ? std::nullopt : std::optional<QUuid>(uuid);
+  return Id::fromBytes(value.toByteArray());
 }
 
 std::optional<quint64> readUnsigned(const QCborMap &map, qint64 field)
@@ -182,7 +166,8 @@ std::optional<quint64> readUnsigned(const QCborMap &map, qint64 field)
 
 FileMessageCodecError idError(const QCborMap &map)
 {
-  return readUuid(map, 1).has_value() ? FileMessageCodecError::InvalidFileId : FileMessageCodecError::InvalidTransferId;
+  return readUuid<TransferId>(map, 1).has_value() ? FileMessageCodecError::InvalidFileId
+                                                  : FileMessageCodecError::InvalidTransferId;
 }
 
 } // namespace
@@ -284,8 +269,8 @@ FileMessageDecodeResult FileMessageCodec::decode(MessageType type, QByteArrayVie
   if (!hasExactKeys(map, expected)) {
     return failure(FileMessageCodecError::InvalidFields, QStringLiteral("file control fields are missing or unknown"));
   }
-  const auto transferId = readUuid(map, 1);
-  const auto fileId = readUuid(map, 2);
+  const auto transferId = readUuid<TransferId>(map, 1);
+  const auto fileId = readUuid<FileId>(map, 2);
   if (!transferId.has_value() || !fileId.has_value()) {
     return failure(idError(map), QStringLiteral("file control identifier is invalid"));
   }

@@ -18,8 +18,9 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-const TransferId kTransferId(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
-const FileId kFileId(QStringLiteral("fedcba98-7654-4321-9234-56789abcdef0"));
+const TransferId kTransferId =
+    *TransferId::fromString(QStringLiteral("01234567-89ab-cdef-8123-456789abcdef"));
+const FileId kFileId = *FileId::fromString(QStringLiteral("fedcba98-7654-4321-9234-56789abcdef0"));
 
 bool writeFile(const QString &path, QByteArrayView data)
 {
@@ -42,7 +43,7 @@ SingleFileManifest buildManifest(const QString &path, const QString &logicalPath
       .fileId = kFileId,
   });
   if (!result.ok()) {
-    return {};
+    qFatal("manifest build failed: %s", qPrintable(result.diagnostic));
   }
   return *result.manifest;
 }

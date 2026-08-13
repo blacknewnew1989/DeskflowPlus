@@ -399,7 +399,7 @@ FileTransferRuntime::negotiatedCapabilities(const DeviceId &peerDeviceId) const
     };
   }
 
-  const auto id = QUuid::createUuid();
+  const auto id = ::relaydesk::transfer::TransferId::generate();
   QString displayName = QFileInfo(localItems.first().toLocalFile()).fileName();
   if (localItems.size() > 1) {
     displayName = tr("%n items", nullptr, localItems.size());

@@ -17,9 +17,10 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-const TransferId kTransferId(QStringLiteral("11111111-2222-4333-8444-555555555555"));
-const FileId kFirstFileId(QStringLiteral("10000000-0000-4000-8000-000000000001"));
-const FileId kSecondFileId(QStringLiteral("20000000-0000-4000-8000-000000000002"));
+const TransferId kTransferId =
+    *TransferId::fromString(QStringLiteral("11111111-2222-4333-8444-555555555555"));
+const FileId kFirstFileId = *FileId::fromString(QStringLiteral("10000000-0000-4000-8000-000000000001"));
+const FileId kSecondFileId = *FileId::fromString(QStringLiteral("20000000-0000-4000-8000-000000000002"));
 
 ResumeQueryMessage query()
 {
@@ -60,12 +61,12 @@ QByteArray encodeRaw(const QCborMap &map)
 QCborMap validResponseMap()
 {
   return {
-      {QCborValue(1), kTransferId.toRfc4122()},
+      {QCborValue(1), kTransferId.toBytes()},
       {QCborValue(2), QByteArray(32, '\xaa')},
       {QCborValue(3),
        QCborArray{
-           QCborMap{{QCborValue(1), kFirstFileId.toRfc4122()}, {QCborValue(2), 12}},
-           QCborMap{{QCborValue(1), kSecondFileId.toRfc4122()}, {QCborValue(2), 34}},
+           QCborMap{{QCborValue(1), kFirstFileId.toBytes()}, {QCborValue(2), 12}},
+           QCborMap{{QCborValue(1), kSecondFileId.toBytes()}, {QCborValue(2), 34}},
        }},
   };
 }
@@ -166,7 +167,7 @@ void ResumeMessageCodecTests::decodeRejectsEnvelopeAndFieldErrors()
   );
 
   QCborMap unknown = {
-      {QCborValue(1), kTransferId.toRfc4122()},
+      {QCborValue(1), kTransferId.toBytes()},
       {QCborValue(2), QByteArray(32, '\xaa')},
       {QCborValue(9), true},
   };
@@ -185,7 +186,7 @@ void ResumeMessageCodecTests::decodeRejectsEnvelopeAndFieldErrors()
       ResumeMessageCodecError::InvalidTransferId
   );
   QCborMap invalidHash = {
-      {QCborValue(1), kTransferId.toRfc4122()},
+      {QCborValue(1), kTransferId.toBytes()},
       {QCborValue(2), QByteArray(31, '\xaa')},
   };
   QCOMPARE(
@@ -200,8 +201,8 @@ void ResumeMessageCodecTests::decodeRejectsDuplicateAndUnorderedFiles()
   duplicate.insert(
       QCborValue(3),
       QCborArray{
-          QCborMap{{QCborValue(1), kFirstFileId.toRfc4122()}, {QCborValue(2), 12}},
-          QCborMap{{QCborValue(1), kFirstFileId.toRfc4122()}, {QCborValue(2), 13}},
+          QCborMap{{QCborValue(1), kFirstFileId.toBytes()}, {QCborValue(2), 12}},
+          QCborMap{{QCborValue(1), kFirstFileId.toBytes()}, {QCborValue(2), 13}},
       }
   );
   QCOMPARE(
@@ -213,8 +214,8 @@ void ResumeMessageCodecTests::decodeRejectsDuplicateAndUnorderedFiles()
   unordered.insert(
       QCborValue(3),
       QCborArray{
-          QCborMap{{QCborValue(1), kSecondFileId.toRfc4122()}, {QCborValue(2), 34}},
-          QCborMap{{QCborValue(1), kFirstFileId.toRfc4122()}, {QCborValue(2), 12}},
+          QCborMap{{QCborValue(1), kSecondFileId.toBytes()}, {QCborValue(2), 34}},
+          QCborMap{{QCborValue(1), kFirstFileId.toBytes()}, {QCborValue(2), 12}},
       }
   );
   QCOMPARE(
@@ -223,7 +224,7 @@ void ResumeMessageCodecTests::decodeRejectsDuplicateAndUnorderedFiles()
   );
 
   auto negative = validResponseMap();
-  negative.insert(QCborValue(3), QCborArray{QCborMap{{QCborValue(1), kFirstFileId.toRfc4122()}, {QCborValue(2), -1}}});
+  negative.insert(QCborValue(3), QCborArray{QCborMap{{QCborValue(1), kFirstFileId.toBytes()}, {QCborValue(2), -1}}});
   QCOMPARE(
       ResumeMessageCodec::decode(kProtocolMajorVersion, MessageType::ResumeResponse, encodeRaw(negative)).error,
       ResumeMessageCodecError::InvalidOffset
@@ -242,7 +243,7 @@ void ResumeMessageCodecTests::buildsResponseOnlyFromMatchingReceiverState()
   QCOMPARE(built.response->files, response().files);
 
   auto unknown = query();
-  unknown.transferId = QUuid::createUuid();
+  unknown.transferId = TransferId::generate();
   QCOMPARE(ResumeNegotiator::buildResponse(store, unknown).error, ResumeNegotiationError::StateNotFound);
 
   auto changedManifest = query();
@@ -269,14 +270,15 @@ void ResumeMessageCodecTests::validatesResponseAgainstQueryAndManifest()
   QCOMPARE(valid.plan->files, response().files);
 
   auto wrongTransfer = response();
-  wrongTransfer.transferId = QUuid::createUuid();
+  wrongTransfer.transferId = TransferId::generate();
   QCOMPARE(
       ResumeNegotiator::validateResponse(query(), wrongTransfer, manifest()).error,
       ResumeNegotiationError::ResponseMismatch
   );
 
   auto unknown = response();
-  unknown.files[1].fileId = QUuid(QStringLiteral("30000000-0000-4000-8000-000000000003"));
+  unknown.files[1].fileId =
+      *FileId::fromString(QStringLiteral("30000000-0000-4000-8000-000000000003"));
   QCOMPARE(ResumeNegotiator::validateResponse(query(), unknown, manifest()).error, ResumeNegotiationError::UnknownFile);
 
   auto beyondEnd = response();

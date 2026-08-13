@@ -101,9 +101,6 @@ bool isSupportedUnsignedInteger(quint64 value)
 
 ResumeStoreOperationResult validateState(const ResumeState &state, const ResumeStoreLimits &limits)
 {
-  if (state.transferId.isNull()) {
-    return operationFailure(ResumeStoreError::InvalidState, QStringLiteral("resume transfer ID is null"));
-  }
   if (state.peerDeviceId.value().isNull()) {
     return operationFailure(ResumeStoreError::InvalidState, QStringLiteral("resume peer device ID is null"));
   }
@@ -124,10 +121,7 @@ ResumeStoreOperationResult validateState(const ResumeState &state, const ResumeS
   QSet<QString> protocolPaths;
   QSet<QString> partPaths;
   for (const auto &file : state.files) {
-    if (file.fileId.isNull()) {
-      return operationFailure(ResumeStoreError::InvalidState, QStringLiteral("resume file ID is null"));
-    }
-    const QByteArray fileId = file.fileId.toRfc4122();
+    const QByteArray fileId = file.fileId.toBytes();
     if (fileIds.contains(fileId)) {
       return operationFailure(ResumeStoreError::InvalidState, QStringLiteral("resume contains a duplicate file ID"));
     }
@@ -174,7 +168,7 @@ QByteArray encodeState(const ResumeState &state)
   QCborArray files;
   for (const auto &file : state.files) {
     files.append(QCborMap{
-        {key(FileIdKey), file.fileId.toRfc4122()},
+        {key(FileIdKey), file.fileId.toBytes()},
         {key(ProtocolPathKey), file.relativeProtocolPath},
         {key(DurableOffsetKey), static_cast<qint64>(file.durableOffset)},
         {key(TotalBytesKey), static_cast<qint64>(file.totalBytes)},
@@ -184,7 +178,7 @@ QByteArray encodeState(const ResumeState &state)
 
   const QCborMap map = {
       {key(SchemaVersionKey), static_cast<qint64>(kResumeStateSchemaVersion)},
-      {key(TransferIdKey), state.transferId.toRfc4122()},
+      {key(TransferIdKey), state.transferId.toBytes()},
       {key(PeerDeviceIdKey), state.peerDeviceId.toBytes()},
       {key(ManifestHashKey), state.manifestSha256},
       {key(DirectionKey), directionName(state.direction)},
@@ -231,10 +225,10 @@ ResumeStoreLoadResult decodeState(QByteArrayView encoded, const ResumeStoreLimit
     return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resume state contains invalid field types"));
   }
 
-  const auto transferId = QUuid::fromRfc4122(transferBytes.toByteArray());
+  const auto transferId = TransferId::fromBytes(transferBytes.toByteArray());
   const auto peerDeviceId = deskflow::relaydesk::DeviceId::fromBytes(peerBytes.toByteArray());
   const auto direction = directionFromName(directionValue.toString());
-  if (transferId.isNull() || !peerDeviceId.has_value() || !direction.has_value()) {
+  if (!transferId.has_value() || !peerDeviceId.has_value() || !direction.has_value()) {
     return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resume identity or direction is invalid"));
   }
 
@@ -264,12 +258,12 @@ ResumeStoreLoadResult decodeState(QByteArrayView encoded, const ResumeStoreLimit
         totalBytes.toInteger() < 0 || !partPath.isString()) {
       return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resume file entry types are invalid"));
     }
-    const auto fileId = QUuid::fromRfc4122(fileBytes.toByteArray());
-    if (fileId.isNull()) {
+    const auto fileId = FileId::fromBytes(fileBytes.toByteArray());
+    if (!fileId.has_value()) {
       return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resume file ID is invalid"));
     }
     files.append({
-        .fileId = fileId,
+        .fileId = *fileId,
         .relativeProtocolPath = protocolPath.toString(),
         .durableOffset = static_cast<quint64>(durableOffset.toInteger()),
         .totalBytes = static_cast<quint64>(totalBytes.toInteger()),
@@ -278,7 +272,7 @@ ResumeStoreLoadResult decodeState(QByteArrayView encoded, const ResumeStoreLimit
   }
 
   ResumeState state{
-      .transferId = transferId,
+      .transferId = *transferId,
       .peerDeviceId = *peerDeviceId,
       .manifestSha256 = manifestHash.toByteArray(),
       .direction = *direction,
@@ -338,7 +332,7 @@ ResumeStoreOperationResult ResumeStore::save(const ResumeState &state) const
 
 ResumeStoreLoadResult ResumeStore::load(const TransferId &transferId) const
 {
-  if (m_activeDirectory.isEmpty() || !QDir::isAbsolutePath(m_activeDirectory) || transferId.isNull()) {
+  if (m_activeDirectory.isEmpty() || !QDir::isAbsolutePath(m_activeDirectory)) {
     return loadFailure(
         ResumeStoreError::InvalidStoreDirectory, QStringLiteral("resume store path or transfer ID is invalid")
     );
@@ -387,8 +381,8 @@ ResumeStoreScanResult ResumeStore::scan() const
   for (const auto &entry : entries) {
     QString stem = entry.fileName();
     stem.chop(QStringLiteral(".resume.cbor").size());
-    const QUuid transferId(stem);
-    if (transferId.isNull() || transferId.toString(QUuid::WithoutBraces).compare(stem, Qt::CaseInsensitive) != 0) {
+    const auto transferId = TransferId::fromString(stem);
+    if (!transferId.has_value() || transferId->toString().compare(stem, Qt::CaseInsensitive) != 0) {
       result.issues.append({
           .path = entry.absoluteFilePath(),
           .error = ResumeStoreError::InvalidFields,
@@ -396,7 +390,7 @@ ResumeStoreScanResult ResumeStore::scan() const
       });
       continue;
     }
-    auto loaded = load(transferId);
+    auto loaded = load(*transferId);
     if (loaded.ok()) {
       result.states.append(std::move(*loaded.state));
     } else {
@@ -412,7 +406,7 @@ ResumeStoreScanResult ResumeStore::scan() const
 
 ResumeStoreOperationResult ResumeStore::remove(const TransferId &transferId) const
 {
-  if (m_activeDirectory.isEmpty() || !QDir::isAbsolutePath(m_activeDirectory) || transferId.isNull()) {
+  if (m_activeDirectory.isEmpty() || !QDir::isAbsolutePath(m_activeDirectory)) {
     return operationFailure(
         ResumeStoreError::InvalidStoreDirectory, QStringLiteral("resume store path or transfer ID is invalid")
     );
@@ -430,7 +424,7 @@ ResumeStoreOperationResult ResumeStore::remove(const TransferId &transferId) con
 
 QString ResumeStore::statePath(const TransferId &transferId) const
 {
-  const QString fileName = transferId.toString(QUuid::WithoutBraces) + QStringLiteral(".resume.cbor");
+  const QString fileName = transferId.toString() + QStringLiteral(".resume.cbor");
   return QDir(m_activeDirectory).absoluteFilePath(fileName);
 }
 

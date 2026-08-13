@@ -271,7 +271,7 @@ QVariant TransferCenterModel::data(const QModelIndex &index, int role) const
   case AccessibleSummaryRole:
     return accessibleSummary(snapshot);
   case TransferIdRole:
-    return snapshot.id.toString(QUuid::WithoutBraces);
+    return snapshot.id.toString();
   case DirectionRole:
     return static_cast<int>(snapshot.direction);
   case DirectionTextRole:
@@ -570,7 +570,7 @@ void TransferCenterModel::flushDueUpdates()
 
 bool TransferCenterModel::validSnapshot(const TransferSnapshot &snapshot)
 {
-  return !snapshot.id.isNull() && !snapshot.peerId.value().isNull() && !snapshot.displayName.isEmpty() &&
+  return !snapshot.peerId.value().isNull() && !snapshot.displayName.isEmpty() &&
          snapshot.createdUtc.isValid() && snapshot.progress.completedBytes <= snapshot.progress.totalBytes &&
          snapshot.progress.completedFiles <= snapshot.progress.totalFiles &&
          std::isfinite(snapshot.progress.bytesPerSecond) && snapshot.progress.bytesPerSecond >= 0.0 &&
@@ -579,7 +579,7 @@ bool TransferCenterModel::validSnapshot(const TransferSnapshot &snapshot)
 
 bool TransferCenterModel::validHistory(const TransferHistoryRecord &record)
 {
-  return !record.transferId.isNull() && !record.peerDeviceId.value().isNull() && !record.displayName.isEmpty() &&
+  return !record.peerDeviceId.value().isNull() && !record.displayName.isEmpty() &&
          record.startedUtc.isValid() && record.finishedUtc.isValid() && record.finishedUtc >= record.startedUtc;
 }
 
@@ -651,7 +651,7 @@ int TransferCenterModel::compare(const Entry &left, const Entry &right) const
   if (leftTime != rightTime)
     return leftTime > rightTime ? -1 : 1;
   return QString::compare(
-      left.snapshot.id.toString(QUuid::WithoutBraces), right.snapshot.id.toString(QUuid::WithoutBraces),
+      left.snapshot.id.toString(), right.snapshot.id.toString(),
       Qt::CaseSensitive
   );
 }
