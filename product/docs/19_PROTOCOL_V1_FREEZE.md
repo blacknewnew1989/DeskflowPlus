@@ -3,21 +3,21 @@
 本文是 RelayDesk RDFT v1 的冻结索引。它把 wire、共享 codec、验证入口和当前共享
 接口边界绑定到同一个 Git commit，但不复制各文件中的 schema 或 C++ 声明。
 
-当前状态为 **freeze candidate**。A0 只有在最终提交、tag、双平台 Actions run 和
-artifacts 都存在后，才可替换下表占位值；占位值本身不是发布证据。
+当前状态为 **FROZEN**。下表绑定唯一 tag commit、同一 commit 的双平台 Actions run
+以及 GitHub artifact 原始 ZIP 的 SHA-256；既有冻结 tag 不得移动。
 
 ## 1. 冻结身份与发布占位
 
 | Field | Value |
 |---|---|
-| `authoritativeCommit` | `TO_BE_TAGGED` |
+| `authoritativeCommit` | `0d091d301aea2140387fdd615150984dfed5bc08` |
 | `freezeTagPattern` | `relaydesk-protocol-v1-*` |
-| `freezeTag` | `TO_BE_TAGGED` |
-| `canonicalActionsRun` | `TO_BE_RUN` |
-| `windowsArtifact` | `TO_BE_PUBLISHED` |
-| `windowsArtifactSha256` | `TO_BE_RECORDED` |
-| `macosArtifact` | `TO_BE_PUBLISHED` |
-| `macosArtifactSha256` | `TO_BE_RECORDED` |
+| `freezeTag` | `relaydesk-protocol-v1-20260813-01` |
+| `canonicalActionsRun` | `31672497950` |
+| `windowsArtifact` | `relaydesk-windows-x64-0d091d301aea2140387fdd615150984dfed5bc08` (ID `9170492840`, unsigned) |
+| `windowsArtifactSha256` | `bf435935c748bc57ea1e7f5913a01dc47467bcaec61040068e630c6d7b54b5d0` |
+| `macosArtifact` | `relaydesk-macos-arm64-0d091d301aea2140387fdd615150984dfed5bc08` (ID `9170386546`, ad-hoc) |
+| `macosArtifactSha256` | `04ba64d9ebd49c4655871fc29005fbbc37d641b19bc2029439baa447a0567887` |
 
 `authoritativeCommit` 最终必须是完整 40 位 Git SHA。`freezeTag` 必须匹配
 `relaydesk-protocol-v1-*`，并直接指向该 commit；不得移动既有冻结 tag。Actions run
@@ -132,9 +132,9 @@ baseline 的 `NOT_WIRED` 结论。真实 Windows↔macOS 发现、配对、重�
 5. 每次新的 freeze candidate 使用新的 `relaydesk-protocol-v1-*` tag，不移动、覆盖或
    force-update 既有 tag。
 
-## 8. A0 最终填充清单
+## 8. A0 最终证据核对
 
-A0 在 tag 和双平台 run 完成后填写第 1 节，并核对：
+A0 已在 tag 和双平台 run 完成后填写第 1 节，并核对：
 
 - tag 指向完整 `authoritativeCommit`；
 - canonical/template workflows 一致且 tag trigger 生效；
@@ -142,4 +142,6 @@ A0 在 tag 和双平台 run 完成后填写第 1 节，并核对：
 - 每个平台的测试结果、artifact ID/name、签名状态和 SHA-256 可追溯；
 - 所有未执行真机项明确为 `NOT_RUN`，所有未完成 composition 明确为 `NOT_WIRED`。
 
-在这些字段仍为占位值时，不得把本文件引用为“最终冻结已完成”的证据。
+以上证据均来自 tag 触发的 canonical run；Windows 84/84、macOS 85/85 CTest 通过，
+Windows MSI 生命周期与 macOS 安装生命周期任务均通过。真实 Windows↔macOS 双机传输
+仍为 `NOT_RUN`，不属于协议字节与共享接口冻结证据。

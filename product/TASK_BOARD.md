@@ -12,8 +12,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
-| PROTO-FREEZE-001 | RelayDesk v1 wire protocol / shared interface freeze | A6/A2/A0 | code candidate complete through `bb4bdc4ac`: 24/24 registry, 60 vectors, stable typed errors/interfaces/capability truth; final docs/tag and dual-platform evidence pending |
-| COMP-004 | IFileTransferService / FileTransferRuntime composition | A6/A0 | safe outgoing slice integrated through `b87dde214`; further service expansion paused until protocol/interface freeze tag PASS |
+| COMP-004 | IFileTransferService / FileTransferRuntime composition | A6/A0 | protocol tag PASS; resume only against `relaydesk-protocol-v1-20260813-01` |
 
 ## Blocked
 
@@ -23,6 +22,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 证据 |
 |---|---|---|---|
+| PROTO-FREEZE-001 | RelayDesk v1 wire protocol / shared interface freeze | A6/A2/A0 | tag `relaydesk-protocol-v1-20260813-01`; run `31672497950` SUCCESS; Win 84/84, Mac 85/85; artifacts `9170492840` / `9170386546` |
 | AUTO-001 | 识别当前 GitHub 仓库、origin、登录状态 | A0/A1 | GitHub admin/push 权限确认 |
 | AUTO-002 | 添加 upstream、fetch v1.26.0、验证 760e3b9 | A0/A1 | `760e3b99` |
 | AUTO-003 | 创建/恢复产品分支并安装资料/workflow | A0/A1 | bootstrap worktree and commit |

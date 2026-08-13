@@ -1,15 +1,19 @@
 # PROTO-FREEZE-001 protocol and shared-interface freeze
 
-Status: `CANDIDATE` until the protocol tag and its Windows/macOS Actions artifacts are recorded in
+Status: `PASS`; the immutable protocol tag and its Windows/macOS Actions artifacts are recorded in
 `product/docs/19_PROTOCOL_V1_FREEZE.md`.
 
 ## Candidate identity
 
 - Integration branch: `product/relaydesk-v1`
-- Candidate implementation through: `bb4bdc4ac7e25a046a6a6415c507501ba765efdf`
-- Final documentation commit: pending
-- Freeze tag: pending
-- Canonical Actions run and artifact digests: pending
+- Authoritative commit: `0d091d301aea2140387fdd615150984dfed5bc08`
+- Freeze tag: `relaydesk-protocol-v1-20260813-01`
+- Tag object: `0ef027c003afa9e4b159e4c3687a46e7e0860f1c`
+- Canonical Actions run: `31672497950` — SUCCESS
+- Windows artifact: ID `9170492840`, API/local ZIP SHA-256
+  `bf435935c748bc57ea1e7f5913a01dc47467bcaec61040068e630c6d7b54b5d0`
+- macOS artifact: ID `9170386546`, API ZIP SHA-256
+  `04ba64d9ebd49c4655871fc29005fbbc37d641b19bc2029439baa447a0567887`
 
 ## Frozen candidate surface
 
@@ -42,6 +46,22 @@ Status: `CANDIDATE` until the protocol tag and its Windows/macOS Actions artifac
   MinGW 13.1 runtime before the older Qt-bundled MinGW runtime.
 - Transfer failure/history/UI targeted suite: 8/8 PASS.
 - `git diff --check`: PASS.
+
+## Canonical tag-run evidence
+
+- Windows job `94359914984`: SUCCESS; 84/84 CTest PASS; package and artifact collection PASS;
+  real unsigned MSI clean install, repair, major upgrade, uninstall, registration, service,
+  firewall and residue lifecycle PASS.
+- macOS job `94359914873`: SUCCESS; 85/85 CTest PASS; deployed App reports `valid on disk` and
+  `satisfies its Designated Requirement`; App/DMG packaging and artifact collection PASS.
+- macOS lifecycle job `94362205393`: SUCCESS; artifact ID `9170501281`, ZIP SHA-256
+  `fee1e9acf631a6f0e3dcc1b81394cc69f799a9d7b210ea54a8934f6cb058a5e9`.
+- Windows artifact contents were downloaded and rehashed locally. The unsigned MSI SHA-256 is
+  `0d6d859c296e71d9dddb3b5d78a3873104633c32da05f046bc48f7958d0b82ec`; the portable 7Z SHA-256 is
+  `ff8597fbbc181b60a25a3f596427c946aadb441d4b1cbf5147cbeb79e70cf14d`.
+- The draft internal Release for the same tag contains the ad-hoc App ZIP SHA-256
+  `3b2ca7be8206325e373f29c9ed471ae2eedd821b95ce46081574199e74af5b70` and DMG SHA-256
+  `08e11b4d6f3cf30b9600b5499558dca92cf4cd55366c3a9a460cf8c3dcb71a66`.
 
 The first conflict-test launch returned Windows `0xc0000139` before Qt test initialization. Root-cause
 evidence showed Qt's `mingw_64/bin` contained an older 2021 `libstdc++-6.dll`; the test executable was

@@ -10,7 +10,7 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: PROTO-FREEZE-001 protocol/interface freeze before further Phase 3-4 runtime composition
+- Current phase: Phase 3-4 runtime composition after PROTO-FREEZE-001 PASS
 - Last updated: 2026-08-13
 - User action required during development: none
 
@@ -21,8 +21,8 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last product implementation commit: `bb4bdc4ac7e25a046a6a6415c507501ba765efdf`
-- Current implementation: PROTO-FREEZE-001 code contracts are complete at candidate level: 24-message registry, 60 shared vectors, stable wire/pairing/transfer errors, strong IDs, typed UI/service/control boundaries, queued values, directional receive capability, canonical sender sink, and typed conflict commit disposition. Further service expansion remains paused until the freeze tag Actions evidence is recorded.
+- Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
+- Current implementation: PROTO-FREEZE-001 is frozen and dual-platform verified. Phase 3-4 service and platform composition may resume only by consuming tag `relaydesk-protocol-v1-20260813-01`; incompatible wire changes require a new version/tag.
 - Last verified stage tag: `relaydesk-phase2-20260813-04` (`d14a92335cc326f00c3bd12869585d48201d1bc0`)
 
 ## 自动执行状态
@@ -42,7 +42,7 @@
 | Draft Release publication | PASS | Phase 2 tag run `31655013105`; four delivery binaries downloaded and API/manifest/local SHA-256 agree |
 | Windows installer lifecycle | PASS | TEST-005 run `31657498852`; real clean install/repair/major-upgrade/two uninstalls and residue checks PASS; report `product/docs/reports/TEST-005_WINDOWS_INSTALL_LIFECYCLE.md` |
 | Final macOS bundle seal/lifecycle | PASS | TEST-005 run `31657596578`; symlink-preserving App ZIP, strict ad-hoc codesign, DMG verify/mount, isolated install/upgrade/uninstall and user-data preservation PASS |
-| Protocol/interface freeze candidate | IN_PROGRESS | candidate contracts through `bb4bdc4ac`; final docs/tag and same-commit Windows/macOS Actions evidence pending |
+| Protocol/interface freeze | PASS | tag `relaydesk-protocol-v1-20260813-01`, run `31672497950`; Windows 84/84, macOS 85/85; artifact IDs `9170492840` / `9170386546` |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
