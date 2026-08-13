@@ -186,6 +186,7 @@ private:
   void updateIpLabel(const QStringList &addresses);
   void setupRelayDeskDiscovery();
   void setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &localDeviceId);
+  void syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &peerDeviceId);
 
   /**
    * @brief showClientError
