@@ -13,6 +13,7 @@
 #include "relaydesk/transfer/ControlMessageCodec.h"
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
+#include "relaydesk/transfer/ResumeMessageCodec.h"
 #include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/transfer/TransferOfferStateMachine.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
@@ -249,9 +250,14 @@ struct FileTransferRuntime::OutgoingSession
   qsizetype currentEntry = 0;
   quint64 completedBytes = 0;
   quint64 completedFiles = 0;
+  QHash<QByteArray, quint64> resumeOffsets;
+  std::optional<::relaydesk::transfer::ResumeQueryMessage> resumeQuery;
+  quint64 senderGeneration = 0;
   bool senderTaskRunning = false;
   bool awaitingFileResult = false;
   bool paused = false;
+  bool interrupted = false;
+  bool resumeQueryPending = false;
   bool cancelled = false;
 };
 
@@ -278,6 +284,9 @@ FileTransferRuntime::FileTransferRuntime(
     }
     if (!m_options.localCapabilities.features.contains(QStringLiteral("folder.v1"))) {
       m_options.localCapabilities.features.append(QStringLiteral("folder.v1"));
+    }
+    if (!m_options.localCapabilities.features.contains(QStringLiteral("resume.v1"))) {
+      m_options.localCapabilities.features.append(QStringLiteral("resume.v1"));
     }
     connect(incoming, &IncomingTransferRuntime::incomingOffer, this, &IFileTransferService::incomingOffer);
     connect(
@@ -1013,6 +1022,30 @@ void FileTransferRuntime::routeTransferFrame(const DeviceId &peerDeviceId, const
   case MessageType::FileResult:
     handleFileResult(peerDeviceId, frame);
     break;
+  case MessageType::ResumeQuery: {
+    QString diagnostic;
+    auto *incoming = m_incoming.get();
+    if (incoming == nullptr || !incoming->receiveResumeQuery(peerDeviceId, frame, &diagnostic)) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          std::move(diagnostic)
+      );
+    }
+    break;
+  }
+  case MessageType::ResumeResponse:
+    handleResumeResponse(peerDeviceId, frame);
+    break;
+  case MessageType::FileCheckpoint: {
+    const auto decoded = ::relaydesk::transfer::FileMessageCodec::decode(frame.type, frame.metadata);
+    if (!decoded.ok()) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          decoded.diagnostic
+      );
+    }
+    break;
+  }
   case MessageType::ManifestPage:
   case MessageType::ManifestComplete:
   case MessageType::FileBegin:
@@ -1124,11 +1157,128 @@ void FileTransferRuntime::offerPreparedTransfers(const DeviceId &peerDeviceId)
 {
   const auto sessions = m_outgoing.values();
   for (auto *session : sessions) {
-    if (session != nullptr && session->peer == peerDeviceId && session->manifest.has_value() &&
+    if (session != nullptr && session->peer == peerDeviceId && session->interrupted &&
+        !session->cancelled) {
+      if (session->senderTaskRunning) {
+        QTimer::singleShot(10, this, [this, peerDeviceId]() { offerPreparedTransfers(peerDeviceId); });
+      } else {
+        sendResumeQuery(*session);
+      }
+    } else if (session != nullptr && session->peer == peerDeviceId && session->manifest.has_value() &&
         session->pagePlan.has_value() && session->offerState == nullptr && !session->cancelled) {
       sendOffer(*session);
     }
   }
+}
+
+void FileTransferRuntime::sendResumeQuery(OutgoingSession &session)
+{
+  using namespace ::relaydesk::transfer;
+
+  if (!session.interrupted || session.resumeQueryPending || !session.manifest.has_value() ||
+      session.control == nullptr) {
+    return;
+  }
+  const auto negotiated = negotiatedCapabilities(session.peer);
+  if (!negotiated.has_value() || !negotiated->features.contains(QStringLiteral("resume.v1"))) {
+    failOutgoing(
+        session, TransferErrorCode::ConnectionLost,
+        QStringLiteral("Peer did not negotiate resume.v1 after transfer interruption")
+    );
+    return;
+  }
+  ResumeQueryMessage query{
+      .transferId = session.id,
+      .manifestSha256 = session.manifest->summary.canonicalSha256,
+  };
+  QString diagnostic;
+  Frame frame{
+      .type = MessageType::ResumeQuery,
+      .flags = AckRequired,
+      .metadata = ResumeMessageCodec::encode(ResumeControlMessage{query}, &diagnostic),
+  };
+  if (frame.metadata.isEmpty() || !sendPeerFrame(session.peer, frame, &diagnostic)) {
+    Q_EMIT errorOccurred(
+        FileTransferRuntimeError::TransportFailed, FileTlsError::ConnectionFailed,
+        std::move(diagnostic)
+    );
+    return;
+  }
+  const auto resumed = session.control->resume();
+  if (!resumed.ok()) {
+    failOutgoing(session, TransferErrorCode::ConnectionLost, resumed.diagnostic);
+    return;
+  }
+  session.resumeQuery = std::move(query);
+  session.resumeQueryPending = true;
+  session.snapshot = session.control->snapshot();
+  Q_EMIT transferChanged(session.snapshot);
+}
+
+void FileTransferRuntime::handleResumeResponse(const DeviceId &peerDeviceId, const Frame &frame)
+{
+  using namespace ::relaydesk::transfer;
+
+  const auto decoded = ResumeMessageCodec::decode(frame.version, frame.type, frame.metadata);
+  const auto *response = decoded.ok() ? std::get_if<ResumeResponseMessage>(&*decoded.message) : nullptr;
+  if (response == nullptr) {
+    Q_EMIT errorOccurred(
+        FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError, decoded.diagnostic
+    );
+    return;
+  }
+  auto *session = outgoing(response->transferId);
+  if (session == nullptr || session->peer != peerDeviceId || !session->resumeQueryPending ||
+      !session->resumeQuery.has_value() || !session->manifest.has_value() || session->control == nullptr) {
+    return;
+  }
+  QList<ManifestEntry> entries;
+  entries.reserve(session->manifest->entries.size());
+  for (const auto &source : session->manifest->entries) {
+    entries.append(source.entry);
+  }
+  const auto validated = ResumeNegotiator::validateResponse(*session->resumeQuery, *response, entries);
+  if (!validated.ok()) {
+    failOutgoing(*session, TransferErrorCode::ConnectionLost, validated.diagnostic);
+    return;
+  }
+
+  session->resumeOffsets.clear();
+  for (const auto &file : validated.plan->files) {
+    session->resumeOffsets.insert(file.fileId.toBytes(), file.durableOffset);
+  }
+  session->completedBytes = 0;
+  session->completedFiles = 0;
+  session->currentEntry = 0;
+  for (qsizetype index = 0; index < session->manifest->entries.size(); ++index) {
+    const auto &entry = session->manifest->entries.at(index).entry;
+    if (entry.type == ManifestEntryType::Directory) {
+      session->currentEntry = index + 1;
+      continue;
+    }
+    const auto offsetEntry = session->resumeOffsets.constFind(entry.id.toBytes());
+    const bool offsetReported = offsetEntry != session->resumeOffsets.cend();
+    const quint64 offset = offsetReported ? *offsetEntry : 0;
+    session->completedBytes += offset;
+    const bool committed = (entry.size == 0 && !offsetReported) ||
+                           (entry.size != 0 && offsetReported && offset == entry.size);
+    if (committed) {
+      ++session->completedFiles;
+      session->currentEntry = index + 1;
+      continue;
+    }
+    session->currentEntry = index;
+    break;
+  }
+  session->nextManifestPage = 0;
+  session->sender.reset();
+  session->awaitingFileResult = false;
+  session->pendingStatus = SenderPumpStatus::Progressed;
+  session->resumeQueryPending = false;
+  session->interrupted = false;
+  updateOutgoingProgress(*session);
+  Q_EMIT transferChanged(session->snapshot);
+  QTimer::singleShot(0, this, [this, id = session->id]() { sendNextManifestPage(id); });
 }
 
 void FileTransferRuntime::sendOffer(OutgoingSession &session)
@@ -1321,12 +1471,15 @@ void FileTransferRuntime::startNextOutgoingFile(OutgoingSession &session)
           .source = source,
           .streamId = static_cast<quint64>(session.currentEntry + 1),
           .chunkBytes = capabilities->chunkBytes,
+          .startOffset = session.resumeOffsets.value(source.entry.id.toBytes(), 0),
       },
       senderBackpressureLimits(*connection)
   );
+  ++session.senderGeneration;
   session.awaitingFileResult = false;
   session.pendingStatus = ::relaydesk::transfer::SenderPumpStatus::Progressed;
-  if (session.control->snapshot().state == TransferState::Queued &&
+  const auto state = session.control->snapshot().state;
+  if ((state == TransferState::Queued || state == TransferState::Resuming) &&
       !session.control->advance(TransferState::Transferring).ok()) {
     failOutgoing(
         session, TransferErrorCode::SenderFailed,
@@ -1358,7 +1511,7 @@ void FileTransferRuntime::scheduleSenderPump(const ::relaydesk::transfer::Transf
 
   auto *session = outgoing(transferId);
   if (session == nullptr || session->cancelled || session->paused || session->awaitingFileResult ||
-      session->senderTaskRunning || session->sender == nullptr) {
+      session->interrupted || session->senderTaskRunning || session->sender == nullptr) {
     return;
   }
   auto *connection = m_peerConnections.value(session->peer, nullptr);
@@ -1405,18 +1558,20 @@ void FileTransferRuntime::scheduleSenderPump(const ::relaydesk::transfer::Transf
   }
 
   session->senderTaskRunning = true;
+  const quint64 generation = session->senderGeneration;
   const auto worker = session->sender;
   auto *watcher = new QFutureWatcher<SenderWorkResult>(this);
-  connect(watcher, &QFutureWatcherBase::finished, this, [this, transferId, watcher]() {
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, transferId, generation, watcher]() {
     auto work = watcher->result();
     watcher->deleteLater();
-    dispatchSenderPumpResult(transferId, work.result);
+    dispatchSenderPumpResult(transferId, generation, work.result);
   });
   watcher->setFuture(QtConcurrent::run(m_workerPool.get(), [worker]() { return worker->produce(); }));
 }
 
 void FileTransferRuntime::dispatchSenderPumpResult(
-    const ::relaydesk::transfer::TransferId &transferId, const SenderPumpResult &result
+    const ::relaydesk::transfer::TransferId &transferId, quint64 generation,
+    const SenderPumpResult &result
 )
 {
   using ::relaydesk::transfer::SenderPumpStatus;
@@ -1425,8 +1580,15 @@ void FileTransferRuntime::dispatchSenderPumpResult(
   if (session == nullptr) {
     return;
   }
+  if (generation != session->senderGeneration) {
+    session->senderTaskRunning = false;
+    if (session->interrupted && isPeerReady(session->peer)) {
+      offerPreparedTransfers(session->peer);
+    }
+    return;
+  }
   session->senderTaskRunning = false;
-  if (session->cancelled) {
+  if (session->cancelled || session->interrupted) {
     return;
   }
   if (result.status == SenderPumpStatus::Failed) {
@@ -1576,6 +1738,26 @@ void FileTransferRuntime::removeConnection(FileTlsConnection &connection)
   if (peer.has_value() && m_peerConnections.value(*peer, nullptr) == &connection) {
     m_peerConnections.remove(*peer);
     if (wasReady) {
+      for (auto *session : std::as_const(m_outgoing)) {
+        if (session == nullptr || session->peer != *peer || session->cancelled ||
+            session->control == nullptr ||
+            ::relaydesk::transfer::TransferControlStateMachine::isTerminal(session->snapshot.state)) {
+          continue;
+        }
+        const auto interrupted = session->control->interrupt();
+        if (!interrupted.ok()) {
+          continue;
+        }
+        session->interrupted = true;
+        session->paused = false;
+        session->resumeQueryPending = false;
+        session->resumeQuery.reset();
+        session->awaitingFileResult = false;
+        ++session->senderGeneration;
+        session->sender.reset();
+        session->snapshot = session->control->snapshot();
+        Q_EMIT transferChanged(session->snapshot);
+      }
       if (auto *incoming = m_incoming.get(); incoming != nullptr) {
         incoming->peerDisconnected(*peer);
       }
@@ -1608,7 +1790,9 @@ bool FileTransferRuntime::publishFileEndpoint(QString *diagnostic)
     return m_discoveryRuntime.setFileEndpoint(FileEndpointAnnouncement::disabled(), diagnostic);
   }
   return m_discoveryRuntime.setFileEndpoint(
-      FileEndpointAnnouncement{.port = listeningPort(), .fileV1 = true, .folderV1 = true},
+      FileEndpointAnnouncement{
+          .port = listeningPort(), .fileV1 = true, .folderV1 = true, .resumeV1 = true
+      },
       diagnostic
   );
 }
