@@ -303,7 +303,7 @@ FileReceiverResult FileReceiver::finish(const FileEndMessage &end)
   return result(FileResultCode::Ok);
 }
 
-FileReceiverResult FileReceiver::cancel(bool keepPartial)
+FileReceiverResult FileReceiver::cancel(PartialDisposition disposition)
 {
   if (m_snapshot.state == FileReceiverState::Completed) {
     return failure(FileReceiverError::InvalidState, QStringLiteral("a committed file cannot be cancelled"));
@@ -315,7 +315,7 @@ FileReceiverResult FileReceiver::cancel(bool keepPartial)
   if (m_partFile.isOpen()) {
     m_partFile.close();
   }
-  if (!keepPartial && !m_snapshot.partPath.isEmpty()) {
+  if (disposition == PartialDisposition::Remove && !m_snapshot.partPath.isEmpty()) {
     QFile::remove(m_snapshot.partPath);
   }
   m_snapshot.state = FileReceiverState::Cancelled;

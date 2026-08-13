@@ -127,7 +127,7 @@ public:
   [[nodiscard]] FileReceiverResult resume(const FileReceiveRequest &request, const ResumeState &state);
   [[nodiscard]] FileReceiverResult append(const FileChunkMessage &chunk, QByteArrayView payload);
   [[nodiscard]] FileReceiverResult finish(const FileEndMessage &end);
-  [[nodiscard]] FileReceiverResult cancel(bool keepPartial);
+  [[nodiscard]] FileReceiverResult cancel(PartialDisposition disposition);
   [[nodiscard]] DurableCheckpointResult
   checkpoint(const ResumeStore &store, ResumeState &state, QDateTime updatedUtc = QDateTime::currentDateTimeUtc());
 

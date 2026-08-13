@@ -105,7 +105,7 @@ bool IncomingOfferModel::acceptInternal(AcceptanceOrigin origin)
       {
           .destinationRoot = m_settings.destinationRoot,
           .conflictPolicy = ConflictPolicy::AutoRename,
-          .keepPartialOnFailure = true,
+          .failurePartialDisposition = ::relaydesk::transfer::PartialDisposition::Keep,
           .acceptanceOrigin = origin,
       }
   );

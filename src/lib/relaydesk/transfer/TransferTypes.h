@@ -123,20 +123,20 @@ enum class AcceptanceOrigin : quint8
   TrustedDevicePolicy = 1,
 };
 
-struct ReceiveOptions
-{
-  QString destinationRoot;
-  ConflictPolicy conflictPolicy = ConflictPolicy::AutoRename;
-  bool keepPartialOnFailure = true;
-  AcceptanceOrigin acceptanceOrigin = AcceptanceOrigin::UserDecision;
-
-  [[nodiscard]] bool operator==(const ReceiveOptions &) const = default;
-};
-
 enum class PartialDisposition : quint8
 {
   Keep = 0,
   Remove = 1,
+};
+
+struct ReceiveOptions
+{
+  QString destinationRoot;
+  ConflictPolicy conflictPolicy = ConflictPolicy::AutoRename;
+  PartialDisposition failurePartialDisposition = PartialDisposition::Keep;
+  AcceptanceOrigin acceptanceOrigin = AcceptanceOrigin::UserDecision;
+
+  [[nodiscard]] bool operator==(const ReceiveOptions &) const = default;
 };
 
 struct TransferCancelOptions

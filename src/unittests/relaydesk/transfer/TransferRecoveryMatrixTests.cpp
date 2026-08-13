@@ -536,14 +536,14 @@ void TransferRecoveryMatrixTests::pauseResumeStopsAndRestartsProduction()
 
 void TransferRecoveryMatrixTests::cancelPolicy_data()
 {
-  QTest::addColumn<bool>("keepPartial");
-  QTest::newRow("cancel-delete-partial") << false;
-  QTest::newRow("cancel-keep-partial") << true;
+  QTest::addColumn<PartialDisposition>("disposition");
+  QTest::newRow("cancel-delete-partial") << PartialDisposition::Remove;
+  QTest::newRow("cancel-keep-partial") << PartialDisposition::Keep;
 }
 
 void TransferRecoveryMatrixTests::cancelPolicy()
 {
-  QFETCH(bool, keepPartial);
+  QFETCH(PartialDisposition, disposition);
   QTemporaryDir temporary;
   QVERIFY(temporary.isValid());
   const QByteArray contents(2 * static_cast<qsizetype>(kTestChunkBytes), '\x55');
@@ -587,8 +587,9 @@ void TransferRecoveryMatrixTests::cancelPolicy()
   QVERIFY(QFileInfo::exists(partPath));
 
   QVERIFY(control.cancel().changed);
-  QVERIFY(receiver.cancel(keepPartial).ok());
+  QVERIFY(receiver.cancel(disposition).ok());
   QVERIFY(control.confirmCancelled().changed);
+  const bool keepPartial = disposition == PartialDisposition::Keep;
   if (!keepPartial) {
     QVERIFY(store.remove(transferId).ok());
   }
@@ -597,7 +598,7 @@ void TransferRecoveryMatrixTests::cancelPolicy()
   QCOMPARE(control.snapshot().state, TransferState::Cancelled);
   QCOMPARE(receiver.snapshot().state, FileReceiverState::Cancelled);
   QVERIFY(!control.cancel().changed);
-  QVERIFY(receiver.cancel(keepPartial).ok());
+  QVERIFY(receiver.cancel(disposition).ok());
 }
 
 void TransferRecoveryMatrixTests::unicodeFolderAndMultipleFilesRecover()
