@@ -18,6 +18,7 @@ class MacosPackagingContractTests(unittest.TestCase):
             "product/scripts/setup-macos.sh",
             "product/scripts/build-macos.sh",
             "product/scripts/package-macos.sh",
+            "deploy/mac/sanitize_bundle_rpaths.sh",
         ):
             mode = os.stat(ROOT / relative_path).st_mode
             self.assertTrue(mode & stat.S_IXUSR, f"{relative_path} must be executable")
@@ -82,11 +83,24 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("${RELAYDESK_MACOS_ICON_SOURCE}", gui)
         self.assertIn("@BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION@", plist)
         self.assertIn('-executable=\\${relaydesk_core}', deploy)
+        self.assertIn("sanitize_bundle_rpaths.sh", deploy)
         self.assertIn("<key>NSBonjourServices</key>", plist)
         self.assertIn("<string>_relaydesk._udp</string>", plist)
         self.assertIn(
             'nw_browse_descriptor_create_bonjour_service("_relaydesk._udp", nullptr)',
             permission_backend,
+        )
+
+    def test_rpath_sanitizer_removes_external_paths_before_final_signing(self) -> None:
+        script = (ROOT / "deploy/mac/sanitize_bundle_rpaths.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('install_name_tool -delete_rpath "$rpath"', script)
+        self.assertIn('codesign --force --deep --sign -', script)
+        self.assertLess(
+            script.index('install_name_tool -delete_rpath "$rpath"'),
+            script.index('codesign --force --deep --sign -'),
         )
 
     def test_package_readme_documents_retained_user_data(self) -> None:

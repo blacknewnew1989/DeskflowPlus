@@ -177,6 +177,57 @@ class MacosInstallRegressionTests(unittest.TestCase):
                 ):
                     MODULE.verify_bundle_linkage(app, mock.Mock())
 
+    def test_rejects_homebrew_runtime_rpath(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / "RelayDesk.app"
+            library = app / "Contents/Frameworks/libexample.dylib"
+            library.parent.mkdir(parents=True)
+            library.write_bytes(b"macho")
+            commands = [
+                subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout="Mach-O 64-bit dynamically linked shared library arm64\n",
+                    stderr="",
+                ),
+                subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout=f"{library}:\n@loader_path/libexample.dylib\n",
+                    stderr="",
+                ),
+                subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout=(
+                        f"{library}:\n"
+                        "\t@loader_path/libexample.dylib "
+                        "(compatibility version 1.0.0, current version 1.0.0)\n"
+                        "\t/usr/lib/libSystem.B.dylib "
+                        "(compatibility version 1.0.0, current version 1356.0.0)\n"
+                    ),
+                    stderr="",
+                ),
+                subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout=(
+                        "Load command 1\n"
+                        "          cmd LC_RPATH\n"
+                        "      cmdsize 64\n"
+                        "         path /opt/homebrew/Cellar/example/1.0/lib (offset 12)\n"
+                    ),
+                    stderr="",
+                ),
+            ]
+            with mock.patch.object(
+                MODULE, "nested_code_candidates", return_value=[library]
+            ), mock.patch.object(MODULE, "run_command", side_effect=commands):
+                with self.assertRaisesRegex(
+                    MODULE.RegressionError, "TEST005_EXTERNAL_RPATH"
+                ):
+                    MODULE.verify_bundle_linkage(app, mock.Mock())
+
     def test_test_root_must_be_unique_and_beneath_runner_temp(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -237,6 +288,7 @@ class MacosInstallRegressionTests(unittest.TestCase):
             '"/usr/bin/lipo", "-archs"',
             '"/usr/bin/xcrun", "vtool", "-show-build"',
             '"/usr/bin/otool", "-L"',
+            '"/usr/bin/otool", "-l"',
             'EXPECTED_MACOS_ARCHITECTURES = ["arm64"]',
             'EXPECTED_MACOS_MINIMUM_VERSION = "14.0"',
         ):

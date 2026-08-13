@@ -414,6 +414,25 @@ def verify_bundle_linkage(app: Path, log: IO[str]) -> int:
                 raise RegressionError(
                     f"TEST005_EXTERNAL_DEPENDENCY: {relative}: {dependency}"
                 )
+        load_commands = run_command(["/usr/bin/otool", "-l", candidate], log)
+        lines = load_commands.stdout.splitlines()
+        for index, raw_line in enumerate(lines):
+            if raw_line.strip() != "cmd LC_RPATH":
+                continue
+            for rpath_line in lines[index + 1 :]:
+                stripped = rpath_line.strip()
+                if stripped.startswith("Load command "):
+                    break
+                match = re.fullmatch(r"path (.+) \(offset [0-9]+\)", stripped)
+                if match is None:
+                    continue
+                rpath = match.group(1)
+                if not rpath.startswith(allowed_prefixes):
+                    relative = candidate.relative_to(app).as_posix()
+                    raise RegressionError(
+                        f"TEST005_EXTERNAL_RPATH: {relative}: {rpath}"
+                    )
+                break
     if macho_count == 0:
         raise RegressionError(f"TEST005_MACHO_PAYLOAD_MISSING: {app.name}")
     return macho_count
