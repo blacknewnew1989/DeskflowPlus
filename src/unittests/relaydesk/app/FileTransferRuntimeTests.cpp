@@ -11,7 +11,6 @@
 #include "relaydesk/transfer/ControlMessageCodec.h"
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
-#include "relaydesk/transfer/SessionMessageCodec.h"
 #include "relaydesk/trust/TlsIdentityAdapter.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
 #include "../TestTlsIdentity.h"
@@ -61,7 +60,6 @@ class FileTransferRuntimeTests final : public QObject
 private Q_SLOTS:
   void listenerLifecycleIsOwnedAndRestartable();
   void trustedPeersNegotiateIndependentFileChannel();
-  void routesPostCapabilityFramesAfterPinning();
   void outgoingSingleFileStreamsThroughWorkerPump();
   void invalidIdentityFailsWithoutPublishingAListener();
 };
@@ -178,76 +176,6 @@ void FileTransferRuntimeTests::trustedPeersNegotiateIndependentFileChannel()
   QVERIFY(negotiated.has_value());
   QVERIFY(negotiated->features.contains(QStringLiteral("file.v1")));
   QVERIFY(negotiated->features.contains(QStringLiteral("sha256")));
-}
-
-void FileTransferRuntimeTests::routesPostCapabilityFramesAfterPinning()
-{
-  using namespace ::relaydesk::transfer;
-
-  QTemporaryDir directory;
-  QVERIFY(directory.isValid());
-  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
-  const auto identity = TlsIdentityAdapter::inspect(identityPath);
-  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
-
-  const auto serverId = DeviceId::generate();
-  const auto clientId = DeviceId::generate();
-  model::DeviceHomeModel deviceModel;
-  DeviceDiscoveryRuntime discovery(
-      localDevice(serverId, identity.fingerprintSha256, QStringLiteral("Server")), deviceModel
-  );
-  TrustedDeviceStore serverTrust(directory.filePath(QStringLiteral("server-trust.json")));
-  TrustedDeviceStore clientTrust(directory.filePath(QStringLiteral("client-trust.json")));
-  QVERIFY(serverTrust.upsert(trustedDevice(clientId, identity.fingerprintSha256)));
-  QVERIFY(clientTrust.upsert(trustedDevice(serverId, identity.fingerprintSha256)));
-
-  FileTransferRuntimeOptions options;
-  options.listenAddress = QHostAddress::LocalHost;
-  FileTransferRuntime runtime(serverId, serverTrust, discovery, identityPath, options);
-  QString diagnostic;
-  QVERIFY2(runtime.start(&diagnostic), qPrintable(diagnostic));
-
-  bool ready = false;
-  std::optional<Frame> routed;
-  QStringList errors;
-  connect(&runtime, &FileTransferRuntime::peerReady, this, [&](DeviceId peer, const auto &) {
-    ready = peer == clientId;
-  });
-  connect(&runtime, &FileTransferRuntime::protocolFrameReceived, this, [&](DeviceId peer, Frame frame) {
-    if (peer == clientId) {
-      routed = std::move(frame);
-    }
-  });
-  connect(&runtime, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
-    errors.append(message);
-  });
-
-  FileTlsClient client(clientId, &clientTrust, identityPath);
-  bool capabilitiesSent = false;
-  connect(&client, &FileTlsClient::connectionCreated, this, [&](FileTlsConnection *connection) {
-    connect(connection, &FileTlsConnection::authenticated, this, [&, connection]() {
-      Frame capabilities{
-          .type = MessageType::Capabilities,
-          .metadata = CapabilityCodec::encode(options.localCapabilities),
-      };
-      capabilitiesSent = connection->sendFrame(capabilities, &diagnostic) == FileTlsError::None;
-    });
-  });
-  QCOMPARE(client.connectToHost(QHostAddress::LocalHost, runtime.listeningPort()), FileTlsError::None);
-  QTRY_VERIFY2_WITH_TIMEOUT(
-      ready && capabilitiesSent, qPrintable(errors.join(QStringLiteral("; "))), 5'000
-  );
-
-  const Frame heartbeat{
-      .type = MessageType::Heartbeat,
-      .flags = AckRequired,
-      .metadata = SessionMessageCodec::encodeHeartbeat(
-          MessageType::Heartbeat, HeartbeatMessage{.sequence = 1, .timestampMs = 1}
-      ),
-  };
-  QCOMPARE(client.connection()->sendFrame(heartbeat, &diagnostic), FileTlsError::None);
-  QTRY_VERIFY2_WITH_TIMEOUT(routed.has_value(), qPrintable(errors.join(QStringLiteral("; "))), 2'000);
-  QCOMPARE(*routed, heartbeat);
 }
 
 void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()

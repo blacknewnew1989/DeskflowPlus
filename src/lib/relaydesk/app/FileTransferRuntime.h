@@ -101,9 +101,6 @@ Q_SIGNALS:
       ::relaydesk::transfer::NegotiatedCapabilities capabilities
   );
   void peerDisconnected(deskflow::relaydesk::DeviceId peerDeviceId);
-  void protocolFrameReceived(
-      deskflow::relaydesk::DeviceId peerDeviceId, ::relaydesk::transfer::Frame frame
-  );
   void errorOccurred(
       deskflow::relaydesk::FileTransferRuntimeError error, deskflow::relaydesk::FileTlsError transportError,
       QString diagnostic
