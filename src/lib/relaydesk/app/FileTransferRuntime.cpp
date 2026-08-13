@@ -42,13 +42,8 @@ using ::relaydesk::transfer::SenderFrameSinkResult;
 using ::relaydesk::transfer::SenderFrameSinkStatus;
 using ::relaydesk::transfer::SenderPumpResult;
 using ::relaydesk::transfer::TransferFrameSink;
+using ::relaydesk::transfer::TransferErrorCode;
 using ::relaydesk::transfer::TransferSenderPump;
-
-constexpr int kManifestBuildFailed = 1001;
-constexpr int kOfferFailed = 1002;
-constexpr int kSenderFailed = 1003;
-constexpr int kPeerRejected = 1004;
-constexpr int kPeerFileFailed = 1005;
 
 quint64 frameMemoryBytes(const Frame &frame) noexcept
 {
@@ -905,18 +900,14 @@ void FileTransferRuntime::finishManifestPreparation(
     return;
   }
   if (!result.ok()) {
-    failOutgoing(
-        *session, kManifestBuildFailed, QStringLiteral("relaydesk.transfer.manifest_failed"), result.diagnostic
-    );
+    failOutgoing(*session, TransferErrorCode::ManifestBuildFailed, result.diagnostic);
     return;
   }
 
   session->manifest = std::move(*result.manifest);
   const auto plan = ManifestPageCodec::plan(*session->manifest);
   if (!plan.ok()) {
-    failOutgoing(
-        *session, kManifestBuildFailed, QStringLiteral("relaydesk.transfer.manifest_failed"), plan.diagnostic
-    );
+    failOutgoing(*session, TransferErrorCode::ManifestBuildFailed, plan.diagnostic);
     return;
   }
   session->pagePlan = *plan.plan;
@@ -926,10 +917,7 @@ void FileTransferRuntime::finishManifestPreparation(
   session->control = std::make_unique<TransferControlStateMachine>(session->snapshot);
   const auto initialized = session->control->initialize();
   if (!initialized.ok()) {
-    failOutgoing(
-        *session, kManifestBuildFailed, QStringLiteral("relaydesk.transfer.manifest_failed"),
-        initialized.diagnostic
-    );
+    failOutgoing(*session, TransferErrorCode::ManifestBuildFailed, initialized.diagnostic);
     return;
   }
   session->snapshot = session->control->snapshot();
@@ -937,9 +925,7 @@ void FileTransferRuntime::finishManifestPreparation(
 
   QString connectDiagnostic;
   if (!connectPeer(session->peer, &connectDiagnostic)) {
-    failOutgoing(
-        *session, kOfferFailed, QStringLiteral("relaydesk.transfer.peer_unavailable"), connectDiagnostic
-    );
+    failOutgoing(*session, TransferErrorCode::ConnectionLost, connectDiagnostic);
     return;
   }
   if (isPeerReady(session->peer)) {
@@ -985,7 +971,7 @@ void FileTransferRuntime::sendOffer(OutgoingSession &session)
   auto offerState = std::make_unique<TransferOfferStateMachine>(*negotiated);
   const auto begun = offerState->beginOutgoing(offer);
   if (!begun.ok()) {
-    failOutgoing(session, kOfferFailed, QStringLiteral("relaydesk.transfer.offer_failed"), begun.diagnostic);
+    failOutgoing(session, TransferErrorCode::OfferFailed, begun.diagnostic);
     return;
   }
   QString diagnostic;
@@ -997,14 +983,14 @@ void FileTransferRuntime::sendOffer(OutgoingSession &session)
       ),
   };
   if (frame.metadata.isEmpty() || !sendPeerFrame(session.peer, frame, &diagnostic)) {
-    failOutgoing(session, kOfferFailed, QStringLiteral("relaydesk.transfer.offer_failed"), diagnostic);
+    failOutgoing(session, TransferErrorCode::OfferFailed, diagnostic);
     return;
   }
   session.offerState = std::move(offerState);
   if (!session.control->advance(TransferState::Offered).ok() ||
       !session.control->advance(TransferState::WaitingForAcceptance).ok()) {
     failOutgoing(
-        session, kOfferFailed, QStringLiteral("relaydesk.transfer.offer_failed"),
+        session, TransferErrorCode::OfferFailed,
         QStringLiteral("Outgoing transfer state could not enter acceptance wait")
     );
     return;
@@ -1035,9 +1021,7 @@ void FileTransferRuntime::handleOfferResponse(const DeviceId &peerDeviceId, cons
     }
     const auto accepted = session->offerState->receiveAccept(*acceptance);
     if (!accepted.ok() || !session->control->advance(TransferState::Queued).ok()) {
-      failOutgoing(
-          *session, kOfferFailed, QStringLiteral("relaydesk.transfer.offer_failed"), accepted.diagnostic
-      );
+      failOutgoing(*session, TransferErrorCode::OfferFailed, accepted.diagnostic);
       return;
     }
     session->snapshot = session->control->snapshot();
@@ -1054,8 +1038,6 @@ void FileTransferRuntime::handleOfferResponse(const DeviceId &peerDeviceId, cons
     (void)session->offerState->receiveReject(*rejection);
     (void)session->control->advance(TransferState::Rejected);
     session->snapshot = session->control->snapshot();
-    session->snapshot.errorCode = kPeerRejected;
-    session->snapshot.errorMessageKey = QStringLiteral("relaydesk.transfer.rejected");
     Q_EMIT transferChanged(session->snapshot);
   }
 }
@@ -1079,9 +1061,7 @@ void FileTransferRuntime::sendNextManifestPage(const ::relaydesk::transfer::Tran
         ),
     };
     if (frame.metadata.isEmpty() || !sendPeerFrame(session->peer, frame, &diagnostic)) {
-      failOutgoing(
-          *session, kOfferFailed, QStringLiteral("relaydesk.transfer.manifest_send_failed"), diagnostic
-      );
+      failOutgoing(*session, TransferErrorCode::OfferFailed, diagnostic);
       return;
     }
     ++session->nextManifestPage;
@@ -1099,9 +1079,7 @@ void FileTransferRuntime::sendNextManifestPage(const ::relaydesk::transfer::Tran
       ),
   };
   if (complete.metadata.isEmpty() || !sendPeerFrame(session->peer, complete, &diagnostic)) {
-    failOutgoing(
-        *session, kOfferFailed, QStringLiteral("relaydesk.transfer.manifest_send_failed"), diagnostic
-    );
+    failOutgoing(*session, TransferErrorCode::OfferFailed, diagnostic);
     return;
   }
   startNextOutgoingFile(*session);
@@ -1131,8 +1109,7 @@ void FileTransferRuntime::startNextOutgoingFile(OutgoingSession &session)
   const auto capabilities = negotiatedCapabilities(session.peer);
   if (!capabilities.has_value()) {
     failOutgoing(
-        session, kSenderFailed, QStringLiteral("relaydesk.transfer.peer_disconnected"),
-        QStringLiteral("Peer file channel is no longer ready")
+        session, TransferErrorCode::ConnectionLost, QStringLiteral("Peer file channel is no longer ready")
     );
     return;
   }
@@ -1140,8 +1117,7 @@ void FileTransferRuntime::startNextOutgoingFile(OutgoingSession &session)
   auto *connection = m_peerConnections.value(session.peer, nullptr);
   if (connection == nullptr) {
     failOutgoing(
-        session, kSenderFailed, QStringLiteral("relaydesk.transfer.peer_disconnected"),
-        QStringLiteral("Peer file channel is no longer ready")
+        session, TransferErrorCode::ConnectionLost, QStringLiteral("Peer file channel is no longer ready")
     );
     return;
   }
@@ -1159,7 +1135,7 @@ void FileTransferRuntime::startNextOutgoingFile(OutgoingSession &session)
   if (session.control->snapshot().state == TransferState::Queued &&
       !session.control->advance(TransferState::Transferring).ok()) {
     failOutgoing(
-        session, kSenderFailed, QStringLiteral("relaydesk.transfer.sender_failed"),
+        session, TransferErrorCode::SenderFailed,
         QStringLiteral("Outgoing transfer could not enter the transferring state")
     );
     return;
@@ -1194,7 +1170,7 @@ void FileTransferRuntime::scheduleSenderPump(const ::relaydesk::transfer::Transf
   auto *connection = m_peerConnections.value(session->peer, nullptr);
   if (connection == nullptr || !isPeerReady(session->peer)) {
     failOutgoing(
-        *session, kSenderFailed, QStringLiteral("relaydesk.transfer.peer_disconnected"),
+        *session, TransferErrorCode::ConnectionLost,
         QStringLiteral("Peer file channel disconnected while sending")
     );
     return;
@@ -1209,16 +1185,12 @@ void FileTransferRuntime::scheduleSenderPump(const ::relaydesk::transfer::Transf
     const SenderFrameSinkResult submitted = sink.submit(*pendingFrame);
     if (submitted.status == SenderFrameSinkStatus::Backpressured) {
       if (queuedBeforeSubmit == 0) {
-        failOutgoing(
-            *session, kSenderFailed, QStringLiteral("relaydesk.transfer.sender_failed"), submitted.diagnostic
-        );
+        failOutgoing(*session, TransferErrorCode::SenderFailed, submitted.diagnostic);
       }
       return;
     }
     if (submitted.status != SenderFrameSinkStatus::Accepted) {
-      failOutgoing(
-          *session, kSenderFailed, QStringLiteral("relaydesk.transfer.sender_failed"), submitted.diagnostic
-      );
+      failOutgoing(*session, TransferErrorCode::SenderFailed, submitted.diagnostic);
       return;
     }
     session->sender->consumePendingFrame();
@@ -1264,9 +1236,7 @@ void FileTransferRuntime::dispatchSenderPumpResult(
     return;
   }
   if (result.status == SenderPumpStatus::Failed) {
-    failOutgoing(
-        *session, kSenderFailed, QStringLiteral("relaydesk.transfer.sender_failed"), result.diagnostic
-    );
+    failOutgoing(*session, TransferErrorCode::SenderFailed, result.diagnostic);
     return;
   }
   session->pendingStatus = result.status;
@@ -1301,9 +1271,7 @@ void FileTransferRuntime::handleFileResult(const DeviceId &peerDeviceId, const F
     return;
   }
   if (result->code != FileResultCode::Ok) {
-    failOutgoing(
-        *session, kPeerFileFailed, QStringLiteral("relaydesk.transfer.peer_file_failed"), result->diagnostic
-    );
+    failOutgoing(*session, TransferErrorCode::PeerFileFailed, result->diagnostic);
     return;
   }
 
@@ -1343,7 +1311,7 @@ void FileTransferRuntime::completeOutgoing(OutgoingSession &session)
       !session.control->advance(TransferState::Committing).ok() ||
       !session.control->advance(TransferState::Completed).ok()) {
     failOutgoing(
-        session, kSenderFailed, QStringLiteral("relaydesk.transfer.sender_failed"),
+        session, TransferErrorCode::SenderFailed,
         QStringLiteral("Outgoing transfer could not complete its state sequence")
     );
     return;
@@ -1353,7 +1321,7 @@ void FileTransferRuntime::completeOutgoing(OutgoingSession &session)
 }
 
 void FileTransferRuntime::failOutgoing(
-    OutgoingSession &session, int errorCode, QString errorMessageKey, QString diagnostic
+    OutgoingSession &session, TransferErrorCode errorCode, QString diagnostic
 )
 {
   using ::relaydesk::transfer::TransferControlStateMachine;
@@ -1361,12 +1329,11 @@ void FileTransferRuntime::failOutgoing(
 
   if (session.control != nullptr &&
       !TransferControlStateMachine::isTerminal(session.control->snapshot().state)) {
-    (void)session.control->fail(errorCode, errorMessageKey);
+    (void)session.control->fail(errorCode);
     session.snapshot = session.control->snapshot();
   } else if (!TransferControlStateMachine::isTerminal(session.snapshot.state)) {
     session.snapshot.state = TransferState::Failed;
     session.snapshot.errorCode = errorCode;
-    session.snapshot.errorMessageKey = std::move(errorMessageKey);
     session.snapshot.canCancel = false;
     session.snapshot.canRetry = true;
     session.snapshot.finishedUtc = QDateTime::currentDateTimeUtc();

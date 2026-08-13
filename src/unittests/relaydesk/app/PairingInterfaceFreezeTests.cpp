@@ -51,6 +51,16 @@ static_assert(std::same_as<decltype(&PairingWizardModel::bindService), BindMembe
 static_assert(std::is_constructible_v<PairingWizardModel, IPairingService &, QObject *>);
 static_assert(!std::is_constructible_v<PairingWizardModel, PairingStateMachine &, QObject *>);
 static_assert(std::is_copy_constructible_v<PairingOperationResult>);
+static_assert(std::same_as<std::underlying_type_t<PairingFailureReason>, quint32>);
+static_assert(static_cast<quint32>(PairingFailureReason::None) == 0);
+static_assert(static_cast<quint32>(PairingFailureReason::Cancelled) == 1);
+static_assert(static_cast<quint32>(PairingFailureReason::CodeMismatch) == 2);
+static_assert(static_cast<quint32>(PairingFailureReason::Expired) == 3);
+static_assert(static_cast<quint32>(PairingFailureReason::TooManyAttempts) == 4);
+static_assert(static_cast<quint32>(PairingFailureReason::TransportFailed) == 5);
+static_assert(static_cast<quint32>(PairingFailureReason::TrustStoreWriteFailed) == 6);
+static_assert(static_cast<quint32>(PairingFailureReason::CertificateChanged) == 7);
+static_assert(static_cast<quint32>(PairingFailureReason::DirectConnectionRequired) == 8);
 
 template <class T>
 concept ExposesTransportService = requires(T &value) { value.service(); };
@@ -80,6 +90,7 @@ void PairingInterfaceFreezeTests::pinsQtMetaObjectContract()
   QVERIFY(metaObject.indexOfSignal("pairingChanged(deskflow::relaydesk::PairingSnapshot)") >= 0);
   QVERIFY(metaObject.indexOfSignal("operationFailed(deskflow::relaydesk::PairingOperationResult)") >= 0);
   QVERIFY(QMetaType::fromType<DeviceId>().isValid());
+  QVERIFY(QMetaType::fromType<PairingFailureReason>().isValid());
   QVERIFY(QMetaType::fromType<PairingSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<PairingOperationResult>().isValid());
 }

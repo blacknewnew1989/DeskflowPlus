@@ -172,6 +172,8 @@ using TransferRemovedSignal = void (IFileTransferService::*)(TransferId);
 using TransferOperationSignal = void (IFileTransferService::*)(TransferOperationResult);
 using DiscoveryEndpointMethod = bool (DiscoveryService::*)(FileEndpointAnnouncement, QString *);
 using DiscoveryRuntimeEndpointMethod = bool (DeviceDiscoveryRuntime::*)(FileEndpointAnnouncement, QString *);
+using PairingIntent = void (widgets::DevicesDock::*)(DeviceId);
+using SnapshotPairingIntent = void (widgets::DevicesDock::*)(DeviceSnapshot);
 using SendItemsIntent = void (widgets::DevicesDock::*)(DeviceId, QList<QUrl>, SendOptions);
 using AcceptIntent = void (model::IncomingOfferModel::*)(TransferId, ReceiveOptions);
 using RejectIntent = void (model::IncomingOfferModel::*)(TransferId, RejectReason);
@@ -204,6 +206,8 @@ static_assert(std::is_same_v<decltype(&DiscoveryService::setFileEndpoint), Disco
 static_assert(
     std::is_same_v<decltype(&DeviceDiscoveryRuntime::setFileEndpoint), DiscoveryRuntimeEndpointMethod>
 );
+static_assert(std::is_same_v<decltype(&widgets::DevicesDock::pairingRequested), PairingIntent>);
+static_assert(!std::is_same_v<decltype(&widgets::DevicesDock::pairingRequested), SnapshotPairingIntent>);
 static_assert(std::is_same_v<decltype(&widgets::DevicesDock::sendItemsRequested), SendItemsIntent>);
 static_assert(std::is_same_v<decltype(&model::IncomingOfferModel::acceptRequested), AcceptIntent>);
 static_assert(std::is_same_v<decltype(&model::IncomingOfferModel::rejectRequested), RejectIntent>);
@@ -262,6 +266,19 @@ static_assert(static_cast<quint32>(TransferOperationError::UnknownTransfer) == 1
 static_assert(static_cast<quint32>(TransferOperationError::UnsupportedOperation) == 2);
 static_assert(static_cast<quint32>(TransferOperationError::InvalidState) == 3);
 static_assert(static_cast<quint32>(TransferOperationError::StartFailed) == 4);
+static_assert(std::is_same_v<std::underlying_type_t<TransferErrorCode>, quint32>);
+static_assert(static_cast<quint32>(TransferErrorCode::None) == 0);
+static_assert(static_cast<quint32>(TransferErrorCode::ManifestBuildFailed) == 1001);
+static_assert(static_cast<quint32>(TransferErrorCode::OfferFailed) == 1002);
+static_assert(static_cast<quint32>(TransferErrorCode::SenderFailed) == 1003);
+static_assert(static_cast<quint32>(TransferErrorCode::PeerRejected) == 1004);
+static_assert(static_cast<quint32>(TransferErrorCode::PeerFileFailed) == 1005);
+static_assert(static_cast<quint32>(TransferErrorCode::DiskFull) == 1006);
+static_assert(static_cast<quint32>(TransferErrorCode::UnsafePath) == 1007);
+static_assert(static_cast<quint32>(TransferErrorCode::SourceUnreadable) == 1008);
+static_assert(static_cast<quint32>(TransferErrorCode::ConnectionLost) == 1009);
+static_assert(static_cast<quint32>(TransferErrorCode::HashMismatch) == 1010);
+static_assert(static_cast<quint32>(TransferErrorCode::InternalError) == 1011);
 
 static_assert(std::is_copy_constructible_v<DeviceId>);
 static_assert(std::is_copy_constructible_v<DeviceInfo>);
@@ -331,6 +348,7 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaType::fromType<TransferOperationOutcome>().isValid());
   QVERIFY(QMetaType::fromType<TransferOperationError>().isValid());
   QVERIFY(QMetaType::fromType<TransferOperationResult>().isValid());
+  QVERIFY(QMetaType::fromType<TransferErrorCode>().isValid());
   QVERIFY(QMetaType::fromType<PermissionSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<FileEndpointAnnouncement>().isValid());
   QVERIFY(QMetaType::fromType<NegotiatedCapabilities>().isValid());
@@ -503,6 +521,7 @@ void SharedInterfaceFreezeTests::publicUiHeadersContainOnlyTypedBusinessIntents(
       QRegularExpression(QStringLiteral("\\bFrame\\b")),
       QRegularExpression(QStringLiteral("\\bTransferAccept\\b")),
       QRegularExpression(QStringLiteral("\\bTransferReject\\b")),
+      QRegularExpression(QStringLiteral("pairingRequested\\s*\\([^;]*\\bDeviceSnapshot\\b")),
   };
 
   for (const auto &relativePath : headers) {

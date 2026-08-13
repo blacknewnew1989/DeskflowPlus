@@ -48,23 +48,28 @@ QString statusText(HistoryStatus status)
   return i18n::translate(Text::TransferStateFailed);
 }
 
-QString safeErrorText(const QString &errorMessageKey)
+QString safeErrorText(TransferErrorCode errorCode)
 {
-  if (errorMessageKey.endsWith(QStringLiteral("disk_full")))
+  switch (errorCode) {
+  case TransferErrorCode::None:
+    return {};
+  case TransferErrorCode::DiskFull:
     return i18n::translate(Text::TransferErrorDiskFull);
-  if (errorMessageKey.endsWith(QStringLiteral("unsafe_path")) ||
-      errorMessageKey.endsWith(QStringLiteral("path_invalid"))) {
+  case TransferErrorCode::UnsafePath:
     return i18n::translate(Text::TransferErrorUnsafePath);
-  }
-  if (errorMessageKey.endsWith(QStringLiteral("unreadable")) ||
-      errorMessageKey.endsWith(QStringLiteral("source_changed"))) {
+  case TransferErrorCode::ManifestBuildFailed:
+  case TransferErrorCode::SourceUnreadable:
     return i18n::translate(Text::TransferErrorUnreadable);
-  }
-  if (errorMessageKey.endsWith(QStringLiteral("connection_lost")))
+  case TransferErrorCode::ConnectionLost:
     return i18n::translate(Text::TransferErrorConnectionLost);
-  if (errorMessageKey.endsWith(QStringLiteral("checksum_mismatch")) ||
-      errorMessageKey.endsWith(QStringLiteral("hash_mismatch"))) {
+  case TransferErrorCode::HashMismatch:
     return i18n::translate(Text::TransferErrorChecksumMismatch);
+  case TransferErrorCode::OfferFailed:
+  case TransferErrorCode::SenderFailed:
+  case TransferErrorCode::PeerRejected:
+  case TransferErrorCode::PeerFileFailed:
+  case TransferErrorCode::InternalError:
+    return i18n::translate(Text::TransferErrorUnknown);
   }
   return i18n::translate(Text::TransferErrorUnknown);
 }
@@ -217,7 +222,7 @@ void TransferHistoryDetailsDialog::updateText()
   const auto failed = m_record.status == HistoryStatus::Failed;
   m_errorCaption->setVisible(failed);
   m_errorValue->setVisible(failed);
-  m_errorValue->setText(failed ? safeErrorText(m_record.errorMessageKey) : QString());
+  m_errorValue->setText(failed ? safeErrorText(m_record.errorCode) : QString());
 
   const auto setAccessibleLabel = [](QLabel *value, const QLabel *caption) {
     value->setAccessibleName(caption->text());

@@ -192,9 +192,9 @@ void TransferOfferStateMachineTests::failIsTerminalUntilReset()
 {
   TransferOfferStateMachine machine(capabilities());
   QVERIFY(machine.receiveIncoming(offer()).ok());
-  QVERIFY(machine.fail(QStringLiteral("transfer.offer.failed")).ok());
+  QVERIFY(machine.fail(TransferErrorCode::OfferFailed).ok());
   QCOMPARE(machine.snapshot()->state, OfferState::Failed);
-  QCOMPARE(machine.fail(QStringLiteral("again")).error, OfferStateError::InvalidState);
+  QCOMPARE(machine.fail(TransferErrorCode::InternalError).error, OfferStateError::InvalidState);
   machine.reset();
   QVERIFY(!machine.snapshot().has_value());
   QVERIFY(machine.receiveIncoming(offer()).ok());

@@ -44,8 +44,7 @@ TransferSnapshot transferSnapshot(
           .bytesPerSecond = terminal ? 0.0 : 12.5,
       },
       .currentRelativeDisplayPath = terminal ? QString() : QStringLiteral("folder/file.bin"),
-      .errorMessageKey = state == TransferState::Failed ? QStringLiteral("relaydesk.transfer.io_error") : QString(),
-      .errorCode = state == TransferState::Failed ? 4008 : 0,
+      .errorCode = state == TransferState::Failed ? TransferErrorCode::SenderFailed : TransferErrorCode::None,
       .canPause = state == TransferState::Transferring,
       .canResume = state == TransferState::Paused || state == TransferState::Interrupted,
       .canCancel = !terminal,
@@ -68,8 +67,7 @@ TransferHistoryRecord historyRecord(const QString &id, HistoryStatus status = Hi
       .startedUtc = kBaseUtc.addSecs(-20),
       .finishedUtc = kBaseUtc.addSecs(-10),
       .status = status,
-      .errorCode = status == HistoryStatus::Failed ? 4008 : 0,
-      .errorMessageKey = status == HistoryStatus::Failed ? QStringLiteral("relaydesk.transfer.io_error") : QString(),
+      .errorCode = status == HistoryStatus::Failed ? TransferErrorCode::SenderFailed : TransferErrorCode::None,
   };
 }
 
@@ -240,7 +238,7 @@ void TransferCenterModelTests::emitsValidatedHistoryOpenAndRetryIntents()
   auto failed = historyRecord(
       QStringLiteral("22222222-2222-4222-8222-222222222222"), HistoryStatus::Failed
   );
-  failed.errorMessageKey = QStringLiteral("remote.private.backend_stacktrace");
+  failed.errorCode = TransferErrorCode::InternalError;
   const auto liveFailed = transferSnapshot(
       QStringLiteral("33333333-3333-4333-8333-333333333333"), TransferDirection::Sending,
       TransferState::Failed
@@ -312,7 +310,7 @@ void TransferCenterModelTests::mapsStateAndErrorsToSafeVisibleStrings()
       QStringLiteral("11111111-1111-4111-8111-111111111111"), TransferDirection::Receiving,
       TransferState::Failed
   );
-  failed.errorMessageKey = QStringLiteral("remote.secret.backend_stacktrace");
+  failed.errorCode = TransferErrorCode::InternalError;
   QVERIFY(model.upsertTransfer(failed));
   const auto index = model.index(0, 0);
   QCOMPARE(model.data(index, TransferCenterModel::StateTextRole).toString(), QStringLiteral("Failed"));
@@ -491,8 +489,7 @@ void TransferCenterModelTests::throttlesTerminalNotificationsWithoutDroppingThem
       QStringLiteral("22222222-2222-4222-8222-222222222222"), TransferDirection::Receiving,
       TransferState::Failed, 1
   );
-  second.errorMessageKey = QStringLiteral("remote.private.diagnostic");
-  second.errorCode = 4008;
+  second.errorCode = TransferErrorCode::InternalError;
   QVERIFY(model.upsertTransfer(second));
   QCOMPARE(notifications.count(), 1);
   now += 1999;

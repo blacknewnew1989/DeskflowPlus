@@ -54,7 +54,8 @@ DeviceSnapshot peerSnapshot(DevicePresence presence = DevicePresence::Discovered
 }
 
 PairingSnapshot pairingSnapshot(
-    DeviceSnapshot peer, PairingState state, QString sas = {}, QString errorMessageKey = {}
+    DeviceSnapshot peer, PairingState state, QString sas = {},
+    PairingFailureReason failureReason = PairingFailureReason::None
 )
 {
   peer.presence = DevicePresence::Pairing;
@@ -65,7 +66,7 @@ PairingSnapshot pairingSnapshot(
       .sixDigitSas = std::move(sas),
       .expiresAtUtc = QDateTime::currentDateTimeUtc().addSecs(60),
       .attemptsRemaining = 3,
-      .errorMessageKey = std::move(errorMessageKey),
+      .failureReason = failureReason,
   };
 }
 
@@ -108,7 +109,7 @@ class DevicesDockTests final : public QObject
 
 private Q_SLOTS:
   void rendersEmptyAndPairableDeviceStates();
-  void emitsImmutablePairingRequest();
+  void emitsTypedPairingIntent();
   void rendersAndDrivesSharedPairingModel();
   void confirmsAndCancelsFromPairingPanel();
   void rendersExpiredPairingState();
@@ -154,9 +155,9 @@ void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
   QCOMPARE(pair->text(), QStringLiteral("Pair again"));
 }
 
-void DevicesDockTests::emitsImmutablePairingRequest()
+void DevicesDockTests::emitsTypedPairingIntent()
 {
-  qRegisterMetaType<DeviceSnapshot>();
+  qRegisterMetaType<DeviceId>();
   Fixture fixture;
   const auto peer = peerSnapshot();
   fixture.devices.upsertRemoteDevice(peer);
@@ -172,12 +173,8 @@ void DevicesDockTests::emitsImmutablePairingRequest()
   QTest::mouseClick(pair, Qt::LeftButton);
   QCOMPARE(requested.count(), 1);
   const auto arguments = requested.takeFirst();
-  QCOMPARE(arguments.at(0).metaType(), QMetaType::fromType<DeviceSnapshot>());
-  const auto *emittedPeer = static_cast<const DeviceSnapshot *>(arguments.at(0).constData());
-  QVERIFY(emittedPeer != nullptr);
-  QCOMPARE(emittedPeer->id, peer.id);
-  QCOMPARE(emittedPeer->displayName, peer.displayName);
-  QCOMPARE(emittedPeer->presence, peer.presence);
+  QCOMPARE(arguments.at(0).metaType(), QMetaType::fromType<DeviceId>());
+  QCOMPARE(*static_cast<const DeviceId *>(arguments.at(0).constData()), peer.id);
   const auto storedPeer = fixture.devices.snapshot(peer.id);
   QVERIFY(storedPeer.has_value());
   QCOMPARE(storedPeer->id, peer.id);
@@ -268,7 +265,7 @@ void DevicesDockTests::rendersExpiredPairingState()
   QVERIFY(state != nullptr);
   QVERIFY(error != nullptr);
   snapshot.state = PairingState::Expired;
-  snapshot.errorMessageKey = QStringLiteral("pairing.code.expired");
+  snapshot.failureReason = PairingFailureReason::Expired;
   pairingService.publish(snapshot, fingerprint);
   QCOMPARE(state->text(), QStringLiteral("The pairing code expired. Generate a new code."));
   QCOMPARE(error->text(), QStringLiteral("The pairing code expired. Generate a new code."));

@@ -53,7 +53,7 @@ public:
     lastCancelledSession = sessionId;
     ++cancelCount;
     if (cancelResult.ok()) {
-      transition(sessionId, PairingState::Rejected, QStringLiteral("pairing.cancelled"));
+      transition(sessionId, PairingState::Rejected, PairingFailureReason::Cancelled);
     }
     return cancelResult;
   }
@@ -111,13 +111,16 @@ public:
   int revokeCount = 0;
 
 private:
-  void transition(const QUuid &sessionId, PairingState state, QString errorMessageKey = {})
+  void transition(
+      const QUuid &sessionId, PairingState state,
+      PairingFailureReason failureReason = PairingFailureReason::None
+  )
   {
     if (!currentSnapshot.has_value() || currentSnapshot->pairingSessionId != sessionId) {
       return;
     }
     currentSnapshot->state = state;
-    currentSnapshot->errorMessageKey = std::move(errorMessageKey);
+    currentSnapshot->failureReason = failureReason;
     Q_EMIT pairingChanged(*currentSnapshot);
   }
 };

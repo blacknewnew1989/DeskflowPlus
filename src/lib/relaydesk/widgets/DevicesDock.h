@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "relaydesk/device/DeviceSnapshot.h"
+#include "relaydesk/device/DeviceId.h"
 #include "relaydesk/transfer/TransferTypes.h"
 
 #include <QDockWidget>
@@ -59,7 +59,7 @@ public:
   void setIncomingOfferModel(model::IncomingOfferModel *incomingOffers);
 
 Q_SIGNALS:
-  void pairingRequested(DeviceSnapshot peer);
+  void pairingRequested(DeviceId peerDeviceId);
   void sendItemsRequested(
       DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options
   );

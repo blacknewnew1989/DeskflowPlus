@@ -178,13 +178,13 @@ OfferStateResult TransferOfferStateMachine::rejectIncoming(RejectReason reason, 
   return {};
 }
 
-OfferStateResult TransferOfferStateMachine::fail(QString errorMessageKey)
+OfferStateResult TransferOfferStateMachine::fail(TransferErrorCode errorCode)
 {
-  if (!m_snapshot.has_value() || isTerminal(m_snapshot->state) || errorMessageKey.trimmed().isEmpty()) {
+  if (!m_snapshot.has_value() || isTerminal(m_snapshot->state) || !isKnownTransferErrorCode(errorCode)) {
     return failure(OfferStateError::InvalidState, QStringLiteral("offer cannot transition to failed"));
   }
   m_snapshot->state = OfferState::Failed;
-  m_snapshot->errorMessageKey = std::move(errorMessageKey);
+  m_snapshot->errorCode = errorCode;
   return {};
 }
 

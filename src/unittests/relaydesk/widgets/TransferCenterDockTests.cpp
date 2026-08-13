@@ -58,10 +58,7 @@ TransferHistoryRecord historyRecord(
       .startedUtc = started,
       .finishedUtc = started.addSecs(75),
       .status = status,
-      .errorCode = status == HistoryStatus::Failed ? 4008 : 0,
-      .errorMessageKey = status == HistoryStatus::Failed
-                             ? QStringLiteral("remote.private.backend_stacktrace")
-                             : QString(),
+      .errorCode = status == HistoryStatus::Failed ? TransferErrorCode::InternalError : TransferErrorCode::None,
   };
 }
 

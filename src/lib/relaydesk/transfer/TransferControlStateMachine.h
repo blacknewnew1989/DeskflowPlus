@@ -5,6 +5,7 @@
 
 #include "relaydesk/device/DeviceId.h"
 #include "relaydesk/transfer/Protocol.h"
+#include "relaydesk/transfer/TransferError.h"
 
 #include <QDateTime>
 #include <QMetaType>
@@ -64,8 +65,7 @@ struct TransferSnapshot
   TransferState state = TransferState::Preparing;
   TransferProgress progress;
   QString currentRelativeDisplayPath;
-  QString errorMessageKey;
-  int errorCode = 0;
+  TransferErrorCode errorCode = TransferErrorCode::None;
   bool canPause = false;
   bool canResume = false;
   bool canCancel = false;
@@ -114,7 +114,7 @@ public:
   [[nodiscard]] TransferControlResult interrupt();
   [[nodiscard]] TransferControlResult cancel();
   [[nodiscard]] TransferControlResult confirmCancelled();
-  [[nodiscard]] TransferControlResult fail(int errorCode, QString errorMessageKey);
+  [[nodiscard]] TransferControlResult fail(TransferErrorCode errorCode);
   [[nodiscard]] TransferControlResult updateProgress(
       quint64 completedBytes, quint64 completedFiles, double bytesPerSecond,
       std::optional<std::chrono::seconds> estimatedRemaining = std::nullopt, QString currentRelativeDisplayPath = {}

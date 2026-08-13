@@ -28,8 +28,7 @@ TransferHistoryRecord record(const QString &id, int secondsAgo, HistoryStatus st
       .startedUtc = kNow.addSecs(-secondsAgo - 10),
       .finishedUtc = kNow.addSecs(-secondsAgo),
       .status = status,
-      .errorCode = failed ? 4008 : 0,
-      .errorMessageKey = failed ? QStringLiteral("relaydesk.transfer.io_error") : QString{},
+      .errorCode = failed ? TransferErrorCode::SenderFailed : TransferErrorCode::None,
   };
 }
 
@@ -48,12 +47,36 @@ class TransferHistoryStoreTests final : public QObject
 
 private Q_SLOTS:
   void roundTripsAndPagesNewestFirst();
+  void migratesLegacySchemaWithoutTrustingMessageKeys();
   void replacesDuplicateTransferAtomically();
   void prunesByAgeAndCount();
   void isolatesCorruptAndOversizedRows();
   void rejectsInvalidRecordsAndLimits();
   void boundsWholeFileAndClearsIdempotently();
 };
+
+void TransferHistoryStoreTests::migratesLegacySchemaWithoutTrustingMessageKeys()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const QString path = temporary.filePath(QStringLiteral("history.jsonl"));
+  const QByteArray legacy = QByteArrayLiteral(
+      R"({"schemaVersion":1,"transferId":"20000000-0000-4000-8000-000000000002","peerDeviceId":"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee","peerDisplayName":"Peer","displayName":"Legacy","direction":"send","fileCount":1,"totalBytes":8,"startedAtMs":1779999990000,"finishedAtMs":1780000000000,"status":"failed","errorCode":4008,"errorMessageKey":"remote.private.key"})"
+  );
+  appendBytes(path, legacy + '\n');
+  TransferHistoryStore store(path, {}, [] { return kNow; });
+  const auto page = store.page();
+  QVERIFY(page.ok());
+  QCOMPARE(page.page.records.size(), 1);
+  QCOMPARE(page.page.records.constFirst().errorCode, TransferErrorCode::InternalError);
+  QVERIFY(store.append(page.page.records.constFirst()).ok());
+  QFile rewritten(path);
+  QVERIFY(rewritten.open(QIODevice::ReadOnly));
+  const auto bytes = rewritten.readAll();
+  QVERIFY(bytes.contains("\"schemaVersion\":2"));
+  QVERIFY(!bytes.contains("errorMessageKey"));
+  QVERIFY(!bytes.contains("remote.private.key"));
+}
 
 void TransferHistoryStoreTests::roundTripsAndPagesNewestFirst()
 {
@@ -95,8 +118,7 @@ void TransferHistoryStoreTests::replacesDuplicateTransferAtomically()
   QVERIFY(store.append(original).ok());
   auto replacement = original;
   replacement.status = HistoryStatus::Failed;
-  replacement.errorCode = 4008;
-  replacement.errorMessageKey = QStringLiteral("relaydesk.transfer.io_error");
+  replacement.errorCode = TransferErrorCode::SenderFailed;
   replacement.finishedUtc = kNow;
   QVERIFY(store.append(replacement).ok());
 
@@ -172,7 +194,12 @@ void TransferHistoryStoreTests::rejectsInvalidRecordsAndLimits()
   QCOMPARE(store.append(invalid).error, TransferHistoryError::InvalidRecord);
   invalid = record(QStringLiteral("10000000-0000-4000-8000-000000000001"), 10);
   invalid.status = HistoryStatus::Completed;
-  invalid.errorCode = 1;
+  invalid.errorCode = TransferErrorCode::SenderFailed;
+  QCOMPARE(store.append(invalid).error, TransferHistoryError::InvalidRecord);
+  invalid = record(
+      QStringLiteral("10000000-0000-4000-8000-000000000001"), 10, HistoryStatus::Failed
+  );
+  invalid.errorCode = static_cast<TransferErrorCode>(999);
   QCOMPARE(store.append(invalid).error, TransferHistoryError::InvalidRecord);
 
   TransferHistoryLimits invalidLimits;

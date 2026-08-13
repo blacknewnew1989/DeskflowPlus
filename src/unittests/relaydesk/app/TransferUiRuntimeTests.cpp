@@ -72,8 +72,7 @@ TransferSnapshot transferSnapshot(const QString &id, TransferState state)
               .totalFiles = 1,
               .bytesPerSecond = terminal ? 0.0 : 25.0,
           },
-      .errorMessageKey = state == TransferState::Failed ? QStringLiteral("relaydesk.transfer.io_error") : QString(),
-      .errorCode = state == TransferState::Failed ? 4008 : 0,
+      .errorCode = state == TransferState::Failed ? TransferErrorCode::SenderFailed : TransferErrorCode::None,
       .canPause = state == TransferState::Transferring,
       .canResume = state == TransferState::Paused,
       .canCancel = !terminal,
@@ -99,8 +98,7 @@ TransferHistoryRecord historyRecord(
       .startedUtc = kBaseUtc,
       .finishedUtc = kBaseUtc.addSecs(10),
       .status = status,
-      .errorCode = status == HistoryStatus::Failed ? 4008 : 0,
-      .errorMessageKey = status == HistoryStatus::Failed ? QStringLiteral("relaydesk.transfer.io_error") : QString(),
+      .errorCode = status == HistoryStatus::Failed ? TransferErrorCode::SenderFailed : TransferErrorCode::None,
   };
 }
 
