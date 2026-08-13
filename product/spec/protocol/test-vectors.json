@@ -100,6 +100,50 @@
     },
     {
       "kind": "frame-positive",
+      "name": "transfer-complete-two-completed-one-skipped",
+      "headerHex": "5244465400010303000000050000001d00000000000000000000000000000000",
+      "metadataHex": "a401501111111122224333844455555555555502020301041a00100003",
+      "payloadHex": "",
+      "expected": {
+        "version": 1,
+        "messageType": 771,
+        "flags": 5,
+        "metadataLength": 29,
+        "payloadLength": 0,
+        "streamId": 0
+      }
+    },
+    {
+      "kind": "frame-positive",
+      "name": "transfer-result-ok",
+      "headerHex": "5244465400010304000000060000001500000000000000000000000000000000",
+      "metadataHex": "a20150111111112222433384445555555555550200",
+      "payloadHex": "",
+      "expected": {
+        "version": 1,
+        "messageType": 772,
+        "flags": 6,
+        "metadataLength": 21,
+        "payloadLength": 0,
+        "streamId": 0
+      }
+    },
+    {
+      "kind": "metadata-negative",
+      "name": "transfer-complete-negative-file-count",
+      "metadataHex": "a4015011111111222243338444555555555555022003010409",
+      "messageType": 771,
+      "expectedCodecError": "InvalidFileCount"
+    },
+    {
+      "kind": "metadata-negative",
+      "name": "transfer-result-ok-with-diagnostic",
+      "metadataHex": "a30150111111112222433384445555555555550200036473746f70",
+      "messageType": 772,
+      "expectedCodecError": "InvalidDiagnostic"
+    },
+    {
+      "kind": "frame-positive",
       "name": "file-chunk-three-bytes-no-metadata",
       "headerHex": "524446540001020100000001000000000000000000000003000000000000002a",
       "metadataHex": "",

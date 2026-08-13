@@ -139,15 +139,22 @@ transfer-cancel = {
 
 transfer-complete = {
   1: transfer-id,
-  2: uint,                 ; completed files
-  3: uint,                 ; skipped files
-  4: uint                  ; total bytes
+  2: 0..100000,            ; completed files
+  3: 0..100000,            ; skipped files; sum with key 2 <= 100000
+  4: 0..9223372036854775807 ; committed bytes for completed files
 }
 
-transfer-result = {
+transfer-result = transfer-result-ok / transfer-result-error
+
+transfer-result-ok = {
   1: transfer-id,
-  2: uint,
-  ? 3: tstr
+  2: 0
+}
+
+transfer-result-error = {
+  1: transfer-id,
+  2: 1..3,                 ; Partial, Cancelled, Failed
+  3: tstr .size (1..512)
 }
 
 resume-query = {

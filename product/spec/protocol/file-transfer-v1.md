@@ -114,6 +114,27 @@ that contradict the current or terminal transfer state return a stable transfer
 state error. Reconnect offsets are negotiated only by
 `RESUME_QUERY`/`RESUME_RESPONSE`; `TRANSFER_RESUME` never carries an offset.
 
+### Transfer completion
+
+`TRANSFER_COMPLETE` contains exactly `{1: transferId, 2: completedFiles,
+3: skippedFiles, 4: totalBytes}`. File counts are each in `0..100000`, their
+sum is at most 100000, and total bytes is in `0..2^63-1`. It uses
+`streamId=0`, empty payload, and exactly `AckRequired | Final`.
+
+`TRANSFER_RESULT` contains `{1: transferId, 2: code}` for `Ok=0`, or exactly
+`{1: transferId, 2: code, 3: diagnostic}` for `Partial=1`, `Cancelled=2`, or
+`Failed=3`. A failure diagnostic is 1..512 UTF-8 bytes. It uses `streamId=0`,
+empty payload, and exactly `Response | Final`.
+
+The sender emits complete only after every file has a terminal `FILE_RESULT`
+and no data frame remains queued. The receiver compares its committed counts
+and bytes with the offer/manifest before returning `Ok`; skipped files produce
+`Partial`, not `Ok`. An exact duplicate complete/result is idempotent and
+replays the cached response. A contradictory duplicate, a terminal message
+before all files finish, or any new command after a terminal result is a stable
+transfer-state error. `TRANSFER_COMPLETE` means sender-side exhaustion;
+`TRANSFER_RESULT(Ok)` is the authoritative receiver commit confirmation.
+
 ## IDs
 
 - UUID fields are 16-byte CBOR byte strings.
