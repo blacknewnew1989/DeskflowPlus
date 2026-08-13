@@ -286,6 +286,10 @@ IncomingFileReceiverWorker::finish(const ::relaydesk::transfer::FileEndMessage &
     m_target.reset();
   }
   if (!commit.ok()) {
+    if (m_conflictRequest.policy == ConflictPolicy::Skip &&
+        commit.error == FileSafetyError::DestinationExists) {
+      (void)QFile::remove(m_receiver.m_snapshot.partPath);
+    }
     const auto receiverError = commit.error == FileSafetyError::DestinationExists
                                    ? FileReceiverError::TargetExists
                                    : commit.error == FileSafetyError::LinkTraversalDetected ||

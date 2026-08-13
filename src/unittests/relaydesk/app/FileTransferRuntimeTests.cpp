@@ -63,6 +63,8 @@ private Q_SLOTS:
   void trustedPeersNegotiateIndependentFileChannel();
   void outgoingSingleFileStreamsThroughWorkerPump();
   void incomingSingleFileCommitsThroughPlatformReceiver();
+  void incomingConflictPolicies_data();
+  void incomingConflictPolicies();
   void interruptedIncomingFileResumesFromDurableCheckpoint();
   void incomingFolderCommitsEveryFileAndPreservesEmptyDirectories();
   void runtimeSourceUsesCanonicalSenderBoundary();
@@ -498,6 +500,128 @@ void FileTransferRuntimeTests::incomingSingleFileCommitsThroughPlatformReceiver(
   QVERIFY(sender.activeTransfers().isEmpty());
   QVERIFY(receiver.activeTransfers().isEmpty());
   QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
+}
+
+void FileTransferRuntimeTests::incomingConflictPolicies_data()
+{
+  using ::relaydesk::transfer::ConflictPolicy;
+
+  QTest::addColumn<ConflictPolicy>("policy");
+  QTest::addColumn<QString>("committedName");
+  QTest::addColumn<bool>("originalReplaced");
+  QTest::newRow("auto-rename") << ConflictPolicy::AutoRename << QStringLiteral("conflict (1).bin") << false;
+  QTest::newRow("overwrite") << ConflictPolicy::Overwrite << QStringLiteral("conflict.bin") << true;
+  QTest::newRow("skip") << ConflictPolicy::Skip << QString{} << false;
+  QTest::newRow("ask-user-accept") << ConflictPolicy::Ask << QStringLiteral("conflict (1).bin") << false;
+}
+
+void FileTransferRuntimeTests::incomingConflictPolicies()
+{
+  using namespace ::relaydesk::transfer;
+
+  QFETCH(ConflictPolicy, policy);
+  QFETCH(QString, committedName);
+  QFETCH(bool, originalReplaced);
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  const QByteArray sourceBytes(256 * 1024 + 31, '\x73');
+  const QByteArray originalBytes = QByteArrayLiteral("preserve-original");
+  const auto sourcePath = directory.filePath(QStringLiteral("conflict.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+  source.close();
+  const auto receiveRoot = directory.filePath(QStringLiteral("conflict-received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+  QFile original(QDir(receiveRoot).filePath(QStringLiteral("conflict.bin")));
+  QVERIFY(original.open(QIODevice::WriteOnly));
+  QCOMPARE(original.write(originalBytes), qint64(originalBytes.size()));
+  original.close();
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("conflict-sender-trust.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("conflict-receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  model::DeviceHomeModel senderModel;
+  model::DeviceHomeModel receiverModel;
+  DeviceDiscoveryRuntime senderDiscovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Conflict sender")), senderModel
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Conflict receiver")), receiverModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  QStringList errors;
+  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("sender: ") + message);
+  });
+  connect(&receiver, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("receiver: ") + message);
+  });
+  connect(&receiver, &IFileTransferService::incomingOffer, this, [&](const IncomingOffer &offer) {
+    receiver.accept(
+        offer.offer.transferId, {.destinationRoot = receiveRoot, .conflictPolicy = policy}
+    );
+  });
+  std::optional<TransferSnapshot> senderLatest;
+  std::optional<TransferSnapshot> receiverLatest;
+  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Sending) {
+      senderLatest = snapshot;
+    }
+  });
+  connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Receiving) {
+      receiverLatest = snapshot;
+    }
+  });
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+  const auto started = sender.send(
+      receiverId, {QUrl::fromLocalFile(sourcePath)}, {.conflictPolicy = policy}
+  );
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+  QElapsedTimer wait;
+  wait.start();
+  while (wait.elapsed() < 15'000 &&
+         (!senderLatest.has_value() || senderLatest->state != TransferState::Completed ||
+          !receiverLatest.has_value() || receiverLatest->state != TransferState::Completed)) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+  }
+  const auto evidence = QStringLiteral("policy=%1 errors=[%2] sender=%3 receiver=%4")
+                            .arg(static_cast<int>(policy))
+                            .arg(errors.join(QStringLiteral("; ")))
+                            .arg(senderLatest.has_value() ? static_cast<int>(senderLatest->state) : -1)
+                            .arg(receiverLatest.has_value() ? static_cast<int>(receiverLatest->state) : -1);
+  QVERIFY2(senderLatest.has_value() && senderLatest->state == TransferState::Completed, qPrintable(evidence));
+  QVERIFY2(receiverLatest.has_value() && receiverLatest->state == TransferState::Completed, qPrintable(evidence));
+  QFile preserved(QDir(receiveRoot).filePath(QStringLiteral("conflict.bin")));
+  QVERIFY(preserved.open(QIODevice::ReadOnly));
+  QCOMPARE(preserved.readAll(), originalReplaced ? sourceBytes : originalBytes);
+  if (!committedName.isEmpty() && committedName != QStringLiteral("conflict.bin")) {
+    QFile committed(QDir(receiveRoot).filePath(committedName));
+    QVERIFY2(committed.open(QIODevice::ReadOnly), qPrintable(committed.errorString()));
+    QCOMPARE(committed.readAll(), sourceBytes);
+  }
+  if (policy == ConflictPolicy::Skip) {
+    QVERIFY(!QFileInfo::exists(QDir(receiveRoot).filePath(QStringLiteral("conflict (1).bin"))));
+  }
+  QCOMPARE(receiverLatest->progress.completedFiles, quint64{1});
+  QCOMPARE(receiverLatest->progress.completedBytes, static_cast<quint64>(sourceBytes.size()));
+  QVERIFY2(errors.isEmpty(), qPrintable(evidence));
 }
 
 void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoint()
