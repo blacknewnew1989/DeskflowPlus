@@ -129,7 +129,8 @@ OfferStateResult TransferOfferStateMachine::receiveReject(const TransferReject &
 }
 
 OfferStateResult TransferOfferStateMachine::acceptIncoming(
-    ConflictPolicy effectivePolicy, QString logicalDestination, quint64 freeBytes, bool autoAccepted
+    ConflictPolicy effectivePolicy, QString logicalDestination, quint64 freeBytes,
+    AcceptanceOrigin origin
 )
 {
   if (!m_snapshot.has_value() || m_snapshot->direction != OfferDirection::Incoming ||
@@ -153,7 +154,7 @@ OfferStateResult TransferOfferStateMachine::acceptIncoming(
       .effectiveConflictPolicy = effectivePolicy,
       .logicalDestination = std::move(logicalDestination),
       .freeBytes = freeBytes,
-      .autoAccepted = autoAccepted,
+      .autoAccepted = origin == AcceptanceOrigin::TrustedDevicePolicy,
   };
   m_snapshot->state = OfferState::Accepted;
   return {};
