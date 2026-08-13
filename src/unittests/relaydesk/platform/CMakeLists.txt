@@ -9,6 +9,13 @@ create_test(
 )
 
 create_test(
+  NAME RelayDeskPlatformFileSafetyContractTests
+  DEPENDS relaydesk_platform_contract
+  SOURCE PlatformFileSafetyContractTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/platform"
+)
+
+create_test(
   NAME RelayDeskMacPermissionProbeTests
   DEPENDS relaydesk_macos_permissions
   SOURCE MacPermissionProbeTests.cpp
