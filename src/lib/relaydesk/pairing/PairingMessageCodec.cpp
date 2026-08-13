@@ -13,6 +13,7 @@
 #include <QSet>
 #include <QTimeZone>
 
+#include <limits>
 #include <utility>
 
 namespace deskflow::relaydesk {
@@ -31,11 +32,12 @@ enum PayloadKey : qint64
   SessionIdKey = 1,
   SenderKey = 2,
   ValueKey = 3,
+  DiagnosticKey = 4,
 };
 
 const auto kSixDigitPattern = QRegularExpression(QStringLiteral("^[0-9]{6}$"));
 constexpr qsizetype kSha256Bytes = 32;
-constexpr qsizetype kMaximumErrorKeyBytes = 256;
+constexpr qsizetype kMaximumDiagnosticBytes = 512;
 
 QCborValue key(qint64 value)
 {
@@ -174,18 +176,27 @@ QByteArray PairingMessageCodec::encode(const PairingMessage &message, QString *e
           payload.insert(key(ValueKey), typedMessage.sixDigitSas);
           return true;
         } else {
-          if (typedMessage.accepted && !typedMessage.errorMessageKey.isEmpty()) {
-            setError(errorMessage, QStringLiteral("accepted pairing result cannot contain an error"));
+          if (!isKnownPairingFailureReason(typedMessage.failureReason)) {
+            setError(errorMessage, QStringLiteral("pairing result failure reason is unknown"));
             return false;
           }
-          if (!typedMessage.accepted && (typedMessage.errorMessageKey.isEmpty() ||
-                                         typedMessage.errorMessageKey.toUtf8().size() > kMaximumErrorKeyBytes)) {
-            setError(errorMessage, QStringLiteral("rejected pairing result requires a bounded error key"));
+          const bool successful = typedMessage.failureReason == PairingFailureReason::None;
+          if (typedMessage.accepted != successful) {
+            setError(errorMessage, QStringLiteral("pairing result acceptance and failure reason disagree"));
+            return false;
+          }
+          if (typedMessage.accepted && !typedMessage.diagnostic.isEmpty()) {
+            setError(errorMessage, QStringLiteral("accepted pairing result cannot contain a diagnostic"));
+            return false;
+          }
+          if (typedMessage.diagnostic.toUtf8().size() > kMaximumDiagnosticBytes) {
+            setError(errorMessage, QStringLiteral("pairing result diagnostic exceeds the local limit"));
             return false;
           }
           payload.insert(key(SenderKey), typedMessage.accepted);
-          if (!typedMessage.accepted) {
-            payload.insert(key(ValueKey), typedMessage.errorMessageKey);
+          payload.insert(key(ValueKey), static_cast<qint64>(typedMessage.failureReason));
+          if (!typedMessage.diagnostic.isEmpty()) {
+            payload.insert(key(DiagnosticKey), typedMessage.diagnostic);
           }
           return true;
         }
@@ -294,31 +305,42 @@ PairingMessageDecodeResult PairingMessageCodec::decode(QByteArrayView bytes)
     return {.message = PairingMessage(PairingCodeSubmission{*sessionId, *sender, sas.toString()})};
   }
 
-  if (payload.size() != 2 && payload.size() != 3) {
+  if (payload.size() != 3 && payload.size() != 4) {
     return failure(PairingMessageError::InvalidPayload, QStringLiteral("pairing result fields are invalid"));
   }
   const auto accepted = valueFor(payload, SenderKey);
   if (!accepted.isBool()) {
     return failure(PairingMessageError::InvalidResult, QStringLiteral("pairing result acceptance must be boolean"));
   }
-  QString errorMessageKey;
-  if (accepted.toBool()) {
-    if (!hasOnlyKeys(payload, {SessionIdKey, SenderKey}, 2)) {
-      return failure(
-          PairingMessageError::InvalidResult, QStringLiteral("accepted pairing result contains extra fields")
-      );
-    }
-  } else {
-    if (!hasOnlyKeys(payload, {SessionIdKey, SenderKey, ValueKey}, 3)) {
-      return failure(PairingMessageError::InvalidResult, QStringLiteral("rejected pairing result is missing an error"));
-    }
-    const auto error = valueFor(payload, ValueKey);
-    if (!error.isString() || error.toString().isEmpty() || error.toString().toUtf8().size() > kMaximumErrorKeyBytes) {
-      return failure(PairingMessageError::InvalidResult, QStringLiteral("pairing result error key is invalid"));
-    }
-    errorMessageKey = error.toString();
+  if (!hasOnlyKeys(payload, {SessionIdKey, SenderKey, ValueKey}, 3) &&
+      !hasOnlyKeys(payload, {SessionIdKey, SenderKey, ValueKey, DiagnosticKey}, 4)) {
+    return failure(PairingMessageError::InvalidResult, QStringLiteral("pairing result fields are invalid"));
   }
-  return {.message = PairingMessage(PairingResultMessage{*sessionId, accepted.toBool(), errorMessageKey})};
+  const auto encodedReason = valueFor(payload, ValueKey);
+  if (!encodedReason.isInteger() || encodedReason.toInteger() < 0 ||
+      encodedReason.toInteger() > std::numeric_limits<quint32>::max()) {
+    return failure(PairingMessageError::InvalidResult, QStringLiteral("pairing result failure reason is invalid"));
+  }
+  const auto reason = static_cast<PairingFailureReason>(encodedReason.toInteger());
+  if (!isKnownPairingFailureReason(reason) ||
+      accepted.toBool() != (reason == PairingFailureReason::None)) {
+    return failure(
+        PairingMessageError::InvalidResult,
+        QStringLiteral("pairing result acceptance and failure reason are inconsistent")
+    );
+  }
+  QString diagnostic;
+  if (payload.contains(key(DiagnosticKey))) {
+    const auto encodedDiagnostic = valueFor(payload, DiagnosticKey);
+    if (!encodedDiagnostic.isString() || encodedDiagnostic.toString().isEmpty() ||
+        encodedDiagnostic.toString().toUtf8().size() > kMaximumDiagnosticBytes || accepted.toBool()) {
+      return failure(PairingMessageError::InvalidResult, QStringLiteral("pairing result diagnostic is invalid"));
+    }
+    diagnostic = encodedDiagnostic.toString();
+  }
+  return {
+      .message = PairingMessage(PairingResultMessage{*sessionId, accepted.toBool(), reason, diagnostic})
+  };
 }
 
 } // namespace deskflow::relaydesk

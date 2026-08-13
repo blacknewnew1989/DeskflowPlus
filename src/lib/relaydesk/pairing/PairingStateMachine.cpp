@@ -155,7 +155,7 @@ PairingActionResult PairingStateMachine::submitDisplayedSas(const QUuid &session
     --m_snapshot->attemptsRemaining;
     if (m_snapshot->attemptsRemaining == 0) {
       m_snapshot->state = PairingState::Rejected;
-      m_snapshot->errorMessageKey = QStringLiteral("pairing.too_many_attempts");
+      m_snapshot->failureReason = PairingFailureReason::TooManyAttempts;
       publish();
       return failure(PairingError::AttemptsExhausted, QStringLiteral("pairing code attempts were exhausted"));
     }
@@ -175,29 +175,37 @@ PairingActionResult PairingStateMachine::complete(const QUuid &sessionId)
 
 PairingActionResult PairingStateMachine::cancel(const QUuid &sessionId)
 {
-  const auto prepared = prepareAction(sessionId);
-  if (!prepared.ok()) {
-    return prepared;
-  }
-  if (isTerminal(m_snapshot->state)) {
-    return failure(PairingError::InvalidState, QStringLiteral("terminal pairing state cannot be cancelled"));
-  }
-  m_snapshot->state = PairingState::Rejected;
-  publish();
-  return {};
+  return reject(sessionId, PairingFailureReason::Cancelled);
 }
 
-PairingActionResult PairingStateMachine::fail(const QUuid &sessionId, QString errorMessageKey)
+PairingActionResult PairingStateMachine::reject(const QUuid &sessionId, PairingFailureReason reason)
 {
   const auto prepared = prepareAction(sessionId);
   if (!prepared.ok()) {
     return prepared;
   }
-  if (isTerminal(m_snapshot->state) || errorMessageKey.trimmed().isEmpty()) {
+  if (isTerminal(m_snapshot->state) || reason == PairingFailureReason::None ||
+      !isKnownPairingFailureReason(reason)) {
+    return failure(PairingError::InvalidState, QStringLiteral("pairing rejection transition is invalid"));
+  }
+  m_snapshot->state = PairingState::Rejected;
+  m_snapshot->failureReason = reason;
+  publish();
+  return {};
+}
+
+PairingActionResult PairingStateMachine::fail(const QUuid &sessionId, PairingFailureReason reason)
+{
+  const auto prepared = prepareAction(sessionId);
+  if (!prepared.ok()) {
+    return prepared;
+  }
+  if (isTerminal(m_snapshot->state) || reason == PairingFailureReason::None ||
+      !isKnownPairingFailureReason(reason)) {
     return failure(PairingError::InvalidState, QStringLiteral("pairing failure transition is invalid"));
   }
   m_snapshot->state = PairingState::Failed;
-  m_snapshot->errorMessageKey = std::move(errorMessageKey);
+  m_snapshot->failureReason = reason;
   publish();
   return {};
 }
@@ -208,7 +216,7 @@ bool PairingStateMachine::expireIfNeeded()
     return false;
   }
   m_snapshot->state = PairingState::Expired;
-  m_snapshot->errorMessageKey = QStringLiteral("pairing.code.expired");
+  m_snapshot->failureReason = PairingFailureReason::Expired;
   publish();
   return true;
 }

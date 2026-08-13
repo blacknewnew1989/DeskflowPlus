@@ -3,6 +3,7 @@
 
 add_library(relaydesk_pairing STATIC
   IPairingService.h
+  PairingFailureReason.h
   PairingManager.cpp
   PairingManager.h
   PairingMessageCodec.cpp

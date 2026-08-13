@@ -87,7 +87,7 @@ PairingTrustCommitResult PairingTrustCommitter::commit(
     if (!rollbackResult.ok) {
       combined += QStringLiteral("; rollback failed: %1").arg(rollbackResult.diagnostic);
     }
-    const auto failed = stateMachine.fail(sessionId, QStringLiteral("pairing.trust_store_write_failed"));
+    const auto failed = stateMachine.fail(sessionId, PairingFailureReason::TrustStoreWriteFailed);
     if (!failed.ok()) {
       combined += QStringLiteral("; state transition failed: %1").arg(failed.diagnostic);
     }

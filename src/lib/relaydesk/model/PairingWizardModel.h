@@ -84,7 +84,7 @@ private Q_SLOTS:
 private:
   [[nodiscard]] static QString displayName(const DeviceSnapshot &peer);
   [[nodiscard]] static QString formatFingerprint(const QByteArray &fingerprint, bool shortened);
-  [[nodiscard]] static QString translatedMessageKey(const QString &messageKey);
+  [[nodiscard]] static QString failureText(PairingFailureReason reason);
   [[nodiscard]] static bool isTerminal(PairingState state);
   [[nodiscard]] static QString stateText(PairingState state);
   [[nodiscard]] static QString actionErrorText(PairingError error);

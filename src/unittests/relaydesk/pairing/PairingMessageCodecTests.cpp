@@ -11,9 +11,22 @@
 #include <QTest>
 #include <QTimeZone>
 
+#include <type_traits>
+
 using namespace deskflow::relaydesk;
 
 namespace {
+
+static_assert(std::is_same_v<std::underlying_type_t<PairingFailureReason>, quint32>);
+static_assert(static_cast<quint32>(PairingFailureReason::None) == 0);
+static_assert(static_cast<quint32>(PairingFailureReason::Cancelled) == 1);
+static_assert(static_cast<quint32>(PairingFailureReason::CodeMismatch) == 2);
+static_assert(static_cast<quint32>(PairingFailureReason::Expired) == 3);
+static_assert(static_cast<quint32>(PairingFailureReason::TooManyAttempts) == 4);
+static_assert(static_cast<quint32>(PairingFailureReason::TransportFailed) == 5);
+static_assert(static_cast<quint32>(PairingFailureReason::TrustStoreWriteFailed) == 6);
+static_assert(static_cast<quint32>(PairingFailureReason::CertificateChanged) == 7);
+static_assert(static_cast<quint32>(PairingFailureReason::DirectConnectionRequired) == 8);
 
 DeviceInfo deviceInfo(char fingerprintByte = '\x35')
 {
@@ -47,6 +60,7 @@ private Q_SLOTS:
   void requestRoundTrip();
   void submissionRoundTrip();
   void acceptedAndRejectedResultRoundTrip();
+  void freezesCanonicalResultBytes();
   void encodingRejectsUnsafeValues();
   void rejectsOversizedAndTrailingInput();
   void rejectsEnvelopeVersionsAndTypes();
@@ -80,14 +94,42 @@ void PairingMessageCodecTests::acceptedAndRejectedResultRoundTrip()
 {
   const auto sessionId = QUuid::createUuid();
   const QList<PairingResultMessage> messages = {
-      {sessionId, true, {}},
-      {sessionId, false, QStringLiteral("pairing.code_mismatch")},
+      {.pairingSessionId = sessionId, .accepted = true},
+      {
+          .pairingSessionId = sessionId,
+          .accepted = false,
+          .failureReason = PairingFailureReason::CodeMismatch,
+          .diagnostic = QStringLiteral("peer comparison failed"),
+      },
   };
   for (const auto &message : messages) {
     const auto decoded = PairingMessageCodec::decode(PairingMessageCodec::encode(PairingMessage(message)));
     QVERIFY2(decoded.ok(), qPrintable(decoded.diagnostic));
     QCOMPARE(std::get<PairingResultMessage>(*decoded.message), message);
   }
+}
+
+void PairingMessageCodecTests::freezesCanonicalResultBytes()
+{
+  const auto sessionId = QUuid(QStringLiteral("00112233-4455-6677-8899-aabbccddeeff"));
+  const auto accepted = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{
+      .pairingSessionId = sessionId,
+      .accepted = true,
+  }));
+  QCOMPARE(
+      accepted.toHex(),
+      QByteArray("a4017172656c61796465736b2d70616972696e670201030304a3015000112233445566778899aabbccddeeff02f50300")
+  );
+
+  const auto rejected = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{
+      .pairingSessionId = sessionId,
+      .accepted = false,
+      .failureReason = PairingFailureReason::CodeMismatch,
+  }));
+  QCOMPARE(
+      rejected.toHex(),
+      QByteArray("a4017172656c61796465736b2d70616972696e670201030304a3015000112233445566778899aabbccddeeff02f40302")
+  );
 }
 
 void PairingMessageCodecTests::encodingRejectsUnsafeValues()
@@ -104,7 +146,39 @@ void PairingMessageCodecTests::encodingRejectsUnsafeValues()
   )
               .isEmpty());
   QVERIFY(PairingMessageCodec::encode(
-              PairingMessage(PairingResultMessage{QUuid::createUuid(), true, QStringLiteral("unexpected")}), &error
+              PairingMessage(PairingResultMessage{
+                  .pairingSessionId = QUuid::createUuid(),
+                  .accepted = true,
+                  .failureReason = PairingFailureReason::CodeMismatch,
+              }),
+              &error
+  )
+              .isEmpty());
+  QVERIFY(PairingMessageCodec::encode(
+              PairingMessage(PairingResultMessage{
+                  .pairingSessionId = QUuid::createUuid(),
+                  .accepted = false,
+              }),
+              &error
+  )
+              .isEmpty());
+  QVERIFY(PairingMessageCodec::encode(
+              PairingMessage(PairingResultMessage{
+                  .pairingSessionId = QUuid::createUuid(),
+                  .accepted = false,
+                  .failureReason = static_cast<PairingFailureReason>(99),
+              }),
+              &error
+  )
+              .isEmpty());
+  QVERIFY(PairingMessageCodec::encode(
+              PairingMessage(PairingResultMessage{
+                  .pairingSessionId = QUuid::createUuid(),
+                  .accepted = false,
+                  .failureReason = PairingFailureReason::TransportFailed,
+                  .diagnostic = QString(513, QLatin1Char('x')),
+              }),
+              &error
   )
               .isEmpty());
 }
@@ -115,14 +189,20 @@ void PairingMessageCodecTests::rejectsOversizedAndTrailingInput()
       PairingMessageCodec::decode(QByteArray(kMaximumPairingMessageBytes + 1, '\0')).error,
       PairingMessageError::TooLarge
   );
-  auto encoded = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{QUuid::createUuid(), true, {}}));
+  auto encoded = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{
+      .pairingSessionId = QUuid::createUuid(),
+      .accepted = true,
+  }));
   encoded.append('\0');
   QCOMPARE(PairingMessageCodec::decode(encoded).error, PairingMessageError::MalformedCbor);
 }
 
 void PairingMessageCodecTests::rejectsEnvelopeVersionsAndTypes()
 {
-  const auto valid = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{QUuid::createUuid(), true, {}}));
+  const auto valid = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{
+      .pairingSessionId = QUuid::createUuid(),
+      .accepted = true,
+  }));
   QCOMPARE(
       PairingMessageCodec::decode(mutate(valid, [](QCborMap &map) { map.insert(2, 2); })).error,
       PairingMessageError::UnsupportedVersion
@@ -140,7 +220,10 @@ void PairingMessageCodecTests::rejectsEnvelopeVersionsAndTypes()
 
 void PairingMessageCodecTests::rejectsInvalidSessionAndPayloadShape()
 {
-  const auto valid = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{QUuid::createUuid(), true, {}}));
+  const auto valid = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{
+      .pairingSessionId = QUuid::createUuid(),
+      .accepted = true,
+  }));
   const auto badSession = mutate(valid, [](QCborMap &envelope) {
     auto payload = envelope.value(4).toMap();
     payload.insert(1, QByteArray(15, '\0'));
@@ -201,20 +284,45 @@ void PairingMessageCodecTests::rejectsTrailingSenderAndInvalidExpiry()
 
 void PairingMessageCodecTests::rejectsInvalidResultCombinations()
 {
-  const auto valid = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{QUuid::createUuid(), true, {}}));
-  const auto acceptedWithError = mutate(valid, [](QCborMap &envelope) {
+  const auto valid = PairingMessageCodec::encode(PairingMessage(PairingResultMessage{
+      .pairingSessionId = QUuid::createUuid(),
+      .accepted = true,
+  }));
+  const auto acceptedWithFailure = mutate(valid, [](QCborMap &envelope) {
     auto payload = envelope.value(4).toMap();
-    payload.insert(3, QStringLiteral("pairing.error"));
+    payload.insert(3, static_cast<qint64>(PairingFailureReason::CodeMismatch));
     envelope.insert(4, payload);
   });
-  QCOMPARE(PairingMessageCodec::decode(acceptedWithError).error, PairingMessageError::InvalidResult);
+  QCOMPARE(PairingMessageCodec::decode(acceptedWithFailure).error, PairingMessageError::InvalidResult);
 
-  const auto rejectedWithoutError = mutate(valid, [](QCborMap &envelope) {
+  const auto rejectedWithoutFailure = mutate(valid, [](QCborMap &envelope) {
     auto payload = envelope.value(4).toMap();
     payload.insert(2, false);
     envelope.insert(4, payload);
   });
-  QCOMPARE(PairingMessageCodec::decode(rejectedWithoutError).error, PairingMessageError::InvalidResult);
+  QCOMPARE(PairingMessageCodec::decode(rejectedWithoutFailure).error, PairingMessageError::InvalidResult);
+
+  const auto unknownFailure = mutate(valid, [](QCborMap &envelope) {
+    auto payload = envelope.value(4).toMap();
+    payload.insert(2, false);
+    payload.insert(3, 99);
+    envelope.insert(4, payload);
+  });
+  QCOMPARE(PairingMessageCodec::decode(unknownFailure).error, PairingMessageError::InvalidResult);
+
+  const auto missingFailure = mutate(valid, [](QCborMap &envelope) {
+    auto payload = envelope.value(4).toMap();
+    payload.remove(3);
+    envelope.insert(4, payload);
+  });
+  QCOMPARE(PairingMessageCodec::decode(missingFailure).error, PairingMessageError::InvalidPayload);
+
+  const auto acceptedWithDiagnostic = mutate(valid, [](QCborMap &envelope) {
+    auto payload = envelope.value(4).toMap();
+    payload.insert(4, QStringLiteral("remote diagnostic"));
+    envelope.insert(4, payload);
+  });
+  QCOMPARE(PairingMessageCodec::decode(acceptedWithDiagnostic).error, PairingMessageError::InvalidResult);
 }
 
 QTEST_MAIN(PairingMessageCodecTests)

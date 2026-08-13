@@ -54,7 +54,8 @@ DeviceSnapshot peerSnapshot(DevicePresence presence = DevicePresence::Discovered
 }
 
 PairingSnapshot pairingSnapshot(
-    DeviceSnapshot peer, PairingState state, QString sas = {}, QString errorMessageKey = {}
+    DeviceSnapshot peer, PairingState state, QString sas = {},
+    PairingFailureReason failureReason = PairingFailureReason::None
 )
 {
   peer.presence = DevicePresence::Pairing;
@@ -65,7 +66,7 @@ PairingSnapshot pairingSnapshot(
       .sixDigitSas = std::move(sas),
       .expiresAtUtc = QDateTime::currentDateTimeUtc().addSecs(60),
       .attemptsRemaining = 3,
-      .errorMessageKey = std::move(errorMessageKey),
+      .failureReason = failureReason,
   };
 }
 
@@ -268,7 +269,7 @@ void DevicesDockTests::rendersExpiredPairingState()
   QVERIFY(state != nullptr);
   QVERIFY(error != nullptr);
   snapshot.state = PairingState::Expired;
-  snapshot.errorMessageKey = QStringLiteral("pairing.code.expired");
+  snapshot.failureReason = PairingFailureReason::Expired;
   pairingService.publish(snapshot, fingerprint);
   QCOMPARE(state->text(), QStringLiteral("The pairing code expired. Generate a new code."));
   QCOMPARE(error->text(), QStringLiteral("The pairing code expired. Generate a new code."));
