@@ -2,8 +2,8 @@
 
 - 当前结论：`IN_PROGRESS`（实现与本地验证 PASS，等待阶段标签双平台 Actions）
 - 集成分支：`product/relaydesk-v1`
-- 候选提交：`1db34ff6d`
-- 目标标签：`relaydesk-phase2-20260813-02`
+- 候选提交：`bd342ed5e`
+- 目标标签：`relaydesk-phase2-20260813-03`
 - 产物性质：unsigned/ad-hoc 内部包；签名凭据不阻塞本阶段。
 
 ## 已完成范围
@@ -31,6 +31,7 @@
 - `RelayDeskTransferRecoveryMatrixTests`：PASS（Phase 3 恢复组合叠加验证）。
 - 代理分支上真实 Qt full transfer harness 累计最高 `18/18 PASS`；当前产品树的新增目标逐项重新编译运行。
 - `git diff --check` 与开发材料验证 PASS。
+- 当前产品树 Qt 6.7.3 / MinGW 13.1：文件传输 probe `21/21 PASS`，GUI/平台/发现组合 probe `10/10 PASS`。
 
 ## 标签构建诊断
 
@@ -38,6 +39,10 @@
 - Windows 首个失败点：`WindowsFirewallProbe.cpp` 使用 IPv6 MIB 表类型，但 Microsoft SDK 只在 Winsock2 IPv6 定义已加载时声明该类型；提交 `d933716fc` 按 SDK include 顺序补入 `ws2tcpip.h`。
 - macOS 首个失败点：发现端口条件表达式由 `quint16` 与整型字面量共同推导成 `int`，Clang 在 `DeviceInfo` 列表初始化时拒绝运行时窄化；提交 `1db34ff6d` 将变量显式定为 `quint16`，且原有 `1..65535` 范围检查保持不变。
 - 两端失败均发生在编译阶段，未将该 run 的诊断测试步骤误记为 PASS；新候选标签必须重新完成 build、package、CTest 与 artifact。
+- `relaydesk-phase2-20260813-02` / Actions run `31653533200`：macOS Build/Package/App stage 均 PASS，但 CTest `72/74`，恢复矩阵在 `main()` 前 SEGFAULT，Windows start-at-login 的 5 个平台无关 fake-adapter 用例因宿主路径判断失败；Windows 则在 WiX custom action 的 MSVC 预处理阶段失败。
+- 恢复矩阵根因是跨 translation unit 动态初始化顺序：测试全局初始化调用 `DeviceId::fromString()` 时，另一个 translation unit 的全局 `QRegularExpression` 尚未构造。提交 `da0428940` 改为首次调用时构造的函数局部 static；恢复矩阵本地重复 10/10 PASS。
+- start-at-login 根因是 Windows 命令契约错误依赖宿主 `QFileInfo::isAbsolute()`/native separator；提交 `5845dbc3c` 改为平台无关的 drive/UNC 规范化，注入式用例本地 PASS。
+- WiX 根因是 MSVC legacy preprocessor 不接受 custom action 的 C++20 `__VA_OPT__`；提交 `bd342ed5e` 仅对 MSVC target 启用 `/Zc:preprocessor`，并由 packaging contract 测试锁定。
 
 ## 架构边界
 
@@ -53,7 +58,8 @@
 - [x] 当前可用 Qt/MinGW 定向测试与 benchmarks 通过。
 - [x] 生成 Phase 2 报告。
 - [x] 创建并推送 `relaydesk-phase2-20260813-01`（诊断 run 失败，已保留证据）。
-- [ ] 创建并推送 `relaydesk-phase2-20260813-02`。
+- [x] 创建并推送 `relaydesk-phase2-20260813-02`（第二轮诊断 run 失败，已保留证据）。
+- [ ] 创建并推送 `relaydesk-phase2-20260813-03`。
 - [ ] 标签 Windows x64 / macOS arm64 configure、build、CTest、package、artifact 全部 PASS。
 - [ ] 下载阶段 Release assets 并记录 API digest/本地 SHA。
 
