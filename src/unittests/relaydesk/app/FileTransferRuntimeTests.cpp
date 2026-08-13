@@ -63,6 +63,7 @@ private Q_SLOTS:
   void trustedPeersNegotiateIndependentFileChannel();
   void outgoingSingleFileStreamsThroughWorkerPump();
   void incomingSingleFileCommitsThroughPlatformReceiver();
+  void incomingFolderCommitsEveryFileAndPreservesEmptyDirectories();
   void runtimeSourceUsesCanonicalSenderBoundary();
   void runtimeSourceComposesPlatformReceiver();
   void runtimeEnablesComposedReceiverCapability();
@@ -97,7 +98,7 @@ void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
   QVERIFY(firstPort != 0);
   QCOMPARE(discovery.service().localDevice().filePort, firstPort);
   QVERIFY(discovery.service().localDevice().capabilities.fileV1);
-  QVERIFY(!discovery.service().localDevice().capabilities.folderV1);
+  QVERIFY(discovery.service().localDevice().capabilities.folderV1);
   QVERIFY(!discovery.service().localDevice().capabilities.resumeV1);
   QCOMPARE(started.count(), 1);
   QVERIFY(runtime.start(&diagnostic));
@@ -119,7 +120,7 @@ void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
   QVERIFY(runtime.listeningPort() != 0);
   QCOMPARE(discovery.service().localDevice().filePort, runtime.listeningPort());
   QVERIFY(discovery.service().localDevice().capabilities.fileV1);
-  QVERIFY(!discovery.service().localDevice().capabilities.folderV1);
+  QVERIFY(discovery.service().localDevice().capabilities.folderV1);
   QVERIFY(!discovery.service().localDevice().capabilities.resumeV1);
   QCOMPARE(started.count(), 2);
   QCOMPARE(errors.count(), 0);
@@ -498,6 +499,119 @@ void FileTransferRuntimeTests::incomingSingleFileCommitsThroughPlatformReceiver(
   QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
 }
 
+void FileTransferRuntimeTests::incomingFolderCommitsEveryFileAndPreservesEmptyDirectories()
+{
+  using namespace ::relaydesk::transfer;
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  const QString sourceRoot = directory.filePath(QStringLiteral("folder-payload"));
+  const QString nested = QDir(sourceRoot).filePath(QStringLiteral("nested"));
+  QVERIFY(QDir().mkpath(QDir(nested).filePath(QStringLiteral("empty"))));
+  const QByteArray firstBytes(700'003, '\x31');
+  const QByteArray secondBytes(1'100'009, '\x32');
+  QFile first(QDir(sourceRoot).filePath(QStringLiteral("first.bin")));
+  QVERIFY(first.open(QIODevice::WriteOnly));
+  QCOMPARE(first.write(firstBytes), qint64(firstBytes.size()));
+  first.close();
+  QFile second(QDir(nested).filePath(QStringLiteral("second.bin")));
+  QVERIFY(second.open(QIODevice::WriteOnly));
+  QCOMPARE(second.write(secondBytes), qint64(secondBytes.size()));
+  second.close();
+  const QString receiveRoot = directory.filePath(QStringLiteral("multi-received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("multi-sender-trust.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("multi-receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  model::DeviceHomeModel senderModel;
+  model::DeviceHomeModel receiverModel;
+  DeviceDiscoveryRuntime senderDiscovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Multi sender")), senderModel
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Multi receiver")), receiverModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  QStringList errors;
+  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("sender: ") + message);
+  });
+  connect(&receiver, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("receiver: ") + message);
+  });
+  connect(&receiver, &IFileTransferService::incomingOffer, this, [&](const IncomingOffer &offer) {
+    receiver.accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
+  });
+  std::optional<TransferSnapshot> senderLatest;
+  std::optional<TransferSnapshot> receiverLatest;
+  QList<quint64> receiverCompletedFiles;
+  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Sending) {
+      senderLatest = snapshot;
+    }
+  });
+  connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction != TransferDirection::Receiving) {
+      return;
+    }
+    receiverLatest = snapshot;
+    if (snapshot.progress.completedFiles != 0 &&
+        !receiverCompletedFiles.contains(snapshot.progress.completedFiles)) {
+      receiverCompletedFiles.append(snapshot.progress.completedFiles);
+    }
+  });
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  auto receiverInfo = receiverDiscovery.service().localDevice();
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(receiverInfo, QHostAddress::LocalHost));
+  const auto started = sender.send(receiverId, {QUrl::fromLocalFile(sourceRoot)}, {});
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+  QElapsedTimer wait;
+  wait.start();
+  while (wait.elapsed() < 20'000 &&
+         (!senderLatest.has_value() || senderLatest->state != TransferState::Completed ||
+          !receiverLatest.has_value() || receiverLatest->state != TransferState::Completed)) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+  }
+  const auto evidence = QStringLiteral("errors=[%1] sender=%2 receiver=%3 receiverFiles=[%4]")
+                            .arg(errors.join(QStringLiteral("; ")))
+                            .arg(senderLatest.has_value() ? static_cast<int>(senderLatest->state) : -1)
+                            .arg(receiverLatest.has_value() ? static_cast<int>(receiverLatest->state) : -1)
+                            .arg([&]() {
+                              QStringList values;
+                              for (const auto value : receiverCompletedFiles) {
+                                values.append(QString::number(value));
+                              }
+                              return values.join(QLatin1Char(','));
+                            }());
+  QVERIFY2(senderLatest.has_value() && senderLatest->state == TransferState::Completed, qPrintable(evidence));
+  QVERIFY2(receiverLatest.has_value() && receiverLatest->state == TransferState::Completed, qPrintable(evidence));
+  QCOMPARE(receiverLatest->progress.completedFiles, quint64{2});
+  QCOMPARE(receiverLatest->progress.completedBytes, quint64(firstBytes.size() + secondBytes.size()));
+  QCOMPARE(receiverCompletedFiles, QList<quint64>({1, 2}));
+  const QDir committedRoot(QDir(receiveRoot).filePath(QStringLiteral("folder-payload")));
+  QVERIFY(committedRoot.exists(QStringLiteral("nested/empty")));
+  QFile committedFirst(committedRoot.filePath(QStringLiteral("first.bin")));
+  QFile committedSecond(committedRoot.filePath(QStringLiteral("nested/second.bin")));
+  QVERIFY(committedFirst.open(QIODevice::ReadOnly));
+  QVERIFY(committedSecond.open(QIODevice::ReadOnly));
+  QCOMPARE(committedFirst.readAll(), firstBytes);
+  QCOMPARE(committedSecond.readAll(), secondBytes);
+  QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
+}
+
 void FileTransferRuntimeTests::runtimeSourceUsesCanonicalSenderBoundary()
 {
 #if !defined(RELAYDESK_FILE_TRANSFER_RUNTIME_SOURCE_PATH)
@@ -524,7 +638,7 @@ void FileTransferRuntimeTests::runtimeSourceComposesPlatformReceiver()
   QVERIFY2(source.open(QIODevice::ReadOnly), qPrintable(source.errorString()));
   const QByteArray contents = source.readAll();
   QVERIFY(contents.contains("createPlatformFileSafety"));
-  QVERIFY(contents.contains("FileEndpointAnnouncement{.port = listeningPort(), .fileV1 = true}"));
+  QVERIFY(contents.contains("FileEndpointAnnouncement{.port = listeningPort(), .fileV1 = true, .folderV1 = true}"));
   QVERIFY(contents.contains("case MessageType::TransferOffer:"));
   QVERIFY(contents.contains("case MessageType::FileEnd:"));
 #endif

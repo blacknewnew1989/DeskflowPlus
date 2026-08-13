@@ -276,6 +276,9 @@ FileTransferRuntime::FileTransferRuntime(
           QString::fromLatin1(::relaydesk::transfer::kFileReceiveFeature)
       );
     }
+    if (!m_options.localCapabilities.features.contains(QStringLiteral("folder.v1"))) {
+      m_options.localCapabilities.features.append(QStringLiteral("folder.v1"));
+    }
     connect(incoming, &IncomingTransferRuntime::incomingOffer, this, &IFileTransferService::incomingOffer);
     connect(
         incoming, &IncomingTransferRuntime::transferOperationFinished, this,
@@ -1605,7 +1608,8 @@ bool FileTransferRuntime::publishFileEndpoint(QString *diagnostic)
     return m_discoveryRuntime.setFileEndpoint(FileEndpointAnnouncement::disabled(), diagnostic);
   }
   return m_discoveryRuntime.setFileEndpoint(
-      FileEndpointAnnouncement{.port = listeningPort(), .fileV1 = true}, diagnostic
+      FileEndpointAnnouncement{.port = listeningPort(), .fileV1 = true, .folderV1 = true},
+      diagnostic
   );
 }
 

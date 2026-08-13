@@ -100,6 +100,7 @@ private Q_SLOTS:
   void rejectsAndPublishesExactlyOneTypedResultPerIntent();
   void refusesUnnegotiatedAndUnknownTransfers();
   void receivesAcceptedFileThroughAtomicCommit();
+  void receivesPagedEmptyDirectoryManifest();
   void disconnectInterruptsAcceptedPipeline();
 };
 
@@ -413,6 +414,82 @@ void IncomingTransferRuntimeTests::receivesAcceptedFileThroughAtomicCommit()
   QFile committed(root.filePath(QStringLiteral("received.bin")));
   QVERIFY(committed.open(QIODevice::ReadOnly));
   QCOMPARE(committed.readAll(), bytes);
+}
+
+void IncomingTransferRuntimeTests::receivesPagedEmptyDirectoryManifest()
+{
+  FakeFileSafety safety;
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const auto transferId = TransferId::generate();
+  const QList<ManifestEntry> entries{
+      {
+          .id = FileId::generate(),
+          .relativeProtocolPath = QStringLiteral("folder"),
+          .type = ManifestEntryType::Directory,
+          .modifiedUtc = QDateTime::currentDateTimeUtc(),
+      },
+      {
+          .id = FileId::generate(),
+          .relativeProtocolPath = QStringLiteral("folder/empty"),
+          .type = ManifestEntryType::Directory,
+          .modifiedUtc = QDateTime::currentDateTimeUtc(),
+      },
+  };
+  QString diagnostic;
+  const auto digest = ManifestPageCodec::canonicalSha256(entries, &diagnostic);
+  QVERIFY2(!digest.isEmpty(), qPrintable(diagnostic));
+  const TransferOffer incoming{
+      .transferId = transferId,
+      .displayName = QStringLiteral("folder"),
+      .directoryCount = 2,
+      .manifestSha256 = digest,
+      .manifestPageCount = 2,
+      .requestedConflictPolicy = ConflictPolicy::AutoRename,
+      .createdAtMs = static_cast<quint64>(QDateTime::currentMSecsSinceEpoch()),
+  };
+  const auto peer = DeviceId::generate();
+  QThreadPool pool;
+  IncomingTransferRuntime runtime(safety, pool);
+  QSignalSpy operations(&runtime, &IncomingTransferRuntime::transferOperationFinished);
+  std::optional<TransferSnapshot> latest;
+  connect(&runtime, &IncomingTransferRuntime::transferChanged, this, [&](const auto &snapshot) {
+    latest = snapshot;
+  });
+  auto capabilities = receiverCapabilities();
+  capabilities.features.append(QStringLiteral("folder.v1"));
+  QVERIFY(runtime.receiveOffer(peer, QStringLiteral("Peer"), true, capabilities, incoming));
+  runtime.accept(transferId, {.destinationRoot = root.path()});
+  QTRY_COMPARE_WITH_TIMEOUT(operations.count(), 1, 5'000);
+  for (qsizetype index = 0; index < entries.size(); ++index) {
+    Frame page{
+        .type = MessageType::ManifestPage,
+        .metadata = ManifestPageCodec::encode(
+            {
+                .transferId = transferId,
+                .pageIndex = static_cast<quint64>(index),
+                .pageCount = 2,
+                .entries = {entries.at(index)},
+            },
+            {}, &diagnostic
+        ),
+    };
+    QVERIFY2(!page.metadata.isEmpty(), qPrintable(diagnostic));
+    QVERIFY2(runtime.enqueueFrame(peer, page, &diagnostic), qPrintable(diagnostic));
+  }
+  Frame complete{
+      .type = MessageType::ManifestComplete,
+      .metadata = ManifestPageCodec::encodeComplete(
+          {.transferId = transferId, .canonicalSha256 = digest}, &diagnostic
+      ),
+  };
+  QVERIFY(runtime.enqueueFrame(peer, complete, &diagnostic));
+  QTRY_VERIFY_WITH_TIMEOUT(
+      latest.has_value() && latest->state == TransferState::Completed, 5'000
+  );
+  QCOMPARE(latest->progress.completedFiles, quint64{0});
+  QCOMPARE(latest->progress.totalFiles, quint64{0});
+  QVERIFY(QDir(root.path()).exists(QStringLiteral("folder/empty")));
 }
 
 void IncomingTransferRuntimeTests::disconnectInterruptsAcceptedPipeline()
