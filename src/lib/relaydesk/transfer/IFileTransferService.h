@@ -28,7 +28,7 @@ public:
 
   Q_DISABLE_COPY_MOVE(IFileTransferService)
 
-  [[nodiscard]] virtual ::relaydesk::transfer::TransferId send(
+  [[nodiscard]] virtual ::relaydesk::transfer::TransferStartResult send(
       const DeviceId &target, const QList<QUrl> &localItems,
       const ::relaydesk::transfer::SendOptions &options
   ) = 0;

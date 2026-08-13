@@ -87,6 +87,29 @@ struct TransferManifest
   [[nodiscard]] bool operator==(const TransferManifest &) const = default;
 };
 
+enum class TransferStartError : quint32
+{
+  None = 0,
+  WrongThread = 1,
+  InvalidRequest = 2,
+  NotRunning = 3,
+  PeerUnavailable = 4,
+};
+
+struct TransferStartResult
+{
+  std::optional<TransferId> transferId;
+  TransferStartError error = TransferStartError::None;
+  QString diagnostic;
+
+  [[nodiscard]] bool ok() const noexcept
+  {
+    return transferId.has_value() && error == TransferStartError::None;
+  }
+
+  [[nodiscard]] bool operator==(const TransferStartResult &) const = default;
+};
+
 struct SendOptions
 {
   ConflictPolicy conflictPolicy = ConflictPolicy::AutoRename;
@@ -121,3 +144,5 @@ struct IncomingOffer
 Q_DECLARE_METATYPE(relaydesk::transfer::SendOptions)
 Q_DECLARE_METATYPE(relaydesk::transfer::ReceiveOptions)
 Q_DECLARE_METATYPE(relaydesk::transfer::IncomingOffer)
+Q_DECLARE_METATYPE(relaydesk::transfer::TransferStartError)
+Q_DECLARE_METATYPE(relaydesk::transfer::TransferStartResult)
