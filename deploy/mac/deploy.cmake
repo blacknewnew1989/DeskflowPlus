@@ -92,14 +92,15 @@ if (OSX_BUNDLE)
       message(FATAL_ERROR \"RelayDesk core executable is missing before macdeployqt\")
     endif()
     # macdeployqt discovers optional plugins during its first pass, but does
-    # not revisit their dependencies. Run an unsigned discovery pass before
-    # the signed pass so plugin frameworks are included in the final bundle.
+    # not revisit their dependencies. Use an ad-hoc discovery pass before the
+    # final signing pass so this remains compatible with Qt 6.10.2, which does
+    # not support the newer -no-codesign option.
     execute_process(
       COMMAND \"${DEPLOYQT}\"
               \"\${relaydesk_app}\"
               \"-executable=\${relaydesk_core}\"
               \"-libpath=${RELAYDESK_QT_LIBRARY_PATH}\"
-              \"-no-codesign\"
+              \"-codesign=-\"
       RESULT_VARIABLE relaydesk_macdeployqt_discovery_result
     )
     if(NOT relaydesk_macdeployqt_discovery_result EQUAL 0)
