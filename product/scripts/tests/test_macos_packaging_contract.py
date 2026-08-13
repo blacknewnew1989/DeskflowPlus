@@ -11,6 +11,19 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class MacosPackagingContractTests(unittest.TestCase):
+    def test_macos_entrypoint_scripts_are_executable(self) -> None:
+        for relative_path in (
+            "product/scripts/setup-macos.sh",
+            "product/scripts/build-macos.sh",
+            "product/scripts/package-macos.sh",
+        ):
+            script = ROOT / relative_path
+            self.assertNotEqual(
+                script.stat().st_mode & 0o111,
+                0,
+                f"{relative_path} must be executable from a Git checkout",
+            )
+
     def test_package_script_has_optional_signing_and_notarization_verification(self) -> None:
         script = (ROOT / "product/scripts/package-macos.sh").read_text(encoding="utf-8")
 
