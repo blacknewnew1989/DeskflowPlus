@@ -4,13 +4,12 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 ## Ready
 
-| ID | 任务 | Owner | 依赖 |
-|---|---|---|---|
-| REL-001/002 | 发布候选、安装说明与最终验收清单 | A0/A7 | Phase 4 packages |
+No development or release-engineering tasks remain for Phase 0-4. Physical two-machine acceptance
+is listed in `product/docs/reports/RELAYDESK_V1_INTERNAL_RC.md` and is intentionally user-owned.
 
 ## In Progress
 
-No active implementation tasks. Release-candidate packaging and final evidence are tracked in Ready.
+No active implementation tasks.
 
 ## Blocked
 
@@ -28,6 +27,7 @@ No active implementation tasks. Release-candidate packaging and final evidence a
 | COMP-006 | MainWindow transfer service/UI/history composition | A3/A0 | `f04293dad`, `14e6f2453`, `479a0f78f`; typed lifecycle and asynchronous history/free-space bridge tests PASS |
 | COMP-007 | conflict four-policy production composition | A6/A0 | `153d38df6`, `2717f77d6`; AutoRename/Overwrite/Skip/Ask real TLS paths and 7/7 suites PASS |
 | COMP-008 | authenticated reconnect and Windows permission product wiring | A3/A2/A4/A0 | `b251933dd` through `f79cc64dd`; selected-candidate TLS, async failure completion and firewall probe tests PASS |
+| REL-001/002 | Phase 4 release candidate, installation instructions and acceptance checklist | A0/A7 | tag `relaydesk-phase4-20260813-02`; run `31688962563` SUCCESS; Win 88/88, Mac 89/89; installer/lifecycle PASS; four final packages locally SHA-256 verified |
 | AUTO-001 | 识别当前 GitHub 仓库、origin、登录状态 | A0/A1 | GitHub admin/push 权限确认 |
 | AUTO-002 | 添加 upstream、fetch v1.26.0、验证 760e3b9 | A0/A1 | `760e3b99` |
 | AUTO-003 | 创建/恢复产品分支并安装资料/workflow | A0/A1 | bootstrap worktree and commit |
