@@ -2,8 +2,8 @@
 
 - 当前结论：`IN_PROGRESS`（实现与本地验证 PASS，等待阶段标签双平台 Actions）
 - 集成分支：`product/relaydesk-v1`
-- 候选提交：`ac0e9d74a`
-- 目标标签：`relaydesk-phase2-20260813-01`
+- 候选提交：`1db34ff6d`
+- 目标标签：`relaydesk-phase2-20260813-02`
 - 产物性质：unsigned/ad-hoc 内部包；签名凭据不阻塞本阶段。
 
 ## 已完成范围
@@ -32,6 +32,13 @@
 - 代理分支上真实 Qt full transfer harness 累计最高 `18/18 PASS`；当前产品树的新增目标逐项重新编译运行。
 - `git diff --check` 与开发材料验证 PASS。
 
+## 标签构建诊断
+
+- `relaydesk-phase2-20260813-01` / Actions run `31627604618`：双平台 Configure PASS，但 Build FAIL，后续 package 与有效 CTest 因目标未生成而跳过/Not Run。
+- Windows 首个失败点：`WindowsFirewallProbe.cpp` 使用 IPv6 MIB 表类型，但 Microsoft SDK 只在 Winsock2 IPv6 定义已加载时声明该类型；提交 `d933716fc` 按 SDK include 顺序补入 `ws2tcpip.h`。
+- macOS 首个失败点：发现端口条件表达式由 `quint16` 与整型字面量共同推导成 `int`，Clang 在 `DeviceInfo` 列表初始化时拒绝运行时窄化；提交 `1db34ff6d` 将变量显式定为 `quint16`，且原有 `1..65535` 范围检查保持不变。
+- 两端失败均发生在编译阶段，未将该 run 的诊断测试步骤误记为 PASS；新候选标签必须重新完成 build、package、CTest 与 artifact。
+
 ## 架构边界
 
 - 文件传输与 Deskflow 键鼠/剪贴板连接、队列和缓冲区独立。
@@ -45,7 +52,8 @@
 - [x] 文件传输核心以独立小提交合入并推送。
 - [x] 当前可用 Qt/MinGW 定向测试与 benchmarks 通过。
 - [x] 生成 Phase 2 报告。
-- [ ] 创建并推送 `relaydesk-phase2-20260813-01`。
+- [x] 创建并推送 `relaydesk-phase2-20260813-01`（诊断 run 失败，已保留证据）。
+- [ ] 创建并推送 `relaydesk-phase2-20260813-02`。
 - [ ] 标签 Windows x64 / macOS arm64 configure、build、CTest、package、artifact 全部 PASS。
 - [ ] 下载阶段 Release assets 并记录 API digest/本地 SHA。
 
