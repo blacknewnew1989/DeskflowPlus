@@ -9,3 +9,12 @@
 !actions/*.json
 !handoffs/
 !handoffs/*.md
+!platform-sync/
+!platform-sync/README.md
+!platform-sync/TEMPLATE.md
+!platform-sync/a0/
+!platform-sync/a0/*.md
+!platform-sync/windows/
+!platform-sync/windows/*.md
+!platform-sync/macos/
+!platform-sync/macos/*.md
