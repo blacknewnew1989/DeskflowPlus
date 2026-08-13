@@ -99,6 +99,7 @@ public:
   [[nodiscard]] PairingOperationResult revoke(const DeviceId &deviceId);
   [[nodiscard]] bool expireIfNeeded();
   [[nodiscard]] std::optional<PairingSnapshot> snapshot() const;
+  [[nodiscard]] std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const;
 
 Q_SIGNALS:
   void pairingChanged(PairingSnapshot snapshot);

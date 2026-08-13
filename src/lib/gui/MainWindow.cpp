@@ -31,19 +31,20 @@
 #include "gui/widgets/LogDock.h"
 #include "net/FingerprintDatabase.h"
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
+#include "relaydesk/app/PairingTrustRuntime.h"
 #include "relaydesk/device/DeviceIdentity.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
 #include "relaydesk/model/TransferCenterModel.h"
-#include "relaydesk/pairing/PairingStateMachine.h"
 #include "relaydesk/platform/MacPermissionProbe.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 
 #include <QCloseEvent>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFileDialog>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -107,10 +108,8 @@ MainWindow::MainWindow()
 
   addDockWidget(Qt::BottomDockWidgetArea, m_logDock);
 
-  m_relayDeskPairingState = new deskflow::relaydesk::PairingStateMachine({}, {}, {}, this);
   m_relayDeskDeviceModel = new deskflow::relaydesk::model::DeviceHomeModel(this);
-  m_relayDeskPairingModel =
-      new deskflow::relaydesk::model::PairingWizardModel(*m_relayDeskPairingState, this);
+  m_relayDeskPairingModel = new deskflow::relaydesk::model::PairingWizardModel(this);
   m_relayDeskPermissionModel = new deskflow::relaydesk::model::PermissionStatusModel(
       deskflow::relaydesk::buildPermissionPlatform(), this
   );
@@ -269,13 +268,38 @@ void MainWindow::setupRelayDeskDiscovery()
       .certificateFingerprintSha256 = m_fingerprint.data,
   };
 
-  m_relayDeskDiscovery = new deskflow::relaydesk::DeviceDiscoveryRuntime(
-      std::move(localDevice), *m_relayDeskDeviceModel, {}, this
-  );
+  m_relayDeskDiscovery =
+      new deskflow::relaydesk::DeviceDiscoveryRuntime(localDevice, *m_relayDeskDeviceModel, {}, this);
   connect(
       m_relayDeskDiscovery, &deskflow::relaydesk::DeviceDiscoveryRuntime::errorOccurred, this,
       [](deskflow::relaydesk::DiscoveryServiceError error, const QString &message) {
         qWarning().noquote() << "RelayDesk discovery error" << static_cast<int>(error) << ':' << message;
+      }
+  );
+
+  const auto trustedDevicesPath =
+      QDir(Settings::settingsPath()).filePath(QStringLiteral("relaydesk/trusted-devices.json"));
+  m_relayDeskPairing = new deskflow::relaydesk::PairingTrustRuntime(
+      std::move(localDevice), trustedDevicesPath, *m_relayDeskDiscovery, *m_relayDeskDeviceModel,
+      *m_relayDeskPairingModel, {}, this
+  );
+  if (!m_relayDeskPairing->isReady()) {
+    qWarning().noquote() << "RelayDesk pairing disabled:" << m_relayDeskPairing->loadResult().diagnostic;
+  }
+  connect(
+      m_relayDeskPairing, &deskflow::relaydesk::PairingTrustRuntime::operationFailed, this,
+      [](const deskflow::relaydesk::PairingOperationResult &result) {
+        qWarning().noquote() << "RelayDesk pairing error" << static_cast<int>(result.error) << ':'
+                             << result.diagnostic;
+      }
+  );
+  connect(
+      m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::pairingRequested, this,
+      [this](const deskflow::relaydesk::DeviceSnapshot &peer) {
+        const auto result = m_relayDeskPairing->startPairing(peer);
+        if (!result.ok()) {
+          qWarning().noquote() << "RelayDesk pairing could not start:" << result.diagnostic;
+        }
       }
   );
 

@@ -7,6 +7,7 @@
 #include "relaydesk/model/PairingWizardModel.h"
 
 #include "relaydesk/i18n/ProductStrings.h"
+#include "relaydesk/pairing/PairingService.h"
 
 #include <QLocale>
 #include <QRegularExpression>
@@ -20,14 +21,35 @@ const auto kSixDigitPattern = QRegularExpression(QStringLiteral("^[0-9]{6}$"));
 
 } // namespace
 
+PairingWizardModel::PairingWizardModel(QObject *parent) : QObject(parent)
+{
+}
+
 PairingWizardModel::PairingWizardModel(PairingStateMachine &pairing, QObject *parent)
-    : QObject(parent),
-      m_pairing(pairing),
-      m_snapshot(pairing.snapshot())
+    : QObject(parent), m_pairing(&pairing), m_snapshot(pairing.snapshot())
 {
   if (m_snapshot.has_value())
     m_peerFingerprint = m_snapshot->peer.pinnedFingerprint;
-  connect(&m_pairing, &PairingStateMachine::pairingChanged, this, &PairingWizardModel::pairingChanged);
+  connect(m_pairing, &PairingStateMachine::pairingChanged, this, &PairingWizardModel::pairingChanged);
+}
+
+void PairingWizardModel::bindService(IPairingService &service)
+{
+  if (m_pairing != nullptr) {
+    disconnect(m_pairing, &PairingStateMachine::pairingChanged, this, &PairingWizardModel::pairingChanged);
+  }
+  if (m_service != nullptr) {
+    disconnect(m_service, &IPairingService::pairingChanged, this, &PairingWizardModel::pairingChanged);
+  }
+  m_pairing = nullptr;
+  m_service = &service;
+  m_snapshot = service.snapshot();
+  m_peerFingerprint.clear();
+  if (m_snapshot.has_value()) {
+    m_peerFingerprint = service.pendingFingerprint(m_snapshot->pairingSessionId).value_or(QByteArray{});
+  }
+  connect(m_service, &IPairingService::pairingChanged, this, &PairingWizardModel::pairingChanged);
+  Q_EMIT changed();
 }
 
 bool PairingWizardModel::active() const
@@ -147,12 +169,15 @@ bool PairingWizardModel::start(
 )
 {
   m_actionErrorText.clear();
-  const auto result = m_pairing.begin(peer, peerFingerprintSha256, receivedSas);
+  if (m_pairing == nullptr) {
+    return applyResult({.error = PairingError::InvalidState});
+  }
+  const auto result = m_pairing->begin(peer, peerFingerprintSha256, receivedSas);
   if (!applyResult(result))
     return false;
 
   m_peerFingerprint = peerFingerprintSha256;
-  if (const auto snapshot = m_pairing.snapshot(); snapshot.has_value())
+  if (const auto snapshot = m_pairing->snapshot(); snapshot.has_value())
     updateSnapshot(*snapshot);
   Q_EMIT startRequested(peer, peerFingerprintSha256, receivedSas.value_or(QString()));
   return true;
@@ -162,7 +187,10 @@ bool PairingWizardModel::confirmMatchingSas()
 {
   if (!m_snapshot.has_value())
     return applyResult({.error = PairingError::SessionNotFound});
-  return applyResult(m_pairing.confirmMatchingSas(m_snapshot->pairingSessionId));
+  if (m_service != nullptr)
+    return applyResult(m_service->confirmMatchingSas(m_snapshot->pairingSessionId));
+  return m_pairing != nullptr ? applyResult(m_pairing->confirmMatchingSas(m_snapshot->pairingSessionId))
+                              : applyResult({.error = PairingError::InvalidState});
 }
 
 bool PairingWizardModel::submitDisplayedSas(const QString &sixDigits)
@@ -175,19 +203,28 @@ bool PairingWizardModel::submitDisplayedSas(const QString &sixDigits)
   }
   if (!m_snapshot.has_value())
     return applyResult({.error = PairingError::SessionNotFound});
-  return applyResult(m_pairing.submitDisplayedSas(m_snapshot->pairingSessionId, sixDigits));
+  if (m_service != nullptr)
+    return applyResult(m_service->submitDisplayedSas(m_snapshot->pairingSessionId, sixDigits));
+  return m_pairing != nullptr
+             ? applyResult(m_pairing->submitDisplayedSas(m_snapshot->pairingSessionId, sixDigits))
+             : applyResult({.error = PairingError::InvalidState});
 }
 
 bool PairingWizardModel::cancel()
 {
   if (!m_snapshot.has_value())
     return applyResult({.error = PairingError::SessionNotFound});
-  return applyResult(m_pairing.cancel(m_snapshot->pairingSessionId));
+  if (m_service != nullptr)
+    return applyResult(m_service->cancel(m_snapshot->pairingSessionId));
+  return m_pairing != nullptr ? applyResult(m_pairing->cancel(m_snapshot->pairingSessionId))
+                              : applyResult({.error = PairingError::InvalidState});
 }
 
 bool PairingWizardModel::expireIfNeeded()
 {
-  const auto expired = m_pairing.expireIfNeeded();
+  if (m_pairing == nullptr)
+    return false;
+  const auto expired = m_pairing->expireIfNeeded();
   if (expired)
     m_actionErrorText.clear();
   return expired;
@@ -196,6 +233,9 @@ bool PairingWizardModel::expireIfNeeded()
 void PairingWizardModel::pairingChanged(const PairingSnapshot &snapshot)
 {
   m_actionErrorText.clear();
+  if (m_service != nullptr) {
+    m_peerFingerprint = m_service->pendingFingerprint(snapshot.pairingSessionId).value_or(QByteArray{});
+  }
   updateSnapshot(snapshot);
 }
 
@@ -300,9 +340,44 @@ bool PairingWizardModel::applyResult(const PairingActionResult &result)
   return false;
 }
 
+bool PairingWizardModel::applyResult(const PairingOperationResult &result)
+{
+  if (result.ok()) {
+    m_actionErrorText.clear();
+    return true;
+  }
+  if (result.stateError != PairingError::None) {
+    return applyResult({.error = result.stateError, .diagnostic = result.diagnostic});
+  }
+
+  PairingError error = PairingError::InvalidState;
+  switch (result.error) {
+  case PairingOperationError::None:
+    error = PairingError::None;
+    break;
+  case PairingOperationError::ActiveSessionExists:
+    error = PairingError::ActiveSessionExists;
+    break;
+  case PairingOperationError::SessionNotFound:
+  case PairingOperationError::SessionMismatch:
+    error = PairingError::SessionNotFound;
+    break;
+  case PairingOperationError::Expired:
+    error = PairingError::Expired;
+    break;
+  case PairingOperationError::InvalidCode:
+    error = PairingError::InvalidSas;
+    break;
+  default:
+    break;
+  }
+  return applyResult({.error = error, .diagnostic = result.diagnostic});
+}
+
 void PairingWizardModel::updateSnapshot(const PairingSnapshot &snapshot)
 {
-  if (!m_snapshot.has_value() || m_snapshot->pairingSessionId != snapshot.pairingSessionId)
+  if (m_service == nullptr &&
+      (!m_snapshot.has_value() || m_snapshot->pairingSessionId != snapshot.pairingSessionId))
     m_peerFingerprint = snapshot.peer.pinnedFingerprint;
   m_snapshot = snapshot;
   Q_EMIT changed();

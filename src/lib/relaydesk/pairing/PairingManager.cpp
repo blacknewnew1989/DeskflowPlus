@@ -293,6 +293,14 @@ std::optional<PairingSnapshot> PairingManager::snapshot() const
   return m_stateMachine.snapshot();
 }
 
+std::optional<QByteArray> PairingManager::pendingFingerprint(const QUuid &sessionId) const
+{
+  if (!m_active.has_value() || m_active->wireSessionId != sessionId) {
+    return std::nullopt;
+  }
+  return m_active->peerFingerprintSha256;
+}
+
 PairingOperationResult PairingManager::handleRequest(
     const PairingRequest &request, const PairingEndpoint &source
 )

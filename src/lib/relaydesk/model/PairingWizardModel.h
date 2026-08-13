@@ -13,6 +13,11 @@
 
 #include <optional>
 
+namespace deskflow::relaydesk {
+class IPairingService;
+struct PairingOperationResult;
+}
+
 namespace deskflow::relaydesk::model {
 
 class PairingWizardModel final : public QObject
@@ -42,7 +47,10 @@ class PairingWizardModel final : public QObject
   Q_PROPERTY(bool terminal READ terminal NOTIFY changed)
 
 public:
+  explicit PairingWizardModel(QObject *parent = nullptr);
   explicit PairingWizardModel(PairingStateMachine &pairing, QObject *parent = nullptr);
+
+  void bindService(IPairingService &service);
 
   [[nodiscard]] bool active() const;
   [[nodiscard]] QString title() const;
@@ -93,9 +101,11 @@ private:
   [[nodiscard]] static QString stateText(PairingState state);
   [[nodiscard]] static QString actionErrorText(PairingError error);
   bool applyResult(const PairingActionResult &result);
+  bool applyResult(const PairingOperationResult &result);
   void updateSnapshot(const PairingSnapshot &snapshot);
 
-  PairingStateMachine &m_pairing;
+  PairingStateMachine *m_pairing = nullptr;
+  IPairingService *m_service = nullptr;
   std::optional<PairingSnapshot> m_snapshot;
   QByteArray m_peerFingerprint;
   QString m_actionErrorText;

@@ -110,6 +110,11 @@ std::optional<PairingSnapshot> PairingService::snapshot() const
   return m_manager.snapshot();
 }
 
+std::optional<QByteArray> PairingService::pendingFingerprint(const QUuid &sessionId) const
+{
+  return m_manager.pendingFingerprint(sessionId);
+}
+
 void PairingService::readPendingDatagrams()
 {
   while (m_socket.hasPendingDatagrams()) {
