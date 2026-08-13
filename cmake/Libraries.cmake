@@ -121,16 +121,18 @@ macro(configure_unix_libs)
     message(FATAL_ERROR "Missing posix sigwait")
   endif()
 
-  # pthread is used on both Linux and Mac
-  check_library_exists("pthread" pthread_create "" HAVE_PTHREAD)
-  if(HAVE_PTHREAD)
-    list(APPEND libs pthread)
-  else()
-    message(FATAL_ERROR "Missing library: pthread")
-  endif()
+  # pthread APIs are provided by different link mechanisms across Unix
+  # platforms. In particular, modern macOS SDKs expose them from libSystem
+  # and do not ship a standalone libpthread for `-lpthread` to resolve.
+  set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+  find_package(Threads REQUIRED)
+  list(APPEND libs Threads::Threads)
 
   if(APPLE)
-    set(CMAKE_CXX_FLAGS "--sysroot ${CMAKE_OSX_SYSROOT} ${CMAKE_CXX_FLAGS} -DGTEST_USE_OWN_TR1_TUPLE=1")
+    # CMake owns the SDK selection and adds the appropriate sysroot flags.
+    # Expanding an unset CMAKE_OSX_SYSROOT here produces a bare `--sysroot`,
+    # causing the following compiler option to be consumed as its value.
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGTEST_USE_OWN_TR1_TUPLE=1")
     find_library(lib_ScreenSaver ScreenSaver)
     find_library(lib_IOKit IOKit)
     find_library(lib_ApplicationServices ApplicationServices)

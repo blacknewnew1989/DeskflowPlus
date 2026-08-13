@@ -27,6 +27,14 @@ class MacosPackagingContractTests(unittest.TestCase):
 
         self.assertIn("/.relaydesk-toolchain-macos.env", gitignore)
 
+    def test_unix_threads_use_the_portable_cmake_target(self) -> None:
+        libraries = (ROOT / "cmake/Libraries.cmake").read_text(encoding="utf-8")
+
+        self.assertIn("find_package(Threads REQUIRED)", libraries)
+        self.assertIn("list(APPEND libs Threads::Threads)", libraries)
+        self.assertNotIn("list(APPEND libs pthread)", libraries)
+        self.assertNotIn("--sysroot ${CMAKE_OSX_SYSROOT}", libraries)
+
     def test_package_script_has_optional_signing_and_notarization_verification(self) -> None:
         script = (ROOT / "product/scripts/package-macos.sh").read_text(encoding="utf-8")
 
