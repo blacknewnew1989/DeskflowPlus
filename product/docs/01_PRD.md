@@ -6,6 +6,89 @@
 
 **默认前提：当前目录和会话已经连接用户的 GitHub 仓库，`origin` 可用。用户只负责最终安装与验收。**
 
+### 0.1 当前最高优先级：RelayDesk v1 协议与共享接口冻结
+
+在 Windows 与 macOS 并行实现文件传输 service 之前，A0 必须优先完成
+`PROTO-FREEZE-001`。该任务是当前开发顺序的最高优先级，高于继续扩展发送、接收、
+暂停、续传和历史等业务运行时。它是防止两个平台产生不兼容实现的工程依赖，不是
+人工审批、PR 门禁或 required check。
+
+冻结范围只包含本 PRD 的 P0/v1 能力，不扩展 Phase 5，不引入账号、云端、RBAC、复杂
+PKI、病毒扫描、DLP 或其他额外安全体系。
+
+A2/A6 是共享网络协议和接口的 owner，A0 是唯一集成负责人。A4/A5 在冻结前可以继续
+不依赖未定义协议的平台构建、权限、打包和安装验证，但不得各自在平台目录补充消息、
+字段、codec、service 或同名数据模型。冻结后，两端必须从同一个
+`product/relaydesk-v1` 提交开始实现 service。
+
+#### 0.1.1 协议冻结范围
+
+`src/lib/relaydesk/transfer/Protocol.h` 中每个 v1 `MessageType` 必须满足以下二选一：
+
+1. 具有唯一、规范的值类型、CBOR schema、codec、validator、错误分类、测试和冻结向量；
+2. 被明确标为 reserved，且 v1 运行时不得发送。
+
+不得保留“已注册且被运行时使用，但没有 schema/codec”的消息。每种可发送消息必须定义：
+
+- CBOR 整数 key、字段类型、必填/可选字段及默认值；
+- UUID、SHA-256、字符串、集合和整数范围；
+- 合法 `streamId`、flags、metadata 和 payload 组合；
+- 版本、未知字段、未知消息和畸形 CBOR 的处理；
+- 重复、乱序、终态后消息及幂等规则；
+- 稳定错误码与可安全本地化的诊断分类；
+- Windows/macOS 共用的正负十六进制 test vector。
+
+现有 `Heartbeat`、`HeartbeatAck`、`TransferPause`、`TransferResume`、
+`TransferCancel`、`TransferComplete`、`TransferResult` 和 `Goodbye` 不得只保留编号；
+A0/A6 必须为其补齐上述契约，或在 v1 中明确 reserved 并从运行时路径排除。
+
+以下既有消息也必须统一审计，不因已有 codec 而跳过：
+
+- `Hello` / `AuthResult` / `Capabilities`；
+- `TransferOffer` / `TransferAccept` / `TransferReject` / `Error`；
+- `ManifestPage` / `ManifestComplete`；
+- `FileBegin` / `FileChunk` / `FileCheckpoint` / `FileEnd` / `FileResult`；
+- `ResumeQuery` / `ResumeResponse`。
+
+固定 32-byte RDFT header、big-endian 编码、独立文件 TLS 连接、认证前不交付业务帧、
+默认 1 MiB 文件块和最终 SHA-256 保持现有规范，不另造第二套协议。
+
+#### 0.1.2 共享接口冻结范围
+
+协议冻结同时必须审核并固定以下跨平台接口：
+
+- `DeviceId`、`DeviceInfo`、`DeviceSnapshot`、`DeviceCapabilities`；
+- discovery、pairing、trust、pinning 和 reconnect 的公共输入输出；
+- `IncomingOffer`、`TransferSnapshot`、`TransferHistoryRecord`；
+- `SendOptions`、`ReceiveOptions`；
+- `IFileTransferService` 的 send/accept/reject/pause/resume/cancel/retry、活动任务和 signals；
+- `FileTransferRuntime` 的生命周期、线程所有权、连接路由和 service 组合职责；
+- sender/receiver、frame sink、backpressure、resume、conflict 和 history 的组合边界；
+- `PermissionSnapshot` 及平台 adapter 输入输出。
+
+`IFileTransferService` 是 GUI 和平台组合层使用的唯一文件传输业务接口。
+`FileTransferRuntime` 后续必须实现或组合该接口，不得长期形成两套互不相干的业务 API。
+UI 只消费不可变 snapshot 并发送 typed intent；socket 回调不得读取文件、扫描目录或计算
+SHA-256，磁盘和哈希工作必须留在 worker 边界。
+
+#### 0.1.3 冻结完成条件
+
+A0 只有在以下条件全部满足后，才可宣布 v1 协议冻结并启动双平台 service 并行实现：
+
+1. `Protocol.h` 的全部消息已被机器可验证地归类为 implemented 或 reserved；
+2. 所有 implemented 消息具有 struct、codec、validator、负例和冻结向量；
+3. `product/docs/05_FILE_TRANSFER_PROTOCOL.md`、
+   `product/docs/18_SHARED_CONTRACTS.md` 与代码一致；
+4. 新增 `product/docs/19_PROTOCOL_V1_FREEZE.md`，记录消息表、schema、状态机、错误和兼容规则；
+5. 自动测试能发现 enum 已注册但缺 schema/codec 的回归；
+6. 相同正负向量在 Windows x64 与 macOS arm64 全部通过；
+7. A0 将小提交合入并推送 `product/relaydesk-v1`；
+8. A0 创建并推送 `relaydesk-protocol-v1-<date>-01` 标签，监控唯一双平台 Actions；
+9. 阶段报告记录 commit、tag、run、测试数、artifact 和 `NOT_RUN`。
+
+冻结后如确需修改 v1 契约，必须由原 owner 创建独立兼容性提交、同步文档和向量，并由
+A0 先合入；平台代理不得私自扩展 wire schema。
+
 ## 1. 产品定义
 
 RelayDesk 是一款无需账号、无需云端、在本地局域网工作的跨设备协作工具。用户使用一套键盘鼠标在 Windows 与 macOS 设备间无缝切换，并把文件或文件夹可靠发送到任意已配对设备。
@@ -299,6 +382,11 @@ git switch -c agent/a5/macos-<task>    # 不存在时创建
 
 文件传输协议、公共数据结构和 CMake target 由 A2/A6 先提交并推送。Windows/macOS 适配必须基于同一个共享 commit。
 
+在 `PROTO-FREEZE-001` 完成前，A4/A5 不得开始依赖未冻结消息的 service 实现。协议标签
+推送后，Windows/macOS 会话先验证当前分支包含该标签指向的提交，再分别创建平台分支。
+平台发现共享契约缺字段时，只提交最小需求和复现证据，由 A2/A6 owner 统一修改；不得在
+平台 adapter 中复制或派生第二套协议类型。
+
 平台代理完成后：
 
 ```bash
@@ -525,6 +613,17 @@ python product/scripts/run-github-actions.py --ref product/relaydesk-v1
 | FR-BASE-005 | 当前 GitHub 仓库自动导入、提交和推送 | P0 |
 | FR-BASE-006 | Windows/macOS 自动构建和 artifact | P0 |
 
+### FR-PROTOCOL
+
+| ID | 需求 | 优先级 |
+|---|---|---|
+| FR-PROTO-001 | v1 `MessageType` 全量 implemented/reserved 分类，不允许活动占位消息 | P0 |
+| FR-PROTO-002 | 每个 implemented 消息具有规范 schema、codec、validator、错误和负例 | P0 |
+| FR-PROTO-003 | Windows/macOS 共用冻结正负 test vector，字节级结果一致 | P0 |
+| FR-PROTO-004 | `IFileTransferService` 是 GUI/平台唯一文件业务接口 | P0 |
+| FR-PROTO-005 | 共享接口由 A2/A6 owner 先提交，A4/A5 从同一冻结提交实现 | P0 |
+| FR-PROTO-006 | 协议文档、代码注册表和自动审计保持一致 | P0 |
+
 ### FR-DISCOVERY
 
 | ID | 需求 | 优先级 |
@@ -664,3 +763,10 @@ Windows→Mac、Mac→Windows 鼠标跨屏、键盘、滚轮、自动重连。
 ### AC-007 Git 协作
 
 远程仓库存在小功能提交、阶段推送、阶段标签和双平台 artifact；两端不依赖手工复制源码。
+
+### AC-008 v1 协议与接口冻结
+
+`Protocol.h` 中所有 v1 消息均被归类为 implemented 或 reserved；implemented 消息都有
+schema、codec、validator、错误负例和冻结向量。Windows x64 与 macOS arm64 对相同向量
+产生相同结果，`IFileTransferService` 和共享 snapshot 可由两个平台从同一冻结提交直接
+消费，不需要平台私有协议补丁。
