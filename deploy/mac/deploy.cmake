@@ -12,6 +12,11 @@ if(NOT RELAYDESK_MACOS_PACKAGE_VARIANT MATCHES "^(adhoc|signed)$")
   message(FATAL_ERROR "RELAYDESK_MACOS_PACKAGE_VARIANT must be adhoc or signed")
 endif()
 set(RELAYDESK_MACOS_SIGNING_IDENTITY "" CACHE STRING "Developer ID Application identity for macOS packages")
+option(
+  RELAYDESK_MACOS_CUSTOM_DMG_LAYOUT
+  "Use Finder automation to apply the custom RelayDesk DMG layout"
+  OFF
+)
 if(RELAYDESK_MACOS_PACKAGE_VARIANT STREQUAL "signed" AND
    RELAYDESK_MACOS_SIGNING_IDENTITY STREQUAL "")
   message(FATAL_ERROR "signed macOS packages require RELAYDESK_MACOS_SIGNING_IDENTITY")
@@ -23,11 +28,15 @@ endif()
 set(OS_STRING "macos-${BUILD_ARCHITECTURE}-${RELAYDESK_MACOS_PACKAGE_VARIANT}")
 
 if (OSX_BUNDLE)
-  configure_file(
-    "${MY_DIR}/generate_ds_store.applescript"
-    "${CMAKE_CURRENT_BINARY_DIR}/generate_ds_store.applescript"
-    @ONLY
-  )
+  if(RELAYDESK_MACOS_CUSTOM_DMG_LAYOUT)
+    configure_file(
+      "${MY_DIR}/generate_ds_store.applescript"
+      "${CMAKE_CURRENT_BINARY_DIR}/generate_ds_store.applescript"
+      @ONLY
+    )
+    set(CPACK_DMG_BACKGROUND_IMAGE "${MY_DIR}/dmg-background.tiff")
+    set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/generate_ds_store.applescript")
+  endif()
   if(RELAYDESK_MACOS_PACKAGE_VARIANT STREQUAL "signed")
     set(RELAYDESK_MACDEPLOYQT_CODESIGN "${RELAYDESK_MACOS_SIGNING_IDENTITY}")
     set(RELAYDESK_MACDEPLOYQT_HARDENED "\"-hardened-runtime\"")
@@ -36,8 +45,6 @@ if (OSX_BUNDLE)
     set(RELAYDESK_MACDEPLOYQT_HARDENED "")
   endif()
   set(CPACK_PACKAGE_ICON "${MY_DIR}/dmg-volume.icns")
-  set(CPACK_DMG_BACKGROUND_IMAGE "${MY_DIR}/dmg-background.tiff")
-  set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/generate_ds_store.applescript")
   set(CPACK_DMG_VOLUME_NAME "${CMAKE_PROJECT_PROPER_NAME}")
   set(CPACK_DMG_SLA_USE_RESOURCE_FILE_LICENSE ON)
   set(CPACK_GENERATOR "DragNDrop")
