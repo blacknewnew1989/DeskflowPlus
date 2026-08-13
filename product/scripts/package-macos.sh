@@ -60,13 +60,26 @@ BUILD_ARGS=(
 "$SCRIPT_DIR/build-macos.sh" "${BUILD_ARGS[@]}"
 CONFIG_LOWER="$(printf '%s' "$CONFIG" | tr '[:upper:]' '[:lower:]')"
 BUILD_DIR="$REPO_ROOT/build/macos/$CONFIG_LOWER"
-for previous_dmg in "$BUILD_DIR"/relaydesk-*-macos-*.dmg; do
-  [[ -f "$previous_dmg" ]] && cmake -E rm -f "$previous_dmg"
-done
-cmake --build "$BUILD_DIR" --config "$CONFIG" --target package package_source --parallel
-
 FULL_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-STAGE_DIR="$BUILD_DIR/relaydesk-package-stage/$FULL_SHA"
+PACKAGE_TEMP="$(/usr/bin/mktemp -d /private/tmp/relaydesk-package.XXXXXX)"
+if [[ "$PACKAGE_TEMP" != /private/tmp/relaydesk-package.* || ! -d "$PACKAGE_TEMP" ]]; then
+  echo "MACOS_PACKAGE_TEMP_INVALID: $PACKAGE_TEMP" >&2
+  exit 1
+fi
+cleanup_package_temp() {
+  if [[ "$PACKAGE_TEMP" == /private/tmp/relaydesk-package.* && -d "$PACKAGE_TEMP" ]]; then
+    cmake -E rm -rf "$PACKAGE_TEMP"
+  fi
+}
+trap cleanup_package_temp EXIT
+
+# File Provider-managed workspaces can attach Finder metadata while macdeployqt
+# is signing. Keep the disposable CPack and install trees outside the workspace,
+# then collect only the sealed archives back into dist/.
+cpack --config "$BUILD_DIR/CPackConfig.cmake" -B "$PACKAGE_TEMP"
+cpack --config "$BUILD_DIR/CPackSourceConfig.cmake" -B "$PACKAGE_TEMP"
+
+STAGE_DIR="$PACKAGE_TEMP/relaydesk-package-stage/$FULL_SHA"
 cmake -E rm -rf "$STAGE_DIR"
 cmake --install "$BUILD_DIR" --config "$CONFIG" --prefix "$STAGE_DIR"
 APP_BUNDLES=()
@@ -89,7 +102,7 @@ else
 fi
 
 DMG_FILES=()
-for dmg_file in "$BUILD_DIR"/relaydesk-*-macos-*-$PACKAGE_VARIANT.dmg; do
+for dmg_file in "$PACKAGE_TEMP"/relaydesk-*-macos-*-$PACKAGE_VARIANT.dmg; do
   [[ -f "$dmg_file" ]] && DMG_FILES+=("$dmg_file")
 done
 if [[ "${#DMG_FILES[@]}" -ne 1 ]]; then
@@ -128,7 +141,7 @@ fi
 OUT_DIR="$REPO_ROOT/dist/macos/$FULL_SHA"
 COLLECT_ARGS=(
   "$REPO_ROOT/product/scripts/collect-ci-artifacts.py"
-  --build-dir "$BUILD_DIR"
+  --build-dir "$PACKAGE_TEMP"
   --out-dir "$OUT_DIR"
   --platform macos-arm64
   --commit "$FULL_SHA"

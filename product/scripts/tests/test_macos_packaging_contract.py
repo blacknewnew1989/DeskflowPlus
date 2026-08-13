@@ -48,6 +48,9 @@ class MacosPackagingContractTests(unittest.TestCase):
             "MACOS_NOTARIZATION_STATUS=not-requested",
             "--app-bundle",
             "--plan-only",
+            "/private/tmp/relaydesk-package.XXXXXX",
+            'cpack --config "$BUILD_DIR/CPackConfig.cmake" -B "$PACKAGE_TEMP"',
+            '--build-dir "$PACKAGE_TEMP"',
         ):
             self.assertIn(required, script)
 
@@ -56,11 +59,23 @@ class MacosPackagingContractTests(unittest.TestCase):
 
     def test_bundle_and_dmg_use_central_brand_and_signature_variant(self) -> None:
         deploy = (ROOT / "deploy/mac/deploy.cmake").read_text(encoding="utf-8")
+        dmg_layout = (ROOT / "deploy/mac/generate_ds_store.applescript").read_text(
+            encoding="utf-8"
+        )
         gui = (ROOT / "src/apps/deskflow-gui/CMakeLists.txt").read_text(encoding="utf-8")
         plist = (ROOT / "src/apps/res/deskflow.plist.in").read_text(encoding="utf-8")
 
         self.assertIn("RELAYDESK_MACOS_PACKAGE_VARIANT", deploy)
         self.assertIn("RELAYDESK_MACOS_SIGNING_IDENTITY", deploy)
+        self.assertIn("RELAYDESK_MACOS_CUSTOM_DMG_LAYOUT", deploy)
+        self.assertIn("Use Finder automation to apply the custom RelayDesk DMG layout", deploy)
+        self.assertIn("if(RELAYDESK_MACOS_CUSTOM_DMG_LAYOUT)", deploy)
+        self.assertLess(
+            deploy.index("if(RELAYDESK_MACOS_CUSTOM_DMG_LAYOUT)"),
+            deploy.index("CPACK_DMG_DS_STORE_SETUP_SCRIPT"),
+        )
+        self.assertIn("with timeout of 30 seconds", dmg_layout)
+        self.assertIn("custom Finder layout skipped", dmg_layout)
         self.assertIn("${RELAYDESK_MACOS_ICON_SOURCE}", gui)
         self.assertIn("@BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION@", plist)
 
