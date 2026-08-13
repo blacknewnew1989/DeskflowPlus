@@ -748,7 +748,6 @@ void FileTransferRuntime::handleFrame(FileTlsConnection &connection, Frame frame
     return;
   }
   routeTransferFrame(*context->peer, frame);
-  Q_EMIT protocolFrameReceived(*context->peer, std::move(frame));
 }
 
 void FileTransferRuntime::routeTransferFrame(const DeviceId &peerDeviceId, const Frame &frame)
