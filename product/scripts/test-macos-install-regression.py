@@ -175,11 +175,14 @@ def run_command(
     log: IO[str],
     *,
     environment: dict[str, str] | None = None,
+    input_text: str | None = None,
     timeout: int = 120,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     command = [os.fspath(argument) for argument in arguments]
     log.write(f"$ {' '.join(command)}\n")
+    if input_text is not None:
+        log.write("STDIN=Y (accept embedded DMG license for automated testing)\n")
     log.flush()
     try:
         result = subprocess.run(
@@ -187,6 +190,7 @@ def run_command(
             capture_output=True,
             text=True,
             env=environment,
+            input=input_text,
             timeout=timeout,
             check=False,
         )
@@ -477,9 +481,11 @@ def run_regression(args: argparse.Namespace) -> int:
                     artifacts.dmg,
                 ],
                 log,
+                input_text="Y\n",
                 timeout=180,
             )
             mounted = True
+            result["checks"]["dmgLicenseAcceptedForAutomation"] = "PASS"
             result["checks"]["dmgAttach"] = "PASS"
             dmg_app = find_single_app(mount_point, "TEST005_DMG_STRUCTURE")
             dmg_info = read_bundle_info(dmg_app)
