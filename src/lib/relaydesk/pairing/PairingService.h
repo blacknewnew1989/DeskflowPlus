@@ -20,32 +20,8 @@ namespace deskflow::relaydesk {
 
 inline constexpr quint16 kDefaultPairingPort = 24802;
 
-class IPairingService : public QObject
-{
-  Q_OBJECT
-
-public:
-  explicit IPairingService(QObject *parent = nullptr) : QObject(parent)
-  {
-  }
-  ~IPairingService() override = default;
-
-  virtual PairingOperationResult startPairing(
-      DeviceSnapshot peer, QByteArray peerFingerprintSha256, PairingEndpoint endpoint
-  ) = 0;
-  virtual PairingOperationResult confirmMatchingSas(const QUuid &sessionId) = 0;
-  virtual PairingOperationResult submitDisplayedSas(const QUuid &sessionId, const QString &sixDigits) = 0;
-  virtual PairingOperationResult cancel(const QUuid &sessionId) = 0;
-  virtual PairingOperationResult revoke(const DeviceId &deviceId) = 0;
-  [[nodiscard]] virtual std::optional<PairingSnapshot> snapshot() const = 0;
-  [[nodiscard]] virtual std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const = 0;
-
-Q_SIGNALS:
-  void pairingChanged(PairingSnapshot snapshot);
-  void operationFailed(PairingOperationResult result);
-};
-
-class PairingService final : public IPairingService
+/** Internal UDP transport; GUI code consumes IPairingService via PairingTrustRuntime. */
+class PairingService final : public QObject
 {
   Q_OBJECT
 
@@ -55,6 +31,8 @@ public:
       PairingManager::Clock clock = {}, PairingManager::SasGenerator sasGenerator = {},
       PairingManager::DatagramSender datagramSender = {}, QObject *parent = nullptr
   );
+
+  Q_DISABLE_COPY_MOVE(PairingService)
 
   [[nodiscard]] PairingOperationResult listen(
       const QHostAddress &address = QHostAddress::AnyIPv4, quint16 port = kDefaultPairingPort
@@ -67,13 +45,17 @@ public:
 
   PairingOperationResult startPairing(
       DeviceSnapshot peer, QByteArray peerFingerprintSha256, PairingEndpoint endpoint
-  ) override;
-  PairingOperationResult confirmMatchingSas(const QUuid &sessionId) override;
-  PairingOperationResult submitDisplayedSas(const QUuid &sessionId, const QString &sixDigits) override;
-  PairingOperationResult cancel(const QUuid &sessionId) override;
-  PairingOperationResult revoke(const DeviceId &deviceId) override;
-  [[nodiscard]] std::optional<PairingSnapshot> snapshot() const override;
-  [[nodiscard]] std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const override;
+  );
+  PairingOperationResult confirmMatchingSas(const QUuid &sessionId);
+  PairingOperationResult submitDisplayedSas(const QUuid &sessionId, const QString &sixDigits);
+  PairingOperationResult cancel(const QUuid &sessionId);
+  PairingOperationResult revoke(const DeviceId &deviceId);
+  [[nodiscard]] std::optional<PairingSnapshot> snapshot() const;
+  [[nodiscard]] std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const;
+
+Q_SIGNALS:
+  void pairingChanged(PairingSnapshot snapshot);
+  void operationFailed(PairingOperationResult result);
 
 private Q_SLOTS:
   void readPendingDatagrams();

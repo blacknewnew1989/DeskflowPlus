@@ -16,6 +16,13 @@ create_test(
 )
 
 create_test(
+  NAME RelayDeskPairingInterfaceFreezeTests
+  DEPENDS relaydesk_app
+  SOURCE PairingInterfaceFreezeTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+)
+
+create_test(
   NAME RelayDeskTransferUiRuntimeTests
   DEPENDS relaydesk_app
   SOURCE TransferUiRuntimeTests.cpp

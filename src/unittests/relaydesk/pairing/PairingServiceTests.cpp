@@ -183,7 +183,7 @@ void PairingServiceTests::reportsBindAndMalformedDatagramErrors()
   const auto info = deviceInfo(DeviceId::generate(), QStringLiteral("Listener"), '\x31');
   TrustedDeviceStore store(directory.filePath(QStringLiteral("trusted.json")));
   PairingService service(info, store);
-  QSignalSpy failed(&service, &IPairingService::operationFailed);
+  QSignalSpy failed(&service, &PairingService::operationFailed);
   QVERIFY(service.listen(QHostAddress::LocalHost, 0).ok());
 
   QUdpSocket occupied;

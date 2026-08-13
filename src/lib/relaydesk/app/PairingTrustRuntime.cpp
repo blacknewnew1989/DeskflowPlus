@@ -9,6 +9,7 @@
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
+#include "relaydesk/pairing/PairingService.h"
 
 #include <QAbstractSocket>
 
@@ -28,9 +29,9 @@ PairingTrustRuntime::PairingTrustRuntime(
     model::DeviceHomeModel &deviceModel, model::PairingWizardModel &pairingModel,
     PairingTrustRuntimeOptions options, QObject *parent
 )
-    : QObject(parent), m_discovery(discovery), m_deviceModel(deviceModel),
+    : IPairingService(parent), m_discovery(discovery), m_deviceModel(deviceModel),
       m_trustedDevices(std::move(trustedDevicesPath)), m_loadResult(m_trustedDevices.load()),
-      m_service(
+      m_service(std::make_unique<PairingService>(
           std::move(localDevice), m_trustedDevices, options.pairing, std::move(options.clock),
           std::move(options.sasGenerator),
           [&discovery](QByteArray bytes, PairingEndpoint endpoint) {
@@ -41,25 +42,27 @@ PairingTrustRuntime::PairingTrustRuntime(
             return PairingTransportResult{.ok = written == bytes.size(), .diagnostic = std::move(diagnostic)};
           },
           this
-      ),
+      )),
       m_endpointResolver(std::move(options.endpointResolver))
 {
-  pairingModel.bindService(m_service);
+  pairingModel.bindService(*this);
   connect(
-      &m_discovery.service(), &DiscoveryService::unrecognizedDatagramReceived, &m_service,
+      &m_discovery.service(), &DiscoveryService::unrecognizedDatagramReceived, m_service.get(),
       [this](const QByteArray &datagram, const QHostAddress &address, quint16 port) {
         if (!isReady()) {
-          Q_EMIT operationFailed(failure(PairingOperationError::PersistenceFailed, m_loadResult.diagnostic));
+          (void)reportPreflightFailure(
+              failure(PairingOperationError::PersistenceFailed, m_loadResult.diagnostic)
+          );
           return;
         }
-        (void)m_service.receiveDatagram(datagram, {.address = address, .port = port});
+        (void)m_service->receiveDatagram(datagram, {.address = address, .port = port});
       }
   );
-  connect(&m_service, &IPairingService::pairingChanged, this, [this](const PairingSnapshot &snapshot) {
+  connect(m_service.get(), &PairingService::pairingChanged, this, [this](const PairingSnapshot &snapshot) {
     updateDevice(snapshot);
     Q_EMIT pairingChanged(snapshot);
   });
-  connect(&m_service, &IPairingService::operationFailed, this, &PairingTrustRuntime::operationFailed);
+  connect(m_service.get(), &PairingService::operationFailed, this, &IPairingService::operationFailed);
   connect(
       &m_discovery.registry(), &DiscoveryRegistry::deviceAdded, this,
       &PairingTrustRuntime::syncDiscoveredDevice
@@ -75,7 +78,7 @@ PairingTrustRuntime::PairingTrustRuntime(
 
 PairingTrustRuntime::~PairingTrustRuntime()
 {
-  m_service.close();
+  m_service->close();
 }
 
 const TrustedDeviceStoreResult &PairingTrustRuntime::loadResult() const
@@ -88,52 +91,61 @@ bool PairingTrustRuntime::isReady() const
   return m_loadResult.ok;
 }
 
-PairingService &PairingTrustRuntime::service()
-{
-  return m_service;
-}
-
 const TrustedDeviceStore &PairingTrustRuntime::trustedDevices() const
 {
   return m_trustedDevices;
 }
 
-PairingOperationResult PairingTrustRuntime::startPairing(const DeviceSnapshot &peer)
+PairingOperationResult PairingTrustRuntime::startPairing(const DeviceId &deviceId)
 {
   if (!isReady()) {
-    return failure(PairingOperationError::PersistenceFailed, m_loadResult.diagnostic);
+    return reportPreflightFailure(
+        failure(PairingOperationError::PersistenceFailed, m_loadResult.diagnostic)
+    );
   }
-  const auto device = m_discovery.registry().deviceInfo(peer.id);
-  if (!device.has_value()) {
-    return failure(PairingOperationError::InvalidPeer, QStringLiteral("pairing peer was not discovered"));
+  const auto peer = m_discovery.registry().snapshot(deviceId);
+  const auto device = m_discovery.registry().deviceInfo(deviceId);
+  if (!peer.has_value() || !device.has_value() || device->deviceId != deviceId ||
+      device->certificateFingerprintSha256.size() != 32) {
+    return reportPreflightFailure(
+        failure(PairingOperationError::InvalidPeer, QStringLiteral("pairing peer identity is not currently discovered"))
+    );
   }
-  const auto endpoint = endpointFor(peer);
+  const auto endpoint = endpointFor(*peer);
   if (!endpoint.has_value()) {
-    return failure(PairingOperationError::InvalidEndpoint, QStringLiteral("pairing peer has no usable endpoint"));
+    return reportPreflightFailure(
+        failure(PairingOperationError::InvalidEndpoint, QStringLiteral("pairing peer has no usable discovered endpoint"))
+    );
   }
-  return m_service.startPairing(peer, device->certificateFingerprintSha256, *endpoint);
+  // Discovery identity is only pending evidence. PairingManager binds the
+  // authenticated pairing transcript sender identity and fingerprint to this
+  // value before PairingTrustCommitter can persist the TLS pin.
+  return m_service->startPairing(
+      *peer, device->certificateFingerprintSha256,
+      {.address = endpoint->first, .port = endpoint->second}
+  );
 }
 
 PairingOperationResult PairingTrustRuntime::confirmMatchingSas(const QUuid &sessionId)
 {
-  return m_service.confirmMatchingSas(sessionId);
+  return m_service->confirmMatchingSas(sessionId);
 }
 
 PairingOperationResult PairingTrustRuntime::submitDisplayedSas(
     const QUuid &sessionId, const QString &sixDigits
 )
 {
-  return m_service.submitDisplayedSas(sessionId, sixDigits);
+  return m_service->submitDisplayedSas(sessionId, sixDigits);
 }
 
 PairingOperationResult PairingTrustRuntime::cancel(const QUuid &sessionId)
 {
-  return m_service.cancel(sessionId);
+  return m_service->cancel(sessionId);
 }
 
 PairingOperationResult PairingTrustRuntime::revoke(const DeviceId &deviceId)
 {
-  auto result = m_service.revoke(deviceId);
+  auto result = m_service->revoke(deviceId);
   if (!result.ok()) {
     return result;
   }
@@ -148,19 +160,38 @@ PairingOperationResult PairingTrustRuntime::revoke(const DeviceId &deviceId)
   return result;
 }
 
-bool PairingTrustRuntime::expireIfNeeded()
+std::optional<PairingSnapshot> PairingTrustRuntime::snapshot() const
 {
-  return m_service.expireIfNeeded();
+  return m_service->snapshot();
 }
 
-std::optional<PairingEndpoint> PairingTrustRuntime::endpointFor(const DeviceSnapshot &peer) const
+std::optional<QByteArray> PairingTrustRuntime::pendingFingerprint(const QUuid &sessionId) const
+{
+  return m_service->pendingFingerprint(sessionId);
+}
+
+bool PairingTrustRuntime::expireIfNeeded()
+{
+  return m_service->expireIfNeeded();
+}
+
+PairingOperationResult PairingTrustRuntime::reportPreflightFailure(PairingOperationResult result)
+{
+  Q_ASSERT(!result.ok());
+  Q_EMIT operationFailed(result);
+  return result;
+}
+
+std::optional<std::pair<QHostAddress, quint16>> PairingTrustRuntime::endpointFor(
+    const DeviceSnapshot &peer
+) const
 {
   if (m_endpointResolver) {
-    return m_endpointResolver(peer);
+    return m_endpointResolver(peer.id);
   }
   for (const auto &address : peer.addresses) {
     if (!address.isNull() && address.protocol() == QAbstractSocket::IPv4Protocol) {
-      return PairingEndpoint{.address = address, .port = m_discovery.service().destinationPort()};
+      return std::pair(address, m_discovery.service().destinationPort());
     }
   }
   return std::nullopt;
@@ -193,7 +224,7 @@ void PairingTrustRuntime::syncDiscoveredDevice(DeviceSnapshot snapshot)
     return;
   }
 
-  if (const auto pairing = m_service.snapshot(); pairing.has_value() && pairing->peer.id == snapshot.id &&
+  if (const auto pairing = m_service->snapshot(); pairing.has_value() && pairing->peer.id == snapshot.id &&
       pairing->state != PairingState::Completed && pairing->state != PairingState::Expired &&
       pairing->state != PairingState::Rejected && pairing->state != PairingState::Failed) {
     snapshot.presence = DevicePresence::Pairing;

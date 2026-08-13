@@ -14,6 +14,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimeZone>
@@ -70,17 +71,11 @@ struct RuntimePair
       return;
     }
 
-    firstOptions.endpointResolver = [this](const DeviceSnapshot &) {
-      return std::optional<PairingEndpoint>({
-          .address = QHostAddress::LocalHost,
-          .port = secondDiscovery.service().boundPort(),
-      });
+    firstOptions.endpointResolver = [this](const DeviceId &) {
+      return std::optional(std::pair(QHostAddress(QHostAddress::LocalHost), secondDiscovery.service().boundPort()));
     };
-    secondOptions.endpointResolver = [this](const DeviceSnapshot &) {
-      return std::optional<PairingEndpoint>({
-          .address = QHostAddress::LocalHost,
-          .port = firstDiscovery.service().boundPort(),
-      });
+    secondOptions.endpointResolver = [this](const DeviceId &) {
+      return std::optional(std::pair(QHostAddress(QHostAddress::LocalHost), firstDiscovery.service().boundPort()));
     };
     first = std::make_unique<PairingTrustRuntime>(
         firstInfo, directory.filePath(QStringLiteral("first/trusted.json")), firstDiscovery, firstModel,
@@ -95,7 +90,7 @@ struct RuntimePair
 
   PairingOperationResult start()
   {
-    return first->startPairing(*firstModel.snapshot(secondInfo.deviceId));
+    return first->startPairing(secondInfo.deviceId);
   }
 
   DeviceInfo firstInfo;
@@ -123,6 +118,7 @@ private Q_SLOTS:
   void cancelAndExpiryReturnDevicesToDiscovered();
   void revokePersistsAndPinningPolicyRejectsPeer();
   void unusableTrustStoreBlocksPairing();
+  void rejectsMissingFreshDiscoveryIdentityAndEndpoint();
 };
 
 void PairingTrustRuntimeTests::twoSharedDiscoverySocketsPersistExplicitlyConfirmedTrust()
@@ -135,9 +131,9 @@ void PairingTrustRuntimeTests::twoSharedDiscoverySocketsPersistExplicitlyConfirm
 
   const auto started = pair.start();
   QVERIFY2(started.ok(), qPrintable(started.diagnostic));
-  QTRY_VERIFY_WITH_TIMEOUT(pair.second->service().snapshot().has_value(), 3000);
+  QTRY_VERIFY_WITH_TIMEOUT(pair.second->snapshot().has_value(), 3000);
 
-  const auto sas = pair.first->service().snapshot()->sixDigitSas;
+  const auto sas = pair.first->snapshot()->sixDigitSas;
   QCOMPARE(sas, QStringLiteral("123456"));
   QVERIFY(pair.firstPairingModel.active());
   QVERIFY(pair.secondPairingModel.active());
@@ -152,8 +148,8 @@ void PairingTrustRuntimeTests::twoSharedDiscoverySocketsPersistExplicitlyConfirm
   QVERIFY(pair.firstPairingModel.confirmMatchingSas());
   QVERIFY(pair.secondPairingModel.submitDisplayedSas(sas));
 
-  QTRY_COMPARE_WITH_TIMEOUT(pair.first->service().snapshot()->state, PairingState::Completed, 3000);
-  QTRY_COMPARE_WITH_TIMEOUT(pair.second->service().snapshot()->state, PairingState::Completed, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(pair.first->snapshot()->state, PairingState::Completed, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(pair.second->snapshot()->state, PairingState::Completed, 3000);
   const auto firstPeer = pair.firstModel.snapshot(pair.secondInfo.deviceId);
   const auto secondPeer = pair.secondModel.snapshot(pair.firstInfo.deviceId);
   QVERIFY(firstPeer->trusted);
@@ -191,13 +187,13 @@ void PairingTrustRuntimeTests::wrongCodeNeverPinsAdvertisedFingerprint()
   RuntimePair pair(directory, {.sasGenerator = []() { return 123456U; }});
   QVERIFY2(pair.ready, qPrintable(pair.readyDiagnostic));
   QVERIFY(pair.start().ok());
-  QTRY_VERIFY_WITH_TIMEOUT(pair.second->service().snapshot().has_value(), 3000);
+  QTRY_VERIFY_WITH_TIMEOUT(pair.second->snapshot().has_value(), 3000);
 
   QVERIFY(pair.firstPairingModel.confirmMatchingSas());
   QVERIFY(pair.secondPairingModel.submitDisplayedSas(QStringLiteral("000000")));
   QTRY_VERIFY_WITH_TIMEOUT(
-      pair.first->service().snapshot()->state == PairingState::Rejected ||
-          pair.first->service().snapshot()->state == PairingState::Failed,
+      pair.first->snapshot()->state == PairingState::Rejected ||
+          pair.first->snapshot()->state == PairingState::Failed,
       3000
   );
   QVERIFY(!pair.first->trustedDevices().find(pair.secondInfo.deviceId).has_value());
@@ -213,9 +209,9 @@ void PairingTrustRuntimeTests::cancelAndExpiryReturnDevicesToDiscovered()
   RuntimePair cancelled(cancelDirectory);
   QVERIFY2(cancelled.ready, qPrintable(cancelled.readyDiagnostic));
   QVERIFY(cancelled.start().ok());
-  QTRY_VERIFY_WITH_TIMEOUT(cancelled.second->service().snapshot().has_value(), 3000);
+  QTRY_VERIFY_WITH_TIMEOUT(cancelled.second->snapshot().has_value(), 3000);
   QVERIFY(cancelled.firstPairingModel.cancel());
-  QTRY_COMPARE_WITH_TIMEOUT(cancelled.second->service().snapshot()->state, PairingState::Rejected, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(cancelled.second->snapshot()->state, PairingState::Rejected, 3000);
   QCOMPARE(cancelled.firstModel.snapshot(cancelled.secondInfo.deviceId)->presence, DevicePresence::Discovered);
   QCOMPARE(cancelled.secondModel.snapshot(cancelled.firstInfo.deviceId)->presence, DevicePresence::Discovered);
 
@@ -228,12 +224,12 @@ void PairingTrustRuntimeTests::cancelAndExpiryReturnDevicesToDiscovered()
   RuntimePair expired(expiryDirectory, expiryOptions, expiryOptions);
   QVERIFY2(expired.ready, qPrintable(expired.readyDiagnostic));
   QVERIFY(expired.start().ok());
-  QTRY_VERIFY_WITH_TIMEOUT(expired.second->service().snapshot().has_value(), 3000);
+  QTRY_VERIFY_WITH_TIMEOUT(expired.second->snapshot().has_value(), 3000);
   now = now.addSecs(2);
   QVERIFY(expired.first->expireIfNeeded());
   QVERIFY(expired.second->expireIfNeeded());
-  QCOMPARE(expired.first->service().snapshot()->state, PairingState::Expired);
-  QCOMPARE(expired.second->service().snapshot()->state, PairingState::Expired);
+  QCOMPARE(expired.first->snapshot()->state, PairingState::Expired);
+  QCOMPARE(expired.second->snapshot()->state, PairingState::Expired);
   QCOMPARE(expired.firstModel.snapshot(expired.secondInfo.deviceId)->presence, DevicePresence::Discovered);
   QCOMPARE(expired.secondModel.snapshot(expired.firstInfo.deviceId)->presence, DevicePresence::Discovered);
 }
@@ -244,11 +240,11 @@ void PairingTrustRuntimeTests::revokePersistsAndPinningPolicyRejectsPeer()
   RuntimePair pair(directory, {.sasGenerator = []() { return 123456U; }});
   QVERIFY2(pair.ready, qPrintable(pair.readyDiagnostic));
   QVERIFY(pair.start().ok());
-  QTRY_VERIFY_WITH_TIMEOUT(pair.second->service().snapshot().has_value(), 3000);
-  const auto sas = pair.first->service().snapshot()->sixDigitSas;
+  QTRY_VERIFY_WITH_TIMEOUT(pair.second->snapshot().has_value(), 3000);
+  const auto sas = pair.first->snapshot()->sixDigitSas;
   QVERIFY(pair.firstPairingModel.confirmMatchingSas());
   QVERIFY(pair.secondPairingModel.submitDisplayedSas(sas));
-  QTRY_COMPARE_WITH_TIMEOUT(pair.first->service().snapshot()->state, PairingState::Completed, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(pair.first->snapshot()->state, PairingState::Completed, 3000);
 
   QVERIFY(pair.first->revoke(pair.secondInfo.deviceId).ok());
   QCOMPARE(pair.firstModel.snapshot(pair.secondInfo.deviceId)->presence, DevicePresence::TrustViolation);
@@ -287,10 +283,42 @@ void PairingTrustRuntimeTests::unusableTrustStoreBlocksPairing()
 
   PairingTrustRuntime runtime(localInfo, storePath, discovery, devices, pairing);
   QVERIFY(!runtime.isReady());
-  const auto result = runtime.startPairing(*devices.snapshot(peerInfo.deviceId));
+  const auto result = runtime.startPairing(peerInfo.deviceId);
   QCOMPARE(result.error, PairingOperationError::PersistenceFailed);
   QVERIFY(!pairing.active());
   QVERIFY(!devices.snapshot(peerInfo.deviceId)->trusted);
+}
+
+void PairingTrustRuntimeTests::rejectsMissingFreshDiscoveryIdentityAndEndpoint()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto localInfo = device(QStringLiteral("Local"), '\x61');
+  const auto peerInfo = device(QStringLiteral("Peer"), '\x62');
+  DeviceHomeModel devices;
+  PairingWizardModel pairing;
+  DeviceDiscoveryRuntime discovery(localInfo, devices, loopbackDiscovery());
+  QVERIFY(discovery.start());
+
+  PairingTrustRuntime runtime(
+      localInfo, directory.filePath(QStringLiteral("trusted.json")), discovery, devices, pairing,
+      {.endpointResolver = [](const DeviceId &) {
+        return std::optional<std::pair<QHostAddress, quint16>>{};
+      }}
+  );
+  QSignalSpy failed(&runtime, &IPairingService::operationFailed);
+
+  const auto missing = runtime.startPairing(peerInfo.deviceId);
+  QCOMPARE(missing.error, PairingOperationError::InvalidPeer);
+  QCOMPARE(failed.count(), 1);
+  QVERIFY(!runtime.snapshot().has_value());
+
+  QVERIFY(discovery.registry().observeAdvertisement(peerInfo, QHostAddress::LocalHost));
+  const auto endpoint = runtime.startPairing(peerInfo.deviceId);
+  QCOMPARE(endpoint.error, PairingOperationError::InvalidEndpoint);
+  QCOMPARE(failed.count(), 2);
+  QVERIFY(!runtime.snapshot().has_value());
+  QVERIFY(!runtime.trustedDevices().find(peerInfo.deviceId).has_value());
 }
 
 QTEST_MAIN(PairingTrustRuntimeTests)

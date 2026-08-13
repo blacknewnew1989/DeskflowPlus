@@ -296,7 +296,7 @@ void MainWindow::setupRelayDeskDiscovery()
   connect(
       m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::pairingRequested, this,
       [this](const deskflow::relaydesk::DeviceSnapshot &peer) {
-        const auto result = m_relayDeskPairing->startPairing(peer);
+        const auto result = m_relayDeskPairing->startPairing(peer.id);
         if (!result.ok()) {
           qWarning().noquote() << "RelayDesk pairing could not start:" << result.diagnostic;
         }

@@ -6,13 +6,16 @@
 
 #pragma once
 
-#include "relaydesk/pairing/PairingService.h"
+#include "relaydesk/pairing/IPairingService.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
 
+#include <QHostAddress>
 #include <QObject>
 
 #include <functional>
+#include <memory>
 #include <optional>
+#include <utility>
 
 namespace deskflow::relaydesk::model {
 class DeviceHomeModel;
@@ -22,16 +25,17 @@ class PairingWizardModel;
 namespace deskflow::relaydesk {
 
 class DeviceDiscoveryRuntime;
+class PairingService;
 
 struct PairingTrustRuntimeOptions
 {
   PairingOptions pairing;
-  PairingManager::Clock clock;
-  PairingManager::SasGenerator sasGenerator;
-  std::function<std::optional<PairingEndpoint>(const DeviceSnapshot &)> endpointResolver;
+  PairingStateMachine::Clock clock;
+  PairingStateMachine::SasGenerator sasGenerator;
+  std::function<std::optional<std::pair<QHostAddress, quint16>>(const DeviceId &)> endpointResolver;
 };
 
-class PairingTrustRuntime final : public QObject
+class PairingTrustRuntime final : public IPairingService
 {
   Q_OBJECT
 
@@ -47,22 +51,24 @@ public:
 
   [[nodiscard]] const TrustedDeviceStoreResult &loadResult() const;
   [[nodiscard]] bool isReady() const;
-  [[nodiscard]] PairingService &service();
   [[nodiscard]] const TrustedDeviceStore &trustedDevices() const;
 
-  [[nodiscard]] PairingOperationResult startPairing(const DeviceSnapshot &peer);
-  [[nodiscard]] PairingOperationResult confirmMatchingSas(const QUuid &sessionId);
-  [[nodiscard]] PairingOperationResult submitDisplayedSas(const QUuid &sessionId, const QString &sixDigits);
-  [[nodiscard]] PairingOperationResult cancel(const QUuid &sessionId);
-  [[nodiscard]] PairingOperationResult revoke(const DeviceId &deviceId);
+  [[nodiscard]] PairingOperationResult startPairing(const DeviceId &deviceId) override;
+  [[nodiscard]] PairingOperationResult confirmMatchingSas(const QUuid &sessionId) override;
+  [[nodiscard]] PairingOperationResult submitDisplayedSas(
+      const QUuid &sessionId, const QString &sixDigits
+  ) override;
+  [[nodiscard]] PairingOperationResult cancel(const QUuid &sessionId) override;
+  [[nodiscard]] PairingOperationResult revoke(const DeviceId &deviceId) override;
+  [[nodiscard]] std::optional<PairingSnapshot> snapshot() const override;
+  [[nodiscard]] std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const override;
   [[nodiscard]] bool expireIfNeeded();
 
-Q_SIGNALS:
-  void pairingChanged(PairingSnapshot snapshot);
-  void operationFailed(PairingOperationResult result);
-
 private:
-  [[nodiscard]] std::optional<PairingEndpoint> endpointFor(const DeviceSnapshot &peer) const;
+  [[nodiscard]] PairingOperationResult reportPreflightFailure(PairingOperationResult result);
+  [[nodiscard]] std::optional<std::pair<QHostAddress, quint16>> endpointFor(
+      const DeviceSnapshot &peer
+  ) const;
   void updateDevice(const PairingSnapshot &snapshot);
   void syncDiscoveredDevice(DeviceSnapshot snapshot);
   void applyTrust(DeviceSnapshot &snapshot) const;
@@ -71,8 +77,8 @@ private:
   model::DeviceHomeModel &m_deviceModel;
   TrustedDeviceStore m_trustedDevices;
   TrustedDeviceStoreResult m_loadResult;
-  PairingService m_service;
-  std::function<std::optional<PairingEndpoint>(const DeviceSnapshot &)> m_endpointResolver;
+  std::unique_ptr<PairingService> m_service;
+  std::function<std::optional<std::pair<QHostAddress, quint16>>(const DeviceId &)> m_endpointResolver;
 };
 
 } // namespace deskflow::relaydesk

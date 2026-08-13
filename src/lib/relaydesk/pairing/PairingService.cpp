@@ -17,7 +17,7 @@ PairingService::PairingService(
     PairingManager::Clock clock, PairingManager::SasGenerator sasGenerator,
     PairingManager::DatagramSender datagramSender, QObject *parent
 )
-    : IPairingService(parent), m_datagramSender(std::move(datagramSender)), m_socket(this),
+    : QObject(parent), m_datagramSender(std::move(datagramSender)), m_socket(this),
       m_manager(
           std::move(localDevice), trustedDevices,
           [this](QByteArray bytes, PairingEndpoint endpoint) {
@@ -28,8 +28,8 @@ PairingService::PairingService(
       m_expiryTimer(this)
 {
   connect(&m_socket, &QUdpSocket::readyRead, this, &PairingService::readPendingDatagrams);
-  connect(&m_manager, &PairingManager::pairingChanged, this, &IPairingService::pairingChanged);
-  connect(&m_manager, &PairingManager::operationFailed, this, &IPairingService::operationFailed);
+  connect(&m_manager, &PairingManager::pairingChanged, this, &PairingService::pairingChanged);
+  connect(&m_manager, &PairingManager::operationFailed, this, &PairingService::operationFailed);
   m_expiryTimer.setInterval(500);
   connect(&m_expiryTimer, &QTimer::timeout, &m_manager, &PairingManager::expireIfNeeded);
   m_expiryTimer.start();
