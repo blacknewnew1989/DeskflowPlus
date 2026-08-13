@@ -25,6 +25,23 @@ AutoReconnectRuntime::AutoReconnectRuntime(
       it.value()->networkAvailable();
     }
   });
+  connect(&files, &FileTransferRuntime::errorOccurred, this, [this](
+      FileTransferRuntimeError, FileTlsError transportError, const QString &diagnostic
+  ) {
+    const bool authenticationFailure =
+        transportError == FileTlsError::PeerCertificateMissing || transportError == FileTlsError::UnknownPeer ||
+        transportError == FileTlsError::RevokedPeer || transportError == FileTlsError::FingerprintChanged ||
+        transportError == FileTlsError::HelloInvalid || transportError == FileTlsError::NotAuthenticated;
+    const auto pending = m_pending.keys();
+    for (const auto &deviceId : pending) {
+      auto callback = m_pending.take(deviceId);
+      callback({
+          .error = authenticationFailure ? AutoReconnectConnectError::AuthenticationFailed
+                                         : AutoReconnectConnectError::NetworkError,
+          .diagnostic = diagnostic,
+      });
+    }
+  });
   for (const auto &snapshot : discovery.registry().snapshots()) {
     observe(snapshot);
   }
