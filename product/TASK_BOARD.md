@@ -14,7 +14,6 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 |---|---|---|---|
 | PROTO-FREEZE-001 | RelayDesk v1 wire protocol / shared interface freeze | A6/A2/A0 | PRD priority integrated; auditing every MessageType, filling missing codecs/errors/vectors, freezing docs/05/18/19 before further service expansion |
 | COMP-004 | IFileTransferService / FileTransferRuntime composition | A6/A0 | safe outgoing slice integrated through `b87dde214`; further service expansion paused until protocol/interface freeze tag PASS |
-| TEST-005 | Windows 安装升级卸载回归 | A7 | 原生临时目标验证中；macOS clean-install 待 runner |
 
 ## Blocked
 
@@ -78,6 +77,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | COMP-002 | pairing/trust runtime composition | A6/A0 | `8a7c025cb`, `c086fa967`; discovery UDP → pairing → atomic trust → GUI, local composition tests PASS |
 | COMP-003 | transfer UI intent runtime adapter | A3/A0 | `c8505c366`; typed send/offer/control/history intents and safe completion opener, 6/6 PASS |
 | PHASE2-CI | 文件传输内核阶段标签双平台验证 | A0 | tag `relaydesk-phase2-20260813-04`, run `31655013105`, Win 74/74 + Mac 75/75 + draft Release + local digest verification PASS |
+| TEST-005 | Windows/macOS 安装、升级、卸载与数据保留回归 | A7/A0 | Windows run `31657498852` installer report PASS；macOS run `31657596578` overall/lifecycle PASS；证据见 `product/docs/reports/TEST-005_*_INSTALL_LIFECYCLE.md` |
 
 ## 规则
 

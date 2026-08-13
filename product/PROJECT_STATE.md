@@ -10,7 +10,7 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 3-4 runtime composition and release hardening
+- Current phase: PROTO-FREEZE-001 protocol/interface freeze before further Phase 3-4 runtime composition
 - Last updated: 2026-08-13
 - User action required during development: none
 
@@ -21,8 +21,8 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last product implementation commit: `5f16c1f43905b0fa633615ff6ef6d02b72885eb5`
-- Current implementation: COMP-002 pairing/trust, COMP-003 UI intents, and COMP-004 file service lifecycle are integrated; file frame/session composition continues.
+- Last product implementation commit: `22619d8d584a2966ae0a82f69a960dbf066a8bbe`
+- Current implementation: COMP-002 pairing/trust and COMP-003 UI intents are integrated; the safe COMP-004 outgoing slice is integrated through `b87dde214`; further service expansion is paused while all RDFT v1 messages, vectors, envelopes, and shared interfaces are frozen.
 - Last verified stage tag: `relaydesk-phase2-20260813-04` (`d14a92335cc326f00c3bd12869585d48201d1bc0`)
 
 ## 自动执行状态
@@ -40,7 +40,8 @@
 | Phase 1 implementation | PASS | brand/i18n/device/discovery/pairing/trust/reconnect/device UI and permission guidance integrated through `ead6acbd5` |
 | Phase 1 dual-platform CI | PASS | tag run `31621226862`; Windows 60/60, macOS 61/61; build/package/upload all succeeded |
 | Draft Release publication | PASS | Phase 2 tag run `31655013105`; four delivery binaries downloaded and API/manifest/local SHA-256 agree |
-| Final macOS bundle seal | IN_PROGRESS | Phase 2 macdeployqt/package PASS; TEST-005 is verifying final App ZIP/DMG after all resource installs |
+| Windows installer lifecycle | PASS | TEST-005 run `31657498852`; real clean install/repair/major-upgrade/two uninstalls and residue checks PASS; report `product/docs/reports/TEST-005_WINDOWS_INSTALL_LIFECYCLE.md` |
+| Final macOS bundle seal/lifecycle | PASS | TEST-005 run `31657596578`; symlink-preserving App ZIP, strict ad-hoc codesign, DMG verify/mount, isolated install/upgrade/uninstall and user-data preservation PASS |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -68,7 +69,7 @@
 - Build result: PASS (CTest 74/74; unsigned MSI + portable 7Z + source packages)
 - Runtime result: NOT_RUN
 
-### macOS（最新 Phase 2 内部候选；最终 seal 仍由 TEST-005 审核）
+### macOS（最新 Phase 2 内部候选；最终 seal 另由 TEST-005 验证）
 
 - Commit: `d14a92335cc326f00c3bd12869585d48201d1bc0`
 - Workflow run: `31655013105`
@@ -77,7 +78,7 @@
 - App ZIP SHA-256: `cb0e460d9e7847c3e17f6aa0d5b85693ec0f66d3aebb3e4918ebde5ec7420730`
 - DMG SHA-256: `82e00d0b9a4d1f6cbdc58cdd6f7f4c7581b94f60ec1a371be90151874055f7d4`
 - Build result: PASS (CTest 75/75; ad-hoc App ZIP + DMG + source packages)
-- Final bundle result: IN_PROGRESS (post-resource strict codesign and isolated lifecycle are Phase 4 TEST-005)
+- Final bundle result: PASS in TEST-005 run `31657596578` for the later ad-hoc App ZIP/DMG at `4377afeed`; see `product/docs/reports/TEST-005_MACOS_INSTALL_LIFECYCLE.md`. The Phase 2 hashes above remain the Phase 2 stage assets and are not relabeled as the later TEST-005 packages.
 - Runtime result: NOT_RUN
 
 ## 最终用户验收
