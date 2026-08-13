@@ -353,6 +353,33 @@ def verify_bundle_platform(bundle: BundleInfo, log: IO[str]) -> None:
             )
 
 
+def framework_symlink_manifest(app: Path) -> dict[str, str]:
+    frameworks_root = app / "Contents" / "Frameworks"
+    frameworks = sorted(frameworks_root.glob("*.framework"))
+    if not frameworks:
+        raise RegressionError(f"TEST005_FRAMEWORKS_MISSING: {app.name}")
+
+    manifest: dict[str, str] = {}
+    for framework in frameworks:
+        framework_root = framework.resolve(strict=True)
+        links = (
+            framework / "Versions" / "Current",
+            framework / framework.stem,
+            framework / "Resources",
+        )
+        for link in links:
+            relative = link.relative_to(app).as_posix()
+            if not link.is_symlink():
+                raise RegressionError(f"TEST005_FRAMEWORK_LINK_INVALID: {relative}")
+            try:
+                resolved = link.resolve(strict=True)
+                resolved.relative_to(framework_root)
+            except (FileNotFoundError, ValueError):
+                raise RegressionError(f"TEST005_FRAMEWORK_LINK_UNSAFE: {relative}")
+            manifest[relative] = os.readlink(link)
+    return manifest
+
+
 def assert_same_bundle(left: BundleInfo, right: BundleInfo) -> None:
     left_identity = (left.identifier, left.executable_name, left.version)
     right_identity = (right.identifier, right.executable_name, right.version)
@@ -529,6 +556,8 @@ def run_regression(args: argparse.Namespace) -> int:
             zip_app = find_single_app(extraction, "TEST005_APP_ZIP_STRUCTURE")
             zip_info = read_bundle_info(zip_app)
             result["checks"]["appZipStructure"] = "PASS"
+            zip_framework_links = framework_symlink_manifest(zip_app)
+            result["checks"]["appZipFrameworkSymlinks"] = "PASS"
             verify_bundle_platform(zip_info, log)
             result["checks"]["appZipPlatform"] = "PASS"
             verify_adhoc_bundle(zip_app, log)
@@ -556,6 +585,10 @@ def run_regression(args: argparse.Namespace) -> int:
             result["checks"]["dmgAttach"] = "PASS"
             dmg_app = find_single_app(mount_point, "TEST005_DMG_STRUCTURE")
             dmg_info = read_bundle_info(dmg_app)
+            dmg_framework_links = framework_symlink_manifest(dmg_app)
+            if dmg_framework_links != zip_framework_links:
+                raise RegressionError("TEST005_FRAMEWORK_LINK_MISMATCH")
+            result["checks"]["dmgAppFrameworkSymlinks"] = "PASS"
             verify_bundle_platform(dmg_info, log)
             result["checks"]["dmgAppPlatform"] = "PASS"
             verify_adhoc_bundle(dmg_app, log)
@@ -571,6 +604,8 @@ def run_regression(args: argparse.Namespace) -> int:
             installed_app = applications / zip_app.name
             copy_app(zip_app, installed_app, log)
             installed_info = read_bundle_info(installed_app)
+            if framework_symlink_manifest(installed_app) != zip_framework_links:
+                raise RegressionError("TEST005_INSTALLED_FRAMEWORK_LINK_MISMATCH")
             assert_same_bundle(zip_info, installed_info)
             verify_adhoc_bundle(installed_app, log)
             smoke_bundle(installed_info, smoke_environment, log)
@@ -583,6 +618,8 @@ def run_regression(args: argparse.Namespace) -> int:
             if stale_marker.exists():
                 raise RegressionError("TEST005_UPGRADE_MERGED_STALE_BUNDLE_CONTENT")
             upgraded_info = read_bundle_info(installed_app)
+            if framework_symlink_manifest(installed_app) != zip_framework_links:
+                raise RegressionError("TEST005_UPGRADED_FRAMEWORK_LINK_MISMATCH")
             assert_same_bundle(zip_info, upgraded_info)
             verify_adhoc_bundle(installed_app, log)
             smoke_bundle(upgraded_info, smoke_environment, log)

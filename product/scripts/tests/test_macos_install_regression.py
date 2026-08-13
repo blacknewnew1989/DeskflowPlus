@@ -132,6 +132,21 @@ class MacosInstallRegressionTests(unittest.TestCase):
                         self._bundle_info(Path(directory)), mock.Mock()
                     )
 
+    def test_rejects_flattened_framework_links(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / "RelayDesk.app"
+            framework = app / "Contents/Frameworks/QtCore.framework"
+            (framework / "Versions/A/Resources").mkdir(parents=True)
+            (framework / "Versions/A/QtCore").write_bytes(b"binary")
+            (framework / "Versions/Current").mkdir()
+            (framework / "QtCore").write_bytes(b"flattened")
+            (framework / "Resources").mkdir()
+
+            with self.assertRaisesRegex(
+                MODULE.RegressionError, "TEST005_FRAMEWORK_LINK_INVALID"
+            ):
+                MODULE.framework_symlink_manifest(app)
+
     def test_test_root_must_be_unique_and_beneath_runner_temp(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
