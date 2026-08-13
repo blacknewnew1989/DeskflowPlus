@@ -6,6 +6,8 @@
 
 #include "relaydesk/app/TransferRuntimeComposition.h"
 
+#include "relaydesk/app/TransferHistoryRuntime.h"
+
 #include "relaydesk/transfer/IFileTransferService.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
@@ -18,6 +20,7 @@ TransferRuntimeComposition::TransferRuntimeComposition(
     std::unique_ptr<IFileTransferService> service, TransferRuntimeLifecycle lifecycle,
     widgets::DevicesDock &devicesDock, widgets::TransferCenterDock &transferCenterDock,
     model::IncomingOfferSettingsSnapshot incomingOfferSettings,
+    QString historyPath,
     TransferUiRuntime::CompletionResolver completionResolver, TransferUiRuntime::UrlOpener urlOpener,
     QObject *parent
 )
@@ -29,6 +32,12 @@ TransferRuntimeComposition::TransferRuntimeComposition(
       )
 {
   Q_ASSERT(m_service != nullptr);
+  if (!historyPath.isEmpty()) {
+    m_historyRuntime = std::make_unique<TransferHistoryRuntime>(
+        *m_service, transferCenterDock.transferModel(), m_incomingOffers,
+        m_incomingOffers.settings().destinationRoot, std::move(historyPath), this
+    );
+  }
 }
 
 TransferRuntimeComposition::~TransferRuntimeComposition()
@@ -51,6 +60,9 @@ bool TransferRuntimeComposition::start(QString *diagnostic)
     return false;
   }
   m_running = m_lifecycle.start(diagnostic);
+  if (m_running && m_historyRuntime != nullptr) {
+    m_historyRuntime->start();
+  }
   return m_running;
 }
 

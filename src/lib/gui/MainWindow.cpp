@@ -32,6 +32,8 @@
 #include "net/FingerprintDatabase.h"
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
 #include "relaydesk/app/PairingTrustRuntime.h"
+#include "relaydesk/app/FileTransferRuntime.h"
+#include "relaydesk/app/TransferRuntimeComposition.h"
 #include "relaydesk/device/DeviceIdentity.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
 #include "relaydesk/model/DeviceHomeModel.h"
@@ -58,6 +60,7 @@
 #include <QRegularExpressionValidator>
 #include <QScreen>
 #include <QScrollBar>
+#include <QStandardPaths>
 #include <QSysInfo>
 
 #include <memory>
@@ -220,6 +223,9 @@ MainWindow::MainWindow()
 }
 MainWindow::~MainWindow()
 {
+  if (m_relayDeskTransfer) {
+    m_relayDeskTransfer->stop();
+  }
   if (m_relayDeskDiscovery) {
     m_relayDeskDiscovery->stop();
   }
@@ -306,6 +312,53 @@ void MainWindow::setupRelayDeskDiscovery()
   const auto enabled = discoverySettings.ok ? discoverySettings.settings.enabled : true;
   if (enabled && !m_relayDeskDiscovery->start(&diagnostic)) {
     qWarning().noquote() << "RelayDesk discovery could not start:" << diagnostic;
+  }
+  setupRelayDeskTransfer(*deviceId);
+}
+
+void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &localDeviceId)
+{
+  if (m_relayDeskDiscovery == nullptr || m_relayDeskPairing == nullptr || m_devicesDock == nullptr ||
+      m_transferCenterDock == nullptr) {
+    qWarning().noquote() << "RelayDesk file transfer disabled: composition dependencies are unavailable";
+    return;
+  }
+
+  auto runtime = std::make_unique<deskflow::relaydesk::FileTransferRuntime>(
+      localDeviceId, m_relayDeskPairing->trustedDevices(), *m_relayDeskDiscovery,
+      Settings::value(Settings::Security::Certificate).toString()
+  );
+  auto *runtimeObserver = runtime.get();
+  connect(
+      runtimeObserver, &deskflow::relaydesk::FileTransferRuntime::errorOccurred, this,
+      [](deskflow::relaydesk::FileTransferRuntimeError error,
+         deskflow::relaydesk::FileTlsError transportError, const QString &diagnostic) {
+        qWarning().noquote() << "RelayDesk file transfer error" << static_cast<int>(error) << '/'
+                             << static_cast<int>(transportError) << ':' << diagnostic;
+      }
+  );
+
+  const auto receiveRoot = QDir(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation))
+                               .filePath(QStringLiteral("RelayDesk"));
+  const auto historyPath =
+      QDir(Settings::settingsPath()).filePath(QStringLiteral("relaydesk/transfer-history.jsonl"));
+  m_relayDeskTransfer = new deskflow::relaydesk::TransferRuntimeComposition(
+      std::move(runtime),
+      {
+          .start = [runtimeObserver](QString *diagnostic) { return runtimeObserver->start(diagnostic); },
+          .stop = [runtimeObserver] { runtimeObserver->stop(); },
+      },
+      *m_devicesDock, *m_transferCenterDock,
+      {
+          .destinationRoot = receiveRoot,
+          .availableBytes = 0,
+          .autoAcceptTrustedDevices = false,
+      },
+      historyPath, {}, {}, this
+  );
+  QString diagnostic;
+  if (!m_relayDeskTransfer->start(&diagnostic)) {
+    qWarning().noquote() << "RelayDesk file transfer could not start:" << diagnostic;
   }
 }
 

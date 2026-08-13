@@ -5,6 +5,7 @@
  */
 
 #include "relaydesk/app/TransferRuntimeComposition.h"
+#include "relaydesk/app/TransferHistoryRuntime.h"
 
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
@@ -17,6 +18,9 @@
 #include "../FakePairingService.h"
 
 #include <QTest>
+#include <QTemporaryDir>
+#include <QSignalSpy>
+#include <QFileInfo>
 
 using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
@@ -80,6 +84,7 @@ class TransferRuntimeCompositionTests final : public QObject
 private Q_SLOTS:
   void ownsTypedServiceBindingAndLifecycle();
   void reportsUnavailableOrFailedStartupWithoutStopping();
+  void loadsAndPersistsHistoryOffTheUiContract();
 };
 
 void TransferRuntimeCompositionTests::ownsTypedServiceBindingAndLifecycle()
@@ -148,6 +153,66 @@ void TransferRuntimeCompositionTests::reportsUnavailableOrFailedStartupWithoutSt
   QVERIFY(!composition.isRunning());
   composition.stop();
   QCOMPARE(stops, 0);
+}
+
+void TransferRuntimeCompositionTests::loadsAndPersistsHistoryOffTheUiContract()
+{
+  Fixture fixture;
+  auto service = std::make_unique<FakeFileTransferService>();
+  auto *serviceObserver = service.get();
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const auto historyPath = temporary.filePath(QStringLiteral("history/transfers.jsonl"));
+  TransferRuntimeComposition composition(
+      std::move(service),
+      {
+          .start = [](QString *) { return true; },
+          .stop = [] {},
+      },
+      fixture.devicesDock, fixture.transferDock,
+      {
+          .destinationRoot = temporary.path(),
+          .availableBytes = 0,
+      },
+      historyPath
+  );
+  QVERIFY(composition.start());
+  auto *historyRuntime = composition.findChild<TransferHistoryRuntime *>();
+  QVERIFY(historyRuntime != nullptr);
+  QString historyError;
+  connect(
+      historyRuntime, &TransferHistoryRuntime::historyError, this,
+      [&](TransferHistoryError, const QString &diagnostic) { historyError = diagnostic; }
+  );
+  QTRY_VERIFY_WITH_TIMEOUT(composition.incomingOffers().settings().availableBytes > 0, 5000);
+
+  const auto now = QDateTime::currentDateTimeUtc();
+  const TransferSnapshot completed{
+      .id = TransferId::generate(),
+      .peerId = DeviceId::generate(),
+      .peerDisplayName = QStringLiteral("Studio Mac"),
+      .displayName = QStringLiteral("Project"),
+      .direction = TransferDirection::Receiving,
+      .state = TransferState::Completed,
+      .progress = {.completedBytes = 1024, .totalBytes = 1024, .completedFiles = 1, .totalFiles = 1},
+      .createdUtc = now.addSecs(-2),
+      .finishedUtc = now,
+  };
+  QVERIFY(TransferHistoryRuntime::recordForSnapshot(completed).has_value());
+  QSignalSpy serviceChanges(serviceObserver, &IFileTransferService::transferChanged);
+  Q_EMIT serviceObserver->transferChanged(completed);
+  QCOMPARE(serviceChanges.count(), 1);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      fixture.transfers.historyRecord(completed.id).has_value() || !historyError.isEmpty(), 5000
+  );
+  QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(historyPath), 5000);
+
+  const TransferHistoryStore store(historyPath);
+  const auto page = store.page();
+  QVERIFY2(page.ok(), qPrintable(page.diagnostic));
+  QCOMPARE(page.page.records.size(), 1);
+  QCOMPARE(page.page.records.first().transferId, completed.id);
 }
 
 QTEST_MAIN(TransferRuntimeCompositionTests)
