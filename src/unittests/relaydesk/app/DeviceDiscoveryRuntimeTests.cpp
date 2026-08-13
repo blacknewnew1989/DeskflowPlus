@@ -50,6 +50,7 @@ class DeviceDiscoveryRuntimeTests final : public QObject
 private Q_SLOTS:
   void realLoopbackAdvertisementDrivesExistingDeviceModel();
   void updateAndExpiryFlowThroughSameModel();
+  void publishesNamedFileEndpointAnnouncement();
   void destructionStopsListenerAndReleasesPort();
 };
 
@@ -113,6 +114,25 @@ void DeviceDiscoveryRuntimeTests::updateAndExpiryFlowThroughSameModel()
   QTest::qWait(120);
   runtime.registry().expireStaleDevices();
   QCOMPARE(model.snapshot(peer.deviceId)->presence, DevicePresence::Offline);
+}
+
+void DeviceDiscoveryRuntimeTests::publishesNamedFileEndpointAnnouncement()
+{
+  DeviceHomeModel model;
+  DeviceDiscoveryRuntime runtime(device(QStringLiteral("Local")), model, loopbackOptions());
+  const FileEndpointAnnouncement announcement{
+      .port = 24801,
+      .fileV1 = true,
+      .folderV1 = true,
+      .resumeV1 = false,
+  };
+
+  QString diagnostic;
+  QVERIFY2(runtime.setFileEndpoint(announcement, &diagnostic), qPrintable(diagnostic));
+  QCOMPARE(runtime.service().localDevice().filePort, announcement.port);
+  QCOMPARE(runtime.service().localDevice().capabilities.fileV1, announcement.fileV1);
+  QCOMPARE(runtime.service().localDevice().capabilities.folderV1, announcement.folderV1);
+  QCOMPARE(runtime.service().localDevice().capabilities.resumeV1, announcement.resumeV1);
 }
 
 void DeviceDiscoveryRuntimeTests::destructionStopsListenerAndReleasesPort()

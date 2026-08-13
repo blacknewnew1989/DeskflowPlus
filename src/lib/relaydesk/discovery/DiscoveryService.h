@@ -8,6 +8,7 @@
 
 #include "relaydesk/device/DeviceInfo.h"
 #include "relaydesk/discovery/DiscoveryCodec.h"
+#include "relaydesk/discovery/FileEndpointAnnouncement.h"
 
 #include <QHostAddress>
 #include <QList>
@@ -78,7 +79,7 @@ public:
       QString *errorMessage = nullptr
   );
   [[nodiscard]] bool setFileEndpoint(
-      quint16 port, bool folderV1, bool resumeV1, QString *errorMessage = nullptr
+      FileEndpointAnnouncement announcement, QString *errorMessage = nullptr
   );
 
   [[nodiscard]] bool isRunning() const;

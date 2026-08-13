@@ -195,15 +195,23 @@ qint64 DiscoveryService::sendPeerDatagram(
   return written;
 }
 
-bool DiscoveryService::setFileEndpoint(quint16 port, bool folderV1, bool resumeV1, QString *errorMessage)
+bool DiscoveryService::setFileEndpoint(FileEndpointAnnouncement announcement, QString *errorMessage)
 {
   if (errorMessage != nullptr) {
     errorMessage->clear();
   }
-  m_localDevice.filePort = port;
-  m_localDevice.capabilities.fileV1 = port != 0;
-  m_localDevice.capabilities.folderV1 = port != 0 && folderV1;
-  m_localDevice.capabilities.resumeV1 = port != 0 && resumeV1;
+  if (!announcement.isValid()) {
+    reportError(
+        DiscoveryServiceError::InvalidSettings,
+        QStringLiteral("File endpoint announcement must be fully disabled or publish a non-zero file.v1 port"),
+        errorMessage
+    );
+    return false;
+  }
+  m_localDevice.filePort = announcement.port;
+  m_localDevice.capabilities.fileV1 = announcement.fileV1;
+  m_localDevice.capabilities.folderV1 = announcement.folderV1;
+  m_localDevice.capabilities.resumeV1 = announcement.resumeV1;
   return !isRunning() || announceNow(errorMessage);
 }
 
