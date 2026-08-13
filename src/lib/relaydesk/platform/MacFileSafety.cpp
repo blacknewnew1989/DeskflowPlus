@@ -379,19 +379,13 @@ FileSafetyResult MacFileSafety::commitStagedFile(const CommitStagedFileRequest &
     return failure(FileSafetyError::DestinationExists, QStringLiteral("destination already exists"));
   }
 
-  int renameResult = 0;
-  if (request.disposition == CommitDisposition::FailIfExists) {
-    renameResult = ::renameatx_np(
-        stagingParent.descriptor.get(), stagingParent.leafName.constData(), destinationParent.descriptor.get(),
-        destinationParent.leafName.constData(), RENAME_EXCL
-    );
-  }
-  else {
-    renameResult = ::renameat(
-        stagingParent.descriptor.get(), stagingParent.leafName.constData(), destinationParent.descriptor.get(),
-        destinationParent.leafName.constData()
-    );
-  }
+  unsigned int renameFlags = RENAME_NOFOLLOW_ANY | RENAME_RESOLVE_BENEATH;
+  if (request.disposition == CommitDisposition::FailIfExists)
+    renameFlags |= RENAME_EXCL;
+  const int renameResult = ::renameatx_np(
+      stagingParent.descriptor.get(), stagingParent.leafName.constData(), destinationParent.descriptor.get(),
+      destinationParent.leafName.constData(), renameFlags
+  );
   if (renameResult == 0)
     return {};
 
@@ -402,6 +396,10 @@ FileSafetyResult MacFileSafety::commitStagedFile(const CommitStagedFileRequest &
     return errnoFailure(FileSafetyError::StagingFileUnavailable, QStringLiteral("commit staged file"), nativeError);
   if (nativeError == ELOOP)
     return errnoFailure(FileSafetyError::LinkTraversalDetected, QStringLiteral("commit staged file"), nativeError);
+#ifdef ENOTCAPABLE
+  if (nativeError == ENOTCAPABLE)
+    return errnoFailure(FileSafetyError::LinkTraversalDetected, QStringLiteral("commit staged file"), nativeError);
+#endif
   return errnoFailure(FileSafetyError::CommitFailed, QStringLiteral("commit staged file"), nativeError);
 }
 
