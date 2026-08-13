@@ -28,6 +28,14 @@ endif()
 set(OS_STRING "macos-${BUILD_ARCHITECTURE}-${RELAYDESK_MACOS_PACKAGE_VARIANT}")
 
 if (OSX_BUNDLE)
+  if(NOT DEFINED Qt6_DIR OR NOT IS_DIRECTORY "${Qt6_DIR}")
+    message(FATAL_ERROR "Qt6_DIR is required to locate all macOS deployment frameworks")
+  endif()
+  get_filename_component(RELAYDESK_QT_CMAKE_PATH "${Qt6_DIR}" DIRECTORY)
+  get_filename_component(RELAYDESK_QT_LIBRARY_PATH "${RELAYDESK_QT_CMAKE_PATH}" DIRECTORY)
+  if(NOT IS_DIRECTORY "${RELAYDESK_QT_LIBRARY_PATH}")
+    message(FATAL_ERROR "RelayDesk Qt library path does not exist: ${RELAYDESK_QT_LIBRARY_PATH}")
+  endif()
   if(RELAYDESK_MACOS_CUSTOM_DMG_LAYOUT)
     configure_file(
       "${MY_DIR}/generate_ds_store.applescript"
@@ -72,6 +80,7 @@ if (OSX_BUNDLE)
       COMMAND \"${DEPLOYQT}\"
               \"\${relaydesk_app}\"
               \"-executable=\${relaydesk_core}\"
+              \"-libpath=${RELAYDESK_QT_LIBRARY_PATH}\"
               \"-timestamp\"
               \"-codesign=${RELAYDESK_MACDEPLOYQT_CODESIGN}\"
               ${RELAYDESK_MACDEPLOYQT_HARDENED}
