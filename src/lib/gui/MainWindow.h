@@ -59,10 +59,12 @@ class DaemonIpcClient;
 
 namespace deskflow::relaydesk {
 class DeviceDiscoveryRuntime;
+class AutoReconnectRuntime;
 class DeviceId;
 class MacPermissionProbe;
 class PairingTrustRuntime;
 class TransferRuntimeComposition;
+class WindowsFirewallProbe;
 namespace model {
 class DeviceHomeModel;
 class PairingWizardModel;
@@ -229,9 +231,11 @@ private:
 
   LogDock *m_logDock;
   deskflow::relaydesk::DeviceDiscoveryRuntime *m_relayDeskDiscovery = nullptr;
+  deskflow::relaydesk::AutoReconnectRuntime *m_relayDeskReconnect = nullptr;
   deskflow::relaydesk::PairingTrustRuntime *m_relayDeskPairing = nullptr;
   deskflow::relaydesk::TransferRuntimeComposition *m_relayDeskTransfer = nullptr;
   deskflow::relaydesk::MacPermissionProbe *m_macPermissionProbe = nullptr;
+  deskflow::relaydesk::WindowsFirewallProbe *m_windowsFirewallProbe = nullptr;
   deskflow::relaydesk::model::DeviceHomeModel *m_relayDeskDeviceModel = nullptr;
   deskflow::relaydesk::model::PairingWizardModel *m_relayDeskPairingModel = nullptr;
   deskflow::relaydesk::model::PermissionStatusModel *m_relayDeskPermissionModel = nullptr;

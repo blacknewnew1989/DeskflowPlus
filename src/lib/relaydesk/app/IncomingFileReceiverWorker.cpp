@@ -103,14 +103,21 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
     return safetyFailure(root);
   }
 
-  const auto decision = m_conflicts.resolve({
+  m_disposition = IncomingFileDisposition::Receive;
+  m_conflictRequest = {
       .targetRoot = request.receiveRoot,
       .relativeProtocolPath = request.entry.relativeProtocolPath,
       .policy = request.conflictPolicy,
       .pathLimits = request.pathLimits,
-  });
+  };
+  const auto decision = m_conflicts.resolve(m_conflictRequest);
   const auto *target = std::get_if<UseTarget>(&decision);
   if (target == nullptr) {
+    if (std::holds_alternative<SkipTarget>(decision)) {
+      m_disposition = IncomingFileDisposition::Skip;
+      m_receiveRoot = request.receiveRoot;
+      return {};
+    }
     if (const auto *failure = std::get_if<ConflictFailure>(&decision)) {
       return {
           .error = failure->error == ConflictResolverError::UnsafePath
@@ -171,8 +178,12 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
     (void)m_conflicts.release(target->reservationId);
     return safetyFailure(safeStaging);
   }
-  const auto begun = resumeState == nullptr ? m_receiver.begin(request)
-                                            : m_receiver.resume(request, *resumeState);
+  auto receiverRequest = request;
+  // ConflictResolver and IPlatformFileSafety own the final target. The shared
+  // FileReceiver remains the staging/hash engine and must not resolve it again.
+  receiverRequest.conflictPolicy = ConflictPolicy::AutoRename;
+  const auto begun = resumeState == nullptr ? m_receiver.begin(receiverRequest)
+                                            : m_receiver.resume(receiverRequest, *resumeState);
   if (!begun.ok()) {
     (void)m_conflicts.release(target->reservationId);
     return begun;
@@ -218,16 +229,67 @@ IncomingFileReceiverWorker::finish(const ::relaydesk::transfer::FileEndMessage &
       static_cast<int>(TargetCommitDisposition::ReplaceExisting) ==
       static_cast<int>(CommitDisposition::ReplaceExisting)
   );
-  const auto commit = m_fileSafety.commitStagedFile({
-      .receiveRoot = m_receiveRoot,
-      .stagingPath = m_receiver.m_snapshot.partPath,
-      .destinationPath = m_target->absolutePath,
-      .disposition = static_cast<CommitDisposition>(m_target->commitDisposition),
-  });
-  const QString committedPath = m_target->absolutePath;
-  (void)m_conflicts.release(m_target->reservationId);
-  m_target.reset();
+  FileSafetyResult commit;
+  QString committedPath;
+  for (quint32 attempt = 0; attempt < m_conflictRequest.maximumRenameAttempts; ++attempt) {
+    commit = m_fileSafety.commitStagedFile({
+        .receiveRoot = m_receiveRoot,
+        .stagingPath = m_receiver.m_snapshot.partPath,
+        .destinationPath = m_target->absolutePath,
+        .disposition = static_cast<CommitDisposition>(m_target->commitDisposition),
+    });
+    if (commit.ok()) {
+      committedPath = m_target->absolutePath;
+      (void)m_conflicts.release(m_target->reservationId);
+      m_target.reset();
+      break;
+    }
+    const bool retryCollision =
+        commit.error == FileSafetyError::DestinationExists &&
+        (m_conflictRequest.policy == ConflictPolicy::AutoRename ||
+         m_conflictRequest.policy == ConflictPolicy::Overwrite);
+    if (!retryCollision) {
+      break;
+    }
+    const QString collidedPath = m_target->absolutePath;
+    const auto retried = m_conflicts.retry(m_conflictRequest, m_target->reservationId);
+    m_target.reset();
+    const auto *retryTarget = std::get_if<UseTarget>(&retried);
+    if (retryTarget == nullptr) {
+      if (const auto *failure = std::get_if<ConflictFailure>(&retried)) {
+        commit = {
+            .error = failure->error == ConflictResolverError::UnsafePath
+                         ? FileSafetyError::DestinationInvalid
+                         : FileSafetyError::CommitFailed,
+            .diagnostic = failure->diagnostic,
+        };
+      }
+      break;
+    }
+    if (retryTarget->absolutePath == collidedPath) {
+      (void)m_conflicts.release(retryTarget->reservationId);
+      commit.diagnostic = QStringLiteral("platform reported a destination collision that is not visible to retry");
+      break;
+    }
+    const auto safeTarget = m_fileSafety.verifyNoLinkTraversal(
+        {.receiveRoot = m_receiveRoot, .candidatePath = retryTarget->absolutePath}
+    );
+    if (!safeTarget.ok()) {
+      (void)m_conflicts.release(retryTarget->reservationId);
+      commit = safeTarget;
+      break;
+    }
+    m_target = *retryTarget;
+  }
+  if (m_target.has_value()) {
+    (void)m_conflicts.release(m_target->reservationId);
+    m_target.reset();
+  }
   if (!commit.ok()) {
+    if (m_conflictRequest.policy == ConflictPolicy::Skip &&
+        commit.error == FileSafetyError::DestinationExists) {
+      (void)QFile::remove(m_receiver.m_snapshot.partPath);
+    }
     const auto receiverError = commit.error == FileSafetyError::DestinationExists
                                    ? FileReceiverError::TargetExists
                                    : commit.error == FileSafetyError::LinkTraversalDetected ||
@@ -248,6 +310,11 @@ IncomingFileReceiverWorker::finish(const ::relaydesk::transfer::FileEndMessage &
 ::relaydesk::transfer::FileReceiverSnapshot IncomingFileReceiverWorker::snapshot() const
 {
   return m_receiver.snapshot();
+}
+
+IncomingFileDisposition IncomingFileReceiverWorker::disposition() const noexcept
+{
+  return m_disposition;
 }
 
 ::relaydesk::transfer::DurableCheckpointResult IncomingFileReceiverWorker::checkpoint(

@@ -128,6 +128,7 @@ target_link_libraries(
   common
   platform
   relaydesk_macos_permissions
+  relaydesk_windows_permissions
   relaydesk_app
   relaydesk_trust
   relaydesk_windows_start_at_login
