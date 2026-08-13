@@ -9,6 +9,7 @@
 #include "relaydesk/app/IncomingFileReceiverWorker.h"
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
+#include "relaydesk/transfer/ResumeMessageCodec.h"
 #include "relaydesk/transfer/TransferControlStateMachine.h"
 
 #include <QDir>
@@ -50,6 +51,9 @@ struct IncomingTransferRuntime::Session
   bool acceptPreflightPending = false;
   ::relaydesk::transfer::ReceiveOptions receiveOptions;
   std::shared_ptr<ReceivePipeline> pipeline;
+  bool resumeNegotiated = false;
+  std::optional<::relaydesk::transfer::ResumeResponseMessage> lastResumeResponse;
+  quint64 pipelineGeneration = 0;
   ::relaydesk::transfer::TransferSnapshot pipelineSnapshot{
       .id = offer.transferId,
       .peerId = peer,
@@ -102,7 +106,8 @@ quint64 frameBytes(const ::relaydesk::transfer::Frame &frame)
 bool isReceivePipelineActive(::relaydesk::transfer::TransferState state)
 {
   return state == ::relaydesk::transfer::TransferState::Queued ||
-         state == ::relaydesk::transfer::TransferState::Transferring;
+         state == ::relaydesk::transfer::TransferState::Transferring ||
+         state == ::relaydesk::transfer::TransferState::Resuming;
 }
 
 FileSafetyResult ensureSafeDirectoryPath(
@@ -177,10 +182,14 @@ public:
       IncomingTransferRuntime &runtime, DeviceId peer,
       ::relaydesk::transfer::TransferOffer offer,
       ::relaydesk::transfer::ReceiveOptions options, IPlatformFileSafety &fileSafety,
-      QThreadPool &pool
+      QThreadPool &pool,
+      std::optional<::relaydesk::transfer::ResumeState> resumeState = std::nullopt,
+      quint64 generation = 0
   )
       : m_runtime(&runtime), m_peer(std::move(peer)), m_offer(std::move(offer)),
-        m_options(std::move(options)), m_fileSafety(fileSafety), m_reassembler(
+        m_options(std::move(options)), m_fileSafety(fileSafety),
+        m_resumeStore(QDir(m_options.destinationRoot).filePath(QStringLiteral(".incoming/resume-active"))),
+        m_resumeState(std::move(resumeState)), m_generation(generation), m_reassembler(
             m_offer.transferId, m_offer.manifestPageCount,
             m_offer.fileCount + m_offer.directoryCount, m_offer.manifestSha256
         )
@@ -270,10 +279,18 @@ private:
       }
       m_entries = std::move(*complete.entries);
       m_manifestReady = prepareDirectories(diagnostic);
+      if (m_manifestReady) {
+        m_manifestReady = prepareResumeState(diagnostic);
+      }
       if (!m_manifestReady) {
-        fail(TransferErrorCode::UnsafePath, diagnostic);
+        fail(TransferErrorCode::InternalError, diagnostic);
       }
       if (m_manifestReady && m_offer.fileCount == 0) {
+        const auto removed = m_resumeStore.remove(m_offer.transferId);
+        if (!removed.ok()) {
+          fail(TransferErrorCode::InternalError, removed.diagnostic);
+          return false;
+        }
         publishCompleted();
         return false;
       }
@@ -300,19 +317,30 @@ private:
       }
       m_receiver = std::make_unique<IncomingFileReceiverWorker>(m_fileSafety);
       m_activeStreamId = frame.streamId;
-      const auto result = m_receiver->begin({
+      const FileReceiveRequest request{
           .receiveRoot = m_options.destinationRoot,
           .entry = *entry,
           .begin = *begin,
           .manifestSha256 = m_offer.manifestSha256,
           .conflictPolicy = m_options.conflictPolicy,
-      });
+      };
+      const auto *resumeFile = resumeFileFor(begin->fileId);
+      const QString partPath = QDir(m_options.destinationRoot).filePath(
+          QStringLiteral(".incoming/%1/%2.part")
+              .arg(begin->transferId.toString(), begin->fileId.toString())
+      );
+      const bool reusePart = resumeFile != nullptr && QFileInfo::exists(partPath);
+      const auto result = reusePart ? m_receiver->resume(request, *m_resumeState)
+                                    : m_receiver->begin(request);
       if (!result.ok()) {
         sendFileResult(result);
         fail(receiverErrorCode(result.error), result.diagnostic);
         return false;
       }
-      publishProgress(m_completedBytes, m_completedFiles, entry->relativeProtocolPath);
+      publishProgress(
+          m_completedBytes + m_receiver->snapshot().receivedBytes, m_completedFiles,
+          entry->relativeProtocolPath
+      );
       return true;
     }
     if (const auto *chunk = std::get_if<FileChunkMessage>(&*decoded.message)) {
@@ -327,6 +355,14 @@ private:
         return false;
       }
       const auto snapshot = m_receiver->snapshot();
+      if (snapshot.receivedBytes < snapshot.expectedSize) {
+        const auto checkpoint = m_receiver->checkpoint(m_resumeStore, *m_resumeState);
+        if (!checkpoint.ok()) {
+          fail(TransferErrorCode::InternalError, checkpoint.diagnostic);
+          return false;
+        }
+        sendCheckpoint(*checkpoint.message);
+      }
       publishProgress(
           m_completedBytes + snapshot.receivedBytes, m_completedFiles,
           snapshot.relativeProtocolPath
@@ -339,12 +375,34 @@ private:
         return false;
       }
       const auto result = m_receiver->finish(*end);
-      sendFileResult(result);
       if (!result.ok()) {
+        sendFileResult(result);
         fail(receiverErrorCode(result.error), result.diagnostic);
         return false;
       }
       const auto snapshot = m_receiver->snapshot();
+      auto *resumeFile = resumeFileFor(snapshot.fileId.value());
+      if (resumeFile == nullptr) {
+        fail(TransferErrorCode::InternalError, QStringLiteral("completed file is absent from resume state"));
+        return false;
+      }
+      if (resumeFile->totalBytes == 0) {
+        for (auto iterator = m_resumeState->files.begin(); iterator != m_resumeState->files.end(); ++iterator) {
+          if (iterator->fileId == snapshot.fileId.value()) {
+            m_resumeState->files.erase(iterator);
+            break;
+          }
+        }
+      } else {
+        resumeFile->durableOffset = resumeFile->totalBytes;
+      }
+      m_resumeState->updatedUtc = QDateTime::currentDateTimeUtc();
+      const auto persisted = m_resumeStore.save(*m_resumeState);
+      if (!persisted.ok()) {
+        fail(TransferErrorCode::InternalError, persisted.diagnostic);
+        return false;
+      }
+      sendFileResult(result);
       m_completedBytes += snapshot.expectedSize;
       ++m_completedFiles;
       publishProgress(m_completedBytes, m_completedFiles, snapshot.relativeProtocolPath);
@@ -396,6 +454,128 @@ private:
     return std::nullopt;
   }
 
+  [[nodiscard]] bool prepareResumeState(QString &diagnostic)
+  {
+    using namespace ::relaydesk::transfer;
+    if (!m_resumeState.has_value()) {
+      ResumeState state{
+          .transferId = m_offer.transferId,
+          .peerDeviceId = m_peer,
+          .manifestSha256 = m_offer.manifestSha256,
+          .direction = ResumeDirection::Receiving,
+          .updatedUtc = QDateTime::currentDateTimeUtc(),
+      };
+      for (const auto &entry : m_entries) {
+        if (entry.type != ManifestEntryType::File) {
+          continue;
+        }
+        state.files.append({
+            .fileId = entry.id,
+            .relativeProtocolPath = entry.relativeProtocolPath,
+            .totalBytes = entry.size,
+            .partRelativePath =
+                QStringLiteral(".incoming/%1/%2.part")
+                    .arg(m_offer.transferId.toString(), entry.id.toString()),
+        });
+      }
+      m_resumeState = std::move(state);
+      const auto saved = m_resumeStore.save(*m_resumeState);
+      if (!saved.ok()) {
+        diagnostic = saved.diagnostic;
+        return false;
+      }
+      return true;
+    }
+
+    if (m_resumeState->transferId != m_offer.transferId || m_resumeState->peerDeviceId != m_peer ||
+        m_resumeState->manifestSha256 != m_offer.manifestSha256 ||
+        m_resumeState->direction != ResumeDirection::Receiving) {
+      diagnostic = QStringLiteral("stored resume state is not bound to this peer and manifest");
+      return false;
+    }
+    qsizetype matchedFiles = 0;
+    bool incompleteSeen = false;
+    for (const auto &entry : m_entries) {
+      if (entry.type != ManifestEntryType::File) {
+        continue;
+      }
+      const auto *file = resumeFileFor(entry.id);
+      const QString expectedPart = QStringLiteral(".incoming/%1/%2.part")
+                                       .arg(m_offer.transferId.toString(), entry.id.toString());
+      if (file == nullptr) {
+        if (entry.size == 0) {
+          ++m_completedFiles;
+          continue;
+        }
+        diagnostic = QStringLiteral("stored resume state is missing a non-empty manifest file");
+        return false;
+      }
+      ++matchedFiles;
+      if (file->relativeProtocolPath != entry.relativeProtocolPath ||
+          file->totalBytes != entry.size || file->durableOffset > entry.size ||
+          file->partRelativePath != expectedPart ||
+          (incompleteSeen && file->durableOffset != 0)) {
+        diagnostic = QStringLiteral("stored resume offsets do not match the accepted manifest order");
+        return false;
+      }
+      if (file->durableOffset == file->totalBytes) {
+        m_completedBytes += file->totalBytes;
+        ++m_completedFiles;
+      } else {
+        incompleteSeen = true;
+      }
+    }
+    if (matchedFiles != m_resumeState->files.size()) {
+      diagnostic = QStringLiteral("stored resume state has a different file set");
+      return false;
+    }
+    return true;
+  }
+
+  [[nodiscard]] ::relaydesk::transfer::ResumeFileState *
+  resumeFileFor(const ::relaydesk::transfer::FileId &fileId)
+  {
+    if (!m_resumeState.has_value()) {
+      return nullptr;
+    }
+    ::relaydesk::transfer::ResumeFileState *matching = nullptr;
+    for (auto &file : m_resumeState->files) {
+      if (file.fileId == fileId) {
+        if (matching != nullptr) {
+          return nullptr;
+        }
+        matching = &file;
+      }
+    }
+    return matching;
+  }
+
+  [[nodiscard]] const ::relaydesk::transfer::ResumeFileState *
+  resumeFileFor(const ::relaydesk::transfer::FileId &fileId) const
+  {
+    return const_cast<ReceivePipeline *>(this)->resumeFileFor(fileId);
+  }
+
+  void sendCheckpoint(const ::relaydesk::transfer::FileCheckpointMessage &checkpoint)
+  {
+    using namespace ::relaydesk::transfer;
+    QString diagnostic;
+    Frame response{
+        .type = MessageType::FileCheckpoint,
+        .flags = Response,
+        .streamId = m_activeStreamId,
+        .metadata = FileMessageCodec::encode(FileControlMessage{checkpoint}, &diagnostic),
+    };
+    invoke([id = m_offer.transferId, generation = m_generation, peer = m_peer,
+            response = std::move(response)](IncomingTransferRuntime &runtime) mutable {
+      const auto *session = runtime.m_sessions.value(id, nullptr);
+      if (session != nullptr && session->pipelineGeneration == generation &&
+          isReceivePipelineActive(session->pipelineSnapshot.state)) {
+        Q_EMIT runtime.responseReady(peer, std::move(response));
+      }
+    });
+  }
+
   void sendFileResult(const ::relaydesk::transfer::FileReceiverResult &result)
   {
     using namespace ::relaydesk::transfer;
@@ -410,10 +590,11 @@ private:
         .metadata = FileMessageCodec::encode(FileControlMessage{*result.fileResult}, &diagnostic),
     };
     invoke(
-        [id = m_offer.transferId, peer = m_peer,
+        [id = m_offer.transferId, generation = m_generation, peer = m_peer,
          response = std::move(response)](IncomingTransferRuntime &runtime) mutable {
           const auto *session = runtime.m_sessions.value(id, nullptr);
-          if (session == nullptr || !isReceivePipelineActive(session->pipelineSnapshot.state)) {
+          if (session == nullptr || session->pipelineGeneration != generation ||
+              !isReceivePipelineActive(session->pipelineSnapshot.state)) {
             return;
           }
           Q_EMIT runtime.responseReady(peer, std::move(response));
@@ -423,9 +604,10 @@ private:
 
   void publishProgress(quint64 bytes, quint64 files, QString path)
   {
-    invoke([id = m_offer.transferId, bytes, files, path = std::move(path)](IncomingTransferRuntime &runtime) {
+    invoke([id = m_offer.transferId, generation = m_generation, bytes, files,
+            path = std::move(path)](IncomingTransferRuntime &runtime) {
       auto *session = runtime.m_sessions.value(id, nullptr);
-      if (session == nullptr) {
+      if (session == nullptr || session->pipelineGeneration != generation) {
         return;
       }
       auto snapshot = session->pipelineSnapshot;
@@ -443,9 +625,9 @@ private:
 
   void publishCompleted()
   {
-    invoke([id = m_offer.transferId](IncomingTransferRuntime &runtime) {
+    invoke([id = m_offer.transferId, generation = m_generation](IncomingTransferRuntime &runtime) {
       auto *session = runtime.m_sessions.value(id, nullptr);
-      if (session == nullptr) {
+      if (session == nullptr || session->pipelineGeneration != generation) {
         return;
       }
       auto snapshot = session->pipelineSnapshot;
@@ -464,11 +646,12 @@ private:
 
   void fail(::relaydesk::transfer::TransferErrorCode code, QString diagnostic)
   {
-    invoke([id = m_offer.transferId, code, diagnostic = std::move(diagnostic)](
+    invoke([id = m_offer.transferId, generation = m_generation, code,
+            diagnostic = std::move(diagnostic)](
                IncomingTransferRuntime &runtime
            ) mutable {
       auto *session = runtime.m_sessions.value(id, nullptr);
-      if (session == nullptr) {
+      if (session == nullptr || session->pipelineGeneration != generation) {
         return;
       }
       auto snapshot = session->pipelineSnapshot;
@@ -501,6 +684,9 @@ private:
   ::relaydesk::transfer::TransferOffer m_offer;
   ::relaydesk::transfer::ReceiveOptions m_options;
   IPlatformFileSafety &m_fileSafety;
+  ::relaydesk::transfer::ResumeStore m_resumeStore;
+  std::optional<::relaydesk::transfer::ResumeState> m_resumeState;
+  quint64 m_generation = 0;
   ::relaydesk::transfer::ManifestPageReassembler m_reassembler;
   QList<::relaydesk::transfer::ManifestEntry> m_entries;
   std::unique_ptr<IncomingFileReceiverWorker> m_receiver;
@@ -559,6 +745,7 @@ bool IncomingTransferRuntime::receiveOffer(
   auto *session = new Session(
       peerDeviceId, std::move(peerDisplayName), peerTrusted, offer, capabilities
   );
+  session->resumeNegotiated = capabilities.features.contains(QStringLiteral("resume.v1"));
   const auto received = session->stateMachine.receiveIncoming(offer);
   if (!received.ok()) {
     setDiagnostic(diagnostic, received.diagnostic);
@@ -717,6 +904,95 @@ bool IncomingTransferRuntime::enqueueFrame(
   return session->pipeline->enqueue(frame, diagnostic);
 }
 
+bool IncomingTransferRuntime::receiveResumeQuery(
+    const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
+    QString *diagnostic
+)
+{
+  using namespace ::relaydesk::transfer;
+
+  if (diagnostic != nullptr) {
+    diagnostic->clear();
+  }
+  if (QThread::currentThread() != thread()) {
+    setDiagnostic(diagnostic, QStringLiteral("incoming transfer runtime must be called on its owning thread"));
+    return false;
+  }
+  const auto decoded = ResumeMessageCodec::decode(frame.version, frame.type, frame.metadata);
+  const auto *query = decoded.ok() ? std::get_if<ResumeQueryMessage>(&*decoded.message) : nullptr;
+  if (query == nullptr) {
+    setDiagnostic(diagnostic, decoded.diagnostic);
+    return false;
+  }
+  auto *session = m_sessions.value(query->transferId, nullptr);
+  if (session == nullptr || session->peer != peerDeviceId || !session->resumeNegotiated ||
+      query->manifestSha256 != session->offer.manifestSha256) {
+    setDiagnostic(diagnostic, QStringLiteral("resume query is not bound to an interrupted negotiated transfer"));
+    return false;
+  }
+
+  if (session->pipelineSnapshot.state == TransferState::Resuming &&
+      session->lastResumeResponse.has_value()) {
+    QString encodeDiagnostic;
+    Frame response{
+        .type = MessageType::ResumeResponse,
+        .flags = Response,
+        .metadata = ResumeMessageCodec::encode(
+            ResumeControlMessage{*session->lastResumeResponse}, &encodeDiagnostic
+        ),
+    };
+    if (response.metadata.isEmpty()) {
+      setDiagnostic(diagnostic, std::move(encodeDiagnostic));
+      return false;
+    }
+    Q_EMIT responseReady(peerDeviceId, std::move(response));
+    return true;
+  }
+  if (session->pipelineSnapshot.state != TransferState::Interrupted || session->pipeline != nullptr) {
+    setDiagnostic(diagnostic, QStringLiteral("resume query requires an interrupted receive pipeline"));
+    return false;
+  }
+
+  ResumeStore store(
+      QDir(session->receiveOptions.destinationRoot).filePath(QStringLiteral(".incoming/resume-active"))
+  );
+  const auto loaded = store.load(query->transferId);
+  if (!loaded.ok() || loaded.state->peerDeviceId != peerDeviceId) {
+    setDiagnostic(
+        diagnostic,
+        loaded.ok() ? QStringLiteral("resume state belongs to a different peer") : loaded.diagnostic
+    );
+    return false;
+  }
+  const auto built = ResumeNegotiator::buildResponse(store, *query);
+  if (!built.ok()) {
+    setDiagnostic(diagnostic, built.diagnostic);
+    return false;
+  }
+  QString encodeDiagnostic;
+  Frame response{
+      .type = MessageType::ResumeResponse,
+      .flags = Response,
+      .metadata = ResumeMessageCodec::encode(
+          ResumeControlMessage{*built.response}, &encodeDiagnostic
+      ),
+  };
+  if (response.metadata.isEmpty()) {
+    setDiagnostic(diagnostic, std::move(encodeDiagnostic));
+    return false;
+  }
+
+  session->lastResumeResponse = *built.response;
+  session->pipelineSnapshot.state = TransferState::Resuming;
+  session->pipeline = std::make_shared<ReceivePipeline>(
+      *this, session->peer, session->offer, session->receiveOptions, m_fileSafety,
+      m_workerPool, *loaded.state, session->pipelineGeneration
+  );
+  Q_EMIT transferChanged(session->pipelineSnapshot);
+  Q_EMIT responseReady(peerDeviceId, std::move(response));
+  return true;
+}
+
 void IncomingTransferRuntime::peerDisconnected(const DeviceId &peerDeviceId)
 {
   for (auto *session : std::as_const(m_sessions)) {
@@ -725,6 +1001,9 @@ void IncomingTransferRuntime::peerDisconnected(const DeviceId &peerDeviceId)
       continue;
     }
     session->pipeline->stop();
+    ++session->pipelineGeneration;
+    session->pipeline.reset();
+    session->lastResumeResponse.reset();
     session->pipelineSnapshot.state = ::relaydesk::transfer::TransferState::Interrupted;
     session->pipelineSnapshot.canCancel = true;
     Q_EMIT transferChanged(session->pipelineSnapshot);
@@ -787,7 +1066,8 @@ void IncomingTransferRuntime::finishAcceptPreflight(
   session->receiveOptions = options;
   session->pipelineSnapshot.state = TransferState::Queued;
   session->pipeline = std::make_shared<ReceivePipeline>(
-      *this, session->peer, session->offer, options, m_fileSafety, m_workerPool
+      *this, session->peer, session->offer, options, m_fileSafety, m_workerPool,
+      std::nullopt, session->pipelineGeneration
   );
   Q_EMIT transferAdded(session->pipelineSnapshot);
   Q_EMIT transferAccepted(session->peer, *snapshot->acceptance);
