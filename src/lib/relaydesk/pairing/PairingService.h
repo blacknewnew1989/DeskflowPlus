@@ -38,6 +38,7 @@ public:
   virtual PairingOperationResult cancel(const QUuid &sessionId) = 0;
   virtual PairingOperationResult revoke(const DeviceId &deviceId) = 0;
   [[nodiscard]] virtual std::optional<PairingSnapshot> snapshot() const = 0;
+  [[nodiscard]] virtual std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const = 0;
 
 Q_SIGNALS:
   void pairingChanged(PairingSnapshot snapshot);
@@ -72,6 +73,7 @@ public:
   PairingOperationResult cancel(const QUuid &sessionId) override;
   PairingOperationResult revoke(const DeviceId &deviceId) override;
   [[nodiscard]] std::optional<PairingSnapshot> snapshot() const override;
+  [[nodiscard]] std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const override;
 
 private Q_SLOTS:
   void readPendingDatagrams();

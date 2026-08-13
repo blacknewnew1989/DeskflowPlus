@@ -4,6 +4,8 @@
 add_library(relaydesk_app STATIC
   DeviceDiscoveryRuntime.cpp
   DeviceDiscoveryRuntime.h
+  PairingTrustRuntime.cpp
+  PairingTrustRuntime.h
 )
 
 target_include_directories(
@@ -15,6 +17,8 @@ target_link_libraries(
   PUBLIC
     relaydesk_device_model
     relaydesk_discovery
+    relaydesk_pairing
+    relaydesk_trust
     Qt6::Core
     Qt6::Network
 )
