@@ -6,6 +6,7 @@
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/FrameCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
+#include "relaydesk/transfer/ProtocolMessageRegistry.h"
 #include "relaydesk/transfer/ResumeMessageCodec.h"
 #include "relaydesk/transfer/SessionMessageCodec.h"
 #include "relaydesk/transfer/TransferCommandCodec.h"
@@ -26,6 +27,15 @@ struct FrozenVector
   QString name;
   QString kind;
   QJsonObject value;
+};
+
+inline constexpr qsizetype kFrozenPositiveFrameCount = 24;
+
+struct CanonicalMetadataResult
+{
+  QByteArray metadata;
+  QString diagnostic;
+  bool ok = false;
 };
 
 QList<FrozenVector> loadVectors()
@@ -243,6 +253,147 @@ QString errorName(ResumeMessageCodecError error)
   return {};
 }
 
+CanonicalMetadataResult canonicalFailure(QString error, const QString &diagnostic)
+{
+  if (!diagnostic.isEmpty()) {
+    error.append(QStringLiteral(": "));
+    error.append(diagnostic);
+  }
+  return {.diagnostic = error};
+}
+
+template <typename Message, typename Encoder>
+CanonicalMetadataResult canonicalEncode(const Message &message, Encoder encoder)
+{
+  QString diagnostic;
+  const QByteArray metadata = encoder(message, &diagnostic);
+  if (!diagnostic.isEmpty()) {
+    return canonicalFailure(QStringLiteral("canonical encode failed"), diagnostic);
+  }
+  return {.metadata = metadata, .ok = true};
+}
+
+CanonicalMetadataResult canonicalMetadata(MessageType type, QByteArrayView metadata)
+{
+  const auto *descriptor = protocolMessageDescriptor(type);
+  if (descriptor == nullptr) {
+    return canonicalFailure(QStringLiteral("message type is absent from the protocol registry"), {});
+  }
+
+  switch (descriptor->codecFamily) {
+  case ProtocolCodecFamily::Session:
+    switch (type) {
+    case MessageType::Hello: {
+      const auto decoded = SessionMessageCodec::decodeHello(type, metadata);
+      if (!decoded.ok()) {
+        return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+      }
+      return canonicalEncode(*decoded.message, &SessionMessageCodec::encodeHello);
+    }
+    case MessageType::AuthResult: {
+      const auto decoded = SessionMessageCodec::decodeAuthResult(type, metadata);
+      if (!decoded.ok()) {
+        return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+      }
+      return canonicalEncode(*decoded.message, &SessionMessageCodec::encodeAuthResult);
+    }
+    case MessageType::Heartbeat:
+    case MessageType::HeartbeatAck: {
+      const auto decoded = SessionMessageCodec::decodeHeartbeat(kProtocolMajorVersion, type, metadata);
+      if (!decoded.ok()) {
+        return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+      }
+      return canonicalEncode(*decoded.message, [type](const HeartbeatMessage &message, QString *error) {
+        return SessionMessageCodec::encodeHeartbeat(type, message, error);
+      });
+    }
+    case MessageType::Goodbye: {
+      const auto decoded = SessionMessageCodec::decodeGoodbye(kProtocolMajorVersion, type, metadata);
+      if (!decoded.ok()) {
+        return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+      }
+      return canonicalEncode(*decoded.message, &SessionMessageCodec::encodeGoodbye);
+    }
+    default:
+      return canonicalFailure(QStringLiteral("registry Session family has an unsupported message type"), {});
+    }
+
+  case ProtocolCodecFamily::Capability: {
+    const auto decoded = CapabilityCodec::decode(type, metadata);
+    if (!decoded.ok()) {
+      return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+    }
+    return canonicalEncode(*decoded.message, &CapabilityCodec::encode);
+  }
+
+  case ProtocolCodecFamily::Control: {
+    const auto decoded = ControlMessageCodec::decode(kProtocolMajorVersion, type, metadata.toByteArray());
+    if (!decoded.ok()) {
+      return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+    }
+    return canonicalEncode(*decoded.message, [](const ControlMessage &message, QString *error) {
+      return ControlMessageCodec::encode(kProtocolMajorVersion, message, error);
+    });
+  }
+
+  case ProtocolCodecFamily::Manifest:
+    switch (type) {
+    case MessageType::ManifestPage: {
+      const auto decoded = ManifestPageCodec::decode(kProtocolMajorVersion, metadata.toByteArray());
+      if (!decoded.ok()) {
+        return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+      }
+      return canonicalEncode(*decoded.page, [](const ManifestPage &page, QString *error) {
+        return ManifestPageCodec::encode(page, {}, error);
+      });
+    }
+    case MessageType::ManifestComplete: {
+      const auto decoded = ManifestPageCodec::decodeComplete(kProtocolMajorVersion, metadata.toByteArray());
+      if (!decoded.ok()) {
+        return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+      }
+      return canonicalEncode(*decoded.message, &ManifestPageCodec::encodeComplete);
+    }
+    default:
+      return canonicalFailure(QStringLiteral("registry Manifest family has an unsupported message type"), {});
+    }
+
+  case ProtocolCodecFamily::File: {
+    const auto decoded = FileMessageCodec::decode(type, metadata);
+    if (!decoded.ok()) {
+      return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+    }
+    return canonicalEncode(*decoded.message, &FileMessageCodec::encode);
+  }
+
+  case ProtocolCodecFamily::TransferCommand: {
+    const auto decoded = TransferCommandCodec::decode(kProtocolMajorVersion, type, metadata);
+    if (!decoded.ok()) {
+      return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+    }
+    return canonicalEncode(*decoded.message, &TransferCommandCodec::encode);
+  }
+
+  case ProtocolCodecFamily::TransferCompletion: {
+    const auto decoded = TransferCompletionCodec::decode(kProtocolMajorVersion, type, metadata);
+    if (!decoded.ok()) {
+      return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+    }
+    return canonicalEncode(*decoded.message, &TransferCompletionCodec::encode);
+  }
+
+  case ProtocolCodecFamily::Resume: {
+    const auto decoded = ResumeMessageCodec::decode(kProtocolMajorVersion, type, metadata);
+    if (!decoded.ok()) {
+      return canonicalFailure(errorName(decoded.error), decoded.diagnostic);
+    }
+    return canonicalEncode(*decoded.message, &ResumeMessageCodec::encode);
+  }
+  }
+
+  return canonicalFailure(QStringLiteral("registry has an unsupported codec family"), {});
+}
+
 QString metadataErrorName(MessageType type, QByteArrayView metadata)
 {
   switch (type) {
@@ -304,11 +455,14 @@ private Q_SLOTS:
 void ProtocolVectorTests::framePositive_data()
 {
   QTest::addColumn<QJsonObject>("vector");
+  qsizetype positiveFrameCount = 0;
   for (const auto &vector : loadVectors()) {
     if (vector.kind == QStringLiteral("frame-positive")) {
       QTest::newRow(qPrintable(vector.name)) << vector.value;
+      ++positiveFrameCount;
     }
   }
+  QCOMPARE(positiveFrameCount, kFrozenPositiveFrameCount);
 }
 
 void ProtocolVectorTests::framePositive()
@@ -323,9 +477,14 @@ void ProtocolVectorTests::framePositive()
   const auto decoded = FrameCodec::tryDecode(encoded, frame);
   QVERIFY2(decoded.status == FrameDecodeStatus::FrameReady, qPrintable(decoded.diagnostic));
   QVERIFY(encoded.isEmpty());
-  QCOMPARE(metadataErrorName(frame.type, frame.metadata), QStringLiteral("None"));
+  const auto canonical = canonicalMetadata(frame.type, frame.metadata);
+  QVERIFY2(canonical.ok, qPrintable(canonical.diagnostic));
+  QCOMPARE(canonical.metadata, metadata);
+  frame.metadata = canonical.metadata;
   QString diagnostic;
-  QCOMPARE(FrameCodec::encode(frame, {}, &diagnostic), frozen);
+  const QByteArray canonicalFrame = FrameCodec::encode(frame, {}, &diagnostic);
+  QVERIFY2(diagnostic.isEmpty(), qPrintable(diagnostic));
+  QCOMPARE(canonicalFrame, frozen);
 }
 
 void ProtocolVectorTests::frameNegative_data()
