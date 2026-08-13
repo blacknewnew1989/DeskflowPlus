@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "test-macos-install-regression.py"
+ROOT = Path(__file__).resolve().parents[3]
 SPEC = importlib.util.spec_from_file_location("test_macos_install_regression_script", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -116,6 +117,30 @@ class MacosInstallRegressionTests(unittest.TestCase):
         ):
             self.assertIn(required, script)
         self.assertNotIn('Path("/Applications")', script)
+
+    def test_canonical_workflow_runs_real_regression_on_macos_14(self) -> None:
+        workflow = (ROOT / ".github/workflows/relaydesk-build.yml").read_text(
+            encoding="utf-8"
+        )
+        template = (
+            ROOT / "product/templates/github/workflows/relaydesk-build.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertEqual(workflow, template)
+        for required in (
+            "macos-install-regression:",
+            "runs-on: macos-14",
+            "needs: package",
+            "actions/download-artifact@v5",
+            "test-macos-install-regression.py",
+            "steps:\n      - uses: actions/checkout@v5",
+            "if-no-files-found: error",
+        ):
+            self.assertIn(required, workflow)
+        regression_job = workflow.split("  macos-install-regression:", 1)[1].split(
+            "  publish-tag-artifacts:", 1
+        )[0]
+        self.assertNotIn("continue-on-error", regression_job)
 
 
 if __name__ == "__main__":

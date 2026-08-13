@@ -190,6 +190,62 @@ jobs:
           echo "Test outcome: ${{ steps.tests.outcome }}"
           exit 1
 
+  macos-install-regression:
+    name: macOS install lifecycle regression
+    needs: package
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download macOS App and DMG artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: relaydesk-macos-arm64-${{ github.sha }}
+          path: ${{ runner.temp }}/relaydesk-test005-artifact
+
+      - name: Exercise isolated install, launch, upgrade and uninstall
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/relaydesk-test005-evidence"
+          python3 product/scripts/test-macos-install-regression.py \
+            --artifact-dir "$RUNNER_TEMP/relaydesk-test005-artifact" \
+            --expected-commit "${{ github.sha }}" \
+            --report "$RUNNER_TEMP/relaydesk-test005-evidence/test005-macos-install-regression.json"
+
+      - name: Write macOS regression summary
+        if: always()
+        shell: bash
+        run: |
+          report="$RUNNER_TEMP/relaydesk-test005-evidence/test005-macos-install-regression.json"
+          {
+            echo "## macOS install lifecycle regression"
+            echo "- Commit: \`${{ github.sha }}\`"
+            if [[ -f "$report" ]]; then
+              python3 - "$report" <<'PY'
+          import json
+          import sys
+
+          result = json.load(open(sys.argv[1], encoding="utf-8"))
+          print(f"- Automated lifecycle: `{result['status']}`")
+          for permission, outcome in result["permissions"].items():
+              print(f"- {permission}: `{outcome['status']}`")
+          PY
+            else
+              echo "- Automated lifecycle: \`FAIL\` (report missing)"
+            fi
+            echo "- This development workflow does not create a required check."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload macOS install regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relaydesk-macos-install-regression-${{ github.sha }}
+          path: ${{ runner.temp }}/relaydesk-test005-evidence
+          if-no-files-found: error
+          retention-days: 30
+
   publish-tag-artifacts:
     name: Publish unsigned draft release
     if: startsWith(github.ref, 'refs/tags/')
