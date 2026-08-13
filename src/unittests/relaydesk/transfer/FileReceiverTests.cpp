@@ -321,18 +321,18 @@ void FileReceiverTests::cancelDeleteAndKeepAreIdempotent()
   QVERIFY(remove.begin(fixture.request(QStringLiteral("remove.bin"), 64)).ok());
   QVERIFY(remove.append({fixture.transferId, fixture.fileId, 0, 0}, fixture.contents.first(3)).ok());
   const QString removedPart = remove.snapshot().partPath;
-  const auto firstCancel = remove.cancel(false);
+  const auto firstCancel = remove.cancel(PartialDisposition::Remove);
   QVERIFY(firstCancel.ok());
   QCOMPARE(firstCancel.fileResult->code, FileResultCode::Cancelled);
   QVERIFY(!QFileInfo::exists(removedPart));
-  QVERIFY(remove.cancel(false).ok());
+  QVERIFY(remove.cancel(PartialDisposition::Remove).ok());
 
   Fixture keepFixture;
   FileReceiver keep;
   QVERIFY(keep.begin(keepFixture.request(QStringLiteral("keep.bin"), 64)).ok());
   QVERIFY(keep.append({keepFixture.transferId, keepFixture.fileId, 0, 0}, keepFixture.contents.first(3)).ok());
   const QString keptPart = keep.snapshot().partPath;
-  QVERIFY(keep.cancel(true).ok());
+  QVERIFY(keep.cancel(PartialDisposition::Keep).ok());
   QVERIFY(QFileInfo::exists(keptPart));
   QCOMPARE(readFile(keptPart), keepFixture.contents.first(3));
 }
