@@ -91,6 +91,20 @@ if (OSX_BUNDLE)
     if(NOT EXISTS \"\${relaydesk_core}\")
       message(FATAL_ERROR \"RelayDesk core executable is missing before macdeployqt\")
     endif()
+    # macdeployqt discovers optional plugins during its first pass, but does
+    # not revisit their dependencies. Run an unsigned discovery pass before
+    # the signed pass so plugin frameworks are included in the final bundle.
+    execute_process(
+      COMMAND \"${DEPLOYQT}\"
+              \"\${relaydesk_app}\"
+              \"-executable=\${relaydesk_core}\"
+              \"-libpath=${RELAYDESK_QT_LIBRARY_PATH}\"
+              \"-no-codesign\"
+      RESULT_VARIABLE relaydesk_macdeployqt_discovery_result
+    )
+    if(NOT relaydesk_macdeployqt_discovery_result EQUAL 0)
+      message(FATAL_ERROR \"macdeployqt failed while discovering RelayDesk plugins\")
+    endif()
     execute_process(
       COMMAND \"${DEPLOYQT}\"
               \"\${relaydesk_app}\"
