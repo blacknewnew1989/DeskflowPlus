@@ -12,6 +12,8 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
+| COMP-007 | conflict four-policy production composition | A6/A0 | ConflictResolver/platform contracts implemented; runtime/UI decision wiring active |
+| COMP-008 | auto-reconnect and Windows permission product wiring | A3/A2/A4/A0 | shared modules implemented; MainWindow composition active |
 
 ## Blocked
 
@@ -25,6 +27,8 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | WIN-018 | Windows file safety adapter | A4/A0 | `bc0b9ffc9`; real NTFS junction/atomic commit tests; run `31678206041` Windows 87/87 PASS |
 | MAC-013..018 | macOS file safety adapter and race hardening | A5/A0 | `b5e91d54e` through `e6f5fe519`; run `31678206041` macOS 88/88 PASS |
 | COMP-004 | IFileTransferService / FileTransferRuntime incoming composition | A6/A0 | `cf8982ef8`, `e1a0ecdf6`, `8f5a992f8`; real pinned TLS 1 MiB+73B receive/atomic commit PASS; run `31682728899` Win 87/87, Mac 88/88 |
+| COMP-005 | multi-file/folder and interrupted resume composition | A6/A0 | `e742ba4a4`, `7d9bfcbf6`, `5941ebd85`; real two-file/empty-dir and 20 MiB disconnect/reconnect/resume loopbacks PASS |
+| COMP-006 | MainWindow transfer service/UI/history composition | A3/A0 | `f04293dad`, `14e6f2453`, `479a0f78f`; typed lifecycle and asynchronous history/free-space bridge tests PASS |
 | AUTO-001 | 识别当前 GitHub 仓库、origin、登录状态 | A0/A1 | GitHub admin/push 权限确认 |
 | AUTO-002 | 添加 upstream、fetch v1.26.0、验证 760e3b9 | A0/A1 | `760e3b99` |
 | AUTO-003 | 创建/恢复产品分支并安装资料/workflow | A0/A1 | bootstrap worktree and commit |
