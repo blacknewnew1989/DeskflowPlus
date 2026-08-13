@@ -8,6 +8,8 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,6 +61,40 @@ def app_archive_name(platform: str, variant: str, commit: str) -> str:
     return f"RelayDesk-{platform}-{variant}-{commit[:8]}.app"
 
 
+def archive_app_bundle(app: Path, archive_base: Path) -> Path:
+    """Archive a macOS app without flattening framework symlinks.
+
+    Python's zipfile-based shutil.make_archive follows symlinks. That turns
+    paths such as QtCore.framework/QtCore into regular files and makes the
+    extracted framework bundle fail codesign verification. ditto is the macOS
+    bundle-preserving archive tool; retain the portable fallback for unit tests
+    and non-macOS artifact inspection.
+    """
+    if sys.platform == "darwin":
+        archive = Path(f"{archive_base}.zip")
+        archive.unlink(missing_ok=True)
+        subprocess.run(
+            [
+                "/usr/bin/ditto",
+                "-c",
+                "-k",
+                "--sequesterRsrc",
+                "--keepParent",
+                str(app),
+                str(archive),
+            ],
+            check=True,
+        )
+        if not archive.is_file():
+            raise SystemExit(f"ditto did not create app archive: {archive}")
+        return archive
+    return Path(
+        shutil.make_archive(
+            str(archive_base), "zip", root_dir=app.parent, base_dir=app.name
+        )
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--build-dir", type=Path, required=True)
@@ -103,11 +139,7 @@ def main() -> int:
             archive_base = out / app_archive_name(
                 args.platform, args.package_variant, args.commit
             )
-            archive = Path(
-                shutil.make_archive(
-                    str(archive_base), "zip", root_dir=apps[0].parent, base_dir=apps[0].name
-                )
-            )
+            archive = archive_app_bundle(apps[0], archive_base)
             copied.append(archive)
 
     copied = sorted(set(path for path in copied if path.is_file()))

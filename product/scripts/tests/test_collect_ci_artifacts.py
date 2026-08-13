@@ -66,6 +66,37 @@ class CollectCiArtifactsTests(unittest.TestCase):
             "RelayDesk-macos-arm64-adhoc-01234567.app",
         )
 
+    def test_macos_app_archive_uses_ditto_to_preserve_framework_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = root / "RelayDesk.app"
+            app.mkdir()
+            archive_base = root / "RelayDesk-macos-arm64-adhoc-01234567.app"
+
+            def fake_ditto(command: list[str], *, check: bool) -> None:
+                self.assertTrue(check)
+                Path(command[-1]).write_bytes(b"ditto zip")
+
+            with (
+                patch.object(MODULE.sys, "platform", "darwin"),
+                patch.object(MODULE.subprocess, "run", side_effect=fake_ditto) as run,
+            ):
+                archive = MODULE.archive_app_bundle(app, archive_base)
+
+            self.assertEqual(archive, Path(f"{archive_base}.zip"))
+            run.assert_called_once_with(
+                [
+                    "/usr/bin/ditto",
+                    "-c",
+                    "-k",
+                    "--sequesterRsrc",
+                    "--keepParent",
+                    str(app),
+                    str(archive),
+                ],
+                check=True,
+            )
+
     def test_collects_explicit_adhoc_app_with_manifest_status(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
