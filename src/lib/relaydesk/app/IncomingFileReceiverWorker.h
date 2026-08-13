@@ -16,6 +16,12 @@ class QThread;
 
 namespace deskflow::relaydesk {
 
+enum class IncomingFileDisposition
+{
+  Receive,
+  Skip,
+};
+
 // One-file receive lifecycle that must be constructed and consumed on the
 // same disk worker. Platform root/link inspection and the final typed atomic
 // commit are composed here; success is published only after the injected
@@ -40,6 +46,7 @@ public:
   [[nodiscard]] ::relaydesk::transfer::FileReceiverResult
   finish(const ::relaydesk::transfer::FileEndMessage &end);
   [[nodiscard]] ::relaydesk::transfer::FileReceiverSnapshot snapshot() const;
+  [[nodiscard]] IncomingFileDisposition disposition() const noexcept;
   [[nodiscard]] ::relaydesk::transfer::DurableCheckpointResult checkpoint(
       const ::relaydesk::transfer::ResumeStore &store,
       ::relaydesk::transfer::ResumeState &state
@@ -64,7 +71,9 @@ private:
   QThread *m_ownerThread = nullptr;
   ::relaydesk::transfer::FileReceiver m_receiver;
   ::relaydesk::transfer::ConflictResolver m_conflicts;
+  ::relaydesk::transfer::ConflictResolveRequest m_conflictRequest;
   std::optional<::relaydesk::transfer::UseTarget> m_target;
+  IncomingFileDisposition m_disposition = IncomingFileDisposition::Receive;
   QString m_receiveRoot;
 };
 
