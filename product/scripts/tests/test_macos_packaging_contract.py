@@ -55,6 +55,28 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("--app-bundle", workflow)
         self.assertNotIn("required checks", workflow)
 
+    def test_all_bundle_resources_are_installed_before_macdeployqt_signing(self) -> None:
+        root_cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        deploy = (ROOT / "deploy/mac/deploy.cmake").read_text(encoding="utf-8")
+
+        self.assertLess(
+            root_cmake.index("FILES ${PROJECT_SOURCE_DIR}/LICENSE"),
+            root_cmake.index("add_subdirectory(deploy)"),
+        )
+        self.assertLess(
+            deploy.index('FILES "${CMAKE_CURRENT_BINARY_DIR}/README-macOS.txt"'),
+            deploy.index('install(CODE "'),
+        )
+
+    def test_actions_stage_verifies_the_final_app_after_install(self) -> None:
+        workflow = (ROOT / ".github/workflows/relaydesk-build.yml").read_text(encoding="utf-8")
+        stage = workflow.split("- name: Stage deployed macOS app bundle", 1)[1].split(
+            "- name: Run tests and keep diagnostics", 1
+        )[0]
+
+        self.assertLess(stage.index("cmake --install"), stage.index("codesign --verify"))
+        self.assertIn("--deep --strict --verbose=4", stage)
+
 
 if __name__ == "__main__":
     unittest.main()
