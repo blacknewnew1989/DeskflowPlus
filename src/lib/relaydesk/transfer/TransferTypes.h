@@ -110,6 +110,53 @@ struct TransferStartResult
   [[nodiscard]] bool operator==(const TransferStartResult &) const = default;
 };
 
+enum class TransferOperation : quint8
+{
+  Accept = 1,
+  Reject = 2,
+  Pause = 3,
+  Resume = 4,
+  Cancel = 5,
+  Retry = 6,
+};
+
+enum class TransferOperationOutcome : quint8
+{
+  Applied = 0,
+  Idempotent = 1,
+  Rejected = 2,
+};
+
+enum class TransferOperationError : quint32
+{
+  None = 0,
+  UnknownTransfer = 1,
+  UnsupportedOperation = 2,
+  InvalidState = 3,
+  StartFailed = 4,
+};
+
+struct TransferOperationResult
+{
+  TransferId transferId;
+  TransferOperation operation = TransferOperation::Pause;
+  TransferOperationOutcome outcome = TransferOperationOutcome::Rejected;
+  TransferOperationError error = TransferOperationError::InvalidState;
+  QString diagnostic;
+
+  [[nodiscard]] bool ok() const noexcept
+  {
+    return outcome != TransferOperationOutcome::Rejected && error == TransferOperationError::None;
+  }
+
+  [[nodiscard]] bool changed() const noexcept
+  {
+    return outcome == TransferOperationOutcome::Applied && error == TransferOperationError::None;
+  }
+
+  [[nodiscard]] bool operator==(const TransferOperationResult &) const = default;
+};
+
 struct SendOptions
 {
   ConflictPolicy conflictPolicy = ConflictPolicy::AutoRename;
@@ -170,3 +217,7 @@ Q_DECLARE_METATYPE(relaydesk::transfer::AcceptanceOrigin)
 Q_DECLARE_METATYPE(relaydesk::transfer::IncomingOffer)
 Q_DECLARE_METATYPE(relaydesk::transfer::TransferStartError)
 Q_DECLARE_METATYPE(relaydesk::transfer::TransferStartResult)
+Q_DECLARE_METATYPE(relaydesk::transfer::TransferOperation)
+Q_DECLARE_METATYPE(relaydesk::transfer::TransferOperationOutcome)
+Q_DECLARE_METATYPE(relaydesk::transfer::TransferOperationError)
+Q_DECLARE_METATYPE(relaydesk::transfer::TransferOperationResult)

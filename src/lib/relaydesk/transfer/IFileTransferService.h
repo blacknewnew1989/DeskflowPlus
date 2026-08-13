@@ -54,6 +54,10 @@ Q_SIGNALS:
   void transferAdded(::relaydesk::transfer::TransferSnapshot transfer);
   void transferChanged(::relaydesk::transfer::TransferSnapshot transfer);
   void transferRemoved(::relaydesk::transfer::TransferId transferId);
+  // Every control intent publishes exactly one result. Applied changes state;
+  // Idempotent confirms an already-achieved state; Rejected carries a stable
+  // error and must not mutate the transfer.
+  void transferOperationFinished(::relaydesk::transfer::TransferOperationResult result);
 };
 
 } // namespace deskflow::relaydesk

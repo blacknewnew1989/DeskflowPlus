@@ -63,6 +63,7 @@ private Q_SLOTS:
   void outgoingSingleFileStreamsThroughWorkerPump();
   void runtimeSourceUsesCanonicalSenderBoundary();
   void runtimeSourceDoesNotAdvertiseUnwiredReceiver();
+  void unknownControlOperationsPublishTypedResults();
   void invalidIdentityFailsWithoutPublishingAListener();
 };
 
@@ -416,6 +417,49 @@ void FileTransferRuntimeTests::runtimeSourceDoesNotAdvertiseUnwiredReceiver()
   QVERIFY(!contents.contains("FileEndpointAnnouncement{"));
   QVERIFY(!contents.contains("case MessageType::TransferOffer:"));
 #endif
+}
+
+void FileTransferRuntimeTests::unknownControlOperationsPublishTypedResults()
+{
+  using namespace ::relaydesk::transfer;
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto localId = DeviceId::generate();
+  TrustedDeviceStore trust(directory.filePath(QStringLiteral("trusted-devices.json")));
+  model::DeviceHomeModel deviceModel;
+  DeviceDiscoveryRuntime discovery(
+      localDevice(localId, QByteArray(32, '\x22'), QStringLiteral("Local")), deviceModel
+  );
+  FileTransferRuntime runtime(
+      localId, trust, discovery, directory.filePath(QStringLiteral("unused.pem"))
+  );
+  QSignalSpy results(&runtime, &IFileTransferService::transferOperationFinished);
+  QVERIFY(results.isValid());
+  const auto unknown = TransferId::generate();
+
+  runtime.accept(unknown, {});
+  runtime.reject(unknown, RejectReason::UserDeclined);
+  runtime.pause(unknown);
+  runtime.resume(unknown);
+  runtime.cancel(unknown, {});
+  runtime.retry(unknown);
+
+  QCOMPARE(results.count(), 6);
+  const QList<TransferOperation> expected{
+      TransferOperation::Accept, TransferOperation::Reject, TransferOperation::Pause,
+      TransferOperation::Resume, TransferOperation::Cancel, TransferOperation::Retry,
+  };
+  for (qsizetype index = 0; index < expected.size(); ++index) {
+    const auto &stored = results.at(index).constFirst();
+    const auto *result = static_cast<const TransferOperationResult *>(stored.constData());
+    QVERIFY(result != nullptr);
+    QCOMPARE(result->transferId, unknown);
+    QCOMPARE(result->operation, expected.at(index));
+    QCOMPARE(result->outcome, TransferOperationOutcome::Rejected);
+    QCOMPARE(result->error, TransferOperationError::UnknownTransfer);
+    QVERIFY(!result->ok());
+  }
 }
 
 void FileTransferRuntimeTests::invalidIdentityFailsWithoutPublishingAListener()

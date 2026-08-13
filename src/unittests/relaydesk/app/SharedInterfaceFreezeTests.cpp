@@ -48,6 +48,7 @@ public:
   std::optional<SendOptions> sendOptions;
   std::optional<ReceiveOptions> receiveOptions;
   std::optional<TransferCancelOptions> cancelOptions;
+  std::optional<TransferOperationResult> operationResult;
   std::optional<PermissionSnapshot> permissionSnapshot;
   QThread *deliveryThread = nullptr;
 
@@ -57,7 +58,7 @@ public Q_SLOTS:
       IncomingOffer receivedIncomingOffer, TransferSnapshot receivedTransferSnapshot,
       TransferHistoryRecord receivedHistoryRecord, SendOptions receivedSendOptions,
       ReceiveOptions receivedReceiveOptions, TransferCancelOptions receivedCancelOptions,
-      PermissionSnapshot receivedPermissionSnapshot
+      TransferOperationResult receivedOperationResult, PermissionSnapshot receivedPermissionSnapshot
   )
   {
     deviceId = std::move(receivedDeviceId);
@@ -69,6 +70,7 @@ public Q_SLOTS:
     sendOptions = std::move(receivedSendOptions);
     receiveOptions = std::move(receivedReceiveOptions);
     cancelOptions = std::move(receivedCancelOptions);
+    operationResult = std::move(receivedOperationResult);
     permissionSnapshot = std::move(receivedPermissionSnapshot);
     deliveryThread = QThread::currentThread();
     Q_EMIT delivered();
@@ -150,6 +152,7 @@ using ActiveTransfersMethod = QList<TransferSnapshot> (IFileTransferService::*)(
 using IncomingOfferSignal = void (IFileTransferService::*)(IncomingOffer);
 using TransferSnapshotSignal = void (IFileTransferService::*)(TransferSnapshot);
 using TransferRemovedSignal = void (IFileTransferService::*)(TransferId);
+using TransferOperationSignal = void (IFileTransferService::*)(TransferOperationResult);
 using DiscoveryEndpointMethod = bool (DiscoveryService::*)(FileEndpointAnnouncement, QString *);
 using DiscoveryRuntimeEndpointMethod = bool (DeviceDiscoveryRuntime::*)(FileEndpointAnnouncement, QString *);
 using SendItemsIntent = void (widgets::DevicesDock::*)(DeviceId, QList<QUrl>, SendOptions);
@@ -176,6 +179,9 @@ static_assert(std::is_same_v<decltype(&IFileTransferService::incomingOffer), Inc
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferAdded), TransferSnapshotSignal>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferChanged), TransferSnapshotSignal>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferRemoved), TransferRemovedSignal>);
+static_assert(
+    std::is_same_v<decltype(&IFileTransferService::transferOperationFinished), TransferOperationSignal>
+);
 static_assert(std::is_same_v<decltype(&DiscoveryService::setFileEndpoint), DiscoveryEndpointMethod>);
 static_assert(
     std::is_same_v<decltype(&DeviceDiscoveryRuntime::setFileEndpoint), DiscoveryRuntimeEndpointMethod>
@@ -220,6 +226,23 @@ static_assert(static_cast<quint32>(TransferStartError::WrongThread) == 1);
 static_assert(static_cast<quint32>(TransferStartError::InvalidRequest) == 2);
 static_assert(static_cast<quint32>(TransferStartError::NotRunning) == 3);
 static_assert(static_cast<quint32>(TransferStartError::PeerUnavailable) == 4);
+static_assert(std::is_same_v<std::underlying_type_t<TransferOperation>, quint8>);
+static_assert(static_cast<quint8>(TransferOperation::Accept) == 1);
+static_assert(static_cast<quint8>(TransferOperation::Reject) == 2);
+static_assert(static_cast<quint8>(TransferOperation::Pause) == 3);
+static_assert(static_cast<quint8>(TransferOperation::Resume) == 4);
+static_assert(static_cast<quint8>(TransferOperation::Cancel) == 5);
+static_assert(static_cast<quint8>(TransferOperation::Retry) == 6);
+static_assert(std::is_same_v<std::underlying_type_t<TransferOperationOutcome>, quint8>);
+static_assert(static_cast<quint8>(TransferOperationOutcome::Applied) == 0);
+static_assert(static_cast<quint8>(TransferOperationOutcome::Idempotent) == 1);
+static_assert(static_cast<quint8>(TransferOperationOutcome::Rejected) == 2);
+static_assert(std::is_same_v<std::underlying_type_t<TransferOperationError>, quint32>);
+static_assert(static_cast<quint32>(TransferOperationError::None) == 0);
+static_assert(static_cast<quint32>(TransferOperationError::UnknownTransfer) == 1);
+static_assert(static_cast<quint32>(TransferOperationError::UnsupportedOperation) == 2);
+static_assert(static_cast<quint32>(TransferOperationError::InvalidState) == 3);
+static_assert(static_cast<quint32>(TransferOperationError::StartFailed) == 4);
 
 static_assert(std::is_copy_constructible_v<DeviceId>);
 static_assert(std::is_copy_constructible_v<DeviceInfo>);
@@ -255,7 +278,7 @@ Q_SIGNALS:
       DeviceId deviceId, TransferId transferId, FileId fileId, IncomingOffer incomingOffer,
       TransferSnapshot transferSnapshot, TransferHistoryRecord historyRecord, SendOptions sendOptions,
       ReceiveOptions receiveOptions, TransferCancelOptions cancelOptions,
-      PermissionSnapshot permissionSnapshot
+      TransferOperationResult operationResult, PermissionSnapshot permissionSnapshot
   );
 };
 
@@ -265,6 +288,7 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferAdded).isValid());
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferChanged).isValid());
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferRemoved).isValid());
+  QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferOperationFinished).isValid());
 
   QVERIFY(QMetaType::fromType<DeviceId>().isValid());
   QVERIFY(QMetaType::fromType<DeviceCapabilities>().isValid());
@@ -282,6 +306,10 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaType::fromType<TransferCancelReason>().isValid());
   QVERIFY(QMetaType::fromType<TransferStartError>().isValid());
   QVERIFY(QMetaType::fromType<TransferStartResult>().isValid());
+  QVERIFY(QMetaType::fromType<TransferOperation>().isValid());
+  QVERIFY(QMetaType::fromType<TransferOperationOutcome>().isValid());
+  QVERIFY(QMetaType::fromType<TransferOperationError>().isValid());
+  QVERIFY(QMetaType::fromType<TransferOperationResult>().isValid());
   QVERIFY(QMetaType::fromType<PermissionSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<FileEndpointAnnouncement>().isValid());
 }
@@ -344,6 +372,11 @@ void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
       .reason = TransferCancelReason::ApplicationShutdown,
       .partialDisposition = PartialDisposition::Remove,
   };
+  const TransferOperationResult operationResult{
+      .transferId = transferId,
+      .operation = TransferOperation::Pause,
+      .outcome = TransferOperationOutcome::Applied,
+  };
   const PermissionSnapshot permissionSnapshot{
       .platform = PermissionPlatform::MacOS,
       .entries = {{PermissionKind::MacLocalNetwork, PermissionState::Granted}},
@@ -367,7 +400,7 @@ void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
     ScopedMessageCapture capture(captured);
     Q_EMIT sharedValuesReady(
         deviceId, transferId, fileId, incomingOffer, transferSnapshot, historyRecord, sendOptions,
-        receiveOptions, cancelOptions, permissionSnapshot
+        receiveOptions, cancelOptions, operationResult, permissionSnapshot
     );
     QTRY_COMPARE_WITH_TIMEOUT(delivered.count(), 1, 5000);
   }
@@ -382,6 +415,7 @@ void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
   QCOMPARE(receiver.sendOptions, std::optional<SendOptions>{sendOptions});
   QCOMPARE(receiver.receiveOptions, std::optional<ReceiveOptions>{receiveOptions});
   QCOMPARE(receiver.cancelOptions, std::optional<TransferCancelOptions>{cancelOptions});
+  QCOMPARE(receiver.operationResult, std::optional<TransferOperationResult>{operationResult});
   QCOMPARE(receiver.permissionSnapshot, std::optional<PermissionSnapshot>{permissionSnapshot});
   const QMutexLocker locker(&captured.mutex);
   for (const auto &message : captured.messages)

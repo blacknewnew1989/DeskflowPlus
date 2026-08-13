@@ -509,50 +509,102 @@ FileTransferRuntime::negotiatedCapabilities(const DeviceId &peerDeviceId) const
 }
 
 void FileTransferRuntime::accept(
-    const ::relaydesk::transfer::TransferId &, const ::relaydesk::transfer::ReceiveOptions &
+    const ::relaydesk::transfer::TransferId &transferId, const ::relaydesk::transfer::ReceiveOptions &
 )
 {
-  // Incoming sessions are composed in the receiver slice. Unknown IDs are
-  // intentionally idempotent at the public service boundary.
+  publishOperation(
+      transferId, ::relaydesk::transfer::TransferOperation::Accept,
+      ::relaydesk::transfer::TransferOperationOutcome::Rejected,
+      ::relaydesk::transfer::TransferOperationError::UnknownTransfer,
+      QStringLiteral("No incoming transfer exists for this ID")
+  );
 }
 
 void FileTransferRuntime::reject(
-    const ::relaydesk::transfer::TransferId &, ::relaydesk::transfer::RejectReason
+    const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::RejectReason
 )
 {
+  publishOperation(
+      transferId, ::relaydesk::transfer::TransferOperation::Reject,
+      ::relaydesk::transfer::TransferOperationOutcome::Rejected,
+      ::relaydesk::transfer::TransferOperationError::UnknownTransfer,
+      QStringLiteral("No incoming transfer exists for this ID")
+  );
 }
 
 void FileTransferRuntime::pause(const ::relaydesk::transfer::TransferId &transferId)
 {
+  using namespace ::relaydesk::transfer;
+
   auto *session = outgoing(transferId);
-  if (session == nullptr || session->control == nullptr || session->paused || session->cancelled) {
+  if (session == nullptr) {
+    publishOperation(
+        transferId, TransferOperation::Pause, TransferOperationOutcome::Rejected,
+        TransferOperationError::UnknownTransfer, QStringLiteral("Transfer ID is unknown")
+    );
+    return;
+  }
+  if (session->paused && !session->cancelled) {
+    publishOperation(transferId, TransferOperation::Pause, TransferOperationOutcome::Idempotent);
+    return;
+  }
+  if (session->control == nullptr || session->cancelled) {
+    publishOperation(
+        transferId, TransferOperation::Pause, TransferOperationOutcome::Rejected,
+        TransferOperationError::InvalidState, QStringLiteral("Transfer cannot be paused in its current state")
+    );
     return;
   }
   const auto result = session->control->pause();
   if (!result.ok()) {
+    publishOperation(
+        transferId, TransferOperation::Pause, TransferOperationOutcome::Rejected,
+        TransferOperationError::InvalidState, result.diagnostic
+    );
     return;
   }
   session->paused = true;
   session->snapshot = session->control->snapshot();
   Q_EMIT transferChanged(session->snapshot);
+  publishOperation(transferId, TransferOperation::Pause, TransferOperationOutcome::Applied);
 }
 
 void FileTransferRuntime::resume(const ::relaydesk::transfer::TransferId &transferId)
 {
-  using ::relaydesk::transfer::TransferState;
+  using namespace ::relaydesk::transfer;
 
   auto *session = outgoing(transferId);
-  if (session == nullptr || session->control == nullptr || !session->paused || session->cancelled) {
+  if (session == nullptr) {
+    publishOperation(
+        transferId, TransferOperation::Resume, TransferOperationOutcome::Rejected,
+        TransferOperationError::UnknownTransfer, QStringLiteral("Transfer ID is unknown")
+    );
+    return;
+  }
+  if (!session->paused && !session->cancelled && session->snapshot.state == TransferState::Transferring) {
+    publishOperation(transferId, TransferOperation::Resume, TransferOperationOutcome::Idempotent);
+    return;
+  }
+  if (session->control == nullptr || !session->paused || session->cancelled) {
+    publishOperation(
+        transferId, TransferOperation::Resume, TransferOperationOutcome::Rejected,
+        TransferOperationError::InvalidState, QStringLiteral("Transfer cannot be resumed in its current state")
+    );
     return;
   }
   const auto resumed = session->control->resume();
   if (!resumed.ok() || !session->control->advance(TransferState::Transferring).ok()) {
+    publishOperation(
+        transferId, TransferOperation::Resume, TransferOperationOutcome::Rejected,
+        TransferOperationError::InvalidState, resumed.diagnostic
+    );
     return;
   }
   session->paused = false;
   session->snapshot = session->control->snapshot();
   Q_EMIT transferChanged(session->snapshot);
   scheduleSenderPump(transferId);
+  publishOperation(transferId, TransferOperation::Resume, TransferOperationOutcome::Applied);
 }
 
 void FileTransferRuntime::cancel(
@@ -560,11 +612,25 @@ void FileTransferRuntime::cancel(
     const ::relaydesk::transfer::TransferCancelOptions &
 )
 {
-  using ::relaydesk::transfer::TransferState;
+  using namespace ::relaydesk::transfer;
 
   auto *session = outgoing(transferId);
-  if (session == nullptr || session->cancelled ||
-      TransferState::Cancelled == session->snapshot.state) {
+  if (session == nullptr) {
+    publishOperation(
+        transferId, TransferOperation::Cancel, TransferOperationOutcome::Rejected,
+        TransferOperationError::UnknownTransfer, QStringLiteral("Transfer ID is unknown")
+    );
+    return;
+  }
+  if (session->cancelled || TransferState::Cancelled == session->snapshot.state) {
+    publishOperation(transferId, TransferOperation::Cancel, TransferOperationOutcome::Idempotent);
+    return;
+  }
+  if (TransferControlStateMachine::isTerminal(session->snapshot.state)) {
+    publishOperation(
+        transferId, TransferOperation::Cancel, TransferOperationOutcome::Rejected,
+        TransferOperationError::InvalidState, QStringLiteral("Terminal transfer cannot be cancelled")
+    );
     return;
   }
   session->cancelled = true;
@@ -580,17 +646,37 @@ void FileTransferRuntime::cancel(
     session->snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
   }
   Q_EMIT transferChanged(session->snapshot);
+  publishOperation(transferId, TransferOperation::Cancel, TransferOperationOutcome::Applied);
 }
 
 void FileTransferRuntime::retry(const ::relaydesk::transfer::TransferId &transferId)
 {
-  using ::relaydesk::transfer::TransferState;
+  using namespace ::relaydesk::transfer;
 
   const auto *session = outgoing(transferId);
-  if (session == nullptr || session->snapshot.state != TransferState::Failed) {
+  if (session == nullptr) {
+    publishOperation(
+        transferId, TransferOperation::Retry, TransferOperationOutcome::Rejected,
+        TransferOperationError::UnknownTransfer, QStringLiteral("Transfer ID is unknown")
+    );
     return;
   }
-  (void)send(session->peer, session->localItems, session->options);
+  if (session->snapshot.state != TransferState::Failed) {
+    publishOperation(
+        transferId, TransferOperation::Retry, TransferOperationOutcome::Rejected,
+        TransferOperationError::InvalidState, QStringLiteral("Only a failed transfer can be retried")
+    );
+    return;
+  }
+  const auto started = send(session->peer, session->localItems, session->options);
+  if (!started.ok()) {
+    publishOperation(
+        transferId, TransferOperation::Retry, TransferOperationOutcome::Rejected,
+        TransferOperationError::StartFailed, started.diagnostic
+    );
+    return;
+  }
+  publishOperation(transferId, TransferOperation::Retry, TransferOperationOutcome::Applied);
 }
 
 QList<::relaydesk::transfer::TransferSnapshot> FileTransferRuntime::activeTransfers() const
@@ -1292,6 +1378,22 @@ void FileTransferRuntime::failOutgoing(
         FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError, std::move(diagnostic)
     );
   }
+}
+
+void FileTransferRuntime::publishOperation(
+    const ::relaydesk::transfer::TransferId &transferId,
+    ::relaydesk::transfer::TransferOperation operation,
+    ::relaydesk::transfer::TransferOperationOutcome outcome,
+    ::relaydesk::transfer::TransferOperationError error, QString diagnostic
+)
+{
+  Q_EMIT transferOperationFinished({
+      .transferId = transferId,
+      .operation = operation,
+      .outcome = outcome,
+      .error = error,
+      .diagnostic = std::move(diagnostic),
+  });
 }
 
 FileTransferRuntime::OutgoingSession *
