@@ -81,6 +81,7 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("custom Finder layout skipped", dmg_layout)
         self.assertIn("${RELAYDESK_MACOS_ICON_SOURCE}", gui)
         self.assertIn("@BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION@", plist)
+        self.assertIn('-executable=\\${relaydesk_core}', deploy)
         self.assertIn("<key>NSBonjourServices</key>", plist)
         self.assertIn("<string>_relaydesk._udp</string>", plist)
         self.assertIn(

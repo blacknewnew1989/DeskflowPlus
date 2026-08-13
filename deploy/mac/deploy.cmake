@@ -62,9 +62,15 @@ if (OSX_BUNDLE)
   # Keep this as the final app-bundle install rule: macdeployqt signs the
   # completed bundle, so later resource writes would invalidate CodeResources.
   install(CODE "
+    set(relaydesk_app \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\")
+    set(relaydesk_core \"\${relaydesk_app}/Contents/MacOS/deskflow-core\")
+    if(NOT EXISTS \"\${relaydesk_core}\")
+      message(FATAL_ERROR \"RelayDesk core executable is missing before macdeployqt\")
+    endif()
     execute_process(
       COMMAND \"${DEPLOYQT}\"
-              \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\"
+              \"\${relaydesk_app}\"
+              \"-executable=\${relaydesk_core}\"
               \"-timestamp\"
               \"-codesign=${RELAYDESK_MACDEPLOYQT_CODESIGN}\"
               ${RELAYDESK_MACDEPLOYQT_HARDENED}

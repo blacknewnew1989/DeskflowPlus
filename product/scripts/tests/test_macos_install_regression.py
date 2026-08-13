@@ -147,6 +147,36 @@ class MacosInstallRegressionTests(unittest.TestCase):
             ):
                 MODULE.framework_symlink_manifest(app)
 
+    def test_rejects_homebrew_runtime_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / "RelayDesk.app"
+            executable = app / "Contents/MacOS/deskflow-core"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"macho")
+            commands = [
+                subprocess.CompletedProcess(
+                    [], 0, stdout="Mach-O 64-bit executable arm64\n", stderr=""
+                ),
+                subprocess.CompletedProcess([], 0, stdout=f"{executable}:\n", stderr=""),
+                subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout=(
+                        f"{executable}:\n"
+                        "\t/opt/homebrew/opt/qtbase/lib/QtCore.framework/Versions/A/QtCore "
+                        "(compatibility version 6.0.0, current version 6.11.1)\n"
+                    ),
+                    stderr="",
+                ),
+            ]
+            with mock.patch.object(
+                MODULE, "nested_code_candidates", return_value=[executable]
+            ), mock.patch.object(MODULE, "run_command", side_effect=commands):
+                with self.assertRaisesRegex(
+                    MODULE.RegressionError, "TEST005_EXTERNAL_DEPENDENCY"
+                ):
+                    MODULE.verify_bundle_linkage(app, mock.Mock())
+
     def test_test_root_must_be_unique_and_beneath_runner_temp(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -206,6 +236,7 @@ class MacosInstallRegressionTests(unittest.TestCase):
             '"localNetwork": {"status": "NOT_RUN"',
             '"/usr/bin/lipo", "-archs"',
             '"/usr/bin/xcrun", "vtool", "-show-build"',
+            '"/usr/bin/otool", "-L"',
             'EXPECTED_MACOS_ARCHITECTURES = ["arm64"]',
             'EXPECTED_MACOS_MINIMUM_VERSION = "14.0"',
         ):

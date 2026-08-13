@@ -380,6 +380,45 @@ def framework_symlink_manifest(app: Path) -> dict[str, str]:
     return manifest
 
 
+def verify_bundle_linkage(app: Path, log: IO[str]) -> int:
+    allowed_prefixes = (
+        "@rpath/",
+        "@loader_path/",
+        "@executable_path/",
+        "/System/Library/",
+        "/usr/lib/",
+    )
+    macho_count = 0
+    for candidate in nested_code_candidates(app):
+        if not candidate.is_file():
+            continue
+        kind = run_command(["/usr/bin/file", "-b", candidate], log, check=False)
+        if kind.returncode != 0 or "Mach-O" not in kind.stdout:
+            continue
+
+        macho_count += 1
+        install_name = run_command(
+            ["/usr/bin/otool", "-D", candidate], log, check=False
+        )
+        install_lines = install_name.stdout.splitlines()
+        install_id = install_lines[1].strip() if len(install_lines) > 1 else ""
+        linked = run_command(["/usr/bin/otool", "-L", candidate], log)
+        for raw_line in linked.stdout.splitlines()[1:]:
+            dependency = re.sub(
+                r"\s+\(compatibility version.*$", "", raw_line.strip()
+            )
+            if not dependency or dependency == install_id:
+                continue
+            if not dependency.startswith(allowed_prefixes):
+                relative = candidate.relative_to(app).as_posix()
+                raise RegressionError(
+                    f"TEST005_EXTERNAL_DEPENDENCY: {relative}: {dependency}"
+                )
+    if macho_count == 0:
+        raise RegressionError(f"TEST005_MACHO_PAYLOAD_MISSING: {app.name}")
+    return macho_count
+
+
 def assert_same_bundle(left: BundleInfo, right: BundleInfo) -> None:
     left_identity = (left.identifier, left.executable_name, left.version)
     right_identity = (right.identifier, right.executable_name, right.version)
@@ -560,6 +599,8 @@ def run_regression(args: argparse.Namespace) -> int:
             result["checks"]["appZipFrameworkSymlinks"] = "PASS"
             verify_bundle_platform(zip_info, log)
             result["checks"]["appZipPlatform"] = "PASS"
+            result["bundleMachOCount"] = verify_bundle_linkage(zip_app, log)
+            result["checks"]["appZipSelfContainedLinkage"] = "PASS"
             verify_adhoc_bundle(zip_app, log)
             result["checks"]["appZipCodesign"] = "PASS"
 
@@ -591,6 +632,9 @@ def run_regression(args: argparse.Namespace) -> int:
             result["checks"]["dmgAppFrameworkSymlinks"] = "PASS"
             verify_bundle_platform(dmg_info, log)
             result["checks"]["dmgAppPlatform"] = "PASS"
+            if verify_bundle_linkage(dmg_app, log) != result["bundleMachOCount"]:
+                raise RegressionError("TEST005_MACHO_PAYLOAD_COUNT_MISMATCH")
+            result["checks"]["dmgAppSelfContainedLinkage"] = "PASS"
             verify_adhoc_bundle(dmg_app, log)
             result["checks"]["dmgAppCodesign"] = "PASS"
             assert_same_bundle(zip_info, dmg_info)
