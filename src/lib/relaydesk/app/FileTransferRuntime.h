@@ -8,15 +8,18 @@
 
 #include "relaydesk/device/DeviceId.h"
 #include "relaydesk/filetransport/FileTlsTransport.h"
+#include "relaydesk/transfer/CapabilityCodec.h"
 
+#include <QHash>
 #include <QHostAddress>
 #include <QObject>
 
 #include <memory>
+#include <optional>
 
 namespace deskflow::relaydesk {
 
-class DiscoveryRegistry;
+class DeviceDiscoveryRuntime;
 class TrustedDeviceStore;
 
 struct FileTransferRuntimeOptions
@@ -24,12 +27,29 @@ struct FileTransferRuntimeOptions
   QHostAddress listenAddress = QHostAddress::Any;
   quint16 listenPort = 0;
   FileTlsSettings tlsSettings;
+  ::relaydesk::transfer::CapabilitiesMessage localCapabilities{
+      .features = {
+          QStringLiteral("file.v1"), QStringLiteral("folder.v1"), QStringLiteral("resume.v1"),
+          QStringLiteral("sha256"),
+      },
+      .conflictPolicies = {
+          ::relaydesk::transfer::ConflictPolicy::AutoRename,
+          ::relaydesk::transfer::ConflictPolicy::Overwrite,
+          ::relaydesk::transfer::ConflictPolicy::Skip,
+          ::relaydesk::transfer::ConflictPolicy::Ask,
+      },
+  };
 };
 
 enum class FileTransferRuntimeError
 {
   WrongThread,
   ListenerFailed,
+  DiscoveryPublishFailed,
+  PeerUnavailable,
+  TransportFailed,
+  ProtocolFailed,
+  CapabilityFailed,
 };
 
 // Owns the independent RDFT listener and the application-level dependencies
@@ -40,7 +60,7 @@ class FileTransferRuntime final : public QObject
 
 public:
   FileTransferRuntime(
-      DeviceId localDeviceId, const TrustedDeviceStore &trustedDevices, DiscoveryRegistry &discoveryRegistry,
+      DeviceId localDeviceId, const TrustedDeviceStore &trustedDevices, DeviceDiscoveryRuntime &discoveryRuntime,
       QString combinedPemPath, FileTransferRuntimeOptions options = {}, QObject *parent = nullptr
   );
   ~FileTransferRuntime() override;
@@ -51,24 +71,55 @@ public:
   void stop();
   [[nodiscard]] bool isRunning() const;
   [[nodiscard]] quint16 listeningPort() const;
+  [[nodiscard]] bool connectPeer(const DeviceId &peerDeviceId, QString *diagnostic = nullptr);
+  [[nodiscard]] bool isPeerReady(const DeviceId &peerDeviceId) const;
+  [[nodiscard]] std::optional<::relaydesk::transfer::NegotiatedCapabilities>
+  negotiatedCapabilities(const DeviceId &peerDeviceId) const;
 
 Q_SIGNALS:
   void started(quint16 port);
   void stopped();
+  void peerReady(
+      deskflow::relaydesk::DeviceId peerDeviceId,
+      ::relaydesk::transfer::NegotiatedCapabilities capabilities
+  );
+  void peerDisconnected(deskflow::relaydesk::DeviceId peerDeviceId);
+  void protocolFrameReceived(
+      deskflow::relaydesk::DeviceId peerDeviceId, ::relaydesk::transfer::Frame frame
+  );
   void errorOccurred(
       deskflow::relaydesk::FileTransferRuntimeError error, deskflow::relaydesk::FileTlsError transportError,
       QString diagnostic
   );
 
 private:
+  struct ConnectionContext
+  {
+    std::optional<DeviceId> expectedPeer;
+    std::optional<DeviceId> peer;
+    std::optional<::relaydesk::transfer::NegotiatedCapabilities> negotiated;
+  };
+
   [[nodiscard]] bool onOwningThread(QString *diagnostic);
+  void attachConnection(FileTlsConnection &connection, std::optional<DeviceId> expectedPeer = std::nullopt);
+  void handleAuthenticated(FileTlsConnection &connection);
+  void handleFrame(FileTlsConnection &connection, ::relaydesk::transfer::Frame frame);
+  void removeConnection(FileTlsConnection &connection);
+  void failConnection(
+      FileTlsConnection &connection, FileTransferRuntimeError error, FileTlsError transportError,
+      QString diagnostic
+  );
+  [[nodiscard]] bool publishFileEndpoint(quint16 port, QString *diagnostic = nullptr);
 
   DeviceId m_localDeviceId;
   const TrustedDeviceStore &m_trustedDevices;
-  DiscoveryRegistry &m_discoveryRegistry;
+  DeviceDiscoveryRuntime &m_discoveryRuntime;
   QString m_combinedPemPath;
   FileTransferRuntimeOptions m_options;
   std::unique_ptr<FileTlsListener> m_listener;
+  QHash<FileTlsConnection *, ConnectionContext> m_connections;
+  QHash<DeviceId, FileTlsConnection *> m_peerConnections;
+  QHash<DeviceId, FileTlsClient *> m_clients;
 };
 
 } // namespace deskflow::relaydesk

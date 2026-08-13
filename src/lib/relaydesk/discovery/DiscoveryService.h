@@ -73,6 +73,9 @@ public:
   [[nodiscard]] bool start(QString *errorMessage = nullptr);
   void stop();
   [[nodiscard]] bool announceNow(QString *errorMessage = nullptr);
+  [[nodiscard]] bool setFileEndpoint(
+      quint16 port, bool folderV1, bool resumeV1, QString *errorMessage = nullptr
+  );
 
   [[nodiscard]] bool isRunning() const;
   [[nodiscard]] quint16 boundPort() const;
