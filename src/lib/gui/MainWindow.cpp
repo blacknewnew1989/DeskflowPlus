@@ -72,34 +72,6 @@
 #if defined(Q_OS_MACOS)
 #include <ApplicationServices/ApplicationServices.h>
 #endif
-#if defined(Q_OS_WIN)
-  m_windowsFirewallProbe = new deskflow::relaydesk::WindowsFirewallProbe({}, {}, {}, this);
-  m_relayDeskPermissionModel->setSnapshot(m_windowsFirewallProbe->current());
-  connect(
-      m_windowsFirewallProbe, &deskflow::relaydesk::WindowsFirewallProbe::snapshotChanged,
-      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
-  );
-  connect(
-      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::openSettingsRequested,
-      m_windowsFirewallProbe, [this](deskflow::relaydesk::PermissionKind kind) {
-        (void)m_windowsFirewallProbe->openSystemSettings(kind);
-      }
-  );
-  connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
-    if (state == Qt::ApplicationActive && m_windowsFirewallProbe != nullptr && m_relayDeskTransfer != nullptr) {
-      const auto inputPort = Settings::value(Settings::Core::Port).toInt();
-      const auto filePort = static_cast<deskflow::relaydesk::FileTransferRuntime &>(
-                                m_relayDeskTransfer->service()
-                            ).listeningPort();
-      m_windowsFirewallProbe->refresh({
-          .executablePath = QCoreApplication::applicationFilePath(),
-          .expectedTcpPorts = {static_cast<quint16>(inputPort), filePort},
-          .processId = static_cast<quint32>(QCoreApplication::applicationPid()),
-      });
-    }
-  });
-#endif
-
 using namespace deskflow::gui;
 
 using CoreConnectionState = CoreProcess::ConnectionState;
@@ -146,6 +118,33 @@ MainWindow::MainWindow()
   m_relayDeskPermissionModel = new deskflow::relaydesk::model::PermissionStatusModel(
       deskflow::relaydesk::buildPermissionPlatform(), this
   );
+#if defined(Q_OS_WIN)
+  m_windowsFirewallProbe = new deskflow::relaydesk::WindowsFirewallProbe({}, {}, {}, this);
+  m_relayDeskPermissionModel->setSnapshot(m_windowsFirewallProbe->current());
+  connect(
+      m_windowsFirewallProbe, &deskflow::relaydesk::WindowsFirewallProbe::snapshotChanged,
+      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
+  );
+  connect(
+      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::openSettingsRequested,
+      m_windowsFirewallProbe, [this](deskflow::relaydesk::PermissionKind kind) {
+        (void)m_windowsFirewallProbe->openSystemSettings(kind);
+      }
+  );
+  connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+    if (state == Qt::ApplicationActive && m_windowsFirewallProbe != nullptr && m_relayDeskTransfer != nullptr) {
+      const auto inputPort = Settings::value(Settings::Core::Port).toInt();
+      const auto filePort = static_cast<deskflow::relaydesk::FileTransferRuntime &>(
+                                m_relayDeskTransfer->service()
+                            ).listeningPort();
+      m_windowsFirewallProbe->refresh({
+          .executablePath = QCoreApplication::applicationFilePath(),
+          .expectedTcpPorts = {static_cast<quint16>(inputPort), filePort},
+          .processId = static_cast<quint32>(QCoreApplication::applicationPid()),
+      });
+    }
+  });
+#endif
 #if defined(Q_OS_MACOS)
   m_macPermissionProbe = new deskflow::relaydesk::MacPermissionProbe(this);
   m_relayDeskPermissionModel->setSnapshot(m_macPermissionProbe->current());
