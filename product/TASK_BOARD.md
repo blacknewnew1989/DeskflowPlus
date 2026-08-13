@@ -12,7 +12,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
-| COMP-004 | IFileTransferService / FileTransferRuntime composition | A6/A0 | protocol tag PASS; resume only against `relaydesk-protocol-v1-20260813-01` |
+| COMP-004 | IFileTransferService / FileTransferRuntime composition | A6/A0 | incoming decision/worker core integrated through `c6d212f9`; Win/mac safety adapters through `e6f5fe519`; final atomic commit/product wiring active |
 
 ## Blocked
 
@@ -23,6 +23,8 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | ID | 任务 | Owner | 证据 |
 |---|---|---|---|
 | PROTO-FREEZE-001 | RelayDesk v1 wire protocol / shared interface freeze | A6/A2/A0 | tag `relaydesk-protocol-v1-20260813-01`; run `31672497950` SUCCESS; Win 84/84, Mac 85/85; artifacts `9170492840` / `9170386546` |
+| WIN-018 | Windows file safety adapter | A4/A0 | `bc0b9ffc9`; real NTFS junction/atomic commit tests; run `31678206041` Windows 87/87 PASS |
+| MAC-013..018 | macOS file safety adapter and race hardening | A5/A0 | `b5e91d54e` through `e6f5fe519`; run `31678206041` macOS 88/88 PASS |
 | AUTO-001 | 识别当前 GitHub 仓库、origin、登录状态 | A0/A1 | GitHub admin/push 权限确认 |
 | AUTO-002 | 添加 upstream、fetch v1.26.0、验证 760e3b9 | A0/A1 | `760e3b99` |
 | AUTO-003 | 创建/恢复产品分支并安装资料/workflow | A0/A1 | bootstrap worktree and commit |
