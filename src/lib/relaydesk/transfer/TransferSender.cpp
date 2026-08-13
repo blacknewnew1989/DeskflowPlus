@@ -341,6 +341,7 @@ public:
   TransferFrameSink &sink;
   SenderBackpressureLimits limits;
   std::optional<Frame> pendingFrame;
+  quint64 sourcePulls = 0;
   bool isPaused = false;
   bool isFailed = false;
 };
@@ -377,6 +378,7 @@ SenderPumpResult TransferSenderPump::Impl::pump()
   }
 
   if (!pendingFrame.has_value()) {
+    ++sourcePulls;
     SenderFrameResult produced = sender.nextFrame();
     if (produced.status == SenderFrameStatus::Preparing) {
       return {.status = SenderPumpStatus::Progressed};
@@ -458,6 +460,11 @@ quint64 TransferSenderPump::bufferedFrameBytes() const noexcept
 quint64 TransferSenderPump::bytesProduced() const noexcept
 {
   return m_impl->sender.bytesProduced();
+}
+
+quint64 TransferSenderPump::sourcePullCount() const noexcept
+{
+  return m_impl->sourcePulls;
 }
 
 } // namespace relaydesk::transfer

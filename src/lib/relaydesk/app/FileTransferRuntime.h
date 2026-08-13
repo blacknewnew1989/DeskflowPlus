@@ -143,10 +143,11 @@ private:
   void handleOfferResponse(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
   void sendNextManifestPage(const ::relaydesk::transfer::TransferId &transferId);
   void startNextOutgoingFile(OutgoingSession &session);
+  void schedulePeerSenders(const DeviceId &peerDeviceId);
   void scheduleSenderPump(const ::relaydesk::transfer::TransferId &transferId);
   void dispatchSenderPumpResult(
-      const ::relaydesk::transfer::TransferId &transferId, const ::relaydesk::transfer::SenderPumpResult &result,
-      std::optional<::relaydesk::transfer::Frame> frame, quint64 bytesProduced
+      const ::relaydesk::transfer::TransferId &transferId,
+      const ::relaydesk::transfer::SenderPumpResult &result
   );
   void handleFileResult(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
   void updateOutgoingProgress(OutgoingSession &session);

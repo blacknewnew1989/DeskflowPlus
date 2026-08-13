@@ -92,6 +92,9 @@ void FileTlsConnection::begin()
 {
   connect(m_socket, &QSslSocket::encrypted, this, &FileTlsConnection::handleEncrypted);
   connect(m_socket, &QSslSocket::readyRead, this, &FileTlsConnection::handleReadyRead);
+  connect(m_socket, &QSslSocket::bytesWritten, this, [this](qint64) {
+    Q_EMIT writeCapacityAvailable(queuedWriteBytes());
+  });
   connect(m_socket, &QSslSocket::disconnected, this, &FileTlsConnection::disconnected);
   connect(m_handshakeTimer, &QTimer::timeout, this, [this]() {
     fail(FileTlsError::HandshakeTimeout, QStringLiteral("file TLS handshake timed out"));
