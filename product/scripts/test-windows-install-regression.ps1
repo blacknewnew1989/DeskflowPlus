@@ -542,13 +542,15 @@ $Result = [ordered]@{
 
 try {
     New-Item -ItemType Directory -Path $PortableRoot, $DecompileRoot, $EvidenceRoot -Force | Out-Null
-    if ((Get-ProductRegistrationsByName -ProductName $ExpectedProductName).Count -ne 0) {
+    $ExistingRegistrations = @(Get-ProductRegistrationsByName -ProductName $ExpectedProductName)
+    if ($ExistingRegistrations.Count -ne 0) {
         throw "TEST005_EXISTING_PRODUCT_REFUSED: $ExpectedProductName"
     }
     if ($null -ne (Get-Service -Name $ExpectedServiceName -ErrorAction SilentlyContinue)) {
         throw "TEST005_EXISTING_SERVICE_REFUSED: $ExpectedServiceName"
     }
-    if ((Get-RelayDeskFirewallRules -ProductName $ExpectedProductName).Count -ne 0) {
+    $ExistingFirewallRules = @(Get-RelayDeskFirewallRules -ProductName $ExpectedProductName)
+    if ($ExistingFirewallRules.Count -ne 0) {
         throw "TEST005_EXISTING_FIREWALL_RULE_REFUSED: $ExpectedProductName"
     }
     foreach ($UserDataPath in $UserDataPaths) {
@@ -784,7 +786,7 @@ finally {
         }
     }
     if ($UserDataCreatedByHarness -and (Test-Path -LiteralPath $UserDataRoot)) {
-        if ((Get-ChildItem -LiteralPath $UserDataRoot -Force).Count -eq 0) {
+        if (@(Get-ChildItem -LiteralPath $UserDataRoot -Force).Count -eq 0) {
             [IO.Directory]::Delete($UserDataRoot, $false)
         }
     }
