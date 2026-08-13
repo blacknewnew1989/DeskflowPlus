@@ -93,8 +93,8 @@ void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
   QVERIFY(firstPort != 0);
   QCOMPARE(discovery.service().localDevice().filePort, firstPort);
   QVERIFY(discovery.service().localDevice().capabilities.fileV1);
-  QVERIFY(discovery.service().localDevice().capabilities.folderV1);
-  QVERIFY(discovery.service().localDevice().capabilities.resumeV1);
+  QVERIFY(!discovery.service().localDevice().capabilities.folderV1);
+  QVERIFY(!discovery.service().localDevice().capabilities.resumeV1);
   QCOMPARE(started.count(), 1);
   QVERIFY(runtime.start(&diagnostic));
   QCOMPARE(runtime.listeningPort(), firstPort);

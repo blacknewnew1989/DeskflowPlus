@@ -413,7 +413,9 @@ void FileTransferRuntime::accept(
   // intentionally idempotent at the public service boundary.
 }
 
-void FileTransferRuntime::reject(const ::relaydesk::transfer::TransferId &, int)
+void FileTransferRuntime::reject(
+    const ::relaydesk::transfer::TransferId &, ::relaydesk::transfer::RejectReason
+)
 {
 }
 
@@ -450,7 +452,9 @@ void FileTransferRuntime::resume(const ::relaydesk::transfer::TransferId &transf
   scheduleSenderPump(transferId);
 }
 
-void FileTransferRuntime::cancel(const ::relaydesk::transfer::TransferId &transferId, bool)
+void FileTransferRuntime::cancel(
+    const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::TransferCancelReason, bool
+)
 {
   using ::relaydesk::transfer::TransferState;
 

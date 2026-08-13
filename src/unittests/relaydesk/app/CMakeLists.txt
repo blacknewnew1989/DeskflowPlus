@@ -28,3 +28,10 @@ create_test(
   SOURCE FileTransferRuntimeTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
 )
+
+create_test(
+  NAME RelayDeskSharedInterfaceFreezeTests
+  DEPENDS relaydesk_app
+  SOURCE SharedInterfaceFreezeTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+)

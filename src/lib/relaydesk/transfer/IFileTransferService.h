@@ -36,10 +36,15 @@ public:
       const ::relaydesk::transfer::TransferId &transferId,
       const ::relaydesk::transfer::ReceiveOptions &options
   ) = 0;
-  virtual void reject(const ::relaydesk::transfer::TransferId &transferId, int reasonCode) = 0;
+  virtual void reject(
+      const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::RejectReason reason
+  ) = 0;
   virtual void pause(const ::relaydesk::transfer::TransferId &transferId) = 0;
   virtual void resume(const ::relaydesk::transfer::TransferId &transferId) = 0;
-  virtual void cancel(const ::relaydesk::transfer::TransferId &transferId, bool keepPartial) = 0;
+  virtual void cancel(
+      const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::TransferCancelReason reason,
+      bool keepPartial
+  ) = 0;
   virtual void retry(const ::relaydesk::transfer::TransferId &transferId) = 0;
 
   [[nodiscard]] virtual QList<::relaydesk::transfer::TransferSnapshot> activeTransfers() const = 0;
