@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "repository": "blacknewnew1989/DeskflowPlus",
+  "workflow": ".github/workflows/relaydesk-build.yml",
+  "runId": 31655013105,
+  "runUrl": "https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/31655013105",
+  "tag": "relaydesk-phase2-20260813-04",
+  "commit": "d14a92335cc326f00c3bd12869585d48201d1bc0",
+  "completedAt": "2026-08-13T00:49:02Z",
+  "jobs": [
+    {
+      "id": 94307461806,
+      "name": "Development materials diagnostic",
+      "conclusion": "success"
+    },
+    {
+      "id": 94307461815,
+      "name": "windows-x64",
+      "runner": "windows-2022",
+      "architecture": "x64",
+      "toolchain": "MSVC 2022, Windows SDK 10.0.26100, Qt 6.10.1",
+      "conclusion": "success",
+      "tests": {
+        "status": "PASS",
+        "passed": 74,
+        "failed": 0,
+        "total": 74
+      }
+    },
+    {
+      "id": 94307461814,
+      "name": "macos-arm64",
+      "runner": "macos-15",
+      "architecture": "arm64",
+      "toolchain": "Xcode 16.4, macOS SDK 15.5, Qt 6.10.2",
+      "conclusion": "success",
+      "tests": {
+        "status": "PASS",
+        "passed": 75,
+        "failed": 0,
+        "total": 75
+      }
+    },
+    {
+      "id": 94309479774,
+      "name": "Publish unsigned draft release",
+      "conclusion": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 9164266512,
+      "name": "relaydesk-windows-x64-d14a92335cc326f00c3bd12869585d48201d1bc0",
+      "size": 32895220,
+      "zipSha256": "094412b225b9e9ca220a009e1c551a44ab2fe919dc20b05d1b3000d9e687f087"
+    },
+    {
+      "id": 9164146467,
+      "name": "relaydesk-macos-arm64-d14a92335cc326f00c3bd12869585d48201d1bc0",
+      "size": 81658505,
+      "zipSha256": "bee98016ac6169abd8f6addca7f03b2bf0fc36bcd517b9906c062a170770d622"
+    }
+  ],
+  "release": {
+    "draft": true,
+    "url": "https://github.com/blacknewnew1989/DeskflowPlus/releases/tag/untagged-a279d00bd07a86bb5b96",
+    "localDirectory": "dist/releases/relaydesk-phase2-20260813-04",
+    "deliveryAssets": [
+      {
+        "name": "relaydesk-d14a92335cc326f00c3bd12869585d48201d1bc0-win-x64-unsigned.msi",
+        "size": 15944761,
+        "sha256": "258b721996aed2fe0ae40cf97cd5deffe0f07c50d4586088da5d1d3ab7c8abc2"
+      },
+      {
+        "name": "relaydesk-d14a92335cc326f00c3bd12869585d48201d1bc0-win-x64-unsigned-portable.7z",
+        "size": 12993084,
+        "sha256": "32199d39b2e78771666a746001d5415aeb9636c7e3e2f257631e499d17f770b9"
+      },
+      {
+        "name": "RelayDesk-macos-arm64-adhoc-d14a9233.app.zip",
+        "size": 48601422,
+        "sha256": "cb0e460d9e7847c3e17f6aa0d5b85693ec0f66d3aebb3e4918ebde5ec7420730"
+      },
+      {
+        "name": "relaydesk-d14a92335cc326f00c3bd12869585d48201d1bc0-macos-arm64-adhoc.dmg",
+        "size": 28714314,
+        "sha256": "82e00d0b9a4d1f6cbdc58cdd6f7f4c7581b94f60ec1a371be90151874055f7d4"
+      }
+    ],
+    "digestVerification": "PASS: GitHub release API digest, SHA256SUMS, and local Get-FileHash all match"
+  },
+  "notRun": [
+    "Physical Windows-to-macOS file transfer interoperability",
+    "Physical IP change, Wi-Fi/Ethernet change, and sleep/wake recovery",
+    "Final App ZIP/DMG codesign verification after every bundle resource is installed; covered by Phase 4 TEST-005",
+    "Production code signing, notarization, and Gatekeeper/SmartScreen reputation checks"
+  ]
+}

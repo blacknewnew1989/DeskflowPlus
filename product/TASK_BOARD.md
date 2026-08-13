@@ -12,9 +12,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
-| PHASE2-CI | 文件传输内核阶段标签双平台验证 | A0 | `relaydesk-phase2-20260813-01` 待创建 |
-| COMP-002 | pairing/trust runtime composition | A6 | 基于 COMP-001 实现真实 UDP 配对与 trust commit |
-| COMP-003 | transfer UI intent runtime adapter | A3 | 集中接通 send/offer/control/history intents |
+| COMP-004 | IFileTransferService / FileTransferRuntime composition | A6/A0 | service contract + independent TLS listener lifecycle integrated; frame/session/send/receive wiring continues |
 | TEST-005 | Windows 安装升级卸载回归 | A7 | 原生临时目标验证中；macOS clean-install 待 runner |
 
 ## Blocked
@@ -76,6 +74,9 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | WIN-001..004 | Windows diagnostics/startup/product packages/optional signing | A4/A7 | `b1db63680` through `22d27754d`; native probes and packaging suites PASS |
 | MAC-001..004 | macOS permission probes/product packages/optional notarization | A5/A6 | `588cbb395` through `74634f3c1`; cross-platform Actions + contract tests PASS |
 | COMP-001 | runtime audit and discovery composition | A6 | `a06575dc1`, `ac0e9d74a`; real UDP loopback PASS |
+| COMP-002 | pairing/trust runtime composition | A6/A0 | `8a7c025cb`, `c086fa967`; discovery UDP → pairing → atomic trust → GUI, local composition tests PASS |
+| COMP-003 | transfer UI intent runtime adapter | A3/A0 | `c8505c366`; typed send/offer/control/history intents and safe completion opener, 6/6 PASS |
+| PHASE2-CI | 文件传输内核阶段标签双平台验证 | A0 | tag `relaydesk-phase2-20260813-04`, run `31655013105`, Win 74/74 + Mac 75/75 + draft Release + local digest verification PASS |
 
 ## 规则
 

@@ -1,9 +1,9 @@
 # Phase 2 文件传输内核报告
 
-- 当前结论：`IN_PROGRESS`（实现与本地验证 PASS，等待阶段标签双平台 Actions）
+- 当前结论：`PASS`（文件传输内核、阶段标签双平台构建/CTest/打包、草稿 Release 与本地摘要复验完成）
 - 集成分支：`product/relaydesk-v1`
-- 候选提交：`bd342ed5e`
-- 目标标签：`relaydesk-phase2-20260813-03`
+- 阶段提交：`d14a92335cc326f00c3bd12869585d48201d1bc0`
+- 阶段标签：`relaydesk-phase2-20260813-04`
 - 产物性质：unsigned/ad-hoc 内部包；签名凭据不阻塞本阶段。
 
 ## 已完成范围
@@ -43,6 +43,22 @@
 - 恢复矩阵根因是跨 translation unit 动态初始化顺序：测试全局初始化调用 `DeviceId::fromString()` 时，另一个 translation unit 的全局 `QRegularExpression` 尚未构造。提交 `da0428940` 改为首次调用时构造的函数局部 static；恢复矩阵本地重复 10/10 PASS。
 - start-at-login 根因是 Windows 命令契约错误依赖宿主 `QFileInfo::isAbsolute()`/native separator；提交 `5845dbc3c` 改为平台无关的 drive/UNC 规范化，注入式用例本地 PASS。
 - WiX 根因是 MSVC legacy preprocessor 不接受 custom action 的 C++20 `__VA_OPT__`；提交 `bd342ed5e` 仅对 MSVC target 启用 `/Zc:preprocessor`，并由 packaging contract 测试锁定。
+- `relaydesk-phase2-20260813-03` / Actions run `31654263274`：Windows build/package/CTest PASS；macOS 74/74 CTest PASS，但 Package 正确暴露 `nested code is modified or invalid`。历史 Phase 1 runner 曾忽略同一 `macdeployqt` 返回码，因此当时绿灯不能作为最终 App 签名完整性证据。
+- 根因与 Qt 上游修复一致：Qt 6.10.1 的 `macdeployqt` 在签名顺序上会先签 App、后修改嵌套代码；Qt 6.10.2 已包含“app binary is signed after any other binaries”的修复。提交 `d14a92335` 仅将 macOS runner/template 升级到 Qt 6.10.2，并保留 Windows Qt 6.10.1。
+
+## 最终阶段验证
+
+- 标签：`relaydesk-phase2-20260813-04`，commit `d14a92335cc326f00c3bd12869585d48201d1bc0`。
+- GitHub Actions run：`31655013105`，整体 `PASS`。
+- Windows x64：Configure、Build、MSI/7Z/source package、CTest `74/74 PASS`、artifact upload 全部成功；artifact ID `9164266512`，ZIP digest `094412b225b9e9ca220a009e1c551a44ab2fe919dc20b05d1b3000d9e687f087`。
+- macOS arm64：Qt 6.10.2、Configure、Build、DMG/App/source package、deployed App stage、CTest `75/75 PASS`、artifact upload 全部成功；artifact ID `9164146467`，ZIP digest `bee98016ac6169abd8f6addca7f03b2bf0fc36bcd517b9906c062a170770d622`。
+- 草稿 Release：`https://github.com/blacknewnew1989/DeskflowPlus/releases/tag/untagged-a279d00bd07a86bb5b96`，发布 job `94309479774 PASS`。
+- 四个交付资产已下载到 `dist/releases/relaydesk-phase2-20260813-04`；GitHub Release API digest、Release `SHA256SUMS` 与本地 `Get-FileHash` 三方一致：
+  - Windows MSI：`258b721996aed2fe0ae40cf97cd5deffe0f07c50d4586088da5d1d3ab7c8abc2`
+  - Windows portable 7Z：`32199d39b2e78771666a746001d5415aeb9636c7e3e2f257631e499d17f770b9`
+  - macOS App ZIP：`cb0e460d9e7847c3e17f6aa0d5b85693ec0f66d3aebb3e4918ebde5ec7420730`
+  - macOS DMG：`82e00d0b9a4d1f6cbdc58cdd6f7f4c7581b94f60ec1a371be90151874055f7d4`
+- 结构化证据：`product/working/actions/31655013105.json`。
 
 ## 架构边界
 
@@ -59,15 +75,16 @@
 - [x] 生成 Phase 2 报告。
 - [x] 创建并推送 `relaydesk-phase2-20260813-01`（诊断 run 失败，已保留证据）。
 - [x] 创建并推送 `relaydesk-phase2-20260813-02`（第二轮诊断 run 失败，已保留证据）。
-- [ ] 创建并推送 `relaydesk-phase2-20260813-03`。
-- [ ] 标签 Windows x64 / macOS arm64 configure、build、CTest、package、artifact 全部 PASS。
-- [ ] 下载阶段 Release assets 并记录 API digest/本地 SHA。
+- [x] 创建并推送最终阶段标签 `relaydesk-phase2-20260813-04`。
+- [x] 标签 Windows x64 / macOS arm64 configure、build、CTest、package、artifact 全部 PASS。
+- [x] 下载阶段 Release assets 并记录 API digest/Release manifest/本地 SHA。
 
 ## NOT_RUN
 
 - `NOT_RUN`：两台真实 Windows/macOS 机器之间的完整文件传输。
 - `NOT_RUN`：真实网络 IP 切换、Wi-Fi/Ethernet 切换、sleep/wake。
-- `NOT_RUN`：打包 App 内由 GUI intent 到文件 service 的完整运行时链；COMP 审计已明确区分核心实现与启动接线，后续阶段继续完成。
+- `NOT_RUN`：打包 App 内由 GUI intent 到文件 service 的完整运行时链；`IFileTransferService` / `FileTransferRuntime` 正在以 COMP-004 小切片接线，Phase 3 完成。
+- `NOT_RUN`：所有 README/许可证资源安装完成后的最终 App ZIP/DMG 严格 `codesign --verify --deep --strict`；Phase 4 TEST-005 runner 正在验证，不把 Phase 2 包误标为最终候选。
 - `NOT_RUN`：正式 Windows/Apple 签名和公证。
 
 这些真机/凭据项不阻塞 Phase 2 内核代码、测试与 unsigned artifacts。
