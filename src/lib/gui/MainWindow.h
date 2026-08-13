@@ -59,8 +59,10 @@ class DaemonIpcClient;
 
 namespace deskflow::relaydesk {
 class DeviceDiscoveryRuntime;
+class DeviceId;
 class MacPermissionProbe;
 class PairingTrustRuntime;
+class TransferRuntimeComposition;
 namespace model {
 class DeviceHomeModel;
 class PairingWizardModel;
@@ -181,6 +183,7 @@ private:
   void handleNewClientPromptRequest(const QString &clientName, bool usePeerAuth);
   void updateIpLabel(const QStringList &addresses);
   void setupRelayDeskDiscovery();
+  void setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &localDeviceId);
 
   /**
    * @brief showClientError
@@ -227,6 +230,7 @@ private:
   LogDock *m_logDock;
   deskflow::relaydesk::DeviceDiscoveryRuntime *m_relayDeskDiscovery = nullptr;
   deskflow::relaydesk::PairingTrustRuntime *m_relayDeskPairing = nullptr;
+  deskflow::relaydesk::TransferRuntimeComposition *m_relayDeskTransfer = nullptr;
   deskflow::relaydesk::MacPermissionProbe *m_macPermissionProbe = nullptr;
   deskflow::relaydesk::model::DeviceHomeModel *m_relayDeskDeviceModel = nullptr;
   deskflow::relaydesk::model::PairingWizardModel *m_relayDeskPairingModel = nullptr;
