@@ -45,8 +45,28 @@ public:
     const QMutexLocker lock(&mutex);
     commitRequests.append(request);
     workerThreads.append(QThread::currentThread());
+    if (createDestinationRace && commitRequests.size() == 1) {
+      QFile raced(request.destinationPath);
+      if (!raced.open(QIODevice::WriteOnly) || raced.write(raceBytes) != raceBytes.size()) {
+        return {
+            .error = FileSafetyError::CommitFailed,
+            .diagnostic = QStringLiteral("fake adapter could not create destination race"),
+        };
+      }
+      return {
+          .error = FileSafetyError::DestinationExists,
+          .diagnostic = QStringLiteral("destination appeared before atomic commit"),
+      };
+    }
     if (!commitResult.ok()) {
       return commitResult;
+    }
+    if (request.disposition == CommitDisposition::ReplaceExisting &&
+        QFileInfo::exists(request.destinationPath) && !QFile::remove(request.destinationPath)) {
+      return {
+          .error = FileSafetyError::CommitFailed,
+          .diagnostic = QStringLiteral("fake adapter could not replace destination"),
+      };
     }
     if (!QFile::rename(request.stagingPath, request.destinationPath)) {
       return {
@@ -65,6 +85,8 @@ public:
   FileSafetyResult rootResult;
   FileSafetyResult traversalResult;
   FileSafetyResult commitResult;
+  bool createDestinationRace = false;
+  QByteArray raceBytes = QByteArrayLiteral("external-race");
 };
 
 struct WorkerResult
@@ -115,6 +137,9 @@ private Q_SLOTS:
   void rejectsCrossThreadReuse();
   void retainsPartWhenPlatformCommitFails();
   void checkpointsAndResumesPartOnDiskWorker();
+  void retriesAutoRenameWhenDestinationAppearsBeforeCommit();
+  void overwritesFileButRejectsDirectoryAndPreservesOriginal();
+  void skipsExistingFileWithoutCreatingPart();
 };
 
 void IncomingFileReceiverWorkerTests::ownsCompleteFileReceiverLifecycleOnDiskWorker()
@@ -378,6 +403,153 @@ void IncomingFileReceiverWorkerTests::checkpointsAndResumesPartOnDiskWorker()
   QVERIFY(committed.open(QIODevice::ReadOnly));
   QCOMPARE(committed.readAll(), bytes);
   QCOMPARE(safety.commitRequests.size(), 1);
+}
+
+void IncomingFileReceiverWorkerTests::retriesAutoRenameWhenDestinationAppearsBeforeCommit()
+{
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const QByteArray originalBytes = QByteArrayLiteral("keep-original");
+  const QByteArray receivedBytes = QByteArrayLiteral("received-payload");
+  auto request = requestFor(root.path(), receivedBytes);
+  request.entry.relativeProtocolPath = QStringLiteral("payload.bin");
+  QFile original(root.filePath(QStringLiteral("payload.bin")));
+  QVERIFY(original.open(QIODevice::WriteOnly));
+  QCOMPARE(original.write(originalBytes), qint64(originalBytes.size()));
+  original.close();
+  FakeFileSafety safety;
+  safety.createDestinationRace = true;
+  QThreadPool pool;
+  auto future = QtConcurrent::run(&pool, [&]() {
+    IncomingFileReceiverWorker worker(safety);
+    WorkerResult result;
+    result.begin = worker.begin(request);
+    result.firstAppend = worker.append(
+        {.transferId = request.begin.transferId, .fileId = request.begin.fileId},
+        QByteArrayView(receivedBytes)
+    );
+    result.finish = worker.finish({
+        .transferId = request.begin.transferId,
+        .fileId = request.begin.fileId,
+        .size = request.begin.size,
+        .sha256 = request.begin.expectedSha256,
+    });
+    result.snapshot = worker.snapshot();
+    return result;
+  });
+  future.waitForFinished();
+  const auto result = future.result();
+
+  QVERIFY2(result.begin.ok(), qPrintable(result.begin.diagnostic));
+  QVERIFY2(result.finish.ok(), qPrintable(result.finish.diagnostic));
+  QCOMPARE(safety.commitRequests.size(), 2);
+  QVERIFY(safety.commitRequests.at(0).destinationPath.endsWith(QStringLiteral("payload (1).bin")));
+  QVERIFY(safety.commitRequests.at(1).destinationPath.endsWith(QStringLiteral("payload (2).bin")));
+  QFile preserved(root.filePath(QStringLiteral("payload.bin")));
+  QFile raced(root.filePath(QStringLiteral("payload (1).bin")));
+  QFile committed(root.filePath(QStringLiteral("payload (2).bin")));
+  QVERIFY(preserved.open(QIODevice::ReadOnly));
+  QVERIFY(raced.open(QIODevice::ReadOnly));
+  QVERIFY(committed.open(QIODevice::ReadOnly));
+  QCOMPARE(preserved.readAll(), originalBytes);
+  QCOMPARE(raced.readAll(), safety.raceBytes);
+  QCOMPARE(committed.readAll(), receivedBytes);
+}
+
+void IncomingFileReceiverWorkerTests::overwritesFileButRejectsDirectoryAndPreservesOriginal()
+{
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const QByteArray oldBytes = QByteArrayLiteral("old");
+  const QByteArray newBytes = QByteArrayLiteral("new-payload");
+  auto request = requestFor(root.path(), newBytes);
+  request.entry.relativeProtocolPath = QStringLiteral("replace.bin");
+  request.conflictPolicy = ConflictPolicy::Overwrite;
+  QFile existing(root.filePath(QStringLiteral("replace.bin")));
+  QVERIFY(existing.open(QIODevice::WriteOnly));
+  QCOMPARE(existing.write(oldBytes), qint64(oldBytes.size()));
+  existing.close();
+  FakeFileSafety safety;
+  QThreadPool pool;
+  auto overwriteFuture = QtConcurrent::run(&pool, [&]() {
+    IncomingFileReceiverWorker worker(safety);
+    WorkerResult result;
+    result.begin = worker.begin(request);
+    result.firstAppend = worker.append(
+        {.transferId = request.begin.transferId, .fileId = request.begin.fileId},
+        QByteArrayView(newBytes)
+    );
+    result.finish = worker.finish({
+        .transferId = request.begin.transferId,
+        .fileId = request.begin.fileId,
+        .size = request.begin.size,
+        .sha256 = request.begin.expectedSha256,
+    });
+    return result;
+  });
+  overwriteFuture.waitForFinished();
+  const auto overwritten = overwriteFuture.result();
+  QVERIFY2(overwritten.begin.ok(), qPrintable(overwritten.begin.diagnostic));
+  QVERIFY2(overwritten.finish.ok(), qPrintable(overwritten.finish.diagnostic));
+  QCOMPARE(safety.commitRequests.size(), 1);
+  QCOMPARE(safety.commitRequests.first().disposition, CommitDisposition::ReplaceExisting);
+  QFile replaced(root.filePath(QStringLiteral("replace.bin")));
+  QVERIFY(replaced.open(QIODevice::ReadOnly));
+  QCOMPARE(replaced.readAll(), newBytes);
+
+  auto directoryRequest = requestFor(root.path(), newBytes);
+  directoryRequest.entry.relativeProtocolPath = QStringLiteral("existing-directory");
+  directoryRequest.conflictPolicy = ConflictPolicy::Overwrite;
+  QVERIFY(QDir().mkdir(root.filePath(QStringLiteral("existing-directory"))));
+  auto directoryFuture = QtConcurrent::run(&pool, [&]() {
+    IncomingFileReceiverWorker worker(safety);
+    return worker.begin(directoryRequest);
+  });
+  directoryFuture.waitForFinished();
+  const auto directoryResult = directoryFuture.result();
+  QCOMPARE(directoryResult.error, FileReceiverError::UnsupportedConflictPolicy);
+  QVERIFY(QDir(root.filePath(QStringLiteral("existing-directory"))).exists());
+  const QString partPath = root.filePath(
+      QStringLiteral(".incoming/%1/%2.part")
+          .arg(directoryRequest.begin.transferId.toString(), directoryRequest.begin.fileId.toString())
+  );
+  QVERIFY(!QFileInfo::exists(partPath));
+}
+
+void IncomingFileReceiverWorkerTests::skipsExistingFileWithoutCreatingPart()
+{
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const QByteArray oldBytes = QByteArrayLiteral("preserve-me");
+  auto request = requestFor(root.path(), QByteArrayLiteral("incoming"));
+  request.entry.relativeProtocolPath = QStringLiteral("skip.bin");
+  request.conflictPolicy = ConflictPolicy::Skip;
+  QFile existing(root.filePath(QStringLiteral("skip.bin")));
+  QVERIFY(existing.open(QIODevice::WriteOnly));
+  QCOMPARE(existing.write(oldBytes), qint64(oldBytes.size()));
+  existing.close();
+  FakeFileSafety safety;
+  QThreadPool pool;
+  IncomingFileDisposition disposition = IncomingFileDisposition::Receive;
+  auto future = QtConcurrent::run(&pool, [&]() {
+    IncomingFileReceiverWorker worker(safety);
+    const auto result = worker.begin(request);
+    disposition = worker.disposition();
+    return result;
+  });
+  future.waitForFinished();
+  const auto result = future.result();
+  QVERIFY2(result.ok(), qPrintable(result.diagnostic));
+  QCOMPARE(disposition, IncomingFileDisposition::Skip);
+  QCOMPARE(safety.commitRequests.size(), 0);
+  const QString partPath = root.filePath(
+      QStringLiteral(".incoming/%1/%2.part")
+          .arg(request.begin.transferId.toString(), request.begin.fileId.toString())
+  );
+  QVERIFY(!QFileInfo::exists(partPath));
+  QFile preserved(root.filePath(QStringLiteral("skip.bin")));
+  QVERIFY(preserved.open(QIODevice::ReadOnly));
+  QCOMPARE(preserved.readAll(), oldBytes);
 }
 
 QTEST_MAIN(IncomingFileReceiverWorkerTests)
