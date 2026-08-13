@@ -37,7 +37,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
 
-for cmd in cmake ninja xcodebuild; do
+for cmd in cmake ninja xcodebuild xcrun; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "$cmd unavailable; A0 must use the GitHub Actions macOS runner." >&2
     exit 10
@@ -45,6 +45,12 @@ for cmd in cmake ninja xcodebuild; do
 done
 [[ -n "${RELAYDESK_QT_PREFIX:-}" && -d "${RELAYDESK_QT_PREFIX}/lib/cmake/Qt6" ]] || {
   echo "Qt unavailable; A0 must use the GitHub Actions macOS runner." >&2
+  exit 10
+}
+
+MACOS_SDK="${RELAYDESK_MACOS_SDK:-$(xcrun --sdk macosx --show-sdk-path)}"
+[[ -n "$MACOS_SDK" && -d "$MACOS_SDK" ]] || {
+  echo "macOS SDK unavailable; A0 must use the GitHub Actions macOS runner." >&2
   exit 10
 }
 
@@ -61,6 +67,7 @@ ARGS=(
   "-DCMAKE_BUILD_TYPE=$CONFIG"
   -DCMAKE_OSX_ARCHITECTURES=arm64
   -DCMAKE_OSX_DEPLOYMENT_TARGET=14
+  "-DCMAKE_OSX_SYSROOT=$MACOS_SDK"
   -DSKIP_BUILD_TESTS=ON
   -DBUILD_TESTS=ON
   -DBUILD_OSX_BUNDLE=ON

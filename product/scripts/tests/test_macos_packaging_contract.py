@@ -77,6 +77,13 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertLess(stage.index("cmake --install"), stage.index("codesign --verify"))
         self.assertIn("--deep --strict --verbose=4", stage)
 
+    def test_local_build_resolves_and_pins_the_active_macos_sdk(self) -> None:
+        script = (ROOT / "product/scripts/build-macos.sh").read_text(encoding="utf-8")
+
+        self.assertIn("xcrun --sdk macosx --show-sdk-path", script)
+        self.assertIn('"-DCMAKE_OSX_SYSROOT=$MACOS_SDK"', script)
+        self.assertIn('[[ -n "$MACOS_SDK" && -d "$MACOS_SDK" ]]', script)
+
 
 if __name__ == "__main__":
     unittest.main()
