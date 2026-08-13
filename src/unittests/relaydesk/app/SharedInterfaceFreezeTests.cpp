@@ -6,15 +6,23 @@
 
 #include "relaydesk/app/FileTransferRuntime.h"
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
+#include "relaydesk/app/TransferUiRuntime.h"
 
 #include "relaydesk/device/DeviceInfo.h"
 #include "relaydesk/device/DeviceSnapshot.h"
+#include "relaydesk/model/IncomingOfferModel.h"
+#include "relaydesk/model/TransferCenterModel.h"
 #include "relaydesk/platform/PermissionSnapshot.h"
 #include "relaydesk/transfer/TransferHistoryStore.h"
+#include "relaydesk/widgets/DevicesDock.h"
 
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QMetaMethod>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QThread>
 #include <QtTest>
@@ -144,6 +152,11 @@ using TransferSnapshotSignal = void (IFileTransferService::*)(TransferSnapshot);
 using TransferRemovedSignal = void (IFileTransferService::*)(TransferId);
 using DiscoveryEndpointMethod = bool (DiscoveryService::*)(FileEndpointAnnouncement, QString *);
 using DiscoveryRuntimeEndpointMethod = bool (DeviceDiscoveryRuntime::*)(FileEndpointAnnouncement, QString *);
+using SendItemsIntent = void (widgets::DevicesDock::*)(DeviceId, QList<QUrl>, SendOptions);
+using AcceptIntent = void (model::IncomingOfferModel::*)(TransferId, ReceiveOptions);
+using RejectIntent = void (model::IncomingOfferModel::*)(TransferId, RejectReason);
+using TransferIntent = void (model::TransferCenterModel::*)(TransferId);
+using CancelIntent = void (model::TransferCenterModel::*)(TransferId, TransferCancelOptions);
 
 static_assert(std::is_abstract_v<IFileTransferService>);
 static_assert(std::is_base_of_v<IFileTransferService, FileTransferRuntime>);
@@ -166,6 +179,20 @@ static_assert(std::is_same_v<decltype(&IFileTransferService::transferRemoved), T
 static_assert(std::is_same_v<decltype(&DiscoveryService::setFileEndpoint), DiscoveryEndpointMethod>);
 static_assert(
     std::is_same_v<decltype(&DeviceDiscoveryRuntime::setFileEndpoint), DiscoveryRuntimeEndpointMethod>
+);
+static_assert(std::is_same_v<decltype(&widgets::DevicesDock::sendItemsRequested), SendItemsIntent>);
+static_assert(std::is_same_v<decltype(&model::IncomingOfferModel::acceptRequested), AcceptIntent>);
+static_assert(std::is_same_v<decltype(&model::IncomingOfferModel::rejectRequested), RejectIntent>);
+static_assert(std::is_same_v<decltype(&model::TransferCenterModel::pauseRequested), TransferIntent>);
+static_assert(std::is_same_v<decltype(&model::TransferCenterModel::resumeRequested), TransferIntent>);
+static_assert(std::is_same_v<decltype(&model::TransferCenterModel::retryRequested), TransferIntent>);
+static_assert(std::is_same_v<decltype(&model::TransferCenterModel::historyRetryRequested), TransferIntent>);
+static_assert(std::is_same_v<decltype(&model::TransferCenterModel::cancelRequested), CancelIntent>);
+static_assert(
+    std::is_constructible_v<
+        TransferUiRuntime, IFileTransferService &, widgets::DevicesDock &, widgets::TransferCenterDock &,
+        model::IncomingOfferModel &
+    >
 );
 
 static_assert(std::is_same_v<std::underlying_type_t<RejectReason>, quint32>);
@@ -220,6 +247,7 @@ class SharedInterfaceFreezeTests final : public QObject
 private Q_SLOTS:
   void freezesServiceSignalsAndMetaTypes();
   void queuesSharedValuesAcrossThreadWithoutLoss();
+  void publicUiHeadersContainOnlyTypedBusinessIntents();
   void defaultRuntimeCapabilitiesAreHonest();
 
 Q_SIGNALS:
@@ -358,6 +386,35 @@ void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
   const QMutexLocker locker(&captured.mutex);
   for (const auto &message : captured.messages)
     QVERIFY2(!message.contains(QStringLiteral("Cannot queue arguments")), qPrintable(message));
+}
+
+void SharedInterfaceFreezeTests::publicUiHeadersContainOnlyTypedBusinessIntents()
+{
+  const QDir testSource(QFileInfo(QString::fromUtf8(__FILE__)).absolutePath());
+  const QDir relaydeskSource(testSource.absoluteFilePath(QStringLiteral("../../../lib/relaydesk")));
+  const QStringList headers{
+      QStringLiteral("widgets/DevicesDock.h"),
+      QStringLiteral("model/IncomingOfferModel.h"),
+      QStringLiteral("model/TransferCenterModel.h"),
+      QStringLiteral("app/TransferUiRuntime.h"),
+  };
+  const QList<QRegularExpression> forbidden{
+      QRegularExpression(QStringLiteral("\\bFrame\\b")),
+      QRegularExpression(QStringLiteral("\\bTransferAccept\\b")),
+      QRegularExpression(QStringLiteral("\\bTransferReject\\b")),
+  };
+
+  for (const auto &relativePath : headers) {
+    QFile header(relaydeskSource.absoluteFilePath(relativePath));
+    QVERIFY2(header.open(QIODevice::ReadOnly), qPrintable(header.errorString()));
+    const auto source = QString::fromUtf8(header.readAll());
+    for (const auto &pattern : forbidden) {
+      QVERIFY2(
+          !pattern.match(source).hasMatch(),
+          qPrintable(relativePath + QStringLiteral(" exposes forbidden wire type ") + pattern.pattern())
+      );
+    }
+  }
 }
 
 void SharedInterfaceFreezeTests::defaultRuntimeCapabilitiesAreHonest()
