@@ -28,10 +28,38 @@ struct HelloMessage
   [[nodiscard]] bool operator==(const HelloMessage &) const = default;
 };
 
+/** Stable AUTH_RESULT rejection codes. None is valid only for an accepted result. */
+enum class AuthResultErrorCode : quint32
+{
+  None = 0,
+  InvalidHello = 1,
+  UnsupportedVersion = 2,
+  UnknownPeer = 3,
+  RevokedPeer = 4,
+  FingerprintMismatch = 5,
+  InternalError = 6,
+};
+
+[[nodiscard]] constexpr bool isKnownAuthResultErrorCode(AuthResultErrorCode code) noexcept
+{
+  switch (code) {
+  case AuthResultErrorCode::InvalidHello:
+  case AuthResultErrorCode::UnsupportedVersion:
+  case AuthResultErrorCode::UnknownPeer:
+  case AuthResultErrorCode::RevokedPeer:
+  case AuthResultErrorCode::FingerprintMismatch:
+  case AuthResultErrorCode::InternalError:
+    return true;
+  case AuthResultErrorCode::None:
+    return false;
+  }
+  return false;
+}
+
 struct AuthResultMessage
 {
   bool accepted = false;
-  quint32 errorCode = 0;
+  AuthResultErrorCode errorCode = AuthResultErrorCode::None;
   QString diagnostic;
 
   [[nodiscard]] bool operator==(const AuthResultMessage &) const = default;
@@ -121,3 +149,5 @@ public:
 };
 
 } // namespace relaydesk::transfer
+
+Q_DECLARE_METATYPE(relaydesk::transfer::AuthResultErrorCode)

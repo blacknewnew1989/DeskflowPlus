@@ -18,11 +18,19 @@ hello = {
   6: timestamp-ms
 }
 
-auth-result = {
-  1: bool,
-  ? 2: uint,               ; error code
-  ? 3: tstr
+auth-result = auth-result-accepted / auth-result-rejected
+
+auth-result-accepted = {
+  1: true
 }
+
+auth-result-rejected = {
+  1: false,
+  2: auth-result-error-code,
+  3: tstr .size (1..512)
+}
+
+auth-result-error-code = 1 / 2 / 3 / 4 / 5 / 6
 
 capabilities = {
   1: [+ tstr],
@@ -174,12 +182,14 @@ resume-response = {
 }
 
 error = {
-  1: uint,
+  1: protocol-error-code,
   2: tstr,
-  3: bool,
+  3: bool,                 ; exact retryability is fixed by the code catalog
   ? 4: transfer-id,
   ? 5: file-id
 }
+
+protocol-error-code = 1001 / 1002 / 1003 / 1004 / 1005 / 1006
 
 goodbye = goodbye-plain / goodbye-protocol-error
 
