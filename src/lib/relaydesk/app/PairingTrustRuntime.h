@@ -26,6 +26,7 @@ namespace deskflow::relaydesk {
 
 class DeviceDiscoveryRuntime;
 class PairingService;
+class AutoReconnectRuntime;
 
 struct PairingTrustRuntimeOptions
 {
@@ -65,6 +66,7 @@ public:
   [[nodiscard]] bool expireIfNeeded();
 
 private:
+  friend class AutoReconnectRuntime;
   [[nodiscard]] PairingOperationResult reportPreflightFailure(PairingOperationResult result);
   [[nodiscard]] std::optional<std::pair<QHostAddress, quint16>> endpointFor(
       const DeviceSnapshot &peer

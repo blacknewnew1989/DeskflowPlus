@@ -4,6 +4,8 @@
 find_package(Qt6 ${REQUIRED_QT_VERSION} REQUIRED COMPONENTS Concurrent)
 
 add_library(relaydesk_app STATIC
+  AutoReconnectRuntime.cpp
+  AutoReconnectRuntime.h
   DeviceDiscoveryRuntime.cpp
   DeviceDiscoveryRuntime.h
   FileTransferRuntime.cpp
@@ -33,6 +35,7 @@ target_link_libraries(
     relaydesk_discovery
     relaydesk_file_transport
     relaydesk_pairing
+    relaydesk_reconnect
     relaydesk_trust
     relaydesk_widgets
     Qt6::Core
