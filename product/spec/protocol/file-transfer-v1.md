@@ -70,9 +70,9 @@ Exact offsets:
 | 0x0202 | FILE_CHECKPOINT | file-checkpoint | empty |
 | 0x0203 | FILE_END | file-end | empty |
 | 0x0204 | FILE_RESULT | file-result | empty |
-| 0x0300 | TRANSFER_PAUSE | transfer-command | empty |
-| 0x0301 | TRANSFER_RESUME | transfer-command | empty |
-| 0x0302 | TRANSFER_CANCEL | transfer-command | empty |
+| 0x0300 | TRANSFER_PAUSE | transfer-pause | empty |
+| 0x0301 | TRANSFER_RESUME | transfer-resume | empty |
+| 0x0302 | TRANSFER_CANCEL | transfer-cancel | empty |
 | 0x0303 | TRANSFER_COMPLETE | transfer-complete | empty |
 | 0x0304 | TRANSFER_RESULT | transfer-result | empty |
 | 0x0400 | RESUME_QUERY | resume-query | empty |
@@ -96,6 +96,23 @@ The receiver idempotently re-acknowledges the current sequence. A lower stale
 sequence is ignored; a skipped sequence or an ACK whose fields do not match the
 outstanding heartbeat is a session protocol error. Heartbeat state never
 survives reconnect.
+
+### Transfer commands
+
+`TRANSFER_PAUSE` and `TRANSFER_RESUME` contain exactly `{1: transferId}`.
+`TRANSFER_CANCEL` contains exactly `{1: transferId, 2: reason,
+3: keepPartial}`; reason 1 is `UserRequested` and reason 2 is
+`ApplicationShutdown`. All three use `streamId=0`, empty payload, and only
+`AckRequired` on a request. Pause/resume acknowledgements echo the same type and
+transfer ID with only `Response`; cancel is terminally acknowledged by
+`TRANSFER_RESULT(Cancelled)`.
+
+Commands are serialized per transfer. Repeating the currently applied command
+is idempotent. Pause stops producing new chunks while queued socket bytes may
+drain; resume restarts only after the peer's pause acknowledgement. Commands
+that contradict the current or terminal transfer state return a stable transfer
+state error. Reconnect offsets are negotiated only by
+`RESUME_QUERY`/`RESUME_RESPONSE`; `TRANSFER_RESUME` never carries an offset.
 
 ## IDs
 
