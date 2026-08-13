@@ -8,14 +8,22 @@
 
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
 #include "relaydesk/model/DeviceHomeModel.h"
+#include "relaydesk/transfer/ControlMessageCodec.h"
+#include "relaydesk/transfer/FileMessageCodec.h"
+#include "relaydesk/transfer/ManifestPageCodec.h"
 #include "relaydesk/trust/TlsIdentityAdapter.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
 #include "../TestTlsIdentity.h"
 
 #include <QSignalSpy>
+#include <QCryptographicHash>
+#include <QElapsedTimer>
+#include <QFile>
 #include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
+
+#include <limits>
 
 using namespace deskflow::relaydesk;
 
@@ -53,6 +61,7 @@ private Q_SLOTS:
   void listenerLifecycleIsOwnedAndRestartable();
   void trustedPeersNegotiateIndependentFileChannel();
   void routesPostCapabilityFramesAfterPinning();
+  void outgoingSingleFileStreamsThroughWorkerPump();
   void invalidIdentityFailsWithoutPublishingAListener();
 };
 
@@ -232,6 +241,203 @@ void FileTransferRuntimeTests::routesPostCapabilityFramesAfterPinning()
   QCOMPARE(client.connection()->sendFrame(heartbeat, &diagnostic), FileTlsError::None);
   QTRY_VERIFY2_WITH_TIMEOUT(routed.has_value(), qPrintable(errors.join(QStringLiteral("; "))), 2'000);
   QCOMPARE(*routed, heartbeat);
+}
+
+void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()
+{
+  using namespace ::relaydesk::transfer;
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  const QByteArray sourceBytes(2 * 1024 * 1024 + 137, '\x5a');
+  const auto sourcePath = directory.filePath(QStringLiteral("payload.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+  source.close();
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("sender-trust.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+
+  FileTlsListener receiver(receiverId, &receiverTrust, identityPath);
+  QString diagnostic;
+  QCOMPARE(receiver.listen(QHostAddress::LocalHost, 0, &diagnostic), FileTlsError::None);
+
+  model::DeviceHomeModel deviceModel;
+  DeviceDiscoveryRuntime discovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender")), deviceModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  FileTransferRuntime runtime(senderId, senderTrust, discovery, identityPath, options);
+  QVERIFY2(runtime.start(&diagnostic), qPrintable(diagnostic));
+  auto receiverInfo = localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver"));
+  receiverInfo.filePort = receiver.serverPort();
+  receiverInfo.capabilities.fileV1 = true;
+  receiverInfo.capabilities.folderV1 = true;
+  receiverInfo.capabilities.resumeV1 = true;
+  QVERIFY(discovery.registry().observeAdvertisement(receiverInfo, QHostAddress::LocalHost));
+
+  QByteArray receivedBytes;
+  std::optional<TransferOffer> receivedOffer;
+  std::optional<ManifestEntry> receivedEntry;
+  bool manifestComplete = false;
+  bool fileBeganAfterManifest = false;
+  int chunkCount = 0;
+  QStringList errors;
+  connect(&receiver, &FileTlsListener::connectionCreated, this, [&](FileTlsConnection *connection) {
+    connect(connection, &FileTlsConnection::failed, this, [&](FileTlsError, const QString &message) {
+      errors.append(message);
+    });
+    connect(connection, &FileTlsConnection::frameReceived, this, [&, connection](const Frame &frame) {
+      QString encodeDiagnostic;
+      if (frame.type == MessageType::Capabilities) {
+        Frame response{
+            .type = MessageType::Capabilities,
+            .metadata = CapabilityCodec::encode(options.localCapabilities, &encodeDiagnostic),
+        };
+        if (connection->sendFrame(response, &encodeDiagnostic) != FileTlsError::None) {
+          errors.append(encodeDiagnostic);
+        }
+        return;
+      }
+      if (frame.type == MessageType::TransferOffer) {
+        const auto decoded = ControlMessageCodec::decode(frame.version, frame.type, frame.metadata);
+        if (!decoded.ok()) {
+          errors.append(decoded.diagnostic);
+          return;
+        }
+        const auto *offer = std::get_if<TransferOffer>(&*decoded.message);
+        if (offer == nullptr) {
+          errors.append(QStringLiteral("offer frame decoded to the wrong variant"));
+          return;
+        }
+        receivedOffer = *offer;
+        const TransferAccept acceptance{
+            .transferId = offer->transferId,
+            .effectiveConflictPolicy = ConflictPolicy::AutoRename,
+            .logicalDestination = QStringLiteral("RelayDesk"),
+            .freeBytes = static_cast<quint64>(std::numeric_limits<qint64>::max()),
+        };
+        Frame response{
+            .type = MessageType::TransferAccept,
+            .metadata = ControlMessageCodec::encode(
+                kProtocolMajorVersion, ControlMessage{acceptance}, &encodeDiagnostic
+            ),
+        };
+        if (response.metadata.isEmpty() ||
+            connection->sendFrame(response, &encodeDiagnostic) != FileTlsError::None) {
+          errors.append(encodeDiagnostic);
+        }
+        return;
+      }
+      if (frame.type == MessageType::ManifestPage) {
+        const auto decoded = ManifestPageCodec::decode(frame.version, frame.metadata);
+        if (!decoded.ok() || decoded.page->entries.size() != 1) {
+          errors.append(decoded.ok() ? QStringLiteral("unexpected manifest entry count") : decoded.diagnostic);
+          return;
+        }
+        receivedEntry = decoded.page->entries.first();
+        return;
+      }
+      if (frame.type == MessageType::ManifestComplete) {
+        const auto decoded = ManifestPageCodec::decodeComplete(frame.version, frame.metadata);
+        if (!decoded.ok()) {
+          errors.append(decoded.diagnostic);
+          return;
+        }
+        manifestComplete = receivedOffer.has_value() &&
+                           decoded.message->transferId == receivedOffer->transferId &&
+                           decoded.message->canonicalSha256 == receivedOffer->manifestSha256;
+        return;
+      }
+      const auto decoded = FileMessageCodec::decode(frame.type, frame.metadata);
+      if (!decoded.ok()) {
+        errors.append(decoded.diagnostic);
+        return;
+      }
+      if (const auto *begin = std::get_if<FileBeginMessage>(&*decoded.message)) {
+        fileBeganAfterManifest = manifestComplete && receivedEntry.has_value() &&
+                                 begin->fileId == receivedEntry->id && begin->size == sourceBytes.size();
+        return;
+      }
+      if (const auto *chunk = std::get_if<FileChunkMessage>(&*decoded.message)) {
+        if (chunk->offset != static_cast<quint64>(receivedBytes.size())) {
+          errors.append(QStringLiteral("file chunk offset was not contiguous"));
+          return;
+        }
+        ++chunkCount;
+        receivedBytes.append(frame.payload);
+        return;
+      }
+      if (const auto *end = std::get_if<FileEndMessage>(&*decoded.message)) {
+        if (receivedBytes.size() != sourceBytes.size() ||
+            end->sha256 != QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256)) {
+          errors.append(QStringLiteral("file end did not match streamed payload"));
+          return;
+        }
+        const FileResultMessage result{
+            .transferId = end->transferId,
+            .fileId = end->fileId,
+            .code = FileResultCode::Ok,
+        };
+        Frame response{
+            .type = MessageType::FileResult,
+            .metadata = FileMessageCodec::encode(FileControlMessage{result}, &encodeDiagnostic),
+        };
+        if (response.metadata.isEmpty() ||
+            connection->sendFrame(response, &encodeDiagnostic) != FileTlsError::None) {
+          errors.append(encodeDiagnostic);
+        }
+      }
+    });
+  });
+
+  std::optional<TransferSnapshot> latest;
+  QStringList stateTrace;
+  connect(&runtime, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    latest = snapshot;
+    stateTrace.append(
+        QStringLiteral("state=%1 bytes=%2 files=%3 frames=%4")
+            .arg(static_cast<int>(snapshot.state))
+            .arg(snapshot.progress.completedBytes)
+            .arg(snapshot.progress.completedFiles)
+            .arg(chunkCount)
+    );
+  });
+  connect(&runtime, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(message);
+  });
+  const auto transferId = runtime.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY(!transferId.isNull());
+  QElapsedTimer wait;
+  wait.start();
+  while (wait.elapsed() < 10'000 &&
+         (!latest.has_value() || latest->state != TransferState::Completed)) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+  }
+  const auto evidence =
+      QStringLiteral("errors=[%1] trace=[%2] offer=%3 manifest=%4 begin=%5 bytes=%6 chunks=%7")
+          .arg(errors.join(QStringLiteral("; ")), stateTrace.join(QStringLiteral(" | ")))
+          .arg(receivedOffer.has_value())
+          .arg(manifestComplete)
+          .arg(fileBeganAfterManifest)
+          .arg(receivedBytes.size())
+          .arg(chunkCount);
+  QVERIFY2(latest.has_value() && latest->state == TransferState::Completed, qPrintable(evidence));
+  QCOMPARE(receivedBytes, sourceBytes);
+  QVERIFY(fileBeganAfterManifest);
+  QVERIFY(chunkCount >= 3);
+  QCOMPARE(latest->progress.completedBytes, static_cast<quint64>(sourceBytes.size()));
+  QCOMPARE(latest->progress.completedFiles, quint64{1});
+  QVERIFY(runtime.activeTransfers().isEmpty());
 }
 
 void FileTransferRuntimeTests::invalidIdentityFailsWithoutPublishingAListener()
