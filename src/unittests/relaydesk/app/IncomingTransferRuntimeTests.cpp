@@ -6,6 +6,11 @@
 
 #include "relaydesk/app/IncomingTransferRuntime.h"
 
+#include "relaydesk/transfer/FileMessageCodec.h"
+#include "relaydesk/transfer/ManifestPageCodec.h"
+
+#include <QCryptographicHash>
+#include <QFile>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -94,6 +99,8 @@ private Q_SLOTS:
   void rejectsUnsafeRootAndUntrustedAutomaticAcceptance();
   void rejectsAndPublishesExactlyOneTypedResultPerIntent();
   void refusesUnnegotiatedAndUnknownTransfers();
+  void receivesAcceptedFileThroughAtomicCommit();
+  void disconnectInterruptsAcceptedPipeline();
 };
 
 void IncomingTransferRuntimeTests::validatesAndPublishesIncomingOffer()
@@ -244,6 +251,202 @@ void IncomingTransferRuntimeTests::refusesUnnegotiatedAndUnknownTransfers()
   QCOMPARE(operations.count(), 2);
   QCOMPARE(operation(operations, 0).error, TransferOperationError::UnknownTransfer);
   QCOMPARE(operation(operations, 1).error, TransferOperationError::UnknownTransfer);
+}
+
+void IncomingTransferRuntimeTests::receivesAcceptedFileThroughAtomicCommit()
+{
+  class CommitFileSafety final : public IPlatformFileSafety
+  {
+  public:
+    FileSafetyResult verifyReceiveRoot(const VerifyReceiveRootRequest &) const override
+    {
+      return {};
+    }
+    FileSafetyResult verifyNoLinkTraversal(const VerifyNoLinkTraversalRequest &) const override
+    {
+      return {};
+    }
+    FileSafetyResult commitStagedFile(const CommitStagedFileRequest &request) override
+    {
+      commitRequest = request;
+      return QFile::rename(request.stagingPath, request.destinationPath)
+                 ? FileSafetyResult{}
+                 : FileSafetyResult{
+                       .error = FileSafetyError::CommitFailed,
+                       .diagnostic = QStringLiteral("test atomic move failed"),
+                   };
+    }
+    std::optional<CommitStagedFileRequest> commitRequest;
+  } safety;
+
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const QByteArray bytes(1024U * 1024U + 31U, '\x61');
+  const auto digest = QCryptographicHash::hash(bytes, QCryptographicHash::Sha256);
+  const auto transferId = TransferId::generate();
+  const auto fileId = FileId::generate();
+  const ManifestEntry entry{
+      .id = fileId,
+      .relativeProtocolPath = QStringLiteral("received.bin"),
+      .type = ManifestEntryType::File,
+      .size = static_cast<quint64>(bytes.size()),
+      .modifiedUtc = QDateTime::currentDateTimeUtc(),
+      .sha256 = digest,
+  };
+  QString diagnostic;
+  const QByteArray manifestDigest = ManifestPageCodec::canonicalSha256({entry}, &diagnostic);
+  QVERIFY2(!manifestDigest.isEmpty(), qPrintable(diagnostic));
+  const TransferOffer incoming{
+      .transferId = transferId,
+      .displayName = QStringLiteral("received.bin"),
+      .totalBytes = static_cast<quint64>(bytes.size()),
+      .fileCount = 1,
+      .manifestSha256 = manifestDigest,
+      .manifestPageCount = 1,
+      .requestedConflictPolicy = ConflictPolicy::AutoRename,
+      .createdAtMs = static_cast<quint64>(QDateTime::currentMSecsSinceEpoch()),
+  };
+  const auto peer = DeviceId::generate();
+  QThreadPool pool;
+  pool.setMaxThreadCount(2);
+  IncomingTransferRuntime runtime(safety, pool);
+  QSignalSpy operations(&runtime, &IncomingTransferRuntime::transferOperationFinished);
+  std::optional<TransferSnapshot> latest;
+  connect(&runtime, &IncomingTransferRuntime::transferChanged, this, [&](const auto &snapshot) {
+    latest = snapshot;
+  });
+  std::optional<FileResultMessage> fileResult;
+  connect(&runtime, &IncomingTransferRuntime::responseReady, this, [&](auto responsePeer, const Frame &frame) {
+    QCOMPARE(responsePeer, peer);
+    QCOMPARE(frame.streamId, quint32{1});
+    const auto decoded = FileMessageCodec::decode(frame.type, frame.metadata);
+    QVERIFY(decoded.ok());
+    if (decoded.ok()) {
+      fileResult = std::get<FileResultMessage>(*decoded.message);
+    }
+  });
+
+  QVERIFY(runtime.receiveOffer(peer, QStringLiteral("Peer"), true, receiverCapabilities(), incoming));
+  runtime.accept(transferId, {.destinationRoot = root.path()});
+  QTRY_COMPARE_WITH_TIMEOUT(operations.count(), 1, 5'000);
+  QCOMPARE(operation(operations, 0).outcome, TransferOperationOutcome::Applied);
+
+  Frame manifestPage{
+      .type = MessageType::ManifestPage,
+      .metadata = ManifestPageCodec::encode(
+          {.transferId = transferId, .pageIndex = 0, .pageCount = 1, .entries = {entry}},
+          {}, &diagnostic
+      ),
+  };
+  QVERIFY2(!manifestPage.metadata.isEmpty(), qPrintable(diagnostic));
+  QVERIFY(runtime.enqueueFrame(peer, manifestPage, &diagnostic));
+  Frame manifestComplete{
+      .type = MessageType::ManifestComplete,
+      .metadata = ManifestPageCodec::encodeComplete(
+          {.transferId = transferId, .canonicalSha256 = manifestDigest}, &diagnostic
+      ),
+  };
+  QVERIFY(runtime.enqueueFrame(peer, manifestComplete, &diagnostic));
+
+  const FileBeginMessage begin{
+      .transferId = transferId,
+      .fileId = fileId,
+      .size = static_cast<quint64>(bytes.size()),
+      .chunkBytes = 1024U * 1024U,
+      .expectedSha256 = digest,
+  };
+  Frame beginFrame{
+      .type = MessageType::FileBegin,
+      .streamId = 1,
+      .metadata = FileMessageCodec::encode(FileControlMessage{begin}, &diagnostic),
+  };
+  QVERIFY(runtime.enqueueFrame(peer, beginFrame, &diagnostic));
+  const qsizetype firstBytes = 1024U * 1024U;
+  Frame firstChunk{
+      .type = MessageType::FileChunk,
+      .streamId = 1,
+      .metadata = FileMessageCodec::encode(
+          FileControlMessage{FileChunkMessage{.transferId = transferId, .fileId = fileId}},
+          &diagnostic
+      ),
+      .payload = bytes.first(firstBytes),
+  };
+  QVERIFY(runtime.enqueueFrame(peer, firstChunk, &diagnostic));
+  Frame secondChunk{
+      .type = MessageType::FileChunk,
+      .streamId = 1,
+      .metadata = FileMessageCodec::encode(
+          FileControlMessage{FileChunkMessage{
+              .transferId = transferId,
+              .fileId = fileId,
+              .offset = static_cast<quint64>(firstBytes),
+              .sequence = 1,
+          }},
+          &diagnostic
+      ),
+      .payload = bytes.sliced(firstBytes),
+  };
+  QVERIFY(runtime.enqueueFrame(peer, secondChunk, &diagnostic));
+  Frame endFrame{
+      .type = MessageType::FileEnd,
+      .flags = Final,
+      .streamId = 1,
+      .metadata = FileMessageCodec::encode(
+          FileControlMessage{FileEndMessage{
+              .transferId = transferId,
+              .fileId = fileId,
+              .size = static_cast<quint64>(bytes.size()),
+              .sha256 = digest,
+          }},
+          &diagnostic
+      ),
+  };
+  QVERIFY(runtime.enqueueFrame(peer, endFrame, &diagnostic));
+
+  QTRY_VERIFY_WITH_TIMEOUT(
+      latest.has_value() && latest->state == TransferState::Completed, 10'000
+  );
+  QVERIFY(fileResult.has_value());
+  QCOMPARE(fileResult->code, FileResultCode::Ok);
+  QVERIFY(safety.commitRequest.has_value());
+  QCOMPARE(safety.commitRequest->disposition, CommitDisposition::FailIfExists);
+  QFile committed(root.filePath(QStringLiteral("received.bin")));
+  QVERIFY(committed.open(QIODevice::ReadOnly));
+  QCOMPARE(committed.readAll(), bytes);
+}
+
+void IncomingTransferRuntimeTests::disconnectInterruptsAcceptedPipeline()
+{
+  FakeFileSafety safety;
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  QThreadPool pool;
+  IncomingTransferRuntime runtime(safety, pool);
+  const auto incoming = offer();
+  const auto peer = DeviceId::generate();
+  QSignalSpy operations(&runtime, &IncomingTransferRuntime::transferOperationFinished);
+  QSignalSpy changes(&runtime, &IncomingTransferRuntime::transferChanged);
+  std::optional<TransferSnapshot> latest;
+  connect(&runtime, &IncomingTransferRuntime::transferChanged, this, [&](const auto &snapshot) {
+    latest = snapshot;
+  });
+  QVERIFY(runtime.receiveOffer(peer, QStringLiteral("Peer"), true, receiverCapabilities(), incoming));
+  runtime.accept(incoming.transferId, {.destinationRoot = root.path()});
+  QTRY_COMPARE_WITH_TIMEOUT(operations.count(), 1, 5'000);
+
+  runtime.peerDisconnected(peer);
+
+  QVERIFY(latest.has_value());
+  QCOMPARE(latest->state, TransferState::Interrupted);
+  QCOMPARE(changes.count(), 1);
+  runtime.peerDisconnected(peer);
+  QCOMPARE(changes.count(), 1);
+  QString diagnostic;
+  QVERIFY(!runtime.enqueueFrame(peer, {.type = MessageType::ManifestPage}, &diagnostic));
+  QVERIFY(diagnostic.contains(QStringLiteral("no accepted receive session")));
+  runtime.accept(incoming.transferId, {.destinationRoot = root.path()});
+  QCOMPARE(operations.count(), 2);
+  QCOMPARE(operation(operations, 1).outcome, TransferOperationOutcome::Idempotent);
 }
 
 QTEST_MAIN(IncomingTransferRuntimeTests)
