@@ -349,18 +349,31 @@ FileTransferRuntime::negotiatedCapabilities(const DeviceId &peerDeviceId) const
   return context == m_connections.constEnd() ? std::nullopt : context->negotiated;
 }
 
-::relaydesk::transfer::TransferId FileTransferRuntime::send(
+::relaydesk::transfer::TransferStartResult FileTransferRuntime::send(
     const DeviceId &target, const QList<QUrl> &localItems,
     const ::relaydesk::transfer::SendOptions &options
 )
 {
   using ::relaydesk::transfer::TransferDirection;
   using ::relaydesk::transfer::TransferSnapshot;
+  using ::relaydesk::transfer::TransferStartError;
   using ::relaydesk::transfer::TransferState;
 
   QString diagnostic;
-  if (!onOwningThread(&diagnostic) || !isRunning() || localItems.isEmpty()) {
-    return {};
+  if (!onOwningThread(&diagnostic)) {
+    return {.error = TransferStartError::WrongThread, .diagnostic = std::move(diagnostic)};
+  }
+  if (!isRunning()) {
+    return {
+        .error = TransferStartError::NotRunning,
+        .diagnostic = QStringLiteral("File transfer runtime is not running"),
+    };
+  }
+  if (localItems.isEmpty()) {
+    return {
+        .error = TransferStartError::InvalidRequest,
+        .diagnostic = QStringLiteral("Transfer requires at least one local source"),
+    };
   }
   for (const auto &item : localItems) {
     if (!item.isLocalFile() || item.toLocalFile().isEmpty()) {
@@ -368,7 +381,10 @@ FileTransferRuntime::negotiatedCapabilities(const DeviceId &peerDeviceId) const
           FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
           QStringLiteral("Transfer sources must be non-empty local file URLs")
       );
-      return {};
+      return {
+          .error = TransferStartError::InvalidRequest,
+          .diagnostic = QStringLiteral("Transfer sources must be non-empty local file URLs"),
+      };
     }
   }
   const auto peer = m_discoveryRuntime.registry().snapshot(target);
@@ -377,7 +393,10 @@ FileTransferRuntime::negotiatedCapabilities(const DeviceId &peerDeviceId) const
         FileTransferRuntimeError::PeerUnavailable, FileTlsError::ConnectionFailed,
         QStringLiteral("Transfer target is not present in the discovery registry")
     );
-    return {};
+    return {
+        .error = TransferStartError::PeerUnavailable,
+        .diagnostic = QStringLiteral("Transfer target is not present in the discovery registry"),
+    };
   }
 
   const auto id = QUuid::createUuid();
@@ -402,7 +421,7 @@ FileTransferRuntime::negotiatedCapabilities(const DeviceId &peerDeviceId) const
   m_outgoing.insert(id, session);
   Q_EMIT transferAdded(session->snapshot);
   prepareOutgoing(id);
-  return id;
+  return {.transferId = id};
 }
 
 void FileTransferRuntime::accept(

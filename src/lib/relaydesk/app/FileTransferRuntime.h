@@ -73,7 +73,7 @@ public:
   [[nodiscard]] std::optional<::relaydesk::transfer::NegotiatedCapabilities>
   negotiatedCapabilities(const DeviceId &peerDeviceId) const;
 
-  [[nodiscard]] ::relaydesk::transfer::TransferId send(
+  [[nodiscard]] ::relaydesk::transfer::TransferStartResult send(
       const DeviceId &target, const QList<QUrl> &localItems,
       const ::relaydesk::transfer::SendOptions &options
   ) override;

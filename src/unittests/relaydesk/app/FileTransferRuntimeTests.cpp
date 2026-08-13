@@ -425,8 +425,9 @@ void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()
   connect(&runtime, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
     errors.append(message);
   });
-  const auto transferId = runtime.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
-  QVERIFY(!transferId.isNull());
+  const auto start = runtime.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(start.ok(), qPrintable(start.diagnostic));
+  QVERIFY(start.transferId.has_value());
   QElapsedTimer wait;
   wait.start();
   while (wait.elapsed() < 10'000 &&

@@ -22,7 +22,7 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-using SendMethod = TransferId (IFileTransferService::*)(
+using SendMethod = TransferStartResult (IFileTransferService::*)(
     const DeviceId &, const QList<QUrl> &, const SendOptions &
 );
 using AcceptMethod = void (IFileTransferService::*)(const TransferId &, const ReceiveOptions &);
@@ -72,6 +72,12 @@ static_assert(static_cast<quint32>(RejectReason::InternalError) == 9);
 static_assert(std::is_same_v<std::underlying_type_t<TransferCancelReason>, quint32>);
 static_assert(static_cast<quint32>(TransferCancelReason::UserRequested) == 1);
 static_assert(static_cast<quint32>(TransferCancelReason::ApplicationShutdown) == 2);
+static_assert(std::is_same_v<std::underlying_type_t<TransferStartError>, quint32>);
+static_assert(static_cast<quint32>(TransferStartError::None) == 0);
+static_assert(static_cast<quint32>(TransferStartError::WrongThread) == 1);
+static_assert(static_cast<quint32>(TransferStartError::InvalidRequest) == 2);
+static_assert(static_cast<quint32>(TransferStartError::NotRunning) == 3);
+static_assert(static_cast<quint32>(TransferStartError::PeerUnavailable) == 4);
 
 static_assert(std::is_copy_constructible_v<DeviceId>);
 static_assert(std::is_copy_constructible_v<DeviceInfo>);
@@ -81,6 +87,7 @@ static_assert(std::is_copy_constructible_v<TransferSnapshot>);
 static_assert(std::is_copy_constructible_v<TransferHistoryRecord>);
 static_assert(std::is_copy_constructible_v<SendOptions>);
 static_assert(std::is_copy_constructible_v<ReceiveOptions>);
+static_assert(std::is_copy_constructible_v<TransferStartResult>);
 static_assert(std::is_copy_constructible_v<PermissionSnapshot>);
 static_assert(std::is_copy_constructible_v<FileEndpointAnnouncement>);
 static_assert(FileEndpointAnnouncement::disabled().isDisabled());
@@ -117,6 +124,8 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaType::fromType<ReceiveOptions>().isValid());
   QVERIFY(QMetaType::fromType<RejectReason>().isValid());
   QVERIFY(QMetaType::fromType<TransferCancelReason>().isValid());
+  QVERIFY(QMetaType::fromType<TransferStartError>().isValid());
+  QVERIFY(QMetaType::fromType<TransferStartResult>().isValid());
   QVERIFY(QMetaType::fromType<PermissionSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<FileEndpointAnnouncement>().isValid());
 }
