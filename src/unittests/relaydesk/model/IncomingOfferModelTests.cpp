@@ -15,20 +15,6 @@ using namespace relaydesk::transfer;
 
 namespace {
 
-NegotiatedCapabilities capabilities()
-{
-  return {
-      .protocolMajorVersion = kProtocolMajorVersion,
-      .features = {QStringLiteral("file.v1"), QStringLiteral("folder.v1")},
-      .chunkBytes = 1024,
-      .maxPayloadBytes = 4096,
-      .maxConcurrentTransfers = 2,
-      .maxConcurrentFiles = 2,
-      .maxManifestEntries = 1000,
-      .conflictPolicies = {ConflictPolicy::AutoRename, ConflictPolicy::Ask},
-  };
-}
-
 TransferOffer transferOffer()
 {
   return {
@@ -82,11 +68,10 @@ private Q_SLOTS:
 
 void IncomingOfferModelTests::presentsAndAcceptsValidatedOffer()
 {
-  TransferOfferStateMachine stateMachine(capabilities());
-  IncomingOfferModel model(stateMachine, settings());
+  IncomingOfferModel model(settings());
   const auto incoming = incomingOffer();
   QSignalSpy changed(&model, &IncomingOfferModel::changed);
-  QSignalSpy accepted(&model, &IncomingOfferModel::acceptanceReady);
+  QSignalSpy accepted(&model, &IncomingOfferModel::acceptRequested);
 
   QVERIFY(model.receiveOffer(incoming));
   QCOMPARE(changed.count(), 1);
@@ -105,24 +90,22 @@ void IncomingOfferModelTests::presentsAndAcceptsValidatedOffer()
   QCOMPARE(accepted.count(), 1);
   QCOMPARE(model.status(), IncomingOfferModel::Status::Accepted);
   QVERIFY(!model.visible());
-  const auto acceptance = model.acceptance();
-  QVERIFY(acceptance.has_value());
-  QCOMPARE(acceptance->transferId, incoming.offer.transferId);
-  QCOMPARE(acceptance->effectiveConflictPolicy, ConflictPolicy::AutoRename);
-  QCOMPARE(acceptance->logicalDestination, QStringLiteral("Downloads/RelayDesk"));
-  QCOMPARE(acceptance->freeBytes, 1'000'000ULL);
-  QVERIFY(!acceptance->autoAccepted);
+  const auto acceptance = accepted.constFirst();
+  QCOMPARE(*static_cast<const TransferId *>(acceptance.at(0).constData()), incoming.offer.transferId);
+  const auto options = acceptance.at(1).value<ReceiveOptions>();
+  QCOMPARE(options.destinationRoot, QStringLiteral("Downloads/RelayDesk"));
+  QCOMPARE(options.conflictPolicy, ConflictPolicy::AutoRename);
+  QCOMPARE(options.acceptanceOrigin, AcceptanceOrigin::UserDecision);
   QVERIFY(!model.accept());
   QCOMPARE(accepted.count(), 1);
 }
 
 void IncomingOfferModelTests::rejectsAndIgnoresDuplicateDecisions()
 {
-  TransferOfferStateMachine stateMachine(capabilities());
-  IncomingOfferModel model(stateMachine, settings());
+  IncomingOfferModel model(settings());
   const auto incoming = incomingOffer();
   QSignalSpy changed(&model, &IncomingOfferModel::changed);
-  QSignalSpy rejected(&model, &IncomingOfferModel::rejectionReady);
+  QSignalSpy rejected(&model, &IncomingOfferModel::rejectRequested);
 
   QVERIFY(model.receiveOffer(incoming));
   auto duplicate = incoming;
@@ -134,10 +117,9 @@ void IncomingOfferModelTests::rejectsAndIgnoresDuplicateDecisions()
   QVERIFY(model.reject());
   QCOMPARE(rejected.count(), 1);
   QCOMPARE(model.status(), IncomingOfferModel::Status::Rejected);
-  const auto rejection = model.rejection();
-  QVERIFY(rejection.has_value());
-  QCOMPARE(rejection->reason, RejectReason::UserDeclined);
-  QVERIFY(rejection->diagnostic.isEmpty());
+  const auto rejection = rejected.constFirst();
+  QCOMPARE(*static_cast<const TransferId *>(rejection.at(0).constData()), incoming.offer.transferId);
+  QCOMPARE(rejection.at(1).value<RejectReason>(), RejectReason::UserDeclined);
   QVERIFY(!model.reject());
   QVERIFY(model.receiveOffer(duplicate));
   QCOMPARE(rejected.count(), 1);
@@ -160,15 +142,20 @@ void IncomingOfferModelTests::autoAcceptRequiresAllExplicitConditions()
   };
 
   for (const auto &testCase : cases) {
-    TransferOfferStateMachine stateMachine(capabilities());
-    IncomingOfferModel model(stateMachine, settings(testCase.explicitSetting));
-    QSignalSpy accepted(&model, &IncomingOfferModel::acceptanceReady);
+    IncomingOfferModel model(settings(testCase.explicitSetting));
+    QSignalSpy accepted(&model, &IncomingOfferModel::acceptRequested);
     QVERIFY(model.receiveOffer(incomingOffer(testCase.trusted, testCase.mayAutoAccept)));
     QCOMPARE(model.status() == IncomingOfferModel::Status::Accepted, testCase.expectedAccepted);
     QCOMPARE(accepted.count(), testCase.expectedAccepted ? 1 : 0);
     if (testCase.expectedAccepted) {
-      QVERIFY(model.acceptance().has_value());
-      QVERIFY(model.acceptance()->autoAccepted);
+      QCOMPARE(
+          *static_cast<const TransferId *>(accepted.constFirst().at(0).constData()),
+          model.offer()->offer.transferId
+      );
+      QCOMPARE(
+          accepted.constFirst().at(1).value<ReceiveOptions>().acceptanceOrigin,
+          AcceptanceOrigin::TrustedDevicePolicy
+      );
     }
   }
 }
@@ -176,12 +163,11 @@ void IncomingOfferModelTests::autoAcceptRequiresAllExplicitConditions()
 void IncomingOfferModelTests::expiresOnceAndCanBeDismissed()
 {
   qint64 now = 10'000;
-  TransferOfferStateMachine stateMachine(capabilities());
   auto expirySettings = settings();
   expirySettings.decisionTimeoutMs = 1000;
-  IncomingOfferModel model(stateMachine, expirySettings, [&now]() { return now; });
+  IncomingOfferModel model(expirySettings, [&now]() { return now; });
   const auto incoming = incomingOffer();
-  QSignalSpy rejected(&model, &IncomingOfferModel::rejectionReady);
+  QSignalSpy rejected(&model, &IncomingOfferModel::rejectRequested);
 
   QVERIFY(model.receiveOffer(incoming));
   now += 999;
@@ -192,9 +178,8 @@ void IncomingOfferModelTests::expiresOnceAndCanBeDismissed()
   QCOMPARE(model.status(), IncomingOfferModel::Status::Expired);
   QVERIFY(model.visible());
   QCOMPARE(model.errorText(), QStringLiteral("This transfer request expired"));
-  QVERIFY(model.rejection().has_value());
-  QCOMPARE(model.rejection()->reason, RejectReason::PolicyDenied);
-  QVERIFY(model.rejection()->diagnostic.isEmpty());
+  QCOMPARE(*static_cast<const TransferId *>(rejected.constFirst().at(0).constData()), incoming.offer.transferId);
+  QCOMPARE(rejected.constFirst().at(1).value<RejectReason>(), RejectReason::PolicyDenied);
   QVERIFY(!model.expireIfNeeded());
   QCOMPARE(rejected.count(), 1);
 
@@ -206,8 +191,7 @@ void IncomingOfferModelTests::expiresOnceAndCanBeDismissed()
 
 void IncomingOfferModelTests::blocksUntrustedPeerAndMapsErrorsSafely()
 {
-  TransferOfferStateMachine stateMachine(capabilities());
-  IncomingOfferModel model(stateMachine, settings(true));
+  IncomingOfferModel model(settings(true));
   QVERIFY(model.receiveOffer(incomingOffer(false, true)));
   QVERIFY(model.visible());
   QVERIFY(!model.canAccept());
@@ -215,23 +199,13 @@ void IncomingOfferModelTests::blocksUntrustedPeerAndMapsErrorsSafely()
   QCOMPARE(model.errorText(), QStringLiteral("Pair this device before receiving files"));
   QVERIFY(model.reject());
 
-  TransferOfferStateMachine invalidStateMachine(capabilities());
-  IncomingOfferModel invalidModel(invalidStateMachine, settings());
-  auto invalid = incomingOffer();
-  invalid.offer.displayName.clear();
-  QVERIFY(!invalidModel.receiveOffer(invalid));
-  QCOMPARE(invalidModel.status(), IncomingOfferModel::Status::Error);
-  QCOMPARE(invalidModel.errorText(), QStringLiteral("The incoming transfer request is invalid"));
-  QVERIFY(!invalidModel.errorText().contains(QStringLiteral("fields exceed")));
-  QVERIFY(!invalidModel.errorText().contains(QStringLiteral("diagnostic")));
 }
 
 void IncomingOfferModelTests::settingsUpdateEmitsAndReevaluatesAvailability()
 {
-  TransferOfferStateMachine stateMachine(capabilities());
   auto insufficient = settings();
   insufficient.availableBytes = 1;
-  IncomingOfferModel model(stateMachine, insufficient);
+  IncomingOfferModel model(insufficient);
   QVERIFY(model.receiveOffer(incomingOffer()));
   QCOMPARE(model.errorText(), QStringLiteral("Not enough disk space"));
   QVERIFY(!model.canAccept());

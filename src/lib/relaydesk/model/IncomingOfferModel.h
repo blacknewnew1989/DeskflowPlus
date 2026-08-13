@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "relaydesk/transfer/TransferOfferStateMachine.h"
 #include "relaydesk/transfer/TransferTypes.h"
 
 #include <QObject>
@@ -46,12 +45,10 @@ public:
   using Clock = std::function<qint64()>;
 
   explicit IncomingOfferModel(
-      ::relaydesk::transfer::TransferOfferStateMachine &stateMachine, IncomingOfferSettingsSnapshot settings,
-      QObject *parent = nullptr
+      IncomingOfferSettingsSnapshot settings, QObject *parent = nullptr
   );
   IncomingOfferModel(
-      ::relaydesk::transfer::TransferOfferStateMachine &stateMachine, IncomingOfferSettingsSnapshot settings,
-      Clock clock, QObject *parent = nullptr
+      IncomingOfferSettingsSnapshot settings, Clock clock, QObject *parent = nullptr
   );
 
   bool receiveOffer(const ::relaydesk::transfer::IncomingOffer &offer);
@@ -74,23 +71,22 @@ public:
   [[nodiscard]] QString conflictText() const;
   [[nodiscard]] QString errorText() const;
   [[nodiscard]] std::optional<::relaydesk::transfer::IncomingOffer> offer() const;
-  [[nodiscard]] std::optional<::relaydesk::transfer::TransferAccept> acceptance() const;
-  [[nodiscard]] std::optional<::relaydesk::transfer::TransferReject> rejection() const;
-
 Q_SIGNALS:
   void changed();
-  // The composition layer reads the copied acceptance()/rejection() snapshot.
-  // Network transport deliberately remains outside this UI model.
-  void acceptanceReady();
-  void rejectionReady();
+  void acceptRequested(
+      ::relaydesk::transfer::TransferId transferId,
+      ::relaydesk::transfer::ReceiveOptions options
+  );
+  void rejectRequested(
+      ::relaydesk::transfer::TransferId transferId,
+      ::relaydesk::transfer::RejectReason reason
+  );
 
 private:
   [[nodiscard]] bool acceptInternal(::relaydesk::transfer::AcceptanceOrigin origin);
   void scheduleExpiry();
   void updateSafeError();
-  [[nodiscard]] QString stateErrorText(::relaydesk::transfer::OfferStateError error) const;
 
-  ::relaydesk::transfer::TransferOfferStateMachine &m_stateMachine;
   IncomingOfferSettingsSnapshot m_settings;
   Clock m_clock;
   QTimer m_expiryTimer;

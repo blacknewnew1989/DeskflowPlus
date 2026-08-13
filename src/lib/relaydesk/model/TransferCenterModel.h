@@ -8,6 +8,7 @@
 
 #include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/transfer/TransferHistoryStore.h"
+#include "relaydesk/transfer/TransferTypes.h"
 
 #include <QAbstractListModel>
 #include <QHash>
@@ -83,18 +84,24 @@ public:
 
   bool requestPause(const ::relaydesk::transfer::TransferId &transferId);
   bool requestResume(const ::relaydesk::transfer::TransferId &transferId);
-  bool requestCancel(const ::relaydesk::transfer::TransferId &transferId);
+  bool requestCancel(
+      const ::relaydesk::transfer::TransferId &transferId,
+      const ::relaydesk::transfer::TransferCancelOptions &options = {}
+  );
   bool requestRetry(const ::relaydesk::transfer::TransferId &transferId);
   bool requestOpenFolder(const ::relaydesk::transfer::TransferId &transferId);
   bool requestOpenFile(const ::relaydesk::transfer::TransferId &transferId);
   void flushDueUpdates();
 
 Q_SIGNALS:
-  void pauseRequested(::relaydesk::transfer::TransferSnapshot snapshot);
-  void resumeRequested(::relaydesk::transfer::TransferSnapshot snapshot);
-  void cancelRequested(::relaydesk::transfer::TransferSnapshot snapshot);
-  void retryRequested(::relaydesk::transfer::TransferSnapshot snapshot);
-  void historyRetryRequested(::relaydesk::transfer::TransferHistoryRecord record);
+  void pauseRequested(::relaydesk::transfer::TransferId transferId);
+  void resumeRequested(::relaydesk::transfer::TransferId transferId);
+  void cancelRequested(
+      ::relaydesk::transfer::TransferId transferId,
+      ::relaydesk::transfer::TransferCancelOptions options
+  );
+  void retryRequested(::relaydesk::transfer::TransferId transferId);
+  void historyRetryRequested(::relaydesk::transfer::TransferId transferId);
   void openFolderRequested(::relaydesk::transfer::TransferHistoryRecord record);
   void openFileRequested(::relaydesk::transfer::TransferHistoryRecord record);
   void notificationRequested(
@@ -132,7 +139,7 @@ private:
   void flushNotification();
   [[nodiscard]] bool requestControl(
       const ::relaydesk::transfer::TransferId &transferId, Role allowedRole,
-      void (TransferCenterModel::*signal)(::relaydesk::transfer::TransferSnapshot)
+      void (TransferCenterModel::*signal)(::relaydesk::transfer::TransferId)
   );
   [[nodiscard]] bool requestHistoryAction(
       const ::relaydesk::transfer::TransferId &transferId, Role allowedRole,

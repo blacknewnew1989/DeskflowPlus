@@ -164,7 +164,8 @@ void TransferCenterModelTests::updatesMovesAndRemovesByTransferId()
 
 void TransferCenterModelTests::emitsImmutableControlIntentsOnlyWhenAllowed()
 {
-  qRegisterMetaType<TransferSnapshot>();
+  qRegisterMetaType<TransferId>();
+  qRegisterMetaType<TransferCancelOptions>();
   TransferCenterModel model;
   auto active = transferSnapshot(QStringLiteral("11111111-1111-4111-8111-111111111111"));
   QVERIFY(model.upsertTransfer(active));
@@ -178,16 +179,14 @@ void TransferCenterModelTests::emitsImmutableControlIntentsOnlyWhenAllowed()
   QCOMPARE(pause.count(), 1);
   QCOMPARE(cancel.count(), 1);
   const auto arguments = pause.takeFirst();
-  const auto *emitted = static_cast<const TransferSnapshot *>(arguments.constFirst().constData());
-  QVERIFY(emitted != nullptr);
-  QCOMPARE(emitted->id, active.id);
-  QCOMPARE(emitted->state, TransferState::Transferring);
+  QCOMPARE(*static_cast<const TransferId *>(arguments.constFirst().constData()), active.id);
+  QCOMPARE(*static_cast<const TransferId *>(cancel.constFirst().at(0).constData()), active.id);
+  QCOMPARE(cancel.constFirst().at(1).value<TransferCancelOptions>(), TransferCancelOptions{});
 
   active.state = TransferState::Paused;
   active.canPause = false;
   active.canResume = true;
   QVERIFY(model.upsertTransfer(active));
-  QCOMPARE(emitted->state, TransferState::Transferring);
   QVERIFY(model.requestResume(active.id));
   QCOMPARE(resume.count(), 1);
 }
@@ -263,19 +262,19 @@ void TransferCenterModelTests::emitsValidatedHistoryOpenAndRetryIntents()
 
   std::optional<TransferHistoryRecord> folderIntent;
   std::optional<TransferHistoryRecord> fileIntent;
-  std::optional<TransferHistoryRecord> historyRetryIntent;
-  std::optional<TransferSnapshot> liveRetryIntent;
+  std::optional<TransferId> historyRetryIntent;
+  std::optional<TransferId> liveRetryIntent;
   connect(&model, &TransferCenterModel::openFolderRequested, this, [&](TransferHistoryRecord record) {
     folderIntent = std::move(record);
   });
   connect(&model, &TransferCenterModel::openFileRequested, this, [&](TransferHistoryRecord record) {
     fileIntent = std::move(record);
   });
-  connect(&model, &TransferCenterModel::historyRetryRequested, this, [&](TransferHistoryRecord record) {
-    historyRetryIntent = std::move(record);
+  connect(&model, &TransferCenterModel::historyRetryRequested, this, [&](TransferId transferId) {
+    historyRetryIntent = transferId;
   });
-  connect(&model, &TransferCenterModel::retryRequested, this, [&](TransferSnapshot snapshot) {
-    liveRetryIntent = std::move(snapshot);
+  connect(&model, &TransferCenterModel::retryRequested, this, [&](TransferId transferId) {
+    liveRetryIntent = transferId;
   });
 
   QVERIFY(model.requestOpenFolder(completed.transferId));
@@ -288,8 +287,8 @@ void TransferCenterModelTests::emitsValidatedHistoryOpenAndRetryIntents()
   QVERIFY(liveRetryIntent.has_value());
   QCOMPARE(*folderIntent, completed);
   QCOMPARE(*fileIntent, completed);
-  QCOMPARE(*historyRetryIntent, failed);
-  QCOMPARE(*liveRetryIntent, liveFailed);
+  QCOMPARE(*historyRetryIntent, failed.transferId);
+  QCOMPARE(*liveRetryIntent, liveFailed.id);
 
   auto replacement = completed;
   replacement.displayName = QStringLiteral("Replacement");

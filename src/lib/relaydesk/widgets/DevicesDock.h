@@ -61,7 +61,7 @@ public:
 Q_SIGNALS:
   void pairingRequested(DeviceSnapshot peer);
   void sendItemsRequested(
-      DeviceSnapshot peer, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options
+      DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options
   );
   void sendItemsRejected(QString message);
   void incomingOfferSettingsRequested();
@@ -85,7 +85,7 @@ private:
   void submitPairingCode();
   void chooseAndSend(bool folder);
   [[nodiscard]] QModelIndex targetIndexAt(const QPoint &position) const;
-  [[nodiscard]] std::optional<DeviceSnapshot> sendTarget(const QModelIndex &index) const;
+  [[nodiscard]] std::optional<DeviceId> sendTarget(const QModelIndex &index) const;
   [[nodiscard]] QString validateLocalItems(const QList<QUrl> &items) const;
   [[nodiscard]] bool updateDropTarget(const QModelIndex &index, const QList<QUrl> &items);
   void clearDropTarget();

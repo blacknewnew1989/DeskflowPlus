@@ -11,6 +11,7 @@
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
 #include "relaydesk/model/TransferCenterModel.h"
+#include "relaydesk/transfer/IFileTransferService.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 
@@ -18,6 +19,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -32,20 +34,6 @@ using namespace relaydesk::transfer;
 namespace {
 
 const auto kBaseUtc = QDateTime::fromMSecsSinceEpoch(1'780'000'000'000LL, Qt::UTC);
-
-NegotiatedCapabilities capabilities()
-{
-  return {
-      .protocolMajorVersion = kProtocolMajorVersion,
-      .features = {QStringLiteral("file.v1"), QStringLiteral("folder.v1")},
-      .chunkBytes = 1024,
-      .maxPayloadBytes = 4096,
-      .maxConcurrentTransfers = 2,
-      .maxConcurrentFiles = 2,
-      .maxManifestEntries = 1000,
-      .conflictPolicies = {ConflictPolicy::AutoRename, ConflictPolicy::Ask},
-  };
-}
 
 IncomingOffer incomingOffer()
 {
@@ -116,8 +104,91 @@ TransferHistoryRecord historyRecord(
   };
 }
 
+class FakeFileTransferService final : public IFileTransferService
+{
+public:
+  [[nodiscard]] TransferStartResult send(
+      const DeviceId &target, const QList<QUrl> &localItems, const SendOptions &options
+  ) override
+  {
+    ++sendCalls;
+    sentTarget = target;
+    sentItems = localItems;
+    sentOptions = options;
+    return {.transferId = TransferId::generate()};
+  }
+
+  void accept(const TransferId &transferId, const ReceiveOptions &options) override
+  {
+    ++acceptCalls;
+    acceptedId = transferId;
+    acceptedOptions = options;
+  }
+
+  void reject(const TransferId &transferId, RejectReason reason) override
+  {
+    ++rejectCalls;
+    rejectedId = transferId;
+    rejectedReason = reason;
+  }
+
+  void pause(const TransferId &transferId) override
+  {
+    ++pauseCalls;
+    pausedId = transferId;
+  }
+
+  void resume(const TransferId &transferId) override
+  {
+    ++resumeCalls;
+    resumedId = transferId;
+  }
+
+  void cancel(const TransferId &transferId, const TransferCancelOptions &options) override
+  {
+    ++cancelCalls;
+    cancelledId = transferId;
+    cancelOptions = options;
+  }
+
+  void retry(const TransferId &transferId) override
+  {
+    ++retryCalls;
+    retriedIds.append(transferId);
+  }
+
+  [[nodiscard]] QList<TransferSnapshot> activeTransfers() const override
+  {
+    ++activeTransferCalls;
+    return initialTransfers;
+  }
+
+  int sendCalls = 0;
+  int acceptCalls = 0;
+  int rejectCalls = 0;
+  int pauseCalls = 0;
+  int resumeCalls = 0;
+  int cancelCalls = 0;
+  int retryCalls = 0;
+  mutable int activeTransferCalls = 0;
+  std::optional<DeviceId> sentTarget;
+  QList<QUrl> sentItems;
+  std::optional<SendOptions> sentOptions;
+  std::optional<TransferId> acceptedId;
+  std::optional<ReceiveOptions> acceptedOptions;
+  std::optional<TransferId> rejectedId;
+  std::optional<RejectReason> rejectedReason;
+  std::optional<TransferId> pausedId;
+  std::optional<TransferId> resumedId;
+  std::optional<TransferId> cancelledId;
+  std::optional<TransferCancelOptions> cancelOptions;
+  QList<TransferId> retriedIds;
+  QList<TransferSnapshot> initialTransfers;
+};
+
 struct Fixture
 {
+  FakeFileTransferService service;
   FakePairingService pairingService;
   DeviceHomeModel devices;
   PairingWizardModel pairing{pairingService};
@@ -125,9 +196,7 @@ struct Fixture
   DevicesDock devicesDock{devices, pairing, permissions};
   TransferCenterModel transfers;
   TransferCenterDock transferDock{transfers};
-  TransferOfferStateMachine offerState{capabilities()};
   IncomingOfferModel incoming{
-      offerState,
       {
           .destinationRoot = QStringLiteral("Downloads/RelayDesk"),
           .availableBytes = 1'000'000,
@@ -151,83 +220,43 @@ class TransferUiRuntimeTests final : public QObject
   Q_OBJECT
 
 private Q_SLOTS:
-  void forwardsTypedUiIntentsWithoutOwningTransferWork();
+  void composesTypedUiIntentsThroughOneServiceBoundary();
   void opensResolvedCompletionOnlyInsideExistingReceiveRoot();
   void rejectsUntrustedCompletionPathsBeforeCallingOpener();
   void rejectsUnavailableCompositionDependencies();
 };
 
-void TransferUiRuntimeTests::forwardsTypedUiIntentsWithoutOwningTransferWork()
+void TransferUiRuntimeTests::composesTypedUiIntentsThroughOneServiceBoundary()
 {
   Fixture fixture;
-  TransferUiRuntime runtime(fixture.devicesDock, fixture.transferDock, fixture.incoming);
+  TransferUiRuntime runtime(fixture.service, fixture.devicesDock, fixture.transferDock, fixture.incoming);
+  QCOMPARE(fixture.service.activeTransferCalls, 1);
 
-  std::optional<DeviceSnapshot> sentPeer;
-  QList<QUrl> sentItems;
-  std::optional<SendOptions> sentOptions;
-  connect(
-      &runtime, &TransferUiRuntime::sendItemsRequested, this,
-      [&](DeviceSnapshot peer, QList<QUrl> items, SendOptions options) {
-        sentPeer = std::move(peer);
-        sentItems = std::move(items);
-        sentOptions = options;
-      }
-  );
-  const DeviceSnapshot peer{
-      .id = DeviceId::generate(),
-      .displayName = QStringLiteral("Studio Mac"),
-      .presence = DevicePresence::Online,
-      .trusted = true,
-      .capabilities = {.fileV1 = true},
-  };
+  const auto peerId = DeviceId::generate();
   const QList<QUrl> items{QUrl::fromLocalFile(QStringLiteral("C:/source/file.txt"))};
   const SendOptions options{.conflictPolicy = ConflictPolicy::AutoRename};
-  Q_EMIT fixture.devicesDock.sendItemsRequested(peer, items, options);
-  QVERIFY(sentPeer.has_value());
-  QCOMPARE(*sentPeer, peer);
-  QCOMPARE(sentItems, items);
-  QVERIFY(sentOptions.has_value());
-  QCOMPARE(*sentOptions, options);
+  Q_EMIT fixture.devicesDock.sendItemsRequested(peerId, items, options);
+  QCOMPARE(fixture.service.sendCalls, 1);
+  QCOMPARE(fixture.service.sentTarget, std::optional<DeviceId>{peerId});
+  QCOMPARE(fixture.service.sentItems, items);
+  QCOMPARE(fixture.service.sentOptions, std::optional<SendOptions>{options});
 
-  std::optional<TransferAccept> accepted;
-  std::optional<TransferReject> rejected;
-  connect(&runtime, &TransferUiRuntime::incomingOfferAccepted, this, [&](TransferAccept response) {
-    accepted = std::move(response);
-  });
-  connect(&runtime, &TransferUiRuntime::incomingOfferRejected, this, [&](TransferReject response) {
-    rejected = std::move(response);
-  });
+  QSignalSpy offerChanges(&fixture.incoming, &IncomingOfferModel::changed);
   const auto acceptedOffer = incomingOffer();
-  QVERIFY(fixture.incoming.receiveOffer(acceptedOffer));
+  Q_EMIT fixture.service.incomingOffer(acceptedOffer);
+  QCOMPARE(offerChanges.count(), 1);
+  QCOMPARE(fixture.incoming.offer(), std::optional<IncomingOffer>{acceptedOffer});
   QVERIFY(fixture.incoming.accept());
-  QVERIFY(accepted.has_value());
-  QCOMPARE(accepted->transferId, acceptedOffer.offer.transferId);
+  QCOMPARE(fixture.service.acceptCalls, 1);
+  QCOMPARE(fixture.service.acceptedId, std::optional<TransferId>{acceptedOffer.offer.transferId});
+  QVERIFY(fixture.service.acceptedOptions.has_value());
+  QCOMPARE(fixture.service.acceptedOptions->destinationRoot, QStringLiteral("Downloads/RelayDesk"));
   const auto rejectedOffer = incomingOffer();
-  QVERIFY(fixture.incoming.receiveOffer(rejectedOffer));
+  Q_EMIT fixture.service.incomingOffer(rejectedOffer);
   QVERIFY(fixture.incoming.reject());
-  QVERIFY(rejected.has_value());
-  QCOMPARE(rejected->transferId, rejectedOffer.offer.transferId);
-
-  std::optional<TransferSnapshot> paused;
-  std::optional<TransferSnapshot> resumed;
-  std::optional<TransferSnapshot> cancelled;
-  std::optional<TransferSnapshot> retried;
-  std::optional<TransferHistoryRecord> historyRetried;
-  connect(&runtime, &TransferUiRuntime::pauseRequested, this, [&](TransferSnapshot snapshot) {
-    paused = std::move(snapshot);
-  });
-  connect(&runtime, &TransferUiRuntime::resumeRequested, this, [&](TransferSnapshot snapshot) {
-    resumed = std::move(snapshot);
-  });
-  connect(&runtime, &TransferUiRuntime::cancelRequested, this, [&](TransferSnapshot snapshot) {
-    cancelled = std::move(snapshot);
-  });
-  connect(&runtime, &TransferUiRuntime::retryRequested, this, [&](TransferSnapshot snapshot) {
-    retried = std::move(snapshot);
-  });
-  connect(&runtime, &TransferUiRuntime::historyRetryRequested, this, [&](TransferHistoryRecord record) {
-    historyRetried = std::move(record);
-  });
+  QCOMPARE(fixture.service.rejectCalls, 1);
+  QCOMPARE(fixture.service.rejectedId, std::optional<TransferId>{rejectedOffer.offer.transferId});
+  QCOMPARE(fixture.service.rejectedReason, std::optional<RejectReason>{RejectReason::UserDeclined});
 
   const auto active =
       transferSnapshot(QStringLiteral("11111111-1111-4111-8111-111111111111"), TransferState::Transferring);
@@ -237,20 +266,41 @@ void TransferUiRuntimeTests::forwardsTypedUiIntentsWithoutOwningTransferWork()
   const auto failedHistory = historyRecord(
       QStringLiteral("44444444-4444-4444-8444-444444444444"), HistoryDirection::Receiving, HistoryStatus::Failed
   );
-  QVERIFY(fixture.transfers.upsertTransfer(active));
-  QVERIFY(fixture.transfers.upsertTransfer(pausedTransfer));
-  QVERIFY(fixture.transfers.upsertTransfer(failed));
+  QSignalSpy inserted(&fixture.transfers, &QAbstractItemModel::rowsInserted);
+  Q_EMIT fixture.service.transferAdded(active);
+  Q_EMIT fixture.service.transferAdded(pausedTransfer);
+  Q_EMIT fixture.service.transferAdded(failed);
+  QCOMPARE(inserted.count(), 3);
   fixture.transfers.setHistoryRecords({failedHistory});
   QVERIFY(fixture.transfers.requestPause(active.id));
-  QVERIFY(fixture.transfers.requestCancel(active.id));
+  const TransferCancelOptions cancelOptions{
+      .reason = TransferCancelReason::UserRequested,
+      .partialDisposition = PartialDisposition::Remove,
+  };
+  QVERIFY(fixture.transfers.requestCancel(active.id, cancelOptions));
   QVERIFY(fixture.transfers.requestResume(pausedTransfer.id));
   QVERIFY(fixture.transfers.requestRetry(failed.id));
   QVERIFY(fixture.transfers.requestRetry(failedHistory.transferId));
-  QCOMPARE(paused, active);
-  QCOMPARE(cancelled, active);
-  QCOMPARE(resumed, pausedTransfer);
-  QCOMPARE(retried, failed);
-  QCOMPARE(historyRetried, failedHistory);
+  QCOMPARE(fixture.service.pauseCalls, 1);
+  QCOMPARE(fixture.service.pausedId, std::optional<TransferId>{active.id});
+  QCOMPARE(fixture.service.cancelCalls, 1);
+  QCOMPARE(fixture.service.cancelledId, std::optional<TransferId>{active.id});
+  QCOMPARE(fixture.service.cancelOptions, std::optional<TransferCancelOptions>{cancelOptions});
+  QCOMPARE(fixture.service.resumeCalls, 1);
+  QCOMPARE(fixture.service.resumedId, std::optional<TransferId>{pausedTransfer.id});
+  QCOMPARE(fixture.service.retryCalls, 2);
+  QCOMPARE(fixture.service.retriedIds, QList<TransferId>({failed.id, failedHistory.transferId}));
+
+  auto changed = active;
+  changed.displayName = QStringLiteral("Updated project");
+  QSignalSpy dataChanged(&fixture.transfers, &QAbstractItemModel::dataChanged);
+  Q_EMIT fixture.service.transferChanged(changed);
+  QCOMPARE(dataChanged.count(), 1);
+  QCOMPARE(fixture.transfers.snapshot(active.id), std::optional<TransferSnapshot>{changed});
+  QSignalSpy removed(&fixture.transfers, &QAbstractItemModel::rowsRemoved);
+  Q_EMIT fixture.service.transferRemoved(active.id);
+  QCOMPARE(removed.count(), 1);
+  QVERIFY(!fixture.transfers.snapshot(active.id).has_value());
 }
 
 void TransferUiRuntimeTests::opensResolvedCompletionOnlyInsideExistingReceiveRoot()
@@ -269,7 +319,7 @@ void TransferUiRuntimeTests::opensResolvedCompletionOnlyInsideExistingReceiveRoo
   std::optional<TransferHistoryRecord> resolvedRecord;
   QList<QUrl> openedUrls;
   TransferUiRuntime runtime(
-      fixture.devicesDock, fixture.transferDock, fixture.incoming,
+      fixture.service, fixture.devicesDock, fixture.transferDock, fixture.incoming,
       [&](const TransferHistoryRecord &candidate) -> std::optional<ResolvedTransferCompletion> {
         ++resolverCalls;
         resolvedRecord = candidate;
@@ -328,7 +378,7 @@ void TransferUiRuntimeTests::rejectsUntrustedCompletionPathsBeforeCallingOpener(
 
   int openerCalls = 0;
   TransferUiRuntime runtime(
-      fixture.devicesDock, fixture.transferDock, fixture.incoming,
+      fixture.service, fixture.devicesDock, fixture.transferDock, fixture.incoming,
       [&](const TransferHistoryRecord &record) -> std::optional<ResolvedTransferCompletion> {
         if (record.transferId == outside.transferId)
           return ResolvedTransferCompletion{receiveRoot, outsidePath};
@@ -390,7 +440,7 @@ void TransferUiRuntimeTests::rejectsUnavailableCompositionDependencies()
 
   {
     Fixture fixture;
-    TransferUiRuntime runtime(fixture.devicesDock, fixture.transferDock, fixture.incoming);
+    TransferUiRuntime runtime(fixture.service, fixture.devicesDock, fixture.transferDock, fixture.incoming);
     std::optional<TransferUiRuntime::OpenError> error;
     connect(
         &runtime, &TransferUiRuntime::completionOpenRejected, this,
@@ -404,7 +454,7 @@ void TransferUiRuntimeTests::rejectsUnavailableCompositionDependencies()
   {
     Fixture fixture;
     TransferUiRuntime runtime(
-        fixture.devicesDock, fixture.transferDock, fixture.incoming,
+        fixture.service, fixture.devicesDock, fixture.transferDock, fixture.incoming,
         [&](const TransferHistoryRecord &) -> std::optional<ResolvedTransferCompletion> {
           return ResolvedTransferCompletion{receiveRoot, completedPath};
         }
