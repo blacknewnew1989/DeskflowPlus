@@ -50,6 +50,21 @@ target_link_libraries(
   PUBLIC relaydesk_platform_contract Qt6::Core
 )
 
+if(APPLE)
+  add_library(relaydesk_macos_file_safety STATIC
+    MacFileSafety.cpp
+    MacFileSafety.h
+  )
+  target_include_directories(
+    relaydesk_macos_file_safety
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+  )
+  target_link_libraries(
+    relaydesk_macos_file_safety
+    PUBLIC relaydesk_platform_contract Qt6::Core
+  )
+endif()
+
 add_library(relaydesk_windows_permissions STATIC
   WindowsFirewallProbe.cpp
   WindowsFirewallProbe.h
