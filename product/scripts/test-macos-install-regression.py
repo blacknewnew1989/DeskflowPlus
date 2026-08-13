@@ -362,6 +362,8 @@ def verify_bundle_linkage(app: Path, log: IO[str]) -> int:
             dependency = re.sub(
                 r"\s+\(compatibility version.*$", "", raw_line.strip()
             )
+            if re.fullmatch(r".+ \(architecture [^)]+\):", dependency):
+                continue
             if not dependency or dependency == install_id:
                 continue
             if dependency.startswith(allowed_system_prefixes):

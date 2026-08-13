@@ -150,6 +150,55 @@ class MacosInstallRegressionTests(unittest.TestCase):
                 ):
                     MODULE.verify_bundle_linkage(app, mock.Mock())
 
+    def test_accepts_universal_binary_architecture_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / "RelayDesk.app"
+            framework = (
+                app
+                / "Contents/Frameworks/QtConcurrent.framework/Versions/A/QtConcurrent"
+            )
+            core = app / "Contents/Frameworks/QtCore.framework/Versions/A/QtCore"
+            framework.parent.mkdir(parents=True)
+            core.parent.mkdir(parents=True)
+            framework.write_bytes(b"universal-macho")
+            core.write_bytes(b"dependency")
+            commands = [
+                subprocess.CompletedProcess(
+                    [], 0, stdout="Mach-O universal binary with 2 architectures\n", stderr=""
+                ),
+                subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout=(
+                        f"{framework} (architecture x86_64):\n"
+                        "@rpath/QtConcurrent.framework/Versions/A/QtConcurrent\n"
+                        f"{framework} (architecture arm64):\n"
+                        "@rpath/QtConcurrent.framework/Versions/A/QtConcurrent\n"
+                    ),
+                    stderr="",
+                ),
+                subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout=(
+                        f"{framework} (architecture x86_64):\n"
+                        "\t@rpath/QtConcurrent.framework/Versions/A/QtConcurrent "
+                        "(compatibility version 6.0.0, current version 6.10.2)\n"
+                        f"{framework} (architecture arm64):\n"
+                        "\t@rpath/QtConcurrent.framework/Versions/A/QtConcurrent "
+                        "(compatibility version 6.0.0, current version 6.10.2)\n"
+                        "\t@rpath/QtCore.framework/Versions/A/QtCore "
+                        "(compatibility version 6.0.0, current version 6.10.2)\n"
+                    ),
+                    stderr="",
+                ),
+                subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+            ]
+            with mock.patch.object(
+                MODULE, "nested_code_candidates", return_value=[framework]
+            ), mock.patch.object(MODULE, "run_command", side_effect=commands):
+                self.assertEqual(MODULE.verify_bundle_linkage(app, mock.Mock()), 1)
+
     def test_rejects_homebrew_runtime_rpath(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory) / "RelayDesk.app"
