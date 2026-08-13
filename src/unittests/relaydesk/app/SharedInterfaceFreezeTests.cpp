@@ -431,6 +431,8 @@ void SharedInterfaceFreezeTests::queuesSharedValuesAcrossThreadWithoutLoss()
       .maxConcurrentFiles = 4,
       .maxManifestEntries = 12'345,
       .conflictPolicies = {ConflictPolicy::AutoRename, ConflictPolicy::Ask},
+      .localCanReceiveFiles = false,
+      .peerCanReceiveFiles = true,
   };
 
   QTemporaryDir runtimeDirectory;
@@ -541,6 +543,7 @@ void SharedInterfaceFreezeTests::defaultRuntimeCapabilitiesAreHonest()
 {
   const FileTransferRuntimeOptions options;
   QCOMPARE(options.localCapabilities.features, QStringList({QStringLiteral("file.v1"), QStringLiteral("sha256")}));
+  QVERIFY(!options.localCapabilities.canReceiveFiles());
   QCOMPARE(
       options.localCapabilities.conflictPolicies, QList<ConflictPolicy>({ConflictPolicy::AutoRename})
   );

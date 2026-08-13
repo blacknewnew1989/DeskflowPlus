@@ -169,8 +169,12 @@ exact-field 检查拒绝未知字段。
 - `Heartbeat` 与 `HeartbeatAck` 共用精确 map `{1: sequence, 2: timestampMs}`：sequence
   为 `0..2^63-1`，timestamp 为 `1..2^63-1`。
 - `Capabilities` 是精确七字段 map。feature/policy list 要非空、无重复并满足 codec 的
-  token/enum 约束；negotiated 数值不能超过共享 hard maxima。本文不冻结未注册的
-  feature token 含义。
+  token/enum 约束；negotiated 数值不能超过共享 hard maxima。v1 冻结三个基础 token：
+  `file.v1` 表示支持 RDFT/1 文件协议，`sha256` 表示支持本版摘要，
+  `file.receive.v1` **单向**表示发送该 CAPABILITIES 的 endpoint 已组合并可执行
+  `TransferOffer` 接收处理器。`file.v1` 本身不表示可接收 offer。发送方只能向明确
+  声明 `file.receive.v1` 的对端发 offer；未组合 receiver 的 runtime 不得声明它，并
+  必须拒绝无该协商事实的 incoming `TransferOffer`。其他 feature token 的含义不冻结。
 - `ControlMessageCodec` 使用 `ControlMessage` variant 与 `Protocol.h` 中的
   `ConflictPolicy`、`RejectReason`。`RejectReason` 的 wire 值为 `UserDeclined=1`、
   `NotTrusted=2`、`PolicyDenied=3`、`InsufficientSpace=4`、`TooManyFiles=5`、

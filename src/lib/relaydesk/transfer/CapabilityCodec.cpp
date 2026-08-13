@@ -327,7 +327,8 @@ CapabilityNegotiationResult CapabilityNegotiator::negotiate(
   }
 
   const QStringList features = intersectionPreservingLocalOrder(local.features, peer.features);
-  if (!features.contains(QStringLiteral("file.v1")) || !features.contains(QStringLiteral("sha256"))) {
+  if (!features.contains(QString::fromLatin1(kFileProtocolFeature)) ||
+      !features.contains(QString::fromLatin1(kSha256Feature))) {
     return negotiationFailure(
         CapabilityNegotiationError::MissingRequiredFeature,
         QStringLiteral("peer does not share the required file.v1 and sha256 capabilities")
@@ -352,6 +353,8 @@ CapabilityNegotiationResult CapabilityNegotiator::negotiate(
               .maxConcurrentFiles = std::min(local.maxConcurrentFiles, peer.maxConcurrentFiles),
               .maxManifestEntries = std::min(local.maxManifestEntries, peer.maxManifestEntries),
               .conflictPolicies = policies,
+              .localCanReceiveFiles = local.canReceiveFiles(),
+              .peerCanReceiveFiles = peer.canReceiveFiles(),
           }
   };
 }

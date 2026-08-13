@@ -82,6 +82,16 @@ Exact offsets:
 
 Unknown values are protocol errors in v1 unless a future capability explicitly declares an extension range.
 
+### Directional file capability
+
+`file.v1` declares RDFT/1 file-protocol support and `sha256` declares the
+required digest. Neither token means that an endpoint can receive a transfer.
+`file.receive.v1` is directional: the endpoint sending that token has a
+composed `TRANSFER_OFFER` receiver and can execute the advertised receive
+policies. A sender MUST NOT send an offer unless its peer advertised
+`file.receive.v1`. A runtime without a composed receiver MUST NOT advertise the
+token and MUST reject an offer that arrives without that negotiated fact.
+
 ### Session liveness
 
 `HEARTBEAT` and `HEARTBEAT_ACK` share the deterministic CBOR map

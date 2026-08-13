@@ -63,6 +63,7 @@ private Q_SLOTS:
   void outgoingSingleFileStreamsThroughWorkerPump();
   void runtimeSourceUsesCanonicalSenderBoundary();
   void runtimeSourceDoesNotAdvertiseUnwiredReceiver();
+  void runtimeRejectsUnwiredReceiverCapability();
   void unknownControlOperationsPublishTypedResults();
   void invalidIdentityFailsWithoutPublishingAListener();
 };
@@ -185,6 +186,8 @@ void FileTransferRuntimeTests::trustedPeersNegotiateIndependentFileChannel()
   QVERIFY(negotiated.has_value());
   QVERIFY(negotiated->features.contains(QStringLiteral("file.v1")));
   QVERIFY(negotiated->features.contains(QStringLiteral("sha256")));
+  QVERIFY(!negotiated->localCanReceiveFiles);
+  QVERIFY(!negotiated->peerCanReceiveFiles);
 }
 
 void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()
@@ -243,9 +246,11 @@ void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()
     connect(connection, &FileTlsConnection::frameReceived, this, [&, connection](const Frame &frame) {
       QString encodeDiagnostic;
       if (frame.type == MessageType::Capabilities) {
+        auto receiverCapabilities = options.localCapabilities;
+        receiverCapabilities.features.append(QStringLiteral("file.receive.v1"));
         Frame response{
             .type = MessageType::Capabilities,
-            .metadata = CapabilityCodec::encode(options.localCapabilities, &encodeDiagnostic),
+            .metadata = CapabilityCodec::encode(receiverCapabilities, &encodeDiagnostic),
         };
         if (connection->sendFrame(response, &encodeDiagnostic) != FileTlsError::None) {
           errors.append(encodeDiagnostic);
@@ -417,6 +422,30 @@ void FileTransferRuntimeTests::runtimeSourceDoesNotAdvertiseUnwiredReceiver()
   QVERIFY(!contents.contains("FileEndpointAnnouncement{"));
   QVERIFY(!contents.contains("case MessageType::TransferOffer:"));
 #endif
+}
+
+void FileTransferRuntimeTests::runtimeRejectsUnwiredReceiverCapability()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto localId = DeviceId::generate();
+  TrustedDeviceStore trust(directory.filePath(QStringLiteral("trusted-devices.json")));
+  model::DeviceHomeModel deviceModel;
+  DeviceDiscoveryRuntime discovery(
+      localDevice(localId, QByteArray(32, '\x22'), QStringLiteral("Local")), deviceModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  options.localCapabilities.features.append(QStringLiteral("file.receive.v1"));
+  FileTransferRuntime runtime(localId, trust, discovery, identityPath, options);
+  QSignalSpy errors(&runtime, &FileTransferRuntime::errorOccurred);
+  QString diagnostic;
+  QVERIFY(!runtime.start(&diagnostic));
+  QVERIFY(diagnostic.contains(QStringLiteral("file.receive.v1")));
+  QCOMPARE(errors.count(), 1);
+  QCOMPARE(errors.first().at(0).value<FileTransferRuntimeError>(), FileTransferRuntimeError::CapabilityFailed);
+  QVERIFY(!runtime.isRunning());
 }
 
 void FileTransferRuntimeTests::unknownControlOperationsPublishTypedResults()
