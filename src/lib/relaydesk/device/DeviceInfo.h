@@ -10,6 +10,7 @@
 
 #include <QByteArray>
 #include <QByteArrayView>
+#include <QMetaType>
 #include <QString>
 #include <QtTypes>
 
@@ -55,3 +56,6 @@ public:
 };
 
 } // namespace deskflow::relaydesk
+
+Q_DECLARE_METATYPE(deskflow::relaydesk::DeviceCapabilities)
+Q_DECLARE_METATYPE(deskflow::relaydesk::DeviceInfo)

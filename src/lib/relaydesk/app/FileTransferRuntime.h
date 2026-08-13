@@ -33,16 +33,8 @@ struct FileTransferRuntimeOptions
   quint16 listenPort = 0;
   FileTlsSettings tlsSettings;
   ::relaydesk::transfer::CapabilitiesMessage localCapabilities{
-      .features = {
-          QStringLiteral("file.v1"), QStringLiteral("folder.v1"), QStringLiteral("resume.v1"),
-          QStringLiteral("sha256"),
-      },
-      .conflictPolicies = {
-          ::relaydesk::transfer::ConflictPolicy::AutoRename,
-          ::relaydesk::transfer::ConflictPolicy::Overwrite,
-          ::relaydesk::transfer::ConflictPolicy::Skip,
-          ::relaydesk::transfer::ConflictPolicy::Ask,
-      },
+      .features = {QStringLiteral("file.v1"), QStringLiteral("sha256")},
+      .conflictPolicies = {::relaydesk::transfer::ConflictPolicy::AutoRename},
   };
 };
 
@@ -89,10 +81,15 @@ public:
       const ::relaydesk::transfer::TransferId &transferId,
       const ::relaydesk::transfer::ReceiveOptions &options
   ) override;
-  void reject(const ::relaydesk::transfer::TransferId &transferId, int reasonCode) override;
+  void reject(
+      const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::RejectReason reason
+  ) override;
   void pause(const ::relaydesk::transfer::TransferId &transferId) override;
   void resume(const ::relaydesk::transfer::TransferId &transferId) override;
-  void cancel(const ::relaydesk::transfer::TransferId &transferId, bool keepPartial) override;
+  void cancel(
+      const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::TransferCancelReason reason,
+      bool keepPartial
+  ) override;
   void retry(const ::relaydesk::transfer::TransferId &transferId) override;
   [[nodiscard]] QList<::relaydesk::transfer::TransferSnapshot> activeTransfers() const override;
 

@@ -4,6 +4,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QMetaType>
 #include <QString>
 #include <QUuid>
 #include <QtGlobal>
@@ -65,6 +66,12 @@ enum class RejectReason : quint32
   UnsupportedCapability = 7,
   Busy = 8,
   InternalError = 9,
+};
+
+enum class TransferCancelReason : quint32
+{
+  UserRequested = 1,
+  ApplicationShutdown = 2,
 };
 
 enum class FileResultCode : quint32
@@ -166,3 +173,7 @@ struct Frame
 }
 
 } // namespace relaydesk::transfer
+
+Q_DECLARE_METATYPE(relaydesk::transfer::ConflictPolicy)
+Q_DECLARE_METATYPE(relaydesk::transfer::RejectReason)
+Q_DECLARE_METATYPE(relaydesk::transfer::TransferCancelReason)

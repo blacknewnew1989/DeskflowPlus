@@ -14,12 +14,6 @@
 
 namespace relaydesk::transfer {
 
-enum class TransferCancelReason : quint32
-{
-  UserRequested = 1,
-  ApplicationShutdown = 2,
-};
-
 struct TransferPauseMessage
 {
   TransferId transferId;

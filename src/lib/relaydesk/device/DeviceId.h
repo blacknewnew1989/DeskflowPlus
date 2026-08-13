@@ -8,6 +8,7 @@
 
 #include <QByteArray>
 #include <QByteArrayView>
+#include <QMetaType>
 #include <QString>
 #include <QUuid>
 
@@ -38,3 +39,5 @@ private:
 size_t qHash(const DeviceId &id, size_t seed = 0) noexcept;
 
 } // namespace deskflow::relaydesk
+
+Q_DECLARE_METATYPE(deskflow::relaydesk::DeviceId)

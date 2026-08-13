@@ -8,6 +8,7 @@
 
 #include <QDateTime>
 #include <QList>
+#include <QMetaType>
 #include <QString>
 #include <QtGlobal>
 
@@ -142,3 +143,7 @@ private:
 };
 
 } // namespace relaydesk::transfer
+
+Q_DECLARE_METATYPE(relaydesk::transfer::HistoryDirection)
+Q_DECLARE_METATYPE(relaydesk::transfer::HistoryStatus)
+Q_DECLARE_METATYPE(relaydesk::transfer::TransferHistoryRecord)
