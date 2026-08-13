@@ -21,9 +21,9 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last product implementation commit: `5941ebd85a0e07be7d0b10434e52ae9e15157d6d`
+- Last product implementation commit: `f79cc64dd974d2782fab252019b38a46ceefeaf5`
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
-- Current implementation: production MainWindow owns the file service/UI composition; incoming single/multi-file, folders, empty directories and restart-safe resume route through bounded workers, SHA-256 and real platform atomic commits. Capabilities and discovery endpoint are published only while the corresponding receiver/resume handlers are ready.
+- Current implementation: the v1 internal-release code path is composed: MainWindow owns transfer UI/service/history, incoming single/multi-file/folders, four conflict policies and interrupted resume use bounded workers and platform atomic commits, reconnect dials the selected authenticated TLS candidate, and Windows/macOS permission adapters feed the shared model.
 - Last verified stage tag: `relaydesk-phase2-20260813-04` (`d14a92335cc326f00c3bd12869585d48201d1bc0`)
 
 ## 自动执行状态
@@ -46,7 +46,8 @@
 | Protocol/interface freeze | PASS | tag `relaydesk-protocol-v1-20260813-01`, run `31672497950`; Windows 84/84, macOS 85/85; artifact IDs `9170492840` / `9170386546` |
 | Cross-platform file safety adapters | PASS | integration `e6f5fe519`; run `31678206041`: Windows 87/87, macOS 88/88, strict App seal and installer/lifecycle jobs PASS |
 | Incoming file runtime composition | PASS | `8f5a992f8`; run `31682728899`: Windows 87/87, macOS 88/88, strict App seal and macOS lifecycle PASS; artifacts `9174449354` / `9174307269` |
-| Multi-file/folder/resume production path | IN_PROGRESS | implementation `e742ba4a4`, `7d9bfcbf6`, `5941ebd85`; real 20 MiB TLS interruption/resume PASS; exact dual-platform run `31686813643` active |
+| Multi-file/folder/resume production path | PASS | `e742ba4a4`, `7d9bfcbf6`, `5941ebd85`; real two-file/folder and 20 MiB interruption/resume TLS loopbacks PASS |
+| Product GUI/reconnect/permission composition | PASS | `479a0f78f`, `b251933dd`, `cc923dacc`, `0341c9b86`, `f79cc64dd`; targeted composition/reconnect/firewall tests PASS |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -57,7 +58,7 @@
 | 0 仓库/基线 | PASS | A0/A1/A4/A5/A7 | tag `relaydesk-phase0-20260812-01`, run `31602699800` |
 | 1 产品基础 | PASS | A2/A3/A0 | tag `relaydesk-phase1-20260813-04`; run `31623677270`; local Release asset SHA verification PASS |
 | 2 文件传输 | PASS | A2/A6/A0 | tag `relaydesk-phase2-20260813-04`; run `31655013105`; Win 74/74, Mac 75/75; four assets triple-digest verified |
-| 3 可靠性/UI | IN_PROGRESS | A3/A6/A7 | MainWindow/history/multi-file/folder/resume composed; conflict four-policy and final reconnect/permission wiring active |
+| 3 可靠性/UI | PASS | A3/A6/A7 | MainWindow/history/multi-file/folder/resume/conflict/reconnect composed; physical Win↔Mac remains final acceptance |
 | 4 平台/发布 | IN_PROGRESS | A4/A5/A7 | Win/mac file-safety adapters and unsigned packages pass canonical Actions; final productized RC remains |
 | 5 增强 | NOT_STARTED | A3/A4/A5 | 按价值推进 |
 
