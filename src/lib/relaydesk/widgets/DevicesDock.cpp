@@ -745,9 +745,7 @@ void DevicesDock::requestPairing(const QModelIndex &index)
   const auto id = DeviceId::fromString(index.data(model::DeviceHomeModel::DeviceIdRole).toString());
   if (!id.has_value())
     return;
-  const auto peer = m_devices.snapshot(*id);
-  if (peer.has_value())
-    Q_EMIT pairingRequested(*peer);
+  Q_EMIT pairingRequested(*id);
 }
 
 void DevicesDock::updateIncomingOfferPanel()

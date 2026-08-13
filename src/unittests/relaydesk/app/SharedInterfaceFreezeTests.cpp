@@ -152,6 +152,8 @@ using TransferSnapshotSignal = void (IFileTransferService::*)(TransferSnapshot);
 using TransferRemovedSignal = void (IFileTransferService::*)(TransferId);
 using DiscoveryEndpointMethod = bool (DiscoveryService::*)(FileEndpointAnnouncement, QString *);
 using DiscoveryRuntimeEndpointMethod = bool (DeviceDiscoveryRuntime::*)(FileEndpointAnnouncement, QString *);
+using PairingIntent = void (widgets::DevicesDock::*)(DeviceId);
+using SnapshotPairingIntent = void (widgets::DevicesDock::*)(DeviceSnapshot);
 using SendItemsIntent = void (widgets::DevicesDock::*)(DeviceId, QList<QUrl>, SendOptions);
 using AcceptIntent = void (model::IncomingOfferModel::*)(TransferId, ReceiveOptions);
 using RejectIntent = void (model::IncomingOfferModel::*)(TransferId, RejectReason);
@@ -180,6 +182,8 @@ static_assert(std::is_same_v<decltype(&DiscoveryService::setFileEndpoint), Disco
 static_assert(
     std::is_same_v<decltype(&DeviceDiscoveryRuntime::setFileEndpoint), DiscoveryRuntimeEndpointMethod>
 );
+static_assert(std::is_same_v<decltype(&widgets::DevicesDock::pairingRequested), PairingIntent>);
+static_assert(!std::is_same_v<decltype(&widgets::DevicesDock::pairingRequested), SnapshotPairingIntent>);
 static_assert(std::is_same_v<decltype(&widgets::DevicesDock::sendItemsRequested), SendItemsIntent>);
 static_assert(std::is_same_v<decltype(&model::IncomingOfferModel::acceptRequested), AcceptIntent>);
 static_assert(std::is_same_v<decltype(&model::IncomingOfferModel::rejectRequested), RejectIntent>);
@@ -402,6 +406,7 @@ void SharedInterfaceFreezeTests::publicUiHeadersContainOnlyTypedBusinessIntents(
       QRegularExpression(QStringLiteral("\\bFrame\\b")),
       QRegularExpression(QStringLiteral("\\bTransferAccept\\b")),
       QRegularExpression(QStringLiteral("\\bTransferReject\\b")),
+      QRegularExpression(QStringLiteral("pairingRequested\\s*\\([^;]*\\bDeviceSnapshot\\b")),
   };
 
   for (const auto &relativePath : headers) {
