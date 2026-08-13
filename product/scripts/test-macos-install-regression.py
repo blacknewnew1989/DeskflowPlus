@@ -55,6 +55,13 @@ class BundleInfo:
     core_executable: Path
 
 
+@dataclass(frozen=True)
+class UserDataSentinel:
+    path: Path
+    marker: bytes
+    original_sha256: str | None
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -331,22 +338,50 @@ def assert_same_bundle(left: BundleInfo, right: BundleInfo) -> None:
         raise RegressionError("TEST005_CORE_PAYLOAD_MISMATCH")
 
 
-def create_user_data_sentinels(home: Path) -> dict[Path, str]:
-    payloads = {
-        home / "Library" / "RelayDesk" / "config" / "RelayDesk.conf": b"test005-config\n",
-        home / "Library" / "RelayDesk" / "trust" / "trusted-devices.json": b"{\"test005\":true}\n",
-        home / "Downloads" / "RelayDesk" / "history" / "completed.json": b"{\"kept\":true}\n",
-    }
-    for path, payload in payloads.items():
+def create_user_data_sentinels(home: Path) -> tuple[UserDataSentinel, ...]:
+    # Match the paths used by Settings::UserSettingFile and MainWindow's
+    # PairingTrustRuntime on macOS. Keeping XDG_CONFIG_HOME out of the smoke
+    # environment below is required for these defaults to be exercised.
+    payloads = (
+        (
+            home / "Library" / "RelayDesk" / "RelayDesk.conf",
+            b"[relaydesk]\ntest005Sentinel=test005-config\n",
+            b"test005-config",
+            False,
+        ),
+        (
+            home / "Library" / "RelayDesk" / "relaydesk" / "trusted-devices.json",
+            b'{"schemaVersion":1,"devices":[],"test005":true}\n',
+            b'"test005":true',
+            True,
+        ),
+        (
+            home / "Downloads" / "RelayDesk" / "history" / "completed.json",
+            b'{"kept":true}\n',
+            b'"kept":true',
+            True,
+        ),
+    )
+    sentinels = []
+    for path, payload, marker, require_exact_bytes in payloads:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(payload)
-    return {path: sha256(path) for path in payloads}
+        sentinels.append(
+            UserDataSentinel(
+                path=path,
+                marker=marker,
+                original_sha256=sha256(path) if require_exact_bytes else None,
+            )
+        )
+    return tuple(sentinels)
 
 
-def assert_user_data_preserved(sentinels: dict[Path, str]) -> None:
-    for path, expected_digest in sentinels.items():
-        if not path.is_file() or sha256(path) != expected_digest:
-            raise RegressionError(f"TEST005_USER_DATA_NOT_PRESERVED: {path.name}")
+def assert_user_data_preserved(sentinels: tuple[UserDataSentinel, ...]) -> None:
+    for sentinel in sentinels:
+        if not sentinel.path.is_file() or sentinel.marker not in sentinel.path.read_bytes():
+            raise RegressionError(f"TEST005_USER_DATA_NOT_PRESERVED: {sentinel.path.name}")
+        if sentinel.original_sha256 is not None and sha256(sentinel.path) != sentinel.original_sha256:
+            raise RegressionError(f"TEST005_USER_DATA_CHANGED: {sentinel.path.name}")
 
 
 def copy_app(source: Path, destination: Path, log: IO[str]) -> None:
@@ -449,11 +484,13 @@ def run_regression(args: argparse.Namespace) -> int:
             for directory in (isolated_home, applications, extraction, mount_point, temporary):
                 directory.mkdir(parents=True, exist_ok=True)
             smoke_environment = os.environ.copy()
+            smoke_environment.pop("XDG_CONFIG_HOME", None)
             smoke_environment.update(
                 {
                     "HOME": str(isolated_home),
+                    "CFFIXED_USER_HOME": str(isolated_home),
                     "TMPDIR": str(temporary),
-                    "XDG_CONFIG_HOME": str(isolated_home / ".config"),
+                    "XDG_STATE_HOME": str(isolated_home / ".local" / "state"),
                     "XDG_DATA_HOME": str(isolated_home / ".local" / "share"),
                     "XDG_CACHE_HOME": str(isolated_home / ".cache"),
                 }

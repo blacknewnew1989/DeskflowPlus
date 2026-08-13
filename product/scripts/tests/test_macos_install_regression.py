@@ -102,6 +102,32 @@ class MacosInstallRegressionTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.RegressionError, "UNSAFE_TEST_ROOT"):
                 MODULE.validate_test_root(outside, runner_temp)
 
+    def test_user_data_sentinels_match_runtime_macos_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            home.mkdir()
+
+            sentinels = MODULE.create_user_data_sentinels(home)
+
+            self.assertEqual(
+                {sentinel.path.relative_to(home).as_posix() for sentinel in sentinels},
+                {
+                    "Library/RelayDesk/RelayDesk.conf",
+                    "Library/RelayDesk/relaydesk/trusted-devices.json",
+                    "Downloads/RelayDesk/history/completed.json",
+                },
+            )
+            config = next(sentinel for sentinel in sentinels if sentinel.path.name == "RelayDesk.conf")
+            self.assertIsNone(config.original_sha256)
+            self.assertTrue(
+                all(
+                    sentinel.original_sha256 is not None
+                    for sentinel in sentinels
+                    if sentinel is not config
+                )
+            )
+            MODULE.assert_user_data_preserved(sentinels)
+
     def test_script_keeps_required_real_macos_lifecycle_commands(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         for required in (
@@ -113,6 +139,9 @@ class MacosInstallRegressionTests(unittest.TestCase):
             '"/usr/bin/codesign", "--verify", "--deep", "--strict", "--verbose=4"',
             '"/usr/bin/ditto", "-x", "-k"',
             '"--version"',
+            'smoke_environment.pop("XDG_CONFIG_HOME", None)',
+            '"CFFIXED_USER_HOME": str(isolated_home)',
+            '"XDG_STATE_HOME": str(isolated_home / ".local" / "state")',
             '"accessibility": {"status": "NOT_RUN"',
             '"inputMonitoring": {"status": "NOT_RUN"',
             '"localNetwork": {"status": "NOT_RUN"',
