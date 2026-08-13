@@ -108,8 +108,19 @@ FileSafetyError rootOpenError(int nativeError)
   }
 }
 
+bool containsEmbeddedNull(const QString &path)
+{
+  return path.contains(QChar::Null);
+}
+
 std::pair<RootHandle, FileSafetyResult> openRoot(const QString &path)
 {
+  if (containsEmbeddedNull(path)) {
+    return {
+        RootHandle{},
+        failure(FileSafetyError::InvalidRequest, QStringLiteral("receive root contains an embedded NUL")),
+    };
+  }
   const QString cleanPath = QDir::cleanPath(path);
   const QByteArray encodedPath = QFile::encodeName(cleanPath);
   struct stat entry{};
@@ -140,6 +151,12 @@ std::pair<RootHandle, FileSafetyResult> openRoot(const QString &path)
 
 std::pair<RelativePath, FileSafetyResult> relativePath(const QString &root, const QString &candidate)
 {
+  if (containsEmbeddedNull(root) || containsEmbeddedNull(candidate)) {
+    return {
+        RelativePath{},
+        failure(FileSafetyError::DestinationInvalid, QStringLiteral("candidate path contains an embedded NUL")),
+    };
+  }
   const QString relative = QDir(root).relativeFilePath(QDir::cleanPath(candidate));
   if (QDir::isAbsolutePath(relative) || relative == QStringLiteral("..") ||
       relative.startsWith(QStringLiteral("../"))) {

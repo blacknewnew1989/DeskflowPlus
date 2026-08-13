@@ -60,6 +60,7 @@ private Q_SLOTS:
   void rejectsInvalidRequestsAndUnavailableRoots();
   void validatesRealReceiveRootWithoutFollowingFinalSymlink();
   void detectsSymlinkTraversalAndLexicalEscape();
+  void rejectsEmbeddedNullWithoutTruncatingFilesystemPaths();
   void commitsWithoutReplacingAnExistingDestination();
   void atomicallyReplacesARegularDestination();
   void rejectsSymlinkedStagingAndDestinationPaths();
@@ -120,6 +121,44 @@ void MacFileSafetyTests::detectsSymlinkTraversalAndLexicalEscape()
       safety.verifyNoLinkTraversal({.receiveRoot = root.path(), .candidatePath = outside.path()}).error,
       FileSafetyError::DestinationInvalid
   );
+}
+
+void MacFileSafetyTests::rejectsEmbeddedNullWithoutTruncatingFilesystemPaths()
+{
+  MacFileSafety safety;
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+
+  const QString nulSuffix = QString(QChar::Null) + QStringLiteral("ignored");
+  QCOMPARE(safety.verifyReceiveRoot({.receiveRoot = root.path() + nulSuffix}).error, FileSafetyError::InvalidRequest);
+
+  const QString safeDirectory = QDir(root.path()).absoluteFilePath(QStringLiteral("safe"));
+  createDirectory(safeDirectory);
+  const QString truncatedCandidate = QDir(safeDirectory).absoluteFilePath(QStringLiteral("candidate"));
+  QCOMPARE(
+      safety.verifyNoLinkTraversal({.receiveRoot = root.path(), .candidatePath = truncatedCandidate + nulSuffix}).error,
+      FileSafetyError::DestinationInvalid
+  );
+
+  const QString stagingDirectory = QDir(root.path()).absoluteFilePath(QStringLiteral(".incoming"));
+  createDirectory(stagingDirectory);
+  const QString staging = QDir(stagingDirectory).absoluteFilePath(QStringLiteral("file.part"));
+  const QString destination = QDir(safeDirectory).absoluteFilePath(QStringLiteral("file.txt"));
+  writeFile(staging, QByteArrayLiteral("staged"));
+
+  QCOMPARE(
+      safety.commitStagedFile(commitRequest(root.path(), staging + nulSuffix, destination)).error,
+      FileSafetyError::DestinationInvalid
+  );
+  QVERIFY(QFile::exists(staging));
+  QVERIFY(!QFile::exists(destination));
+
+  QCOMPARE(
+      safety.commitStagedFile(commitRequest(root.path(), staging, destination + nulSuffix)).error,
+      FileSafetyError::DestinationInvalid
+  );
+  QVERIFY(QFile::exists(staging));
+  QVERIFY(!QFile::exists(destination));
 }
 
 void MacFileSafetyTests::commitsWithoutReplacingAnExistingDestination()
