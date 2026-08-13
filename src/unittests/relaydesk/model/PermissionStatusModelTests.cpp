@@ -24,7 +24,7 @@ PermissionProbeEntry permission(
   return {
       .kind = kind,
       .state = state,
-      .errorCode = static_cast<int>(error),
+      .errorCode = error,
       .canOpenSettings = canOpenSettings,
       .diagnostic = std::move(diagnostic),
   };
@@ -174,7 +174,7 @@ void PermissionStatusModelTests::mapsCodesWithoutExposingDiagnostic()
           {
               .kind = PermissionKind::MacLocalNetwork,
               .state = PermissionState::Denied,
-              .errorCode = 999999,
+              .errorCode = static_cast<PermissionErrorCode>(999999),
               .canOpenSettings = true,
               .diagnostic = QStringLiteral("raw socket failure from peer"),
           },

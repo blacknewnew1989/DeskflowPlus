@@ -48,7 +48,7 @@ void MacPermissionProbe::refresh()
   m_backend->refreshLocalNetwork();
 }
 
-bool MacPermissionProbe::openSystemSettings(PermissionKind kind)
+PermissionOpenResult MacPermissionProbe::openSystemSettings(PermissionKind kind)
 {
   switch (kind) {
   case PermissionKind::MacLocalNetwork:
@@ -57,9 +57,15 @@ bool MacPermissionProbe::openSystemSettings(PermissionKind kind)
     return m_backend->openSystemSettings(kind);
   case PermissionKind::WindowsFirewall:
   case PermissionKind::WindowsListeningPort:
-    return false;
+    return {
+        .error = PermissionOpenError::Unsupported,
+        .diagnostic = QStringLiteral("permission kind is not supported by the macOS adapter"),
+    };
   }
-  return false;
+  return {
+      .error = PermissionOpenError::Unsupported,
+      .diagnostic = QStringLiteral("permission kind is not supported by the macOS adapter"),
+  };
 }
 
 void MacPermissionProbe::updateLocalNetwork(PermissionProbeEntry entry)
@@ -77,4 +83,3 @@ QDateTime MacPermissionProbe::nowUtc() const
 }
 
 } // namespace deskflow::relaydesk
-

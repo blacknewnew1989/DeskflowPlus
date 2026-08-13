@@ -65,7 +65,7 @@ QVariant PermissionStatusModel::data(const QModelIndex &index, int role) const
   case MessageTextRole:
     return messageText(entry);
   case ErrorCodeRole:
-    return entry.errorCode;
+    return static_cast<int>(entry.errorCode);
   case NeedsAttentionRole:
     return needsAttention(entry.state);
   case CanOpenSettingsRole:
@@ -236,12 +236,11 @@ QString PermissionStatusModel::messageText(const PermissionProbeEntry &entry)
 {
   if (entry.state == PermissionState::Granted || entry.state == PermissionState::NotRequired)
     return {};
-  if (entry.errorCode == static_cast<int>(PermissionErrorCode::ProbeUnavailable))
+  if (entry.errorCode == PermissionErrorCode::ProbeUnavailable)
     return i18n::translate(Text::PermissionsMessageProbeUnavailable);
   if (entry.state == PermissionState::Unknown)
     return i18n::translate(Text::PermissionsMessageUnknown);
-  if (entry.errorCode != static_cast<int>(PermissionErrorCode::None) &&
-      entry.errorCode != expectedErrorCode(entry.kind)) {
+  if (entry.errorCode != PermissionErrorCode::None && entry.errorCode != expectedErrorCode(entry.kind)) {
     return i18n::translate(Text::PermissionsMessageReview);
   }
 
@@ -260,21 +259,21 @@ QString PermissionStatusModel::messageText(const PermissionProbeEntry &entry)
   return i18n::translate(Text::PermissionsMessageReview);
 }
 
-int PermissionStatusModel::expectedErrorCode(PermissionKind kind)
+PermissionErrorCode PermissionStatusModel::expectedErrorCode(PermissionKind kind)
 {
   switch (kind) {
   case PermissionKind::WindowsFirewall:
-    return static_cast<int>(PermissionErrorCode::WindowsFirewallBlocked);
+    return PermissionErrorCode::WindowsFirewallBlocked;
   case PermissionKind::WindowsListeningPort:
-    return static_cast<int>(PermissionErrorCode::WindowsPortUnavailable);
+    return PermissionErrorCode::WindowsPortUnavailable;
   case PermissionKind::MacLocalNetwork:
-    return static_cast<int>(PermissionErrorCode::MacLocalNetworkDenied);
+    return PermissionErrorCode::MacLocalNetworkDenied;
   case PermissionKind::MacAccessibility:
-    return static_cast<int>(PermissionErrorCode::MacAccessibilityDenied);
+    return PermissionErrorCode::MacAccessibilityDenied;
   case PermissionKind::MacInputMonitoring:
-    return static_cast<int>(PermissionErrorCode::MacInputMonitoringDenied);
+    return PermissionErrorCode::MacInputMonitoringDenied;
   }
-  return static_cast<int>(PermissionErrorCode::None);
+  return PermissionErrorCode::None;
 }
 
 int PermissionStatusModel::primaryAttentionRow() const

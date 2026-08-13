@@ -30,7 +30,7 @@ PermissionProbeEntry permissionEntry(
   return {
       .kind = kind,
       .state = granted ? PermissionState::Granted : PermissionState::Denied,
-      .errorCode = static_cast<int>(granted ? PermissionErrorCode::None : deniedCode),
+      .errorCode = granted ? PermissionErrorCode::None : deniedCode,
       .canOpenSettings = !granted,
       .diagnostic = granted ? QString() : deniedDiagnostic,
   };
@@ -118,11 +118,15 @@ public:
     nw_browser_start(m_browser);
   }
 
-  [[nodiscard]] bool openSystemSettings(PermissionKind kind) override
+  [[nodiscard]] PermissionOpenResult openSystemSettings(PermissionKind kind) override
   {
     const auto *urlText = settingsUrl(kind);
-    if (urlText == nullptr)
-      return false;
+    if (urlText == nullptr) {
+      return {
+          .error = PermissionOpenError::Unsupported,
+          .diagnostic = QStringLiteral("permission kind is not supported by the macOS backend"),
+      };
+    }
 
     // Prompting is limited to this explicit user action. Status probes above
     // never display system UI.
@@ -138,7 +142,13 @@ public:
     }
 
     auto url = [NSURL URLWithString:[NSString stringWithUTF8String:urlText]];
-    return url != nil && [[NSWorkspace sharedWorkspace] openURL:url];
+    if (url == nil || ![[NSWorkspace sharedWorkspace] openURL:url]) {
+      return {
+          .error = PermissionOpenError::OpenFailed,
+          .diagnostic = QStringLiteral("macOS system settings could not be opened"),
+      };
+    }
+    return {};
   }
 
 private:

@@ -44,12 +44,12 @@ PermissionProbeEntry firewallEntry(const WindowsFirewallInspection &inspection)
     break;
   case WindowsFirewallRuleStatus::Blocked:
     entry.state = PermissionState::Denied;
-    entry.errorCode = static_cast<int>(PermissionErrorCode::WindowsFirewallBlocked);
+    entry.errorCode = PermissionErrorCode::WindowsFirewallBlocked;
     entry.canOpenSettings = true;
     break;
   case WindowsFirewallRuleStatus::MissingAllowRule:
     entry.state = PermissionState::NeedsAction;
-    entry.errorCode = static_cast<int>(PermissionErrorCode::WindowsFirewallBlocked);
+    entry.errorCode = PermissionErrorCode::WindowsFirewallBlocked;
     entry.canOpenSettings = true;
     break;
   case WindowsFirewallRuleStatus::NotRequired:
@@ -57,7 +57,7 @@ PermissionProbeEntry firewallEntry(const WindowsFirewallInspection &inspection)
     break;
   case WindowsFirewallRuleStatus::Unavailable:
     entry.state = PermissionState::Unknown;
-    entry.errorCode = static_cast<int>(PermissionErrorCode::ProbeUnavailable);
+    entry.errorCode = PermissionErrorCode::ProbeUnavailable;
 #if defined(Q_OS_WIN)
     entry.canOpenSettings = true;
 #endif
@@ -78,14 +78,14 @@ PermissionProbeEntry listeningPortEntry(const WindowsFirewallInspection &inspect
     break;
   case WindowsListeningPortStatus::NotListening:
     entry.state = PermissionState::NeedsAction;
-    entry.errorCode = static_cast<int>(PermissionErrorCode::WindowsPortUnavailable);
+    entry.errorCode = PermissionErrorCode::WindowsPortUnavailable;
     break;
   case WindowsListeningPortStatus::NotRequired:
     entry.state = PermissionState::NotRequired;
     break;
   case WindowsListeningPortStatus::Unavailable:
     entry.state = PermissionState::Unknown;
-    entry.errorCode = static_cast<int>(PermissionErrorCode::ProbeUnavailable);
+    entry.errorCode = PermissionErrorCode::ProbeUnavailable;
     break;
   }
   return entry;
@@ -459,20 +459,23 @@ WindowsFirewallProbe::WindowsFirewallProbe(
     m_clock = []() { return QDateTime::currentDateTimeUtc(); };
   }
   if (!m_settingsOpener) {
-    m_settingsOpener = [](QString *diagnostic) {
+    m_settingsOpener = []() -> PermissionOpenResult {
 #if defined(Q_OS_WIN)
       const bool started = QProcess::startDetached(
           QStringLiteral("control.exe"), {QStringLiteral("/name"), QStringLiteral("Microsoft.WindowsFirewall")}
       );
-      if (!started && diagnostic != nullptr) {
-        *diagnostic = QStringLiteral("Windows Firewall settings could not be opened");
+      if (!started) {
+        return {
+            .error = PermissionOpenError::OpenFailed,
+            .diagnostic = QStringLiteral("Windows Firewall settings could not be opened"),
+        };
       }
-      return started;
+      return {};
 #else
-      if (diagnostic != nullptr) {
-        *diagnostic = QStringLiteral("Windows Firewall settings are unavailable on this platform");
-      }
-      return false;
+      return {
+          .error = PermissionOpenError::Unsupported,
+          .diagnostic = QStringLiteral("Windows Firewall settings are unavailable on this platform"),
+      };
 #endif
     };
   }
@@ -518,19 +521,35 @@ bool WindowsFirewallProbe::isRefreshing() const noexcept
   return m_refreshing;
 }
 
-bool WindowsFirewallProbe::openSystemSettings(PermissionKind kind)
+PermissionOpenResult WindowsFirewallProbe::openSystemSettings(PermissionKind kind)
 {
-  if (kind != PermissionKind::WindowsFirewall) {
-    const auto diagnostic = QStringLiteral("this diagnostic has no Windows settings page");
-    Q_EMIT settingsOpenFailed(kind, diagnostic);
-    return false;
+  PermissionOpenResult result{
+      .error = PermissionOpenError::Unsupported,
+      .diagnostic = QStringLiteral("permission kind is not supported by the Windows adapter"),
+  };
+  switch (kind) {
+  case PermissionKind::WindowsFirewall:
+    result = m_settingsOpener();
+    break;
+  case PermissionKind::WindowsListeningPort:
+    result = {
+        .error = PermissionOpenError::NotActionable,
+        .diagnostic = QStringLiteral("the listening-port diagnostic has no Windows settings page"),
+    };
+    break;
+  case PermissionKind::MacLocalNetwork:
+  case PermissionKind::MacAccessibility:
+  case PermissionKind::MacInputMonitoring:
+    result = {
+        .error = PermissionOpenError::Unsupported,
+        .diagnostic = QStringLiteral("permission kind is not supported by the Windows adapter"),
+    };
+    break;
   }
-  QString diagnostic;
-  if (!m_settingsOpener(&diagnostic)) {
-    Q_EMIT settingsOpenFailed(kind, diagnostic);
-    return false;
+  if (!result.ok()) {
+    Q_EMIT settingsOpenFailed(kind, result);
   }
-  return true;
+  return result;
 }
 
 WindowsFirewallInspection WindowsFirewallProbe::inspectCurrentSystem(WindowsFirewallProbeRequest request)
