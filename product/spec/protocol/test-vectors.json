@@ -3,6 +3,7 @@
   "fixedHeaderBytes": 32,
   "vectors": [
     {
+      "kind": "frame-positive",
       "name": "heartbeat-sequence-7",
       "headerHex": "5244465400010004000000010000000d00000000000000000000000000000000",
       "metadataHex": "a20107021b00000192cc091400",
@@ -13,12 +14,11 @@
         "flags": 1,
         "metadataLength": 13,
         "payloadLength": 0,
-        "streamId": 0,
-        "sequence": 7,
-        "timestampMs": 1730000000000
+        "streamId": 0
       }
     },
     {
+      "kind": "frame-positive",
       "name": "heartbeat-ack-sequence-7",
       "headerHex": "5244465400010005000000020000000d00000000000000000000000000000000",
       "metadataHex": "a20107021b00000192cc091400",
@@ -29,18 +29,18 @@
         "flags": 2,
         "metadataLength": 13,
         "payloadLength": 0,
-        "streamId": 0,
-        "sequence": 7,
-        "timestampMs": 1730000000000
+        "streamId": 0
       }
     },
     {
+      "kind": "metadata-negative",
       "name": "heartbeat-zero-timestamp",
       "metadataHex": "a201070200",
       "messageType": 4,
       "expectedCodecError": "InvalidTimestamp"
     },
     {
+      "kind": "frame-positive",
       "name": "file-chunk-three-bytes-no-metadata",
       "headerHex": "524446540001020100000001000000000000000000000003000000000000002a",
       "metadataHex": "",
@@ -51,26 +51,29 @@
         "flags": 1,
         "metadataLength": 0,
         "payloadLength": 3,
-        "streamId": 42,
-        "payloadUtf8": "ABC"
+        "streamId": 42
       }
     },
     {
+      "kind": "frame-negative",
       "name": "invalid-magic",
       "headerHex": "0000000000010004000000000000000000000000000000000000000000000000",
       "expectedError": "InvalidMagic"
     },
     {
+      "kind": "frame-negative",
       "name": "unsupported-version",
       "headerHex": "5244465400020004000000000000000000000000000000000000000000000000",
       "expectedError": "UnsupportedVersion"
     },
     {
+      "kind": "frame-negative",
       "name": "metadata-too-large-default",
       "headerHex": "5244465400010004000000000010000100000000000000000000000000000000",
       "expectedError": "MetadataTooLarge"
     },
     {
+      "kind": "frame-negative",
       "name": "payload-too-large-default",
       "headerHex": "5244465400010201000000000000000000000000004000010000000000000001",
       "expectedError": "PayloadTooLarge"

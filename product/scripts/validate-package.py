@@ -82,29 +82,82 @@ for path in sorted(ROOT.rglob("*.json")):
     except Exception as exc:  # noqa: BLE001 - report malformed delivery data
         errors.append(f"invalid JSON {relative(path)}: {exc}")
 
-# Decode protocol test vectors and compare every fixed-header field.
+# Decode protocol test vectors against the explicit v1 vector schemas.
 try:
     vectors = json.loads(
         (ROOT / "spec/protocol/test-vectors.json").read_text(encoding="utf-8")
     )
+    if vectors.get("schemaVersion") != 1:
+        errors.append("protocol vector schemaVersion must be 1")
     if vectors.get("fixedHeaderBytes") != 32:
         errors.append("protocol fixedHeaderBytes must be 32")
 
+    header_fields = {
+        "version",
+        "messageType",
+        "flags",
+        "metadataLength",
+        "payloadLength",
+        "streamId",
+    }
+    error_name = re.compile(r"^[A-Z][A-Za-z0-9]*$")
+    vector_names: set[str] = set()
+
     for vector in vectors["vectors"]:
-        name = vector["name"]
-        header = bytes.fromhex(vector["headerHex"])
-        if len(header) != 32:
-            errors.append(f"protocol vector {name} header is {len(header)} bytes")
+        name = vector.get("name")
+        if not isinstance(name, str) or not name:
+            errors.append("protocol vector has an empty or non-string name")
             continue
+        if name in vector_names:
+            errors.append(f"duplicate protocol vector name: {name}")
+        vector_names.add(name)
 
-        magic, version, message_type, flags, meta_len, payload_len, stream_id = (
-            struct.unpack(">4sHHIIQQ", header)
-        )
-        if name != "invalid-magic" and magic != b"RDFT":
-            errors.append(f"protocol vector {name} has bad magic")
+        kind = vector.get("kind")
+        if kind == "frame-positive":
+            allowed = {
+                "kind",
+                "name",
+                "headerHex",
+                "metadataHex",
+                "payloadHex",
+                "expected",
+            }
+            unknown = set(vector) - allowed
+            if unknown:
+                errors.append(
+                    f"protocol vector {name} has unknown fields: {sorted(unknown)}"
+                )
+                continue
+            header = bytes.fromhex(vector["headerHex"])
+            metadata = bytes.fromhex(vector["metadataHex"])
+            payload = bytes.fromhex(vector["payloadHex"])
+            if len(header) != 32:
+                errors.append(f"protocol vector {name} header is {len(header)} bytes")
+                continue
+            magic, version, message_type, flags, meta_len, payload_len, stream_id = (
+                struct.unpack(">4sHHIIQQ", header)
+            )
+            if magic != b"RDFT":
+                errors.append(f"protocol vector {name} has bad magic")
+            if len(metadata) != meta_len:
+                errors.append(
+                    f"protocol vector {name} metadata length: "
+                    f"header says {meta_len}, hex has {len(metadata)}"
+                )
+            if len(payload) != payload_len:
+                errors.append(
+                    f"protocol vector {name} payload length: "
+                    f"header says {payload_len}, hex has {len(payload)}"
+                )
 
-        expected = vector.get("expected")
-        if expected:
+            expected = vector.get("expected")
+            if not isinstance(expected, dict) or set(expected) != header_fields:
+                actual_fields = set(expected) if isinstance(expected, dict) else set()
+                errors.append(
+                    f"protocol vector {name} expected fields: "
+                    f"required {sorted(header_fields)}, got {sorted(actual_fields)}"
+                )
+                continue
             actual = {
                 "version": version,
                 "messageType": message_type,
@@ -114,16 +167,59 @@ try:
                 "streamId": stream_id,
             }
             for key, expected_value in expected.items():
-                if key == "payloadUtf8":
-                    payload = bytes.fromhex(vector.get("payloadHex", ""))
-                    actual_value = payload.decode("utf-8")
-                else:
-                    actual_value = actual[key]
+                actual_value = actual[key]
                 if actual_value != expected_value:
                     errors.append(
                         f"protocol vector {name} {key}: "
                         f"expected {expected_value!r}, got {actual_value!r}"
                     )
+        elif kind == "frame-negative":
+            allowed = {"kind", "name", "headerHex", "expectedError"}
+            unknown = set(vector) - allowed
+            if unknown:
+                errors.append(
+                    f"protocol vector {name} has unknown fields: {sorted(unknown)}"
+                )
+                continue
+            header = bytes.fromhex(vector["headerHex"])
+            if len(header) != 32:
+                errors.append(f"protocol vector {name} header is {len(header)} bytes")
+            expected_error = vector.get("expectedError")
+            if not isinstance(expected_error, str) or not error_name.fullmatch(
+                expected_error
+            ):
+                errors.append(
+                    f"protocol vector {name} expectedError is not a stable error name"
+                )
+        elif kind == "metadata-negative":
+            allowed = {
+                "kind",
+                "name",
+                "messageType",
+                "metadataHex",
+                "expectedCodecError",
+            }
+            unknown = set(vector) - allowed
+            if unknown:
+                errors.append(
+                    f"protocol vector {name} has unknown fields: {sorted(unknown)}"
+                )
+                continue
+            message_type = vector.get("messageType")
+            if not isinstance(message_type, int) or not 0 < message_type <= 0xFFFF:
+                errors.append(f"protocol vector {name} messageType is invalid")
+            metadata = bytes.fromhex(vector["metadataHex"])
+            if not metadata or len(metadata) > 1024 * 1024:
+                errors.append(f"protocol vector {name} metadata size is invalid")
+            expected_error = vector.get("expectedCodecError")
+            if not isinstance(expected_error, str) or not error_name.fullmatch(
+                expected_error
+            ):
+                errors.append(
+                    f"protocol vector {name} expectedCodecError is not a stable error name"
+                )
+        else:
+            errors.append(f"protocol vector {name} has unknown kind: {kind!r}")
 except Exception as exc:  # noqa: BLE001
     errors.append(f"unable to inspect protocol vectors: {exc}")
 
