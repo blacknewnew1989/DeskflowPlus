@@ -2,6 +2,11 @@
 # SPDX-License-Identifier: MIT
 set_directory_properties(PROPERTIES CLEAN_NO_CUSTOM 1)
 option(CLEAN_TRS "Clean obsolete translations from tr files" OFF)
+option(
+  RELAYDESK_UPDATE_TRANSLATION_SOURCES
+  "Update tracked .ts catalogs from source while building translations"
+  ON
+)
 find_package(Qt6 ${REQUIRED_QT_VERSION} REQUIRED NO_MODULE COMPONENTS LinguistTools)
 
 # To add a new language Add 639 shortname
@@ -19,24 +24,31 @@ if(CLEAN_TRS)
   list(APPEND TR_OPTIONS -no-obsolete)
 endif()
 
-# English will have only plurals
-qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${CMAKE_PROJECT_NAME}_en.ts OPTIONS -pluralonly ${TR_OPTIONS})
-
-# Other languages contain the full set of strings.
-qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${${CMAKE_PROJECT_NAME}_TRS} OPTIONS ${TR_OPTIONS})
-
 # RelayDesk UI uses semantic keys, so keep its source-language catalog complete
 # instead of applying Deskflow's plurals-only English catalog rule.
 set(RELAYDESK_TS
   ${RELAYDESK_TRANSLATION_CATALOG}_en.ts
   ${RELAYDESK_TRANSLATION_CATALOG}_zh_CN.ts
 )
-qt_create_translation(
-  RELAYDESK_TRS
-  ${CMAKE_SOURCE_DIR}/src/lib/relaydesk/i18n
-  ${RELAYDESK_TS}
-  OPTIONS ${TR_OPTIONS}
-)
+
+if(RELAYDESK_UPDATE_TRANSLATION_SOURCES)
+  # English will have only plurals when explicitly refreshing the source catalogs.
+  qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${CMAKE_PROJECT_NAME}_en.ts OPTIONS -pluralonly ${TR_OPTIONS})
+
+  # Other languages contain the full set of strings.
+  qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${${CMAKE_PROJECT_NAME}_TRS} OPTIONS ${TR_OPTIONS})
+  qt_create_translation(
+    RELAYDESK_TRS
+    ${CMAKE_SOURCE_DIR}/src/lib/relaydesk/i18n
+    ${RELAYDESK_TS}
+    OPTIONS ${TR_OPTIONS}
+  )
+else()
+  # Release and package builds compile the reviewed catalogs without rewriting
+  # tracked source files. Catalog extraction remains an explicit maintainer task.
+  qt_add_translation(TRS ${CMAKE_PROJECT_NAME}_en.ts ${${CMAKE_PROJECT_NAME}_TRS})
+  qt_add_translation(RELAYDESK_TRS ${RELAYDESK_TS})
+endif()
 
 #ensure that the targets are built always
 add_custom_target(app_translations ALL DEPENDS ${TRS} ${RELAYDESK_TRS})

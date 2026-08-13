@@ -133,6 +133,16 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn('"-DCMAKE_OSX_SYSROOT=$MACOS_SDK"', script)
         self.assertIn('[[ -n "$MACOS_SDK" && -d "$MACOS_SDK" ]]', script)
 
+    def test_local_build_compiles_catalogs_without_rewriting_sources(self) -> None:
+        script = (ROOT / "product/scripts/build-macos.sh").read_text(encoding="utf-8")
+        translations = (ROOT / "translations/CMakeLists.txt").read_text(encoding="utf-8")
+
+        self.assertIn("-DRELAYDESK_UPDATE_TRANSLATION_SOURCES=OFF", script)
+        self.assertIn("if(RELAYDESK_UPDATE_TRANSLATION_SOURCES)", translations)
+        self.assertIn("qt_create_translation(", translations)
+        self.assertIn("qt_add_translation(TRS", translations)
+        self.assertIn("qt_add_translation(RELAYDESK_TRS", translations)
+
 
 if __name__ == "__main__":
     unittest.main()
