@@ -69,6 +69,8 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("${RELAYDESK_MACOS_ICON_SOURCE}", gui)
         self.assertIn("@BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION@", plist)
         self.assertIn('-executable=\\${relaydesk_core}', deploy)
+        self.assertIn('-libpath=${RELAYDESK_QT_LIBRARY_PATH}', deploy)
+        self.assertIn("get_filename_component(RELAYDESK_QT_LIBRARY_PATH", deploy)
         self.assertIn("sanitize_bundle_rpaths.sh", deploy)
 
     def test_package_readme_documents_retained_user_data(self) -> None:

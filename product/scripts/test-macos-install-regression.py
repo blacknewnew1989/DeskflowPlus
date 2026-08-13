@@ -319,40 +319,83 @@ def verify_adhoc_bundle(app: Path, log: IO[str]) -> None:
 
 
 def verify_bundle_linkage(app: Path, log: IO[str]) -> int:
-    allowed_prefixes = (
-        "@rpath/",
-        "@loader_path/",
-        "@executable_path/",
+    allowed_system_prefixes = (
         "/System/Library/",
         "/usr/lib/",
     )
+    app_root = app.resolve(strict=True)
+    executable_root = app_root / "Contents" / "MacOS"
+    seen_macho_files: set[Path] = set()
+
+    def target_is_bundled(targets: Iterable[Path]) -> bool:
+        for target in targets:
+            try:
+                resolved = target.resolve(strict=True)
+                resolved.relative_to(app_root)
+            except (FileNotFoundError, ValueError):
+                continue
+            return True
+        return False
+
     macho_count = 0
     for candidate in nested_code_candidates(app):
         if not candidate.is_file():
             continue
-        kind = run_command(["/usr/bin/file", "-b", candidate], log, check=False)
+        resolved_candidate = candidate.resolve(strict=True)
+        if resolved_candidate in seen_macho_files:
+            continue
+        kind = run_command(
+            ["/usr/bin/file", "-b", resolved_candidate], log, check=False
+        )
         if kind.returncode != 0 or "Mach-O" not in kind.stdout:
             continue
 
+        seen_macho_files.add(resolved_candidate)
         macho_count += 1
         install_name = run_command(
-            ["/usr/bin/otool", "-D", candidate], log, check=False
+            ["/usr/bin/otool", "-D", resolved_candidate], log, check=False
         )
         install_lines = install_name.stdout.splitlines()
         install_id = install_lines[1].strip() if len(install_lines) > 1 else ""
-        linked = run_command(["/usr/bin/otool", "-L", candidate], log)
+        linked = run_command(["/usr/bin/otool", "-L", resolved_candidate], log)
         for raw_line in linked.stdout.splitlines()[1:]:
             dependency = re.sub(
                 r"\s+\(compatibility version.*$", "", raw_line.strip()
             )
             if not dependency or dependency == install_id:
                 continue
-            if not dependency.startswith(allowed_prefixes):
-                relative = candidate.relative_to(app).as_posix()
+            if dependency.startswith(allowed_system_prefixes):
+                continue
+            if dependency.startswith("@rpath/"):
+                suffix = dependency.removeprefix("@rpath/")
+                targets = (
+                    app_root / "Contents" / "Frameworks" / suffix,
+                    app_root / "Contents" / "Libraries" / suffix,
+                    executable_root / suffix,
+                )
+            elif dependency.startswith("@loader_path/"):
+                targets = (
+                    resolved_candidate.parent
+                    / dependency.removeprefix("@loader_path/"),
+                )
+            elif dependency.startswith("@executable_path/"):
+                targets = (
+                    executable_root
+                    / dependency.removeprefix("@executable_path/"),
+                )
+            else:
+                relative = resolved_candidate.relative_to(app_root).as_posix()
                 raise RegressionError(
                     f"TEST005_EXTERNAL_DEPENDENCY: {relative}: {dependency}"
                 )
-        load_commands = run_command(["/usr/bin/otool", "-l", candidate], log)
+            if not target_is_bundled(targets):
+                relative = resolved_candidate.relative_to(app_root).as_posix()
+                raise RegressionError(
+                    f"TEST005_UNRESOLVED_DEPENDENCY: {relative}: {dependency}"
+                )
+        load_commands = run_command(
+            ["/usr/bin/otool", "-l", resolved_candidate], log
+        )
         lines = load_commands.stdout.splitlines()
         for index, raw_line in enumerate(lines):
             if raw_line.strip() != "cmd LC_RPATH":
@@ -365,8 +408,14 @@ def verify_bundle_linkage(app: Path, log: IO[str]) -> int:
                 if match is None:
                     continue
                 rpath = match.group(1)
-                if not rpath.startswith(allowed_prefixes):
-                    relative = candidate.relative_to(app).as_posix()
+                allowed_rpath_prefixes = (
+                    "@rpath/",
+                    "@loader_path/",
+                    "@executable_path/",
+                    *allowed_system_prefixes,
+                )
+                if not rpath.startswith(allowed_rpath_prefixes):
+                    relative = resolved_candidate.relative_to(app_root).as_posix()
                     raise RegressionError(
                         f"TEST005_EXTERNAL_RPATH: {relative}: {rpath}"
                     )
