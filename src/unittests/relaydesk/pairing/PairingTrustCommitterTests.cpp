@@ -68,12 +68,20 @@ void PairingTrustCommitterTests::atomicallyPersistsConfirmedTrust()
   QVERIFY(fixture.directory.isValid());
   const auto sessionId = fixture.readyToCommit();
   QVERIFY(!sessionId.isNull());
+  bool trustVisibleAtCompletion = false;
+  connect(&fixture.machine, &PairingStateMachine::pairingChanged, this, [&](const PairingSnapshot &snapshot) {
+    if (snapshot.state == PairingState::Completed) {
+      trustVisibleAtCompletion =
+          fixture.store.trustStatus(fixture.peerId, fixture.fingerprint) == TrustStatus::Trusted;
+    }
+  });
 
   const auto result = PairingTrustCommitter::commit(
       fixture.machine, fixture.store, sessionId, {.alias = QStringLiteral("  Studio  "), .autoAcceptFiles = true}
   );
 
   QVERIFY2(result.ok(), qPrintable(result.diagnostic));
+  QVERIFY(trustVisibleAtCompletion);
   QCOMPARE(fixture.machine.snapshot()->state, PairingState::Completed);
   const auto confirmedFingerprint = fixture.machine.confirmedFingerprint(sessionId);
   QVERIFY(confirmedFingerprint.has_value());

@@ -70,6 +70,7 @@ PairingTrustCommitResult PairingTrustCommitter::commit(
       .revoked = false,
   };
 
+  TrustedDeviceStore previous = store;
   TrustedDeviceStore staged = store;
   QString diagnostic;
   if (!staged.upsert(std::move(record), &diagnostic)) {
@@ -93,8 +94,13 @@ PairingTrustCommitResult PairingTrustCommitter::commit(
     return failure(PairingTrustCommitError::PersistenceFailed, std::move(combined));
   }
 
+  // Make the persisted trust visible before Completed is published. Runtime
+  // observers synchronously consume that transition to update device cards and
+  // TLS pinning state.
+  store = std::move(staged);
   const auto completed = stateMachine.complete(sessionId);
   if (!completed.ok()) {
+    store = std::move(previous);
     const auto rollbackResult = store.save();
     QString combined = completed.diagnostic;
     if (!rollbackResult.ok) {
@@ -103,7 +109,6 @@ PairingTrustCommitResult PairingTrustCommitter::commit(
     return failure(PairingTrustCommitError::TransitionFailed, std::move(combined));
   }
 
-  store = std::move(staged);
   return {};
 }
 

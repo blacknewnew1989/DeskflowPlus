@@ -51,7 +51,8 @@ class PairingService final : public IPairingService
 public:
   PairingService(
       DeviceInfo localDevice, TrustedDeviceStore &trustedDevices, PairingOptions options = {},
-      PairingManager::Clock clock = {}, PairingManager::SasGenerator sasGenerator = {}, QObject *parent = nullptr
+      PairingManager::Clock clock = {}, PairingManager::SasGenerator sasGenerator = {},
+      PairingManager::DatagramSender datagramSender = {}, QObject *parent = nullptr
   );
 
   [[nodiscard]] PairingOperationResult listen(
@@ -60,6 +61,8 @@ public:
   void close();
   [[nodiscard]] bool isListening() const;
   [[nodiscard]] quint16 localPort() const;
+  PairingOperationResult receiveDatagram(QByteArrayView bytes, PairingEndpoint source);
+  [[nodiscard]] bool expireIfNeeded();
 
   PairingOperationResult startPairing(
       DeviceSnapshot peer, QByteArray peerFingerprintSha256, PairingEndpoint endpoint
@@ -77,6 +80,7 @@ private:
   [[nodiscard]] PairingTransportResult sendDatagram(QByteArray bytes, PairingEndpoint endpoint);
   PairingOperationResult report(PairingOperationResult result);
 
+  PairingManager::DatagramSender m_datagramSender;
   QUdpSocket m_socket;
   PairingManager m_manager;
   QTimer m_expiryTimer;

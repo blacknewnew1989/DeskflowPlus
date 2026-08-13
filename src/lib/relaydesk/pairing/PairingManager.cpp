@@ -386,6 +386,12 @@ PairingOperationResult PairingManager::handleResult(
   if (expireIfNeeded()) {
     return failure(PairingOperationError::Expired, QStringLiteral("pairing session expired"));
   }
+  if (!message.accepted && m_manualSnapshot.has_value()) {
+    m_manualSnapshot->state = PairingState::Rejected;
+    m_manualSnapshot->errorMessageKey = message.errorMessageKey;
+    publishManualSnapshot();
+    return {};
+  }
   const auto current = m_stateMachine.snapshot();
   if (!current.has_value() || current->state != PairingState::Confirming) {
     return failure(PairingOperationError::DuplicateMessage, QStringLiteral("pairing result is out of order"));

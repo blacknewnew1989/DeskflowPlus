@@ -73,6 +73,10 @@ public:
   [[nodiscard]] bool start(QString *errorMessage = nullptr);
   void stop();
   [[nodiscard]] bool announceNow(QString *errorMessage = nullptr);
+  [[nodiscard]] qint64 sendPeerDatagram(
+      const QByteArray &datagram, const QHostAddress &destination, quint16 port,
+      QString *errorMessage = nullptr
+  );
 
   [[nodiscard]] bool isRunning() const;
   [[nodiscard]] quint16 boundPort() const;
@@ -85,6 +89,7 @@ Q_SIGNALS:
   void started(quint16 port);
   void stopped();
   void advertisementReceived(DeviceInfo device, QHostAddress senderAddress);
+  void unrecognizedDatagramReceived(QByteArray datagram, QHostAddress senderAddress, quint16 senderPort);
   void errorOccurred(DiscoveryServiceError error, QString diagnostic);
 
 private Q_SLOTS:
