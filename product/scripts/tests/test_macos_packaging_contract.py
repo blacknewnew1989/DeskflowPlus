@@ -16,6 +16,7 @@ class MacosPackagingContractTests(unittest.TestCase):
             "product/scripts/setup-macos.sh",
             "product/scripts/build-macos.sh",
             "product/scripts/package-macos.sh",
+            "deploy/mac/sanitize_bundle_rpaths.sh",
         ):
             script = ROOT / relative_path
             self.assertNotEqual(
@@ -68,6 +69,7 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("${RELAYDESK_MACOS_ICON_SOURCE}", gui)
         self.assertIn("@BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION@", plist)
         self.assertIn('-executable=\\${relaydesk_core}', deploy)
+        self.assertIn("sanitize_bundle_rpaths.sh", deploy)
 
     def test_package_readme_documents_retained_user_data(self) -> None:
         readme = (ROOT / "deploy/mac/README-macOS.txt.in").read_text(encoding="utf-8")
@@ -75,6 +77,18 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("Removing @CMAKE_PROJECT_PROPER_NAME@.app does not remove", readme)
         self.assertIn("~/Library/RelayDesk", readme)
         self.assertIn("Downloads/RelayDesk", readme)
+
+    def test_rpath_sanitizer_removes_external_paths_before_final_signing(self) -> None:
+        script = (ROOT / "deploy/mac/sanitize_bundle_rpaths.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('install_name_tool -delete_rpath "$rpath"', script)
+        self.assertIn('codesign --force --deep --sign -', script)
+        self.assertLess(
+            script.index('install_name_tool -delete_rpath "$rpath"'),
+            script.index('codesign --force --deep --sign -'),
+        )
 
     def test_existing_actions_workflow_collects_deployed_adhoc_app(self) -> None:
         workflow = (ROOT / ".github/workflows/relaydesk-build.yml").read_text(encoding="utf-8")

@@ -59,8 +59,9 @@ if (OSX_BUNDLE)
     DESTINATION "${CMAKE_INSTALL_LICENSE_DIR}"
   )
 
-  # Keep this as the final app-bundle install rule: macdeployqt signs the
-  # completed bundle, so later resource writes would invalidate CodeResources.
+  # Keep this as the final app-bundle install rule: macdeployqt deploys the
+  # completed bundle, then the sanitizer removes external runpaths and applies
+  # the final signature. Later resource writes would invalidate CodeResources.
   install(CODE "
     set(relaydesk_app \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\")
     set(relaydesk_core \"\${relaydesk_app}/Contents/MacOS/deskflow-core\")
@@ -78,6 +79,16 @@ if (OSX_BUNDLE)
     )
     if(NOT relaydesk_macdeployqt_result EQUAL 0)
       message(FATAL_ERROR \"macdeployqt failed while deploying the RelayDesk app bundle\")
+    endif()
+    execute_process(
+      COMMAND \"${MY_DIR}/sanitize_bundle_rpaths.sh\"
+              \"\${relaydesk_app}\"
+              \"${RELAYDESK_MACOS_PACKAGE_VARIANT}\"
+              \"${RELAYDESK_MACOS_SIGNING_IDENTITY}\"
+      RESULT_VARIABLE relaydesk_rpath_sanitize_result
+    )
+    if(NOT relaydesk_rpath_sanitize_result EQUAL 0)
+      message(FATAL_ERROR \"failed to sanitize and re-sign the RelayDesk app bundle\")
     endif()
   ")
 endif()
