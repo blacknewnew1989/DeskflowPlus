@@ -28,6 +28,7 @@ from typing import IO, Any, Iterable
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 TEST_ROOT_PREFIX = "relaydesk-test005-macos-"
+EXPECTED_BONJOUR_SERVICES = ["_relaydesk._udp"]
 PERMISSION_NOT_RUN_REASON = (
     "hosted runners cannot grant or observe the macOS System Settings consent UI"
 )
@@ -244,6 +245,8 @@ def read_bundle_info(app: Path) -> BundleInfo:
         raise RegressionError(f"TEST005_BUNDLE_TYPE_INVALID: {app.name}")
     if not plist.get("NSLocalNetworkUsageDescription"):
         raise RegressionError(f"TEST005_LOCAL_NETWORK_USAGE_MISSING: {app.name}")
+    if plist.get("NSBonjourServices") != EXPECTED_BONJOUR_SERVICES:
+        raise RegressionError(f"TEST005_BONJOUR_SERVICES_INVALID: {app.name}")
     executable = app / "Contents" / "MacOS" / executable_name
     core_executable = app / "Contents" / "MacOS" / "deskflow-core"
     for item in (executable, core_executable):

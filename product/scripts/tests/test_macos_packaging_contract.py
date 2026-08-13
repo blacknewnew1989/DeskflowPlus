@@ -64,6 +64,9 @@ class MacosPackagingContractTests(unittest.TestCase):
         )
         gui = (ROOT / "src/apps/deskflow-gui/CMakeLists.txt").read_text(encoding="utf-8")
         plist = (ROOT / "src/apps/res/deskflow.plist.in").read_text(encoding="utf-8")
+        permission_backend = (
+            ROOT / "src/lib/relaydesk/platform/MacPermissionBackend.mm"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("RELAYDESK_MACOS_PACKAGE_VARIANT", deploy)
         self.assertIn("RELAYDESK_MACOS_SIGNING_IDENTITY", deploy)
@@ -78,6 +81,12 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("custom Finder layout skipped", dmg_layout)
         self.assertIn("${RELAYDESK_MACOS_ICON_SOURCE}", gui)
         self.assertIn("@BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION@", plist)
+        self.assertIn("<key>NSBonjourServices</key>", plist)
+        self.assertIn("<string>_relaydesk._udp</string>", plist)
+        self.assertIn(
+            'nw_browse_descriptor_create_bonjour_service("_relaydesk._udp", nullptr)',
+            permission_backend,
+        )
 
     def test_package_readme_documents_retained_user_data(self) -> None:
         readme = (ROOT / "deploy/mac/README-macOS.txt.in").read_text(encoding="utf-8")
