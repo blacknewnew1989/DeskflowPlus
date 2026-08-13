@@ -35,8 +35,8 @@ capabilities = {
 }
 
 heartbeat = {
-  1: uint,                 ; monotonic sequence
-  2: timestamp-ms
+  1: 0..9223372036854775807, ; monotonic per-connection sequence
+  2: 1..9223372036854775807  ; sender UTC milliseconds; ACK echoes both fields
 }
 
 transfer-offer = {

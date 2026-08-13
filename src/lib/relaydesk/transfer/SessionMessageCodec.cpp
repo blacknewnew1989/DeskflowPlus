@@ -32,9 +32,16 @@ enum AuthResultKey : qint64
   DiagnosticKey = 3,
 };
 
+enum HeartbeatKey : qint64
+{
+  HeartbeatSequenceKey = 1,
+  HeartbeatTimestampKey = 2,
+};
+
 constexpr qsizetype kMaximumAppVersionUtf8Bytes = 64;
 constexpr qsizetype kMaximumSupportedVersions = 16;
 constexpr qsizetype kMaximumDiagnosticUtf8Bytes = 512;
+constexpr quint64 kMaximumSessionMetadataBytes = 1U * 1024U * 1024U;
 
 QCborValue key(qint64 value)
 {
@@ -319,6 +326,84 @@ AuthResultDecodeResult SessionMessageCodec::decodeAuthResult(MessageType type, Q
               .errorCode = static_cast<quint32>(errorCode.toInteger()),
               .diagnostic = diagnostic.toString(),
           }
+  };
+}
+
+QByteArray SessionMessageCodec::encodeHeartbeat(MessageType type, const HeartbeatMessage &message, QString *error)
+{
+  if (error != nullptr) {
+    error->clear();
+  }
+  if (type != MessageType::Heartbeat && type != MessageType::HeartbeatAck) {
+    setError(error, QStringLiteral("heartbeat type must be HEARTBEAT or HEARTBEAT_ACK"));
+    return {};
+  }
+  if (message.sequence > static_cast<quint64>(std::numeric_limits<qint64>::max())) {
+    setError(error, QStringLiteral("heartbeat sequence is outside the supported range"));
+    return {};
+  }
+  if (message.timestampMs == 0 || message.timestampMs > static_cast<quint64>(std::numeric_limits<qint64>::max())) {
+    setError(error, QStringLiteral("heartbeat timestamp is outside the supported range"));
+    return {};
+  }
+
+  const QCborMap map = {
+      {key(HeartbeatSequenceKey), static_cast<qint64>(message.sequence)},
+      {key(HeartbeatTimestampKey), static_cast<qint64>(message.timestampMs)},
+  };
+  return QCborValue(map).toCbor(QCborValue::EncodingOption::SortKeysInMaps);
+}
+
+HeartbeatDecodeResult
+SessionMessageCodec::decodeHeartbeat(quint16 protocolVersion, MessageType type, QByteArrayView metadata)
+{
+  if (protocolVersion != kProtocolMajorVersion) {
+    return failure<HeartbeatMessage>(
+        SessionMessageError::UnsupportedVersion, QStringLiteral("heartbeat version is unsupported")
+    );
+  }
+  if (type != MessageType::Heartbeat && type != MessageType::HeartbeatAck) {
+    return failure<HeartbeatMessage>(
+        SessionMessageError::UnsupportedMessageType,
+        QStringLiteral("session metadata is not a HEARTBEAT or HEARTBEAT_ACK message")
+    );
+  }
+  if (metadata.isEmpty() || static_cast<quint64>(metadata.size()) > kMaximumSessionMetadataBytes) {
+    return failure<HeartbeatMessage>(
+        SessionMessageError::TooLarge, QStringLiteral("heartbeat metadata is empty or too large")
+    );
+  }
+  const auto parsed = parseMap(metadata);
+  if (!parsed.has_value()) {
+    return failure<HeartbeatMessage>(
+        SessionMessageError::MalformedCbor, QStringLiteral("heartbeat metadata is not one CBOR map")
+    );
+  }
+  const auto &map = *parsed;
+  if (!hasExactIntegerKeys(map, {HeartbeatSequenceKey, HeartbeatTimestampKey})) {
+    return failure<HeartbeatMessage>(
+        SessionMessageError::InvalidFields,
+        QStringLiteral("heartbeat contains missing, duplicate, or unknown fields")
+    );
+  }
+  const auto sequence = valueFor(map, HeartbeatSequenceKey);
+  if (!sequence.isInteger() || sequence.toInteger() < 0) {
+    return failure<HeartbeatMessage>(
+        SessionMessageError::InvalidSequence, QStringLiteral("heartbeat sequence is outside the supported range")
+    );
+  }
+  const auto timestamp = valueFor(map, HeartbeatTimestampKey);
+  if (!timestamp.isInteger() || timestamp.toInteger() <= 0) {
+    return failure<HeartbeatMessage>(
+        SessionMessageError::InvalidTimestamp, QStringLiteral("heartbeat timestamp is outside the supported range")
+    );
+  }
+  return {
+      .message =
+          HeartbeatMessage{
+              .sequence = static_cast<quint64>(sequence.toInteger()),
+              .timestampMs = static_cast<quint64>(timestamp.toInteger()),
+          },
   };
 }
 

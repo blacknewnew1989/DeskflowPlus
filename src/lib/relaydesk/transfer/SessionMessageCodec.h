@@ -37,10 +37,20 @@ struct AuthResultMessage
   [[nodiscard]] bool operator==(const AuthResultMessage &) const = default;
 };
 
+struct HeartbeatMessage
+{
+  quint64 sequence = 0;
+  quint64 timestampMs = 0;
+
+  [[nodiscard]] bool operator==(const HeartbeatMessage &) const = default;
+};
+
 enum class SessionMessageError
 {
   None,
+  UnsupportedVersion,
   UnsupportedMessageType,
+  TooLarge,
   MalformedCbor,
   MetadataNotMap,
   InvalidFields,
@@ -51,6 +61,7 @@ enum class SessionMessageError
   InvalidFingerprint,
   InvalidTimestamp,
   InvalidAuthResult,
+  InvalidSequence,
 };
 
 template <typename Message> struct SessionMessageDecodeResult
@@ -67,6 +78,7 @@ template <typename Message> struct SessionMessageDecodeResult
 
 using HelloDecodeResult = SessionMessageDecodeResult<HelloMessage>;
 using AuthResultDecodeResult = SessionMessageDecodeResult<AuthResultMessage>;
+using HeartbeatDecodeResult = SessionMessageDecodeResult<HeartbeatMessage>;
 
 class SessionMessageCodec final
 {
@@ -76,6 +88,13 @@ public:
 
   [[nodiscard]] static QByteArray encodeAuthResult(const AuthResultMessage &message, QString *error = nullptr);
   [[nodiscard]] static AuthResultDecodeResult decodeAuthResult(MessageType type, QByteArrayView metadata);
+
+  // HEARTBEAT and HEARTBEAT_ACK use the same canonical metadata. The ACK
+  // echoes both fields exactly so the initiator can reject stale responses.
+  [[nodiscard]] static QByteArray
+  encodeHeartbeat(MessageType type, const HeartbeatMessage &message, QString *error = nullptr);
+  [[nodiscard]] static HeartbeatDecodeResult
+  decodeHeartbeat(quint16 protocolVersion, MessageType type, QByteArrayView metadata);
 };
 
 } // namespace relaydesk::transfer
