@@ -108,6 +108,8 @@ class MacosInstallRegressionTests(unittest.TestCase):
             '"/usr/bin/hdiutil", "verify"',
             '"/usr/bin/hdiutil",\n                    "attach"',
             '"/usr/bin/hdiutil", "detach"',
+            'input_text="Y\\n"',
+            '"dmgLicenseAcceptedForAutomation"] = "PASS"',
             '"/usr/bin/codesign", "--verify", "--deep", "--strict", "--verbose=4"',
             '"/usr/bin/ditto", "-x", "-k"',
             '"--version"',
