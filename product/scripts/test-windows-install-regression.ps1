@@ -355,7 +355,7 @@ function Assert-ServiceInstalled {
 
 function Assert-FirewallInstalled {
     param([string]$ProductName, [string]$InstallRoot)
-    $Rules = Get-RelayDeskFirewallRules -ProductName $ProductName
+    $Rules = @(Get-RelayDeskFirewallRules -ProductName $ProductName)
     if ($Rules.Count -ne 2) { throw "TEST005_FIREWALL_RULE_COUNT: $($Rules.Count)" }
     foreach ($Rule in $Rules) {
         if ([string]$Rule.Enabled -ne "True") {
@@ -434,7 +434,7 @@ function Assert-SystemResidueRemoved {
     if ($null -ne (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
         throw "TEST005_SERVICE_REMAINS: $ServiceName"
     }
-    $Rules = Get-RelayDeskFirewallRules -ProductName $ProductName
+    $Rules = @(Get-RelayDeskFirewallRules -ProductName $ProductName)
     if ($Rules.Count -ne 0) { throw "TEST005_FIREWALL_RULE_REMAINS: $($Rules.Count)" }
     foreach ($InstallRoot in @($InstallRoots | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)) {
         if (Test-Path -LiteralPath $InstallRoot) {

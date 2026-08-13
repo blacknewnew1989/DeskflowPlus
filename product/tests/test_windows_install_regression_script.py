@@ -41,6 +41,7 @@ class WindowsInstallRegressionScriptTests(unittest.TestCase):
         self.assertIn("Get-Service -Name $ExpectedServiceName", SCRIPT)
         self.assertIn("Get-NetFirewallRule -DisplayName", SCRIPT)
         self.assertIn("Get-NetFirewallApplicationFilter", SCRIPT)
+        self.assertIn("$Rules = @(Get-RelayDeskFirewallRules", SCRIPT)
         self.assertIn("Join-Path $env:APPDATA $ExpectedProductName", SCRIPT)
         self.assertIn("TEST005_USER_DATA_SENTINEL_REMOVED", SCRIPT)
         self.assertIn("RelayDesk.conf, trust marker, and history marker", SCRIPT)
