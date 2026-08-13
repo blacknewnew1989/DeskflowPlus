@@ -277,7 +277,7 @@ Windows/macOS 只实现 adapter，不各自实现 transfer 状态机、PathPolic
 
 RelayDesk v1 不定义一个包办所有层的 `ProductError`。稳定错误由实际 boundary 的 enum 管理，例如：
 
-- codec/frame：各 `*CodecError`、`FrameError`、`AuthResultErrorCode`、`ProtocolErrorCode`；
+- codec/frame：各 `*CodecError`、`FrameDecodeError`、`AuthResultErrorCode`、`ProtocolErrorCode`；
 - pairing：`PairingFailureReason`、`PairingOperationError` 及嵌套 transport/state/trust error；
 - reconnect/pinning：`AutoReconnectConnectError`、`PeerPinningError`；
 - service start/control：`TransferStartError`、`TransferOperationResult`、`TransferErrorCode`、
