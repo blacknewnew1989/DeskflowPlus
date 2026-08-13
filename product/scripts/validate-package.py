@@ -30,6 +30,7 @@ REQUIRED = [
     "docs/13_LICENSE_AND_COMPLIANCE.md",
     "docs/18_SHARED_CONTRACTS.md",
     "docs/19_DEMO_RUNBOOK.md",
+    "docs/19_PROTOCOL_V1_FREEZE.md",
     "docs/20_AUTONOMOUS_EXECUTION_AND_GIT_WORKFLOW.md",
     "prompts/A0_ORCHESTRATOR.md",
     "prompts/A6_FILE_TRANSFER.md",
@@ -222,6 +223,121 @@ try:
             errors.append(f"protocol vector {name} has unknown kind: {kind!r}")
 except Exception as exc:  # noqa: BLE001
     errors.append(f"unable to inspect protocol vectors: {exc}")
+
+# Keep the RDFT v1 freeze index tied to the source registry, shared vectors,
+# fixed envelope, and the one canonical cross-platform workflow. This does not
+# duplicate the C++ codec/vector tests; it only guards the release index.
+try:
+    freeze_index = (ROOT / "docs/19_PROTOCOL_V1_FREEZE.md").read_text(encoding="utf-8")
+    registry_text = (
+        ROOT.parent / "src/lib/relaydesk/transfer/ProtocolMessageRegistry.def"
+    ).read_text(encoding="utf-8")
+    protocol_header = (
+        ROOT.parent / "src/lib/relaydesk/transfer/Protocol.h"
+    ).read_text(encoding="utf-8")
+    vector_payload = json.loads(
+        (ROOT / "spec/protocol/test-vectors.json").read_text(encoding="utf-8")
+    )
+
+    registry_count = sum(
+        1 for line in registry_text.splitlines() if re.match(r"^\s*RDFT_MESSAGE\(", line)
+    )
+    vector_count = len(vector_payload.get("vectors", []))
+    fixed_header_match = re.search(
+        r"\bkFixedHeaderBytes\s*=\s*(\d+)\s*;", protocol_header
+    )
+    source_fixed_header = (
+        int(fixed_header_match.group(1)) if fixed_header_match is not None else None
+    )
+
+    def freeze_field(name: str) -> str | None:
+        match = re.search(
+            rf"^\|\s*`{re.escape(name)}`\s*\|\s*`([^`]+)`\s*\|",
+            freeze_index,
+            re.MULTILINE,
+        )
+        return match.group(1) if match is not None else None
+
+    indexed_registry_count = freeze_field("registryMessageTypes")
+    indexed_vector_count = freeze_field("sharedJsonVectors")
+    indexed_fixed_header = freeze_field("fixedHeaderBytes")
+    if indexed_registry_count != str(registry_count):
+        errors.append(
+            "protocol freeze index registryMessageTypes: "
+            f"source has {registry_count}, index has {indexed_registry_count!r}"
+        )
+    if indexed_vector_count != str(vector_count):
+        errors.append(
+            "protocol freeze index sharedJsonVectors: "
+            f"source has {vector_count}, index has {indexed_vector_count!r}"
+        )
+    vector_fixed_header = vector_payload.get("fixedHeaderBytes")
+    if source_fixed_header is None or source_fixed_header != vector_fixed_header:
+        errors.append(
+            "protocol fixed header mismatch between Protocol.h and test-vectors.json: "
+            f"{source_fixed_header!r} != {vector_fixed_header!r}"
+        )
+    if indexed_fixed_header != str(source_fixed_header):
+        errors.append(
+            "protocol freeze index fixedHeaderBytes: "
+            f"source has {source_fixed_header!r}, index has {indexed_fixed_header!r}"
+        )
+
+    for authority_reference in [
+        "[`ProtocolMessageRegistry.def`](../../src/lib/relaydesk/transfer/ProtocolMessageRegistry.def)",
+        "[`messages.cddl`](../spec/protocol/messages.cddl)",
+        "[`test-vectors.json`](../spec/protocol/test-vectors.json)",
+    ]:
+        if authority_reference not in freeze_index:
+            errors.append(
+                f"protocol freeze index authority missing: {authority_reference}"
+            )
+
+    tag_trigger = "relaydesk-protocol-v1-*"
+    if freeze_field("freezeTagPattern") != tag_trigger:
+        errors.append(f"protocol freeze tag pattern must be {tag_trigger}")
+
+    authoritative_commit = freeze_field("authoritativeCommit")
+    if authoritative_commit != "TO_BE_TAGGED" and not re.fullmatch(
+        r"[0-9a-f]{40}", authoritative_commit or ""
+    ):
+        errors.append(
+            "protocol freeze authoritativeCommit must be TO_BE_TAGGED or a full lowercase Git SHA"
+        )
+
+    freeze_tag = freeze_field("freezeTag")
+    if freeze_tag != "TO_BE_TAGGED" and not re.fullmatch(
+        r"relaydesk-protocol-v1-[A-Za-z0-9][A-Za-z0-9._-]*", freeze_tag or ""
+    ):
+        errors.append(
+            "protocol freeze freezeTag must be TO_BE_TAGGED or match relaydesk-protocol-v1-*"
+        )
+
+    canonical_workflow_bytes = (
+        ROOT.parent / ".github/workflows/relaydesk-build.yml"
+    ).read_bytes()
+    template_workflow_bytes = (
+        ROOT / "templates/github/workflows/relaydesk-build.yml"
+    ).read_bytes()
+    canonical_workflow = canonical_workflow_bytes.decode("utf-8")
+    template_workflow = template_workflow_bytes.decode("utf-8")
+    trigger_line = f'      - "{tag_trigger}"'
+    for label, workflow in [
+        ("canonical", canonical_workflow),
+        ("template", template_workflow),
+    ]:
+        tags_block = re.search(
+            r"(?m)^    tags:\s*\n((?:      - [^\r\n]+(?:\r?\n|$))+)", workflow
+        )
+        tag_lines = tags_block.group(1).splitlines() if tags_block is not None else []
+        if trigger_line not in tag_lines:
+            errors.append(
+                f"{label} workflow missing protocol freeze tag trigger: {tag_trigger}"
+            )
+    if canonical_workflow_bytes != template_workflow_bytes:
+        errors.append("canonical and template RelayDesk workflows must be byte-identical")
+except Exception as exc:  # noqa: BLE001
+    errors.append(f"unable to validate protocol freeze index: {exc}")
 
 # Text hygiene and Markdown fence balance.
 for path in sorted(ROOT.rglob("*")):
