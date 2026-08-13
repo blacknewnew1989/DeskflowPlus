@@ -16,6 +16,8 @@ add_library(relaydesk_app STATIC
   PairingTrustRuntime.h
   TransferUiRuntime.cpp
   TransferUiRuntime.h
+  TransferRuntimeComposition.cpp
+  TransferRuntimeComposition.h
 )
 
 target_include_directories(
