@@ -95,25 +95,28 @@ QString stateText(TransferState state)
   return i18n::translate(Text::TransferStateFailed);
 }
 
-QString safeErrorText(const QString &errorMessageKey)
+QString safeErrorText(TransferErrorCode errorCode)
 {
-  if (errorMessageKey.isEmpty())
+  switch (errorCode) {
+  case TransferErrorCode::None:
     return {};
-  if (errorMessageKey.endsWith(QStringLiteral("disk_full")))
+  case TransferErrorCode::DiskFull:
     return i18n::translate(Text::TransferErrorDiskFull);
-  if (errorMessageKey.endsWith(QStringLiteral("unsafe_path")) ||
-      errorMessageKey.endsWith(QStringLiteral("path_invalid"))) {
+  case TransferErrorCode::UnsafePath:
     return i18n::translate(Text::TransferErrorUnsafePath);
-  }
-  if (errorMessageKey.endsWith(QStringLiteral("unreadable")) ||
-      errorMessageKey.endsWith(QStringLiteral("source_changed"))) {
+  case TransferErrorCode::ManifestBuildFailed:
+  case TransferErrorCode::SourceUnreadable:
     return i18n::translate(Text::TransferErrorUnreadable);
-  }
-  if (errorMessageKey.endsWith(QStringLiteral("connection_lost")))
+  case TransferErrorCode::ConnectionLost:
     return i18n::translate(Text::TransferErrorConnectionLost);
-  if (errorMessageKey.endsWith(QStringLiteral("checksum_mismatch")) ||
-      errorMessageKey.endsWith(QStringLiteral("hash_mismatch"))) {
+  case TransferErrorCode::HashMismatch:
     return i18n::translate(Text::TransferErrorChecksumMismatch);
+  case TransferErrorCode::OfferFailed:
+  case TransferErrorCode::SenderFailed:
+  case TransferErrorCode::PeerRejected:
+  case TransferErrorCode::PeerFileFailed:
+  case TransferErrorCode::InternalError:
+    return i18n::translate(Text::TransferErrorUnknown);
   }
   return i18n::translate(Text::TransferErrorUnknown);
 }
@@ -264,7 +267,7 @@ QVariant TransferCenterModel::data(const QModelIndex &index, int role) const
   case DisplayNameRole:
     return snapshot.displayName;
   case Qt::ToolTipRole: {
-    const auto error = safeErrorText(snapshot.errorMessageKey);
+    const auto error = safeErrorText(snapshot.errorCode);
     return error.isEmpty() ? snapshot.currentRelativeDisplayPath : error;
   }
   case Qt::AccessibleTextRole:
@@ -301,7 +304,7 @@ QVariant TransferCenterModel::data(const QModelIndex &index, int role) const
   case CurrentPathRole:
     return snapshot.currentRelativeDisplayPath;
   case ErrorTextRole:
-    return safeErrorText(snapshot.errorMessageKey);
+    return safeErrorText(snapshot.errorCode);
   case CanPauseRole:
     return !entry.history.has_value() && snapshot.canPause;
   case CanResumeRole:
@@ -606,7 +609,6 @@ TransferCenterModel::Entry TransferCenterModel::fromHistory(const TransferHistor
               .completedFiles = completed ? record.fileCount : 0,
               .totalFiles = record.fileCount,
           },
-          .errorMessageKey = record.errorMessageKey,
           .errorCode = record.errorCode,
           .createdUtc = record.startedUtc,
           .finishedUtc = record.finishedUtc,

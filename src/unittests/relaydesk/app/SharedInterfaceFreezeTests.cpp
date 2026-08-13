@@ -266,6 +266,19 @@ static_assert(static_cast<quint32>(TransferOperationError::UnknownTransfer) == 1
 static_assert(static_cast<quint32>(TransferOperationError::UnsupportedOperation) == 2);
 static_assert(static_cast<quint32>(TransferOperationError::InvalidState) == 3);
 static_assert(static_cast<quint32>(TransferOperationError::StartFailed) == 4);
+static_assert(std::is_same_v<std::underlying_type_t<TransferErrorCode>, quint32>);
+static_assert(static_cast<quint32>(TransferErrorCode::None) == 0);
+static_assert(static_cast<quint32>(TransferErrorCode::ManifestBuildFailed) == 1001);
+static_assert(static_cast<quint32>(TransferErrorCode::OfferFailed) == 1002);
+static_assert(static_cast<quint32>(TransferErrorCode::SenderFailed) == 1003);
+static_assert(static_cast<quint32>(TransferErrorCode::PeerRejected) == 1004);
+static_assert(static_cast<quint32>(TransferErrorCode::PeerFileFailed) == 1005);
+static_assert(static_cast<quint32>(TransferErrorCode::DiskFull) == 1006);
+static_assert(static_cast<quint32>(TransferErrorCode::UnsafePath) == 1007);
+static_assert(static_cast<quint32>(TransferErrorCode::SourceUnreadable) == 1008);
+static_assert(static_cast<quint32>(TransferErrorCode::ConnectionLost) == 1009);
+static_assert(static_cast<quint32>(TransferErrorCode::HashMismatch) == 1010);
+static_assert(static_cast<quint32>(TransferErrorCode::InternalError) == 1011);
 
 static_assert(std::is_copy_constructible_v<DeviceId>);
 static_assert(std::is_copy_constructible_v<DeviceInfo>);
@@ -335,6 +348,7 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaType::fromType<TransferOperationOutcome>().isValid());
   QVERIFY(QMetaType::fromType<TransferOperationError>().isValid());
   QVERIFY(QMetaType::fromType<TransferOperationResult>().isValid());
+  QVERIFY(QMetaType::fromType<TransferErrorCode>().isValid());
   QVERIFY(QMetaType::fromType<PermissionSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<FileEndpointAnnouncement>().isValid());
   QVERIFY(QMetaType::fromType<NegotiatedCapabilities>().isValid());

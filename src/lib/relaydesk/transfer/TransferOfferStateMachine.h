@@ -6,6 +6,7 @@
 #include "relaydesk/transfer/CapabilityCodec.h"
 #include "relaydesk/transfer/Protocol.h"
 #include "relaydesk/transfer/TransferTypes.h"
+#include "relaydesk/transfer/TransferError.h"
 
 #include <QString>
 
@@ -64,7 +65,7 @@ struct OfferSnapshot
   ConflictPolicy requestedConflictPolicy = ConflictPolicy::Ask;
   std::optional<TransferAccept> acceptance;
   std::optional<TransferReject> rejection;
-  QString errorMessageKey;
+  TransferErrorCode errorCode = TransferErrorCode::None;
 
   [[nodiscard]] bool operator==(const OfferSnapshot &) const = default;
 };
@@ -84,7 +85,7 @@ public:
       AcceptanceOrigin origin
   );
   [[nodiscard]] OfferStateResult rejectIncoming(RejectReason reason, QString diagnostic = {});
-  [[nodiscard]] OfferStateResult fail(QString errorMessageKey);
+  [[nodiscard]] OfferStateResult fail(TransferErrorCode errorCode);
 
   [[nodiscard]] std::optional<OfferSnapshot> snapshot() const;
   void reset();

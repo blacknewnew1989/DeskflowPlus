@@ -146,15 +146,14 @@ void TransferControlStateMachineTests::failureIsTerminalAndStable()
 {
   auto state = machine();
   advanceToTransferring(state);
-  const auto failed = state.fail(4008, QStringLiteral("relaydesk.transfer.io_error"));
+  const auto failed = state.fail(TransferErrorCode::SenderFailed);
   QVERIFY(failed.ok());
   QCOMPARE(state.snapshot().state, TransferState::Failed);
-  QCOMPARE(state.snapshot().errorCode, 4008);
-  QCOMPARE(state.snapshot().errorMessageKey, QStringLiteral("relaydesk.transfer.io_error"));
+  QCOMPARE(state.snapshot().errorCode, TransferErrorCode::SenderFailed);
   QVERIFY(state.snapshot().canRetry);
-  QVERIFY(!state.fail(4008, QStringLiteral("relaydesk.transfer.io_error")).changed);
+  QVERIFY(!state.fail(TransferErrorCode::SenderFailed).changed);
   QCOMPARE(
-      state.fail(4009, QStringLiteral("relaydesk.transfer.other_error")).error, TransferControlError::TerminalState
+      state.fail(TransferErrorCode::PeerFileFailed).error, TransferControlError::TerminalState
   );
   QCOMPARE(state.advance(TransferState::Preparing).error, TransferControlError::TerminalState);
   QCOMPARE(state.cancel().error, TransferControlError::TerminalState);
@@ -170,8 +169,8 @@ void TransferControlStateMachineTests::rejectsInvalidTransitions()
   QCOMPARE(state.resume().error, TransferControlError::InvalidTransition);
   QCOMPARE(state.interrupt().error, TransferControlError::InvalidTransition);
   QCOMPARE(state.confirmCancelled().error, TransferControlError::InvalidTransition);
-  QCOMPARE(state.fail(0, QStringLiteral("key")).error, TransferControlError::InvalidFailure);
-  QCOMPARE(state.fail(1, {}).error, TransferControlError::InvalidFailure);
+  QCOMPARE(state.fail(TransferErrorCode::None).error, TransferControlError::InvalidFailure);
+  QCOMPARE(state.fail(static_cast<TransferErrorCode>(999)).error, TransferControlError::InvalidFailure);
 
   QVERIFY(state.advance(TransferState::Offered).ok());
   QVERIFY(state.advance(TransferState::Rejected).ok());

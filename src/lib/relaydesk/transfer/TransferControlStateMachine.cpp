@@ -37,7 +37,7 @@ TransferControlResult TransferControlStateMachine::initialize()
   if (m_snapshot.peerId.value().isNull() || m_snapshot.displayName.isEmpty() ||
       m_snapshot.state != TransferState::Preparing || !validProgress(m_snapshot.progress) ||
       !m_snapshot.createdUtc.isValid() || m_snapshot.createdUtc.toMSecsSinceEpoch() <= 0 ||
-      m_snapshot.finishedUtc.isValid() || !m_snapshot.errorMessageKey.isEmpty() || m_snapshot.errorCode != 0) {
+      m_snapshot.finishedUtc.isValid() || m_snapshot.errorCode != TransferErrorCode::None) {
     return failure(
         TransferControlError::InvalidInitialSnapshot, QStringLiteral("initial transfer snapshot is invalid")
     );
@@ -147,16 +147,16 @@ TransferControlResult TransferControlStateMachine::confirmCancelled()
   return setState(TransferState::Cancelled);
 }
 
-TransferControlResult TransferControlStateMachine::fail(int errorCode, QString errorMessageKey)
+TransferControlResult TransferControlStateMachine::fail(TransferErrorCode errorCode)
 {
   if (!m_initialized) {
     return failure(TransferControlError::InvalidInitialSnapshot, QStringLiteral("transfer state is not initialized"));
   }
-  if (errorCode <= 0 || errorMessageKey.isEmpty()) {
+  if (!isKnownTransferErrorCode(errorCode)) {
     return failure(TransferControlError::InvalidFailure, QStringLiteral("failure requires an error code and key"));
   }
   if (m_snapshot.state == TransferState::Failed) {
-    if (m_snapshot.errorCode == errorCode && m_snapshot.errorMessageKey == errorMessageKey) {
+    if (m_snapshot.errorCode == errorCode) {
       return {};
     }
     return failure(TransferControlError::TerminalState, QStringLiteral("failed transfer cannot change its error"));
@@ -165,7 +165,6 @@ TransferControlResult TransferControlStateMachine::fail(int errorCode, QString e
     return failure(TransferControlError::TerminalState, QStringLiteral("terminal transfer cannot fail again"));
   }
   m_snapshot.errorCode = errorCode;
-  m_snapshot.errorMessageKey = std::move(errorMessageKey);
   return setState(TransferState::Failed);
 }
 

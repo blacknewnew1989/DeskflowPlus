@@ -5,6 +5,7 @@
 
 #include "relaydesk/device/DeviceId.h"
 #include "relaydesk/transfer/Protocol.h"
+#include "relaydesk/transfer/TransferError.h"
 
 #include <QDateTime>
 #include <QList>
@@ -17,7 +18,7 @@
 
 namespace relaydesk::transfer {
 
-inline constexpr quint64 kTransferHistorySchemaVersion = 1;
+inline constexpr quint64 kTransferHistorySchemaVersion = 2;
 inline constexpr qsizetype kDefaultMaximumHistoryEntries = 1'000;
 inline constexpr quint64 kDefaultMaximumHistoryBytes = 16U * 1024U * 1024U;
 inline constexpr qsizetype kDefaultMaximumHistoryLineBytes = 64U * 1024U;
@@ -48,8 +49,7 @@ struct TransferHistoryRecord
   QDateTime startedUtc;
   QDateTime finishedUtc;
   HistoryStatus status = HistoryStatus::Completed;
-  int errorCode = 0;
-  QString errorMessageKey;
+  TransferErrorCode errorCode = TransferErrorCode::None;
 
   [[nodiscard]] bool operator==(const TransferHistoryRecord &) const = default;
 };

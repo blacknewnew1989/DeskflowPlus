@@ -20,7 +20,6 @@ namespace relaydesk::transfer {
 namespace {
 
 constexpr qsizetype kMaximumDisplayNameUtf8Bytes = 4'096;
-constexpr qsizetype kMaximumErrorKeyUtf8Bytes = 512;
 
 TransferHistoryOperationResult operationFailure(TransferHistoryError error, QString diagnostic)
 {
@@ -94,7 +93,7 @@ bool validRecord(const TransferHistoryRecord &record)
       record.peerDisplayName.toUtf8().size() > kMaximumDisplayNameUtf8Bytes || !record.startedUtc.isValid() ||
       !record.finishedUtc.isValid() || record.startedUtc.toMSecsSinceEpoch() <= 0 ||
       record.finishedUtc < record.startedUtc || directionName(record.direction).isEmpty() ||
-      statusName(record.status).isEmpty() || record.errorMessageKey.toUtf8().size() > kMaximumErrorKeyUtf8Bytes) {
+      statusName(record.status).isEmpty()) {
     return false;
   }
   if (record.totalBytes > static_cast<quint64>(std::numeric_limits<qint64>::max()) ||
@@ -102,12 +101,12 @@ bool validRecord(const TransferHistoryRecord &record)
     return false;
   }
   if (record.status == HistoryStatus::Completed) {
-    return record.errorCode == 0 && record.errorMessageKey.isEmpty();
+    return record.errorCode == TransferErrorCode::None;
   }
   if (record.status == HistoryStatus::Failed) {
-    return record.errorCode > 0 && !record.errorMessageKey.isEmpty();
+    return isKnownTransferErrorCode(record.errorCode);
   }
-  return record.errorCode >= 0;
+  return record.errorCode == TransferErrorCode::None;
 }
 
 QByteArray encodeRecord(const TransferHistoryRecord &record)
@@ -124,8 +123,7 @@ QByteArray encodeRecord(const TransferHistoryRecord &record)
       {QStringLiteral("startedAtMs"), record.startedUtc.toMSecsSinceEpoch()},
       {QStringLiteral("finishedAtMs"), record.finishedUtc.toMSecsSinceEpoch()},
       {QStringLiteral("status"), statusName(record.status)},
-      {QStringLiteral("errorCode"), record.errorCode},
-      {QStringLiteral("errorMessageKey"), record.errorMessageKey},
+      {QStringLiteral("errorCode"), static_cast<qint64>(record.errorCode)},
   };
   return QJsonDocument(object).toJson(QJsonDocument::Compact);
 }
@@ -152,13 +150,19 @@ std::optional<TransferHistoryRecord> decodeRecord(QByteArrayView line)
     return std::nullopt;
   }
   const QJsonObject object = document.object();
-  const QSet<QString> required{
+  const auto schemaVersion = integerField(object, QStringLiteral("schemaVersion"));
+  if (!schemaVersion.has_value() || (*schemaVersion != 1 && *schemaVersion != 2)) {
+    return std::nullopt;
+  }
+  QSet<QString> required{
       QStringLiteral("schemaVersion"),   QStringLiteral("transferId"),  QStringLiteral("peerDeviceId"),
       QStringLiteral("peerDisplayName"), QStringLiteral("displayName"), QStringLiteral("direction"),
       QStringLiteral("fileCount"),       QStringLiteral("totalBytes"),  QStringLiteral("startedAtMs"),
       QStringLiteral("finishedAtMs"),    QStringLiteral("status"),      QStringLiteral("errorCode"),
-      QStringLiteral("errorMessageKey"),
   };
+  if (*schemaVersion == 1) {
+    required.insert(QStringLiteral("errorMessageKey"));
+  }
   if (object.keys().size() != required.size()) {
     return std::nullopt;
   }
@@ -168,16 +172,15 @@ std::optional<TransferHistoryRecord> decodeRecord(QByteArrayView line)
     }
   }
 
-  const auto schemaVersion = integerField(object, QStringLiteral("schemaVersion"));
   const auto fileCount = integerField(object, QStringLiteral("fileCount"));
   const auto totalBytes = integerField(object, QStringLiteral("totalBytes"));
   const auto startedAt = integerField(object, QStringLiteral("startedAtMs"));
   const auto finishedAt = integerField(object, QStringLiteral("finishedAtMs"));
   const auto errorCode = integerField(object, QStringLiteral("errorCode"));
-  if (!schemaVersion.has_value() || *schemaVersion != static_cast<qint64>(kTransferHistorySchemaVersion) ||
-      !fileCount.has_value() || *fileCount < 0 || !totalBytes.has_value() || *totalBytes < 0 ||
+  if (!fileCount.has_value() || *fileCount < 0 || !totalBytes.has_value() || *totalBytes < 0 ||
       !startedAt.has_value() || *startedAt <= 0 || !finishedAt.has_value() || *finishedAt <= 0 ||
-      !errorCode.has_value() || *errorCode < 0 || *errorCode > std::numeric_limits<int>::max()) {
+      !errorCode.has_value() || *errorCode < 0 ||
+      *errorCode > static_cast<qint64>(std::numeric_limits<quint32>::max())) {
     return std::nullopt;
   }
 
@@ -187,6 +190,21 @@ std::optional<TransferHistoryRecord> decodeRecord(QByteArrayView line)
   const auto direction = parseDirection(object.value(QStringLiteral("direction")).toString());
   const auto status = parseStatus(object.value(QStringLiteral("status")).toString());
   if (!transferId.has_value() || !peerDeviceId.has_value() || !direction.has_value() || !status.has_value()) {
+    return std::nullopt;
+  }
+
+  TransferErrorCode stableError = TransferErrorCode::None;
+  if (*status == HistoryStatus::Failed) {
+    if (*schemaVersion == 1) {
+      const auto legacyKey = object.value(QStringLiteral("errorMessageKey"));
+      if (!legacyKey.isString() || legacyKey.toString().isEmpty()) {
+        return std::nullopt;
+      }
+      stableError = TransferErrorCode::InternalError;
+    } else {
+      stableError = static_cast<TransferErrorCode>(static_cast<quint32>(*errorCode));
+    }
+  } else if (*errorCode != 0) {
     return std::nullopt;
   }
 
@@ -201,8 +219,7 @@ std::optional<TransferHistoryRecord> decodeRecord(QByteArrayView line)
       .startedUtc = QDateTime::fromMSecsSinceEpoch(*startedAt, Qt::UTC),
       .finishedUtc = QDateTime::fromMSecsSinceEpoch(*finishedAt, Qt::UTC),
       .status = *status,
-      .errorCode = static_cast<int>(*errorCode),
-      .errorMessageKey = object.value(QStringLiteral("errorMessageKey")).toString(),
+      .errorCode = stableError,
   };
   return validRecord(record) ? std::optional<TransferHistoryRecord>{std::move(record)} : std::nullopt;
 }
