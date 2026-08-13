@@ -56,7 +56,7 @@ struct PermissionProbeEntry
 {
   PermissionKind kind = PermissionKind::WindowsFirewall;
   PermissionState state = PermissionState::Unknown;
-  int errorCode = static_cast<int>(PermissionErrorCode::None);
+  PermissionErrorCode errorCode = PermissionErrorCode::None;
   bool canOpenSettings = false;
   QString diagnostic;
 

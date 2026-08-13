@@ -6,6 +6,7 @@ add_library(relaydesk_platform_contract INTERFACE)
 target_sources(
   relaydesk_platform_contract
   INTERFACE
+    IPlatformPermissions.h
     PermissionSnapshot.h
 )
 target_include_directories(

@@ -319,7 +319,7 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
           {
               .kind = PermissionKind::WindowsFirewall,
               .state = PermissionState::Denied,
-              .errorCode = static_cast<int>(PermissionErrorCode::WindowsFirewallBlocked),
+              .errorCode = PermissionErrorCode::WindowsFirewallBlocked,
               .canOpenSettings = true,
               .diagnostic = QStringLiteral("<b>remote detail must stay hidden</b>"),
           },

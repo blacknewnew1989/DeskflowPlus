@@ -27,7 +27,7 @@ PermissionProbeEntry macLocalNetworkEntry(
     return {
         .kind = PermissionKind::MacLocalNetwork,
         .state = PermissionState::Denied,
-        .errorCode = static_cast<int>(PermissionErrorCode::MacLocalNetworkDenied),
+        .errorCode = PermissionErrorCode::MacLocalNetworkDenied,
         .canOpenSettings = true,
         .diagnostic = diagnostic,
     };
@@ -36,10 +36,9 @@ PermissionProbeEntry macLocalNetworkEntry(
   return {
       .kind = PermissionKind::MacLocalNetwork,
       .state = PermissionState::Unknown,
-      .errorCode = static_cast<int>(PermissionErrorCode::ProbeUnavailable),
+      .errorCode = PermissionErrorCode::ProbeUnavailable,
       .diagnostic = diagnostic,
   };
 }
 
 } // namespace deskflow::relaydesk
-

@@ -15,7 +15,7 @@
 
 namespace deskflow::relaydesk {
 
-class MacPermissionProbe final : public QObject
+class MacPermissionProbe final : public QObject, public IPlatformPermissions
 {
   Q_OBJECT
 
@@ -27,11 +27,11 @@ public:
       std::unique_ptr<IMacPermissionBackend> backend, NowProvider nowProvider = {}, QObject *parent = nullptr
   );
 
-  [[nodiscard]] PermissionSnapshot current() const;
+  [[nodiscard]] PermissionSnapshot current() const override;
 
 public Q_SLOTS:
   void refresh();
-  bool openSystemSettings(deskflow::relaydesk::PermissionKind kind);
+  PermissionOpenResult openSystemSettings(deskflow::relaydesk::PermissionKind kind) override;
 
 Q_SIGNALS:
   void snapshotChanged(deskflow::relaydesk::PermissionSnapshot snapshot);
@@ -46,4 +46,3 @@ private:
 };
 
 } // namespace deskflow::relaydesk
-

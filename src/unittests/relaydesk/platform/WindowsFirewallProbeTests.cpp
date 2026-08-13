@@ -52,39 +52,39 @@ void WindowsFirewallProbeTests::publishesStablePermissionMappings_data()
 {
   QTest::addColumn<WindowsFirewallRuleStatus>("firewallStatus");
   QTest::addColumn<PermissionState>("firewallState");
-  QTest::addColumn<int>("firewallError");
+  QTest::addColumn<PermissionErrorCode>("firewallError");
   QTest::addColumn<WindowsListeningPortStatus>("portStatus");
   QTest::addColumn<PermissionState>("portState");
-  QTest::addColumn<int>("portError");
+  QTest::addColumn<PermissionErrorCode>("portError");
 
   QTest::newRow("allowed-listening") << WindowsFirewallRuleStatus::Allowed << PermissionState::Granted
-                                     << int(PermissionErrorCode::None) << WindowsListeningPortStatus::Listening
-                                     << PermissionState::Granted << int(PermissionErrorCode::None);
+                                     << PermissionErrorCode::None << WindowsListeningPortStatus::Listening
+                                     << PermissionState::Granted << PermissionErrorCode::None;
   QTest::newRow("blocked-not-listening")
       << WindowsFirewallRuleStatus::Blocked << PermissionState::Denied
-      << int(PermissionErrorCode::WindowsFirewallBlocked) << WindowsListeningPortStatus::NotListening
-      << PermissionState::NeedsAction << int(PermissionErrorCode::WindowsPortUnavailable);
+      << PermissionErrorCode::WindowsFirewallBlocked << WindowsListeningPortStatus::NotListening
+      << PermissionState::NeedsAction << PermissionErrorCode::WindowsPortUnavailable;
   QTest::newRow("missing-unavailable")
       << WindowsFirewallRuleStatus::MissingAllowRule << PermissionState::NeedsAction
-      << int(PermissionErrorCode::WindowsFirewallBlocked) << WindowsListeningPortStatus::Unavailable
-      << PermissionState::Unknown << int(PermissionErrorCode::ProbeUnavailable);
+      << PermissionErrorCode::WindowsFirewallBlocked << WindowsListeningPortStatus::Unavailable
+      << PermissionState::Unknown << PermissionErrorCode::ProbeUnavailable;
   QTest::newRow("disabled-no-ports") << WindowsFirewallRuleStatus::NotRequired << PermissionState::NotRequired
-                                    << int(PermissionErrorCode::None) << WindowsListeningPortStatus::NotRequired
-                                    << PermissionState::NotRequired << int(PermissionErrorCode::None);
+                                    << PermissionErrorCode::None << WindowsListeningPortStatus::NotRequired
+                                    << PermissionState::NotRequired << PermissionErrorCode::None;
   QTest::newRow("probe-unavailable") << WindowsFirewallRuleStatus::Unavailable << PermissionState::Unknown
-                                     << int(PermissionErrorCode::ProbeUnavailable)
+                                     << PermissionErrorCode::ProbeUnavailable
                                      << WindowsListeningPortStatus::Unavailable << PermissionState::Unknown
-                                     << int(PermissionErrorCode::ProbeUnavailable);
+                                     << PermissionErrorCode::ProbeUnavailable;
 }
 
 void WindowsFirewallProbeTests::publishesStablePermissionMappings()
 {
   QFETCH(WindowsFirewallRuleStatus, firewallStatus);
   QFETCH(PermissionState, firewallState);
-  QFETCH(int, firewallError);
+  QFETCH(PermissionErrorCode, firewallError);
   QFETCH(WindowsListeningPortStatus, portStatus);
   QFETCH(PermissionState, portState);
-  QFETCH(int, portError);
+  QFETCH(PermissionErrorCode, portError);
 
   std::optional<WindowsFirewallProbeRequest> receivedRequest;
   WindowsFirewallProbe probe(
@@ -189,20 +189,36 @@ void WindowsFirewallProbeTests::staleAsyncInspectionCannotReplaceNewestSnapshot(
 void WindowsFirewallProbeTests::opensOnlyActionableFirewallSettings()
 {
   int calls = 0;
+  PermissionOpenResult nextResult;
   WindowsFirewallProbe probe(
       {}, {},
-      [&calls](QString *) {
+      [&calls, &nextResult]() {
         ++calls;
-        return true;
+        return nextResult;
       }
   );
   QSignalSpy failed(&probe, &WindowsFirewallProbe::settingsOpenFailed);
 
-  QVERIFY(probe.openSystemSettings(PermissionKind::WindowsFirewall));
+  QVERIFY(probe.openSystemSettings(PermissionKind::WindowsFirewall).ok());
   QCOMPARE(calls, 1);
-  QVERIFY(!probe.openSystemSettings(PermissionKind::WindowsListeningPort));
+  const auto notActionable = probe.openSystemSettings(PermissionKind::WindowsListeningPort);
+  QCOMPARE(notActionable.error, PermissionOpenError::NotActionable);
   QCOMPARE(calls, 1);
   QCOMPARE(failed.count(), 1);
+  QCOMPARE(failed.constFirst().at(1).value<PermissionOpenResult>(), notActionable);
+
+  const auto unsupported = probe.openSystemSettings(PermissionKind::MacAccessibility);
+  QCOMPARE(unsupported.error, PermissionOpenError::Unsupported);
+  QCOMPARE(calls, 1);
+  QCOMPARE(failed.count(), 2);
+
+  nextResult = {
+      .error = PermissionOpenError::OpenFailed,
+      .diagnostic = QStringLiteral("simulated settings launcher failure"),
+  };
+  QCOMPARE(probe.openSystemSettings(PermissionKind::WindowsFirewall), nextResult);
+  QCOMPARE(calls, 2);
+  QCOMPARE(failed.count(), 3);
 }
 
 void WindowsFirewallProbeTests::inspectsRealCurrentProcessListener()

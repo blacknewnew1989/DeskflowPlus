@@ -33,9 +33,12 @@ public:
   {
   }
 
-  [[nodiscard]] bool openSystemSettings(PermissionKind) override
+  [[nodiscard]] PermissionOpenResult openSystemSettings(PermissionKind) override
   {
-    return false;
+    return {
+        .error = PermissionOpenError::Unsupported,
+        .diagnostic = QStringLiteral("macOS system settings are unavailable on this platform"),
+    };
   }
 
 private:
@@ -44,7 +47,7 @@ private:
     return {
         .kind = kind,
         .state = PermissionState::Unknown,
-        .errorCode = static_cast<int>(PermissionErrorCode::ProbeUnavailable),
+        .errorCode = PermissionErrorCode::ProbeUnavailable,
         .diagnostic = QStringLiteral("macOS permission APIs are unavailable on this platform"),
     };
   }
@@ -58,4 +61,3 @@ std::unique_ptr<IMacPermissionBackend> createMacPermissionBackend()
 }
 
 } // namespace deskflow::relaydesk
-

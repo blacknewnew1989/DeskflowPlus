@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "relaydesk/platform/PermissionSnapshot.h"
+#include "relaydesk/platform/IPlatformPermissions.h"
 
 #include <QObject>
 
@@ -26,7 +26,7 @@ public:
   [[nodiscard]] virtual PermissionProbeEntry accessibility() const = 0;
   [[nodiscard]] virtual PermissionProbeEntry inputMonitoring() const = 0;
   virtual void refreshLocalNetwork() = 0;
-  [[nodiscard]] virtual bool openSystemSettings(PermissionKind kind) = 0;
+  [[nodiscard]] virtual PermissionOpenResult openSystemSettings(PermissionKind kind) = 0;
 
 Q_SIGNALS:
   void localNetworkChanged(deskflow::relaydesk::PermissionProbeEntry entry);
@@ -35,4 +35,3 @@ Q_SIGNALS:
 [[nodiscard]] std::unique_ptr<IMacPermissionBackend> createMacPermissionBackend();
 
 } // namespace deskflow::relaydesk
-

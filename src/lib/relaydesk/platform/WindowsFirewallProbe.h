@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "relaydesk/platform/PermissionSnapshot.h"
+#include "relaydesk/platform/IPlatformPermissions.h"
 
 #include <QDateTime>
 #include <QList>
@@ -50,14 +50,14 @@ struct WindowsFirewallInspection
   QString listeningPortDiagnostic;
 };
 
-class WindowsFirewallProbe final : public QObject
+class WindowsFirewallProbe final : public QObject, public IPlatformPermissions
 {
   Q_OBJECT
 
 public:
   using Inspector = std::function<WindowsFirewallInspection(WindowsFirewallProbeRequest)>;
   using Clock = std::function<QDateTime()>;
-  using SettingsOpener = std::function<bool(QString *)>;
+  using SettingsOpener = std::function<PermissionOpenResult()>;
 
   explicit WindowsFirewallProbe(
       Inspector inspector = {}, Clock clock = {}, SettingsOpener settingsOpener = {}, QObject *parent = nullptr
@@ -66,15 +66,15 @@ public:
   // COM and TCP table inspection run on the global worker pool. This method
   // only validates/schedules work and never blocks the calling GUI thread.
   void refresh(WindowsFirewallProbeRequest request);
-  [[nodiscard]] PermissionSnapshot current() const;
+  [[nodiscard]] PermissionSnapshot current() const override;
   [[nodiscard]] bool isRefreshing() const noexcept;
-  [[nodiscard]] bool openSystemSettings(PermissionKind kind);
+  [[nodiscard]] PermissionOpenResult openSystemSettings(PermissionKind kind) override;
 
   [[nodiscard]] static WindowsFirewallInspection inspectCurrentSystem(WindowsFirewallProbeRequest request);
 
 Q_SIGNALS:
   void snapshotChanged(PermissionSnapshot snapshot);
-  void settingsOpenFailed(PermissionKind kind, QString diagnostic);
+  void settingsOpenFailed(PermissionKind kind, PermissionOpenResult result);
 
 private:
   [[nodiscard]] PermissionSnapshot snapshotFromInspection(const WindowsFirewallInspection &inspection) const;

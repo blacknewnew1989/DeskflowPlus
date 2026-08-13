@@ -22,7 +22,7 @@ PermissionProbeEntry entry(PermissionKind kind, PermissionState state, Permissio
   return {
       .kind = kind,
       .state = state,
-      .errorCode = static_cast<int>(error),
+      .errorCode = error,
       .canOpenSettings = state == PermissionState::Denied,
   };
 }
@@ -41,6 +41,7 @@ public:
   );
   int refreshCount = 0;
   QList<PermissionKind> opened;
+  PermissionOpenResult openResult;
 
   [[nodiscard]] PermissionProbeEntry localNetwork() const override
   {
@@ -62,10 +63,10 @@ public:
     ++refreshCount;
   }
 
-  [[nodiscard]] bool openSystemSettings(PermissionKind kind) override
+  [[nodiscard]] PermissionOpenResult openSystemSettings(PermissionKind kind) override
   {
     opened.append(kind);
-    return true;
+    return openResult;
   }
 
   void publishLocal(PermissionProbeEntry value)
@@ -100,7 +101,7 @@ void MacPermissionProbeTests::publishesTypedSnapshotWithoutInventingGrants()
   QCOMPARE(snapshot.entries.size(), 3);
   QCOMPARE(snapshot.entries.at(0).kind, PermissionKind::MacLocalNetwork);
   QCOMPARE(snapshot.entries.at(0).state, PermissionState::Unknown);
-  QCOMPARE(snapshot.entries.at(1).errorCode, static_cast<int>(PermissionErrorCode::MacAccessibilityDenied));
+  QCOMPARE(snapshot.entries.at(1).errorCode, PermissionErrorCode::MacAccessibilityDenied);
   QCOMPARE(snapshot.entries.at(2).state, PermissionState::Granted);
   QCOMPARE(fake->refreshCount, 1);
 }
@@ -119,7 +120,7 @@ void MacPermissionProbeTests::appliesAsynchronousLocalNetworkResult()
   QCOMPARE(changed.count(), 1);
   const auto snapshot = changed.takeFirst().constFirst().value<PermissionSnapshot>();
   QCOMPARE(snapshot.entries.constFirst().state, PermissionState::Denied);
-  QCOMPARE(snapshot.entries.constFirst().errorCode, static_cast<int>(PermissionErrorCode::MacLocalNetworkDenied));
+  QCOMPARE(snapshot.entries.constFirst().errorCode, PermissionErrorCode::MacLocalNetworkDenied);
   QCOMPARE(snapshot.entries.at(1).kind, PermissionKind::MacAccessibility);
 }
 
@@ -129,33 +130,42 @@ void MacPermissionProbeTests::onlyRoutesMacSettingsKinds()
   auto *fake = backend.get();
   MacPermissionProbe probe(std::move(backend));
 
-  QVERIFY(probe.openSystemSettings(PermissionKind::MacAccessibility));
-  QVERIFY(probe.openSystemSettings(PermissionKind::MacInputMonitoring));
-  QVERIFY(probe.openSystemSettings(PermissionKind::MacLocalNetwork));
-  QVERIFY(!probe.openSystemSettings(PermissionKind::WindowsFirewall));
+  QVERIFY(probe.openSystemSettings(PermissionKind::MacAccessibility).ok());
+  QVERIFY(probe.openSystemSettings(PermissionKind::MacInputMonitoring).ok());
+  QVERIFY(probe.openSystemSettings(PermissionKind::MacLocalNetwork).ok());
+  const auto unsupported = probe.openSystemSettings(PermissionKind::WindowsFirewall);
+  QCOMPARE(unsupported.error, PermissionOpenError::Unsupported);
   QCOMPARE(fake->opened.size(), 3);
+
+  fake->openResult = {
+      .error = PermissionOpenError::OpenFailed,
+      .diagnostic = QStringLiteral("simulated native open failure"),
+  };
+  const auto failed = probe.openSystemSettings(PermissionKind::MacAccessibility);
+  QCOMPARE(failed.error, PermissionOpenError::OpenFailed);
+  QCOMPARE(failed.diagnostic, fake->openResult.diagnostic);
 }
 
 void MacPermissionProbeTests::mapsLocalNetworkNativeStatesConservatively()
 {
   const auto ready = macLocalNetworkEntry(MacLocalNetworkProbeState::Ready, false);
   QCOMPARE(ready.state, PermissionState::Granted);
-  QCOMPARE(ready.errorCode, static_cast<int>(PermissionErrorCode::None));
+  QCOMPARE(ready.errorCode, PermissionErrorCode::None);
 
   const auto denied = macLocalNetworkEntry(MacLocalNetworkProbeState::Waiting, true, 2, -65570);
   QCOMPARE(denied.state, PermissionState::Denied);
-  QCOMPARE(denied.errorCode, static_cast<int>(PermissionErrorCode::MacLocalNetworkDenied));
+  QCOMPARE(denied.errorCode, PermissionErrorCode::MacLocalNetworkDenied);
   QVERIFY(denied.canOpenSettings);
   QVERIFY(denied.diagnostic.contains(QStringLiteral("-65570")));
 
   const auto offline = macLocalNetworkEntry(MacLocalNetworkProbeState::Waiting, false, 1, 50);
   QCOMPARE(offline.state, PermissionState::Unknown);
-  QCOMPARE(offline.errorCode, static_cast<int>(PermissionErrorCode::ProbeUnavailable));
+  QCOMPARE(offline.errorCode, PermissionErrorCode::ProbeUnavailable);
   QVERIFY(!offline.canOpenSettings);
 
   const auto failed = macLocalNetworkEntry(MacLocalNetworkProbeState::Failed, false, 1, 22);
   QCOMPARE(failed.state, PermissionState::Unknown);
-  QCOMPARE(failed.errorCode, static_cast<int>(PermissionErrorCode::ProbeUnavailable));
+  QCOMPARE(failed.errorCode, PermissionErrorCode::ProbeUnavailable);
 }
 
 QTEST_GUILESS_MAIN(MacPermissionProbeTests)

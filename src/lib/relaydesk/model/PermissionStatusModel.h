@@ -72,7 +72,7 @@ private:
   [[nodiscard]] static QString titleText(PermissionKind kind);
   [[nodiscard]] static QString statusText(PermissionState state);
   [[nodiscard]] static QString messageText(const PermissionProbeEntry &entry);
-  [[nodiscard]] static int expectedErrorCode(PermissionKind kind);
+  [[nodiscard]] static PermissionErrorCode expectedErrorCode(PermissionKind kind);
   [[nodiscard]] int primaryAttentionRow() const;
 
   PermissionSnapshot m_snapshot;
