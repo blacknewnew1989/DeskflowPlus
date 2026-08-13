@@ -252,7 +252,8 @@ void MainWindow::setupRelayDeskDiscovery()
   }
 
   const auto inputPortValue = Settings::value(Settings::Core::Port).toInt();
-  const auto inputPort = inputPortValue > 0 && inputPortValue <= 65535 ? static_cast<quint16>(inputPortValue) : 0;
+  const quint16 inputPort =
+      inputPortValue > 0 && inputPortValue <= 65535 ? static_cast<quint16>(inputPortValue) : 0;
   deskflow::relaydesk::DeviceInfo localDevice{
       .deviceId = *deviceId,
       .displayName = Settings::value(Settings::Core::ComputerName).toString(),
