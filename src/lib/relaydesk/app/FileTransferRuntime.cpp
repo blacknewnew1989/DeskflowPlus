@@ -268,6 +268,14 @@ bool FileTransferRuntime::start(QString *diagnostic)
     return true;
   }
 
+  if (m_options.localCapabilities.canReceiveFiles()) {
+    const auto message = QStringLiteral(
+        "File transfer runtime cannot advertise file.receive.v1 until its receiver is composed"
+    );
+    setDiagnostic(diagnostic, message);
+    Q_EMIT errorOccurred(FileTransferRuntimeError::CapabilityFailed, FileTlsError::ProtocolError, message);
+    return false;
+  }
   QString capabilityDiagnostic;
   if (CapabilityCodec::encode(m_options.localCapabilities, &capabilityDiagnostic).isEmpty()) {
     setDiagnostic(diagnostic, capabilityDiagnostic);
@@ -828,6 +836,13 @@ void FileTransferRuntime::handleFrame(FileTlsConnection &connection, Frame frame
     );
     return;
   }
+  if (frame.type == MessageType::TransferOffer && !context->negotiated->localCanReceiveFiles) {
+    failConnection(
+        connection, FileTransferRuntimeError::CapabilityFailed, FileTlsError::ProtocolError,
+        QStringLiteral("Peer sent TRANSFER_OFFER without negotiated file.receive.v1 capability")
+    );
+    return;
+  }
   routeTransferFrame(*context->peer, frame);
 }
 
@@ -955,6 +970,13 @@ void FileTransferRuntime::sendOffer(OutgoingSession &session)
   const auto negotiated = negotiatedCapabilities(session.peer);
   if (!negotiated.has_value() || !session.manifest.has_value() || !session.pagePlan.has_value() ||
       session.control == nullptr) {
+    return;
+  }
+  if (!negotiated->peerCanReceiveFiles) {
+    failOutgoing(
+        session, TransferErrorCode::OfferFailed,
+        QStringLiteral("Peer did not advertise file.receive.v1 capability")
+    );
     return;
   }
   TransferOffer offer{

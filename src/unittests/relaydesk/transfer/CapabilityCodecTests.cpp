@@ -16,7 +16,8 @@ CapabilitiesMessage localCapabilities()
 {
   return {
       .features =
-          {QStringLiteral("file.v1"), QStringLiteral("folder.v1"), QStringLiteral("resume.v1"), QStringLiteral("sha256")
+          {QStringLiteral("file.v1"), QStringLiteral("file.receive.v1"), QStringLiteral("folder.v1"),
+           QStringLiteral("resume.v1"), QStringLiteral("sha256")
           },
       .preferredChunkBytes = 1U * 1024U * 1024U,
       .maxPayloadBytes = 4U * 1024U * 1024U,
@@ -167,6 +168,8 @@ void CapabilityCodecTests::negotiatesIntersectionAndLowerLimits()
   QVERIFY2(result.ok(), qPrintable(result.diagnostic));
   QCOMPARE(result.capabilities->protocolMajorVersion, 1);
   QCOMPARE(result.capabilities->features, QStringList({QStringLiteral("file.v1"), QStringLiteral("sha256")}));
+  QVERIFY(result.capabilities->localCanReceiveFiles);
+  QVERIFY(!result.capabilities->peerCanReceiveFiles);
   QCOMPARE(result.capabilities->chunkBytes, 512U * 1024U);
   QCOMPARE(result.capabilities->maxPayloadBytes, 2U * 1024U * 1024U);
   QCOMPARE(result.capabilities->maxConcurrentTransfers, 1);

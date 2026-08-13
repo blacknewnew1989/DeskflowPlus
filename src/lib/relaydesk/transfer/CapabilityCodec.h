@@ -18,6 +18,9 @@ namespace relaydesk::transfer {
 inline constexpr quint32 kMaximumNegotiablePayloadBytes = 64U * 1024U * 1024U;
 inline constexpr quint32 kMaximumNegotiableManifestEntries = 100'000U;
 inline constexpr quint16 kMaximumNegotiableConcurrency = 64U;
+inline constexpr auto kFileProtocolFeature = "file.v1";
+inline constexpr auto kFileReceiveFeature = "file.receive.v1";
+inline constexpr auto kSha256Feature = "sha256";
 
 struct CapabilitiesMessage
 {
@@ -28,6 +31,11 @@ struct CapabilitiesMessage
   quint16 maxConcurrentFiles = 2;
   quint32 maxManifestEntries = kMaximumNegotiableManifestEntries;
   QList<ConflictPolicy> conflictPolicies = {ConflictPolicy::AutoRename, ConflictPolicy::Ask};
+
+  [[nodiscard]] bool canReceiveFiles() const
+  {
+    return features.contains(QString::fromLatin1(kFileReceiveFeature));
+  }
 
   [[nodiscard]] bool operator==(const CapabilitiesMessage &) const = default;
 };
@@ -75,6 +83,8 @@ struct NegotiatedCapabilities
   quint16 maxConcurrentFiles = 0;
   quint32 maxManifestEntries = 0;
   QList<ConflictPolicy> conflictPolicies;
+  bool localCanReceiveFiles = false;
+  bool peerCanReceiveFiles = false;
 
   [[nodiscard]] bool operator==(const NegotiatedCapabilities &) const = default;
 };
