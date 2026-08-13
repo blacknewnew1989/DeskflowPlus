@@ -14,6 +14,60 @@
 
 namespace deskflow::relaydesk {
 
+namespace {
+
+FileSafetyResult ensureSafeDirectoryPath(
+    IPlatformFileSafety &fileSafety, const QString &receiveRoot, const QString &absoluteDirectory
+)
+{
+  QDir root(receiveRoot);
+  QString relative = root.relativeFilePath(absoluteDirectory);
+  relative.replace(QLatin1Char('\\'), QLatin1Char('/'));
+  if (relative == QStringLiteral(".")) {
+    return {};
+  }
+  const auto path = ::relaydesk::transfer::PathPolicy::validateRelative(relative);
+  if (!path.ok || path.normalized != relative) {
+    return {
+        .error = FileSafetyError::DestinationInvalid,
+        .diagnostic = QStringLiteral("receive directory is not a normalized child of the receive root"),
+    };
+  }
+  QString current = QDir::cleanPath(receiveRoot);
+  for (const auto &component : relative.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+    current = QDir(current).absoluteFilePath(component);
+    auto safe = fileSafety.verifyNoLinkTraversal(
+        {.receiveRoot = receiveRoot, .candidatePath = current}
+    );
+    if (!safe.ok()) {
+      return safe;
+    }
+    const QFileInfo existing(current);
+    if (existing.exists()) {
+      if (!existing.isDir()) {
+        return {
+            .error = FileSafetyError::DestinationInvalid,
+            .diagnostic = QStringLiteral("receive path parent exists but is not a directory"),
+        };
+      }
+    } else if (!QDir().mkdir(current)) {
+      return {
+          .error = FileSafetyError::DestinationInvalid,
+          .diagnostic = QStringLiteral("could not create a verified receive directory"),
+      };
+    }
+    safe = fileSafety.verifyNoLinkTraversal(
+        {.receiveRoot = receiveRoot, .candidatePath = current}
+    );
+    if (!safe.ok()) {
+      return safe;
+    }
+  }
+  return {};
+}
+
+} // namespace
+
 IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &fileSafety)
     : m_fileSafety(fileSafety), m_ownerThread(QThread::currentThread())
 {
@@ -55,12 +109,12 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
         .diagnostic = QStringLiteral("conflict policy requires a decision before receiving file bytes"),
     };
   }
-  if (!QDir().mkpath(QFileInfo(target->absolutePath).absolutePath())) {
+  const auto targetDirectory = ensureSafeDirectoryPath(
+      m_fileSafety, request.receiveRoot, QFileInfo(target->absolutePath).absolutePath()
+  );
+  if (!targetDirectory.ok()) {
     (void)m_conflicts.release(target->reservationId);
-    return {
-        .error = FileReceiverError::DirectoryCreateFailed,
-        .diagnostic = QStringLiteral("could not create the reserved target directory"),
-    };
+    return safetyFailure(targetDirectory);
   }
   const auto safeTarget = m_fileSafety.verifyNoLinkTraversal(
       {.receiveRoot = request.receiveRoot, .candidatePath = target->absolutePath}
@@ -86,6 +140,13 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
         .pathError = staging.error,
         .diagnostic = staging.diagnostic,
     };
+  }
+  const auto stagingDirectory = ensureSafeDirectoryPath(
+      m_fileSafety, request.receiveRoot, QFileInfo(stagingPath).absolutePath()
+  );
+  if (!stagingDirectory.ok()) {
+    (void)m_conflicts.release(target->reservationId);
+    return safetyFailure(stagingDirectory);
   }
   const auto safeStaging = m_fileSafety.verifyNoLinkTraversal(
       {.receiveRoot = request.receiveRoot, .candidatePath = stagingPath}

@@ -55,6 +55,8 @@ public:
       QString *diagnostic = nullptr
   );
   void peerDisconnected(const DeviceId &peerDeviceId);
+  [[nodiscard]] bool contains(const ::relaydesk::transfer::TransferId &transferId) const;
+  [[nodiscard]] QList<::relaydesk::transfer::TransferSnapshot> activeTransfers() const;
 
 Q_SIGNALS:
   void incomingOffer(::relaydesk::transfer::IncomingOffer offer);
@@ -72,6 +74,10 @@ Q_SIGNALS:
   );
   void transferAdded(::relaydesk::transfer::TransferSnapshot transfer);
   void transferChanged(::relaydesk::transfer::TransferSnapshot transfer);
+  void pipelineFailed(
+      ::relaydesk::transfer::TransferId transferId,
+      ::relaydesk::transfer::TransferErrorCode errorCode, QString diagnostic
+  );
 
 private:
   struct Session;
