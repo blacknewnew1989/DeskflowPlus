@@ -9,6 +9,7 @@
 #include "relaydesk/device/DeviceInfo.h"
 #include "relaydesk/device/DeviceSnapshot.h"
 #include "relaydesk/pairing/PairingMessageCodec.h"
+#include "relaydesk/pairing/PairingOperation.h"
 #include "relaydesk/pairing/PairingStateMachine.h"
 #include "relaydesk/pairing/PairingTrustCommitter.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
@@ -31,42 +32,6 @@ struct PairingEndpoint
   quint16 port = 0;
 
   bool operator==(const PairingEndpoint &) const = default;
-};
-
-enum class PairingOperationError
-{
-  None,
-  InvalidLocalDevice,
-  InvalidPeer,
-  InvalidEndpoint,
-  ActiveSessionExists,
-  SessionNotFound,
-  SessionMismatch,
-  PeerMismatch,
-  EndpointMismatch,
-  Expired,
-  InvalidCode,
-  UnexpectedMessage,
-  DuplicateMessage,
-  DecodeFailed,
-  InvalidState,
-  SendFailed,
-  PersistenceFailed,
-  RevokeFailed,
-};
-
-struct PairingOperationResult
-{
-  PairingOperationError error = PairingOperationError::None;
-  PairingMessageError messageError = PairingMessageError::None;
-  PairingError stateError = PairingError::None;
-  PairingTrustCommitError trustError = PairingTrustCommitError::None;
-  QString diagnostic;
-
-  [[nodiscard]] bool ok() const noexcept
-  {
-    return error == PairingOperationError::None;
-  }
 };
 
 struct PairingTransportResult
@@ -156,5 +121,3 @@ private:
 } // namespace deskflow::relaydesk
 
 Q_DECLARE_METATYPE(deskflow::relaydesk::PairingEndpoint)
-Q_DECLARE_METATYPE(deskflow::relaydesk::PairingOperationError)
-Q_DECLARE_METATYPE(deskflow::relaydesk::PairingOperationResult)

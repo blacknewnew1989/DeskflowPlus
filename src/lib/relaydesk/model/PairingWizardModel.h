@@ -6,17 +6,12 @@
 
 #pragma once
 
-#include "relaydesk/pairing/PairingStateMachine.h"
+#include "relaydesk/pairing/IPairingService.h"
 
 #include <QObject>
 #include <QString>
 
 #include <optional>
-
-namespace deskflow::relaydesk {
-class IPairingService;
-struct PairingOperationResult;
-}
 
 namespace deskflow::relaydesk::model {
 
@@ -48,7 +43,7 @@ class PairingWizardModel final : public QObject
 
 public:
   explicit PairingWizardModel(QObject *parent = nullptr);
-  explicit PairingWizardModel(PairingStateMachine &pairing, QObject *parent = nullptr);
+  explicit PairingWizardModel(IPairingService &service, QObject *parent = nullptr);
 
   void bindService(IPairingService &service);
 
@@ -74,21 +69,14 @@ public:
   [[nodiscard]] bool canCancel() const;
   [[nodiscard]] bool terminal() const;
 
-  [[nodiscard]] bool start(
-      const DeviceSnapshot &peer, const QByteArray &peerFingerprintSha256,
-      const std::optional<QString> &receivedSas = std::nullopt
-  );
-
 public Q_SLOTS:
   bool confirmMatchingSas();
   bool submitDisplayedSas(const QString &sixDigits);
   bool cancel();
-  bool expireIfNeeded();
 
 Q_SIGNALS:
   void changed();
   void actionFailed(QString message);
-  void startRequested(DeviceSnapshot peer, QByteArray peerFingerprintSha256, QString receivedSas);
 
 private Q_SLOTS:
   void pairingChanged(const PairingSnapshot &snapshot);
@@ -104,7 +92,6 @@ private:
   bool applyResult(const PairingOperationResult &result);
   void updateSnapshot(const PairingSnapshot &snapshot);
 
-  PairingStateMachine *m_pairing = nullptr;
   IPairingService *m_service = nullptr;
   std::optional<PairingSnapshot> m_snapshot;
   QByteArray m_peerFingerprint;

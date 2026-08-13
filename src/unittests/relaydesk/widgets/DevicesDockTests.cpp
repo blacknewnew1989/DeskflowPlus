@@ -11,6 +11,8 @@
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
 
+#include "../FakePairingService.h"
+
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDragEnterEvent>
@@ -31,6 +33,7 @@
 
 using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
+using namespace deskflow::relaydesk::test;
 using namespace deskflow::relaydesk::widgets;
 
 namespace {
@@ -47,6 +50,22 @@ DeviceSnapshot peerSnapshot(DevicePresence presence = DevicePresence::Discovered
       .trusted = trusted,
       .latencyMs = 3,
       .capabilities = {.input = true, .clipboardText = true, .fileV1 = true},
+  };
+}
+
+PairingSnapshot pairingSnapshot(
+    DeviceSnapshot peer, PairingState state, QString sas = {}, QString errorMessageKey = {}
+)
+{
+  peer.presence = DevicePresence::Pairing;
+  return {
+      .pairingSessionId = QUuid::createUuid(),
+      .peer = std::move(peer),
+      .state = state,
+      .sixDigitSas = std::move(sas),
+      .expiresAtUtc = QDateTime::currentDateTimeUtc().addSecs(60),
+      .attemptsRemaining = 3,
+      .errorMessageKey = std::move(errorMessageKey),
   };
 }
 
@@ -88,9 +107,9 @@ DeviceSnapshot peerSnapshot(DevicePresence presence = DevicePresence::Discovered
 
 struct Fixture
 {
-  PairingStateMachine pairingState{{}, {}, []() { return 42U; }};
+  FakePairingService pairingService;
   DeviceHomeModel devices;
-  PairingWizardModel pairing{pairingState};
+  PairingWizardModel pairing{pairingService};
   PermissionStatusModel permissions{PermissionPlatform::Other};
   DevicesDock dock{devices, pairing, permissions};
   QByteArray fingerprint = QByteArray::fromHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
@@ -185,10 +204,8 @@ void DevicesDockTests::rendersAndDrivesSharedPairingModel()
   Fixture fixture;
   const auto peer = peerSnapshot();
   fixture.dock.show();
-  QVERIFY(fixture.pairing.start(peer, fixture.fingerprint, QStringLiteral("123456")));
-  const auto sessionId = fixture.pairingState.snapshot()->pairingSessionId;
-  QVERIFY(fixture.pairingState.markTransportReady(sessionId).ok());
-  QVERIFY(fixture.pairingState.markTranscriptExchanged(sessionId).ok());
+  const auto pairing = pairingSnapshot(peer, PairingState::AwaitingUserComparison, QStringLiteral("123456"));
+  fixture.pairingService.publish(pairing, fixture.fingerprint);
 
   auto *panel = fixture.dock.findChild<QFrame *>(QStringLiteral("relaydeskPairingPanel"));
   auto *state = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskPairingStateLabel"));
@@ -216,7 +233,9 @@ void DevicesDockTests::rendersAndDrivesSharedPairingModel()
   entry->setText(QStringLiteral("123456"));
   QTRY_VERIFY(submit->isEnabled());
   QTest::mouseClick(submit, Qt::LeftButton);
-  QCOMPARE(fixture.pairingState.snapshot()->state, PairingState::Confirming);
+  QCOMPARE(fixture.pairingService.lastSubmittedSession, pairing.pairingSessionId);
+  QCOMPARE(fixture.pairingService.lastSubmittedSas, QStringLiteral("123456"));
+  QCOMPARE(fixture.pairingService.snapshot()->state, PairingState::Confirming);
   QCOMPARE(state->text(), QStringLiteral("Confirming pairing"));
   QVERIFY(!entry->isVisible());
 }
@@ -225,10 +244,10 @@ void DevicesDockTests::confirmsAndCancelsFromPairingPanel()
 {
   Fixture fixture;
   fixture.dock.show();
-  QVERIFY(fixture.pairing.start(peerSnapshot(), fixture.fingerprint, QStringLiteral("123456")));
-  const auto sessionId = fixture.pairingState.snapshot()->pairingSessionId;
-  QVERIFY(fixture.pairingState.markTransportReady(sessionId).ok());
-  QVERIFY(fixture.pairingState.markTranscriptExchanged(sessionId).ok());
+  const auto pairing = pairingSnapshot(
+      peerSnapshot(), PairingState::AwaitingUserComparison, QStringLiteral("123456")
+  );
+  fixture.pairingService.publish(pairing, fixture.fingerprint);
 
   auto *confirm = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskConfirmMatchingSasButton"));
   auto *cancel = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskCancelPairingButton"));
@@ -236,32 +255,36 @@ void DevicesDockTests::confirmsAndCancelsFromPairingPanel()
   QVERIFY(cancel != nullptr);
   QTRY_VERIFY(confirm->isVisible());
   QTest::mouseClick(confirm, Qt::LeftButton);
-  QCOMPARE(fixture.pairingState.snapshot()->state, PairingState::Confirming);
+  QCOMPARE(fixture.pairingService.lastConfirmedSession, pairing.pairingSessionId);
+  QCOMPARE(fixture.pairingService.snapshot()->state, PairingState::Confirming);
   QTRY_VERIFY(cancel->isVisible());
   QTest::mouseClick(cancel, Qt::LeftButton);
-  QCOMPARE(fixture.pairingState.snapshot()->state, PairingState::Rejected);
+  QCOMPARE(fixture.pairingService.lastCancelledSession, pairing.pairingSessionId);
+  QCOMPARE(fixture.pairingService.snapshot()->state, PairingState::Rejected);
   QVERIFY(!cancel->isVisible());
 }
 
 void DevicesDockTests::rendersExpiredPairingState()
 {
-  using namespace std::chrono_literals;
-  auto now = QDateTime::fromString(QStringLiteral("2026-08-12T04:00:00Z"), Qt::ISODate);
-  PairingStateMachine pairingState({.validity = 5s}, [&now]() { return now; }, []() { return 42U; });
+  FakePairingService pairingService;
   DeviceHomeModel devices;
-  PairingWizardModel pairing(pairingState);
+  PairingWizardModel pairing(pairingService);
   PermissionStatusModel permissions(PermissionPlatform::Other);
   DevicesDock dock(devices, pairing, permissions);
   const auto fingerprint = QByteArray::fromHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
 
   dock.show();
-  QVERIFY(pairing.start(peerSnapshot(), fingerprint, QStringLiteral("123456")));
+  auto snapshot = pairingSnapshot(
+      peerSnapshot(), PairingState::AwaitingUserComparison, QStringLiteral("123456")
+  );
+  pairingService.publish(snapshot, fingerprint);
   auto *state = dock.findChild<QLabel *>(QStringLiteral("relaydeskPairingStateLabel"));
   auto *error = dock.findChild<QLabel *>(QStringLiteral("relaydeskPairingErrorLabel"));
   QVERIFY(state != nullptr);
   QVERIFY(error != nullptr);
-  now = now.addSecs(6);
-  QVERIFY(pairing.expireIfNeeded());
+  snapshot.state = PairingState::Expired;
+  snapshot.errorMessageKey = QStringLiteral("pairing.code.expired");
+  pairingService.publish(snapshot, fingerprint);
   QCOMPARE(state->text(), QStringLiteral("The pairing code expired. Generate a new code."));
   QCOMPARE(error->text(), QStringLiteral("The pairing code expired. Generate a new code."));
   QVERIFY(error->isVisible());
@@ -270,9 +293,9 @@ void DevicesDockTests::rendersExpiredPairingState()
 void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
 {
   qRegisterMetaType<PermissionKind>();
-  PairingStateMachine pairingState;
+  FakePairingService pairingService;
   DeviceHomeModel devices;
-  PairingWizardModel pairing(pairingState);
+  PairingWizardModel pairing(pairingService);
   PermissionStatusModel permissions(PermissionPlatform::Windows);
   DevicesDock dock(devices, pairing, permissions);
   dock.show();

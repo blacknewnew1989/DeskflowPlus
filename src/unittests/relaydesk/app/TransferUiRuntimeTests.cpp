@@ -14,6 +14,8 @@
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 
+#include "../FakePairingService.h"
+
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
@@ -23,6 +25,7 @@
 
 using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
+using namespace deskflow::relaydesk::test;
 using namespace deskflow::relaydesk::widgets;
 using namespace relaydesk::transfer;
 
@@ -115,9 +118,9 @@ TransferHistoryRecord historyRecord(
 
 struct Fixture
 {
-  PairingStateMachine pairingState{{}, {}, []() { return 42U; }};
+  FakePairingService pairingService;
   DeviceHomeModel devices;
-  PairingWizardModel pairing{pairingState};
+  PairingWizardModel pairing{pairingService};
   PermissionStatusModel permissions{PermissionPlatform::Other};
   DevicesDock devicesDock{devices, pairing, permissions};
   TransferCenterModel transfers;
