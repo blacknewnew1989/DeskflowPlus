@@ -18,6 +18,8 @@ enum class PeerPinningError
   UnknownPeer,
   RevokedPeer,
   FingerprintChanged,
+  DeviceIdMismatch,
+  UnauthenticatedPeer,
 };
 
 struct PeerPinningResult
