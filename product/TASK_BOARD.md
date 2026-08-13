@@ -12,7 +12,8 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 当前证据 |
 |---|---|---|---|
-| COMP-004 | IFileTransferService / FileTransferRuntime composition | A6/A0 | service contract + independent TLS listener lifecycle integrated; frame/session/send/receive wiring continues |
+| PROTO-FREEZE-001 | RelayDesk v1 wire protocol / shared interface freeze | A6/A2/A0 | PRD priority integrated; auditing every MessageType, filling missing codecs/errors/vectors, freezing docs/05/18/19 before further service expansion |
+| COMP-004 | IFileTransferService / FileTransferRuntime composition | A6/A0 | safe outgoing slice integrated through `b87dde214`; further service expansion paused until protocol/interface freeze tag PASS |
 | TEST-005 | Windows 安装升级卸载回归 | A7 | 原生临时目标验证中；macOS clean-install 待 runner |
 
 ## Blocked
