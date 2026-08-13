@@ -378,7 +378,68 @@ git pull --ff-only origin product/relaydesk-v1
 git switch -c agent/a5/macos-<task>    # 不存在时创建
 ```
 
-### 5.3 接口协同
+### 5.3 活跃开发期间定时同步
+
+Windows A4 与 macOS A5 在活跃开发期间必须自动轮询 GitHub，不依赖用户提醒。默认同步点为：
+
+- 会话启动并完成仓库初始化后；
+- 开始每个可独立验证的小功能之前；
+- 本地连续开发每满 15 分钟；
+- 自己完成 commit/push 后；
+- 准备消费共享接口、合并平台代理提交或运行跨平台测试之前；
+- A0 推送产品提交、协议标签、阶段标签或紧急协作消息后。
+
+定时同步至少执行 `git fetch origin --prune --tags`，读取：
+
+- `origin/product/relaydesk-v1` 是否前进；
+- 最新 `relaydesk-protocol-v1-*` 与 `relaydesk-phase*` 标签；
+- `coord/platform-sync` 的新消息；
+- 对方已在交流消息中明确列出的平台代理分支和 commit。
+
+平台代理不得在工作树存在未提交改动时盲目切换或合并。发现产品分支前进后，先完成当前安全
+小切片并提交，或使用独立 worktree；随后把 `origin/product/relaydesk-v1` 合入自己的平台代理
+分支，运行受影响测试并推送。禁止 force push、`reset --hard` 或静默丢弃本地/对方改动。
+
+“每 15 分钟”是活跃会话内的最长轮询间隔，不要求无人运行的 Codex 会话在后台常驻；会话恢复
+后的第一项协作操作必须立即同步。
+
+### 5.4 Windows/macOS 交流区
+
+平台代理唯一的持久化交流区为：
+
+```text
+branch: coord/platform-sync
+path:   product/working/platform-sync/
+```
+
+目录按写入方隔离：
+
+```text
+product/working/platform-sync/
+├── a0/       # 仅 A0 写：广播、冻结点、集成结果
+├── windows/  # 仅 A4 写：Windows 状态、接口需求、交接
+├── macos/    # 仅 A5 写：macOS 状态、接口需求、交接
+├── README.md
+└── TEMPLATE.md
+```
+
+每条消息使用独立 Markdown 文件，文件名为
+`YYYYMMDD-HHMMSSZ-<task-id>-<short-topic>.md`，UTC 时间只用于排序。消息必须包含 author、
+target、base product SHA、platform branch、commit、status、affected contracts、tests、
+`PASS/FAIL/NOT_RUN`、blocker 和 requested action。不得写入凭据、私钥、用户文件、完整敏感
+路径或大型日志。
+
+`coord/platform-sync` 只保存轻量协作消息，不保存或交换源码、补丁、二进制和构建产物，也不
+取代 `product/relaydesk-v1`、平台代理分支、Actions artifact、`PROJECT_STATE.md` 或
+`TASK_BOARD.md`。代码仍在对应平台代理分支提交，消息只引用可获取的 branch/commit/tag/run。
+
+A4 只追加 `windows/`，A5 只追加 `macos/`，A0 只追加 `a0/`。推送被拒绝时，代理必须自动
+fetch，并在无冲突基础上 rebase 尚未发布的纯消息提交后重试；不得 force push。接收方读到需要
+确认的消息后，在自己的目录新增 ACK 文件并引用原消息路径及所消费的 commit，不修改对方文件。
+A0 负责初始化并维护 `coord/platform-sync`，但 Windows/macOS 可直接在各自目录交流，不必等待
+A0 转述。
+
+### 5.5 接口协同
 
 文件传输协议、公共数据结构和 CMake target 由 A2/A6 先提交并推送。Windows/macOS 适配必须基于同一个共享 commit。
 
@@ -395,9 +456,10 @@ git commit -m "feat(windows): WIN-001 integrate transfer service"
 git push -u origin HEAD
 ```
 
-A0 合并两端分支后触发双平台构建。另一平台不等待用户传文件，直接 fetch。
+A0 合并两端分支后触发双平台构建。另一平台不等待用户传文件，按 5.3 定时 fetch，并通过
+5.4 交流区读取对方的 commit 与验证结果。
 
-### 5.4 共享状态
+### 5.6 共享状态
 
 A0 每次阶段推送同时更新：
 
@@ -612,6 +674,8 @@ python product/scripts/run-github-actions.py --ref product/relaydesk-v1
 | FR-BASE-004 | 品牌集中配置 | P0 |
 | FR-BASE-005 | 当前 GitHub 仓库自动导入、提交和推送 | P0 |
 | FR-BASE-006 | Windows/macOS 自动构建和 artifact | P0 |
+| FR-BASE-007 | Windows/macOS 活跃开发会话至少每 15 分钟及关键边界自动 fetch | P0 |
+| FR-BASE-008 | `coord/platform-sync` 提供目录所有权隔离的追加式平台代理交流区 | P0 |
 
 ### FR-PROTOCOL
 
@@ -763,6 +827,8 @@ Windows→Mac、Mac→Windows 鼠标跨屏、键盘、滚轮、自动重连。
 ### AC-007 Git 协作
 
 远程仓库存在小功能提交、阶段推送、阶段标签和双平台 artifact；两端不依赖手工复制源码。
+Windows/macOS 在活跃开发期间按 5.3 自动同步，并能通过 `coord/platform-sync` 中各自拥有的
+目录交换 commit、测试证据、接口需求和 ACK；交流消息不包含源码、二进制或凭据。
 
 ### AC-008 v1 协议与接口冻结
 
