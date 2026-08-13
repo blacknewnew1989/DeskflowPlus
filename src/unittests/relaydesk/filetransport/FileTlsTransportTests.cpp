@@ -16,6 +16,8 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <thread>
+
 using namespace deskflow::relaydesk;
 using namespace relaydesk::transfer;
 
@@ -161,6 +163,11 @@ void FileTlsTransportTests::pinnedLoopbackAuthenticatesAndTransfersFrame()
   };
   FileTlsFrameSink sink(*client.connection());
   QCOMPARE(sink.queuedBytes(), client.connection()->queuedWriteBytes());
+  SenderFrameSinkResult wrongThreadResult;
+  std::thread wrongThread([&]() { wrongThreadResult = sink.submit(heartbeat); });
+  wrongThread.join();
+  QCOMPARE(wrongThreadResult.status, SenderFrameSinkStatus::Failed);
+  QVERIFY(wrongThreadResult.diagnostic.contains(QStringLiteral("owning thread")));
   QCOMPARE(sink.submit(heartbeat).status, SenderFrameSinkStatus::Accepted);
   QTRY_VERIFY_WITH_TIMEOUT(received.has_value(), 2'000);
   QCOMPARE(*received, heartbeat);

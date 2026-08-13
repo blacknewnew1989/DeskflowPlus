@@ -84,6 +84,7 @@ public:
   [[nodiscard]] SenderFrameSinkResult submit(const Frame &frame) override
   {
     ++submitAttempts;
+    attempted.append(frame);
     const quint64 bytes = encodedFrameBytes(frame);
     if (forceBackpressure || bytes > m_limit || m_queued > m_limit - bytes) {
       return {
@@ -103,6 +104,7 @@ public:
   }
 
   QList<Frame> accepted;
+  QList<Frame> attempted;
   quint64 peakQueued = 0;
   quint64 submitAttempts = 0;
   bool forceBackpressure = false;
@@ -429,11 +431,15 @@ void TransferSenderTests::backpressureBoundsMemoryAndPreservesOrdering()
   QVERIFY(sink.peakQueued <= highWater);
   QVERIFY(pump.bufferedFrameBytes() <= 256 + 512);
   const quint64 producedAtPause = pump.bytesProduced();
+  const quint64 pullsAtPause = pump.sourcePullCount();
   const quint64 attemptsAtPause = sink.submitAttempts;
+  const QList<Frame> framesAttemptedAtPause = sink.attempted;
 
   QCOMPARE(pump.pump().status, SenderPumpStatus::Backpressured);
   QCOMPARE(pump.bytesProduced(), producedAtPause);
+  QCOMPARE(pump.sourcePullCount(), pullsAtPause);
   QCOMPARE(sink.submitAttempts, attemptsAtPause);
+  QCOMPARE(sink.attempted, framesAttemptedAtPause);
   sink.drainTo(lowWater);
   const auto resumed = pump.pump();
   QCOMPARE(resumed.status, SenderPumpStatus::Progressed);
@@ -485,11 +491,18 @@ void TransferSenderTests::detectsSourceMutationAfterBackpressure()
   QCOMPARE(pump.pump().status, SenderPumpStatus::Backpressured);
   QCOMPARE(pump.bytesProduced(), 256);
   QVERIFY(pump.bufferedFrameBytes() > 0);
+  const Frame rejectedFrame = sink.attempted.constLast();
+  const qsizetype attemptsAfterRejection = sink.attempted.size();
   QVERIFY(writeFile(path, QByteArray(1024, '\x42')));
   QVERIFY(setModifiedTime(path, manifest.entry.modifiedUtc.addSecs(10)));
 
   sink.forceBackpressure = false;
   sink.drainTo(0);
+  QCOMPARE(pump.pump().status, SenderPumpStatus::Progressed);
+  QCOMPARE(pump.bytesProduced(), 256);
+  QCOMPARE(sink.attempted.size(), attemptsAfterRejection + 1);
+  QCOMPARE(sink.attempted.constLast(), rejectedFrame);
+  QCOMPARE(sink.accepted.constLast(), rejectedFrame);
   SenderPumpResult result;
   for (int iteration = 0; iteration < 20; ++iteration) {
     result = pump.pump();

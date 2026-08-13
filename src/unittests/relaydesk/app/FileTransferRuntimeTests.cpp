@@ -63,6 +63,7 @@ private Q_SLOTS:
   void trustedPeersNegotiateIndependentFileChannel();
   void routesPostCapabilityFramesAfterPinning();
   void outgoingSingleFileStreamsThroughWorkerPump();
+  void runtimeSourceUsesCanonicalSenderBoundary();
   void invalidIdentityFailsWithoutPublishingAListener();
 };
 
@@ -449,6 +450,23 @@ void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()
   QCOMPARE(latest->progress.completedBytes, static_cast<quint64>(sourceBytes.size()));
   QCOMPARE(latest->progress.completedFiles, quint64{1});
   QVERIFY(runtime.activeTransfers().isEmpty());
+}
+
+void FileTransferRuntimeTests::runtimeSourceUsesCanonicalSenderBoundary()
+{
+#if !defined(RELAYDESK_FILE_TRANSFER_RUNTIME_SOURCE_PATH)
+  QFAIL("runtime source path compile definition is missing");
+#else
+  QFile source(QString::fromUtf8(RELAYDESK_FILE_TRANSFER_RUNTIME_SOURCE_PATH));
+  QVERIFY2(source.open(QIODevice::ReadOnly), qPrintable(source.errorString()));
+  const QByteArray contents = source.readAll();
+  QVERIFY(contents.contains("TransferSenderPump"));
+  QVERIFY(contents.contains("FileTlsFrameSink"));
+  QVERIFY(contents.contains("SenderBackpressureLimits"));
+  QVERIFY(!contents.contains("CapturingFrameSink"));
+  QVERIFY(!contents.contains("writeHighWaterBytes() / 2"));
+  QVERIFY(!contents.contains("singleShot(5"));
+#endif
 }
 
 void FileTransferRuntimeTests::invalidIdentityFailsWithoutPublishingAListener()

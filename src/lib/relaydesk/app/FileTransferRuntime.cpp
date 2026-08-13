@@ -8,6 +8,7 @@
 
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
 #include "relaydesk/discovery/DiscoveryRegistry.h"
+#include "relaydesk/filetransport/FileTlsFrameSink.h"
 #include "relaydesk/transfer/ControlMessageCodec.h"
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
@@ -18,12 +19,15 @@
 #include <QAbstractSocket>
 #include <QFileInfo>
 #include <QFutureWatcher>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QThread>
 #include <QThreadPool>
 #include <QTimer>
 #include <QtConcurrentRun>
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <utility>
 
@@ -33,6 +37,7 @@ using ::relaydesk::transfer::CapabilityCodec;
 using ::relaydesk::transfer::CapabilityNegotiator;
 using ::relaydesk::transfer::Frame;
 using ::relaydesk::transfer::MessageType;
+using ::relaydesk::transfer::SenderBackpressureLimits;
 using ::relaydesk::transfer::SenderFrameSinkResult;
 using ::relaydesk::transfer::SenderFrameSinkStatus;
 using ::relaydesk::transfer::SenderPumpResult;
@@ -45,63 +50,143 @@ constexpr int kSenderFailed = 1003;
 constexpr int kPeerRejected = 1004;
 constexpr int kPeerFileFailed = 1005;
 
-class CapturingFrameSink final : public TransferFrameSink
+quint64 frameMemoryBytes(const Frame &frame) noexcept
+{
+  const quint64 metadataBytes = static_cast<quint64>(frame.metadata.size());
+  const quint64 payloadBytes = static_cast<quint64>(frame.payload.size());
+  const quint64 fixedBytes = static_cast<quint64>(::relaydesk::transfer::kFixedHeaderBytes);
+  const quint64 maximum = std::numeric_limits<quint64>::max();
+  if (metadataBytes > maximum - fixedBytes || payloadBytes > maximum - fixedBytes - metadataBytes) {
+    return maximum;
+  }
+  return fixedBytes + metadataBytes + payloadBytes;
+}
+
+SenderBackpressureLimits senderBackpressureLimits(const FileTlsConnection &connection) noexcept
+{
+  const quint64 highWaterBytes = connection.writeHighWaterBytes();
+  return {
+      .highWaterBytes = highWaterBytes,
+      .lowWaterBytes = highWaterBytes == 0
+                           ? 0
+                           : std::min(::relaydesk::transfer::kDefaultSenderLowWaterBytes, highWaterBytes - 1),
+  };
+}
+
+// The worker sees only this bounded immutable-frame bridge. The app/socket
+// owning thread drains its one accepted frame through FileTlsFrameSink.
+class SenderFrameBridge final : public TransferFrameSink
 {
 public:
+  explicit SenderFrameBridge(SenderBackpressureLimits limits) : m_limits(limits)
+  {
+  }
+
   [[nodiscard]] quint64 queuedBytes() const noexcept override
   {
-    return 0;
+    const QMutexLocker lock(&m_mutex);
+    const quint64 maximum = std::numeric_limits<quint64>::max();
+    return m_frameBytes > maximum - m_transportQueuedBytes ? maximum : m_transportQueuedBytes + m_frameBytes;
   }
 
   [[nodiscard]] SenderFrameSinkResult submit(const Frame &frame) override
   {
+    const quint64 bytes = frameMemoryBytes(frame);
+    const QMutexLocker lock(&m_mutex);
     if (m_frame.has_value()) {
       return {
           .status = SenderFrameSinkStatus::Failed,
-          .diagnostic = QStringLiteral("sender worker produced more than one frame per pump"),
+          .diagnostic = QStringLiteral("sender frame bridge already contains an undrained frame"),
+      };
+    }
+    if (m_limits.highWaterBytes == 0 || bytes > m_limits.highWaterBytes) {
+      return {
+          .status = SenderFrameSinkStatus::Failed,
+          .diagnostic = QStringLiteral("sender frame exceeds the configured TLS write high-water limit"),
+      };
+    }
+    if (m_transportQueuedBytes > m_limits.highWaterBytes - bytes) {
+      return {
+          .status = SenderFrameSinkStatus::Backpressured,
+          .diagnostic = QStringLiteral("sender frame bridge is waiting for TLS write capacity"),
       };
     }
     m_frame = frame;
+    m_frameBytes = bytes;
     return {.status = SenderFrameSinkStatus::Accepted};
   }
 
-  [[nodiscard]] std::optional<Frame> take()
+  void updateTransportQueuedBytes(quint64 bytes) noexcept
   {
-    return std::exchange(m_frame, std::nullopt);
+    const QMutexLocker lock(&m_mutex);
+    m_transportQueuedBytes = bytes;
+  }
+
+  [[nodiscard]] std::optional<Frame> pendingFrame() const
+  {
+    const QMutexLocker lock(&m_mutex);
+    return m_frame;
+  }
+
+  void consumePendingFrame() noexcept
+  {
+    const QMutexLocker lock(&m_mutex);
+    m_frame.reset();
+    m_frameBytes = 0;
   }
 
 private:
+  SenderBackpressureLimits m_limits;
+  mutable QMutex m_mutex;
+  quint64 m_transportQueuedBytes = 0;
+  quint64 m_frameBytes = 0;
   std::optional<Frame> m_frame;
 };
 
 struct SenderWorkResult
 {
   SenderPumpResult result;
-  std::optional<Frame> frame;
-  quint64 bytesProduced = 0;
 };
 
 class SenderWorkerState final
 {
 public:
-  explicit SenderWorkerState(::relaydesk::transfer::TransferSenderRequest request)
-      : m_pump(std::move(request), m_sink)
+  SenderWorkerState(
+      ::relaydesk::transfer::TransferSenderRequest request, SenderBackpressureLimits limits
+  )
+      : m_bridge(limits), m_pump(std::move(request), m_bridge, limits), m_limits(limits)
   {
   }
 
   [[nodiscard]] SenderWorkResult produce()
   {
-    auto result = m_pump.pump();
-    return {
-        .result = std::move(result),
-        .frame = m_sink.take(),
-        .bytesProduced = m_pump.bytesProduced(),
-    };
+    return {.result = m_pump.pump()};
+  }
+
+  void updateTransportQueuedBytes(quint64 bytes) noexcept
+  {
+    m_bridge.updateTransportQueuedBytes(bytes);
+  }
+
+  [[nodiscard]] bool readyToPump() const noexcept
+  {
+    return !m_pump.paused() || m_bridge.queuedBytes() <= m_limits.lowWaterBytes;
+  }
+
+  [[nodiscard]] std::optional<Frame> pendingFrame() const
+  {
+    return m_bridge.pendingFrame();
+  }
+
+  void consumePendingFrame() noexcept
+  {
+    m_bridge.consumePendingFrame();
   }
 
 private:
-  CapturingFrameSink m_sink;
+  SenderFrameBridge m_bridge;
   TransferSenderPump m_pump;
+  SenderBackpressureLimits m_limits;
 };
 
 void setDiagnostic(QString *output, const QString &diagnostic)
@@ -144,7 +229,6 @@ struct FileTransferRuntime::OutgoingSession
   std::unique_ptr<::relaydesk::transfer::TransferOfferStateMachine> offerState;
   std::unique_ptr<::relaydesk::transfer::TransferControlStateMachine> control;
   std::shared_ptr<SenderWorkerState> sender;
-  std::optional<Frame> pendingFrame;
   ::relaydesk::transfer::SenderPumpStatus pendingStatus =
       ::relaydesk::transfer::SenderPumpStatus::Progressed;
   quint64 nextManifestPage = 0;
@@ -547,6 +631,15 @@ void FileTransferRuntime::attachConnection(
   connect(&connection, &FileTlsConnection::frameReceived, this, [this, &connection](Frame frame) {
     handleFrame(connection, std::move(frame));
   });
+  connect(
+      &connection, &FileTlsConnection::writeCapacityAvailable, this,
+      [this, &connection](quint64) {
+        const auto context = m_connections.constFind(&connection);
+        if (context != m_connections.cend() && context->peer.has_value()) {
+          schedulePeerSenders(*context->peer);
+        }
+      }
+  );
   connect(&connection, &FileTlsConnection::failed, this, [this, &connection](FileTlsError error, QString message) {
     failConnection(
         connection, FileTransferRuntimeError::TransportFailed, error, std::move(message)
@@ -959,14 +1052,25 @@ void FileTransferRuntime::startNextOutgoingFile(OutgoingSession &session)
     return;
   }
   const auto &source = session.manifest->entries.at(session.currentEntry);
-  session.sender = std::make_shared<SenderWorkerState>(TransferSenderRequest{
-      .transferId = session.id,
-      .source = source,
-      .streamId = static_cast<quint64>(session.currentEntry + 1),
-      .chunkBytes = capabilities->chunkBytes,
-  });
+  auto *connection = m_peerConnections.value(session.peer, nullptr);
+  if (connection == nullptr) {
+    failOutgoing(
+        session, kSenderFailed, QStringLiteral("relaydesk.transfer.peer_disconnected"),
+        QStringLiteral("Peer file channel is no longer ready")
+    );
+    return;
+  }
+  session.sender = std::make_shared<SenderWorkerState>(
+      TransferSenderRequest{
+          .transferId = session.id,
+          .source = source,
+          .streamId = static_cast<quint64>(session.currentEntry + 1),
+          .chunkBytes = capabilities->chunkBytes,
+      },
+      senderBackpressureLimits(*connection)
+  );
   session.awaitingFileResult = false;
-  session.pendingFrame.reset();
+  session.pendingStatus = ::relaydesk::transfer::SenderPumpStatus::Progressed;
   if (session.control->snapshot().state == TransferState::Queued &&
       !session.control->advance(TransferState::Transferring).ok()) {
     failOutgoing(
@@ -978,6 +1082,19 @@ void FileTransferRuntime::startNextOutgoingFile(OutgoingSession &session)
   updateOutgoingProgress(session);
   Q_EMIT transferChanged(session.snapshot);
   scheduleSenderPump(session.id);
+}
+
+void FileTransferRuntime::schedulePeerSenders(const DeviceId &peerDeviceId)
+{
+  QList<::relaydesk::transfer::TransferId> transfers;
+  for (auto *session : std::as_const(m_outgoing)) {
+    if (session != nullptr && session->peer == peerDeviceId && session->sender != nullptr && !session->cancelled) {
+      transfers.append(session->id);
+    }
+  }
+  for (const auto &transferId : std::as_const(transfers)) {
+    scheduleSenderPump(transferId);
+  }
 }
 
 void FileTransferRuntime::scheduleSenderPump(const ::relaydesk::transfer::TransferId &transferId)
@@ -998,25 +1115,28 @@ void FileTransferRuntime::scheduleSenderPump(const ::relaydesk::transfer::Transf
     return;
   }
 
-  if (session->pendingFrame.has_value()) {
-    if (connection->queuedWriteBytes() >= connection->writeHighWaterBytes() / 2) {
-      QTimer::singleShot(5, this, [this, transferId]() { scheduleSenderPump(transferId); });
+  session->sender->updateTransportQueuedBytes(connection->queuedWriteBytes());
+  if (const auto pendingFrame = session->sender->pendingFrame(); pendingFrame.has_value()) {
+    const auto frameType = pendingFrame->type;
+    const auto payloadBytes = static_cast<quint64>(pendingFrame->payload.size());
+    FileTlsFrameSink sink(*connection);
+    const quint64 queuedBeforeSubmit = sink.queuedBytes();
+    const SenderFrameSinkResult submitted = sink.submit(*pendingFrame);
+    if (submitted.status == SenderFrameSinkStatus::Backpressured) {
+      if (queuedBeforeSubmit == 0) {
+        failOutgoing(
+            *session, kSenderFailed, QStringLiteral("relaydesk.transfer.sender_failed"), submitted.diagnostic
+        );
+      }
       return;
     }
-    const auto frameType = session->pendingFrame->type;
-    const auto payloadBytes = static_cast<quint64>(session->pendingFrame->payload.size());
-    QString diagnostic;
-    if (!sendPeerFrame(session->peer, *session->pendingFrame, &diagnostic)) {
-      if (connection->queuedWriteBytes() >= connection->writeHighWaterBytes() / 2) {
-        QTimer::singleShot(5, this, [this, transferId]() { scheduleSenderPump(transferId); });
-        return;
-      }
+    if (submitted.status != SenderFrameSinkStatus::Accepted) {
       failOutgoing(
-          *session, kSenderFailed, QStringLiteral("relaydesk.transfer.sender_failed"), diagnostic
+          *session, kSenderFailed, QStringLiteral("relaydesk.transfer.sender_failed"), submitted.diagnostic
       );
       return;
     }
-    session->pendingFrame.reset();
+    session->sender->consumePendingFrame();
     if (frameType == MessageType::FileChunk) {
       session->completedBytes += payloadBytes;
       updateOutgoingProgress(*session);
@@ -1028,8 +1148,8 @@ void FileTransferRuntime::scheduleSenderPump(const ::relaydesk::transfer::Transf
     }
   }
 
-  if (connection->queuedWriteBytes() >= connection->writeHighWaterBytes() / 2) {
-    QTimer::singleShot(5, this, [this, transferId]() { scheduleSenderPump(transferId); });
+  session->sender->updateTransportQueuedBytes(connection->queuedWriteBytes());
+  if (!session->sender->readyToPump()) {
     return;
   }
 
@@ -1039,16 +1159,13 @@ void FileTransferRuntime::scheduleSenderPump(const ::relaydesk::transfer::Transf
   connect(watcher, &QFutureWatcherBase::finished, this, [this, transferId, watcher]() {
     auto work = watcher->result();
     watcher->deleteLater();
-    dispatchSenderPumpResult(
-        transferId, work.result, std::move(work.frame), work.bytesProduced
-    );
+    dispatchSenderPumpResult(transferId, work.result);
   });
   watcher->setFuture(QtConcurrent::run(m_workerPool.get(), [worker]() { return worker->produce(); }));
 }
 
 void FileTransferRuntime::dispatchSenderPumpResult(
-    const ::relaydesk::transfer::TransferId &transferId, const SenderPumpResult &result,
-    std::optional<Frame> frame, quint64 bytesProduced
+    const ::relaydesk::transfer::TransferId &transferId, const SenderPumpResult &result
 )
 {
   using ::relaydesk::transfer::SenderPumpStatus;
@@ -1067,21 +1184,11 @@ void FileTransferRuntime::dispatchSenderPumpResult(
     );
     return;
   }
-  if (result.status == SenderPumpStatus::Backpressured) {
-    QTimer::singleShot(5, this, [this, transferId]() { scheduleSenderPump(transferId); });
-    return;
-  }
-  if (frame.has_value()) {
-    session->pendingFrame = std::move(frame);
-    session->pendingStatus = result.status;
-    scheduleSenderPump(transferId);
-    return;
-  }
-  if (result.status == SenderPumpStatus::Finished) {
+  session->pendingStatus = result.status;
+  if (result.status == SenderPumpStatus::Finished && !session->sender->pendingFrame().has_value()) {
     session->awaitingFileResult = true;
     return;
   }
-  Q_UNUSED(bytesProduced);
   scheduleSenderPump(transferId);
 }
 

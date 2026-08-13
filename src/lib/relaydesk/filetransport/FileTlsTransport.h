@@ -69,6 +69,7 @@ public:
 Q_SIGNALS:
   void authenticated();
   void frameReceived(const ::relaydesk::transfer::Frame &frame);
+  void writeCapacityAvailable(quint64 queuedBytes);
   void failed(deskflow::relaydesk::FileTlsError error, const QString &diagnostic);
   void disconnected();
 

@@ -145,6 +145,7 @@ public:
   [[nodiscard]] bool finished() const noexcept;
   [[nodiscard]] quint64 bufferedFrameBytes() const noexcept;
   [[nodiscard]] quint64 bytesProduced() const noexcept;
+  [[nodiscard]] quint64 sourcePullCount() const noexcept;
 
 private:
   class Impl;
