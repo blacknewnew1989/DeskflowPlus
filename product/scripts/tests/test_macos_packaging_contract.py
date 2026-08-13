@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import os
+import stat
 import unittest
 from pathlib import Path
 
@@ -11,6 +13,20 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class MacosPackagingContractTests(unittest.TestCase):
+    def test_macos_entrypoint_scripts_are_executable(self) -> None:
+        for relative_path in (
+            "product/scripts/setup-macos.sh",
+            "product/scripts/build-macos.sh",
+            "product/scripts/package-macos.sh",
+        ):
+            mode = os.stat(ROOT / relative_path).st_mode
+            self.assertTrue(mode & stat.S_IXUSR, f"{relative_path} must be executable")
+
+    def test_generated_toolchain_environment_is_ignored(self) -> None:
+        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+        self.assertIn("/.relaydesk-toolchain-macos.env", gitignore)
+
     def test_package_script_has_optional_signing_and_notarization_verification(self) -> None:
         script = (ROOT / "product/scripts/package-macos.sh").read_text(encoding="utf-8")
 

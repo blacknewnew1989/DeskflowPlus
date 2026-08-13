@@ -12,6 +12,7 @@
 /vcpkg_installed
 /.tools
 /.relaydesk-toolchain-windows.ps1
+/.relaydesk-toolchain-macos.env
 /.cache
 /.venv
 aqtinstall.log
