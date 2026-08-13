@@ -17,6 +17,7 @@
 
 #include <QSignalSpy>
 #include <QCryptographicHash>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QTcpServer>
@@ -61,9 +62,10 @@ private Q_SLOTS:
   void listenerLifecycleIsOwnedAndRestartable();
   void trustedPeersNegotiateIndependentFileChannel();
   void outgoingSingleFileStreamsThroughWorkerPump();
+  void incomingSingleFileCommitsThroughPlatformReceiver();
   void runtimeSourceUsesCanonicalSenderBoundary();
-  void runtimeSourceDoesNotAdvertiseUnwiredReceiver();
-  void runtimeRejectsUnwiredReceiverCapability();
+  void runtimeSourceComposesPlatformReceiver();
+  void runtimeEnablesComposedReceiverCapability();
   void unknownControlOperationsPublishTypedResults();
   void invalidIdentityFailsWithoutPublishingAListener();
 };
@@ -93,8 +95,8 @@ void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
   QVERIFY(runtime.isRunning());
   const quint16 firstPort = runtime.listeningPort();
   QVERIFY(firstPort != 0);
-  QCOMPARE(discovery.service().localDevice().filePort, quint16{0});
-  QVERIFY(!discovery.service().localDevice().capabilities.fileV1);
+  QCOMPARE(discovery.service().localDevice().filePort, firstPort);
+  QVERIFY(discovery.service().localDevice().capabilities.fileV1);
   QVERIFY(!discovery.service().localDevice().capabilities.folderV1);
   QVERIFY(!discovery.service().localDevice().capabilities.resumeV1);
   QCOMPARE(started.count(), 1);
@@ -115,8 +117,8 @@ void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
   QVERIFY2(runtime.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY(runtime.isRunning());
   QVERIFY(runtime.listeningPort() != 0);
-  QCOMPARE(discovery.service().localDevice().filePort, quint16{0});
-  QVERIFY(!discovery.service().localDevice().capabilities.fileV1);
+  QCOMPARE(discovery.service().localDevice().filePort, runtime.listeningPort());
+  QVERIFY(discovery.service().localDevice().capabilities.fileV1);
   QVERIFY(!discovery.service().localDevice().capabilities.folderV1);
   QVERIFY(!discovery.service().localDevice().capabilities.resumeV1);
   QCOMPARE(started.count(), 2);
@@ -186,8 +188,8 @@ void FileTransferRuntimeTests::trustedPeersNegotiateIndependentFileChannel()
   QVERIFY(negotiated.has_value());
   QVERIFY(negotiated->features.contains(QStringLiteral("file.v1")));
   QVERIFY(negotiated->features.contains(QStringLiteral("sha256")));
-  QVERIFY(!negotiated->localCanReceiveFiles);
-  QVERIFY(!negotiated->peerCanReceiveFiles);
+  QVERIFY(negotiated->localCanReceiveFiles);
+  QVERIFY(negotiated->peerCanReceiveFiles);
 }
 
 void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()
@@ -393,6 +395,109 @@ void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()
   QVERIFY(runtime.activeTransfers().isEmpty());
 }
 
+void FileTransferRuntimeTests::incomingSingleFileCommitsThroughPlatformReceiver()
+{
+  using namespace ::relaydesk::transfer;
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  const QByteArray sourceBytes(1024 * 1024 + 73, '\x4c');
+  const auto sourcePath = directory.filePath(QStringLiteral("vertical-source.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+  source.close();
+  const auto receiveRoot = directory.filePath(QStringLiteral("received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("vertical-sender-trust.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("vertical-receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  model::DeviceHomeModel senderModel;
+  model::DeviceHomeModel receiverModel;
+  DeviceDiscoveryRuntime senderDiscovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender")), senderModel
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver")), receiverModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  QStringList errors;
+  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("sender: ") + message);
+  });
+  connect(&receiver, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("receiver: ") + message);
+  });
+  std::optional<IncomingOffer> incoming;
+  connect(&receiver, &IFileTransferService::incomingOffer, this, [&](const IncomingOffer &offer) {
+    incoming = offer;
+    receiver.accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
+  });
+  std::optional<TransferSnapshot> senderLatest;
+  std::optional<TransferSnapshot> receiverLatest;
+  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Sending) {
+      senderLatest = snapshot;
+    }
+  });
+  connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Receiving) {
+      receiverLatest = snapshot;
+    }
+  });
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  auto receiverInfo = receiverDiscovery.service().localDevice();
+  QVERIFY(receiverInfo.filePort != 0);
+  QVERIFY(receiverInfo.capabilities.fileV1);
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(receiverInfo, QHostAddress::LocalHost));
+
+  const auto started = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+  QVERIFY(started.transferId.has_value());
+  QElapsedTimer wait;
+  wait.start();
+  while (wait.elapsed() < 15'000 &&
+         (!senderLatest.has_value() || senderLatest->state != TransferState::Completed ||
+          !receiverLatest.has_value() || receiverLatest->state != TransferState::Completed)) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+  }
+  const auto evidence =
+      QStringLiteral("errors=[%1] offer=%2 senderState=%3 receiverState=%4 senderBytes=%5 receiverBytes=%6")
+          .arg(errors.join(QStringLiteral("; ")))
+          .arg(incoming.has_value())
+          .arg(senderLatest.has_value() ? static_cast<int>(senderLatest->state) : -1)
+          .arg(receiverLatest.has_value() ? static_cast<int>(receiverLatest->state) : -1)
+          .arg(senderLatest.has_value() ? senderLatest->progress.completedBytes : 0)
+          .arg(receiverLatest.has_value() ? receiverLatest->progress.completedBytes : 0);
+  QVERIFY2(senderLatest.has_value() && senderLatest->state == TransferState::Completed, qPrintable(evidence));
+  QVERIFY2(
+      receiverLatest.has_value() && receiverLatest->state == TransferState::Completed,
+      qPrintable(evidence)
+  );
+  QVERIFY(incoming.has_value());
+  QCOMPARE(incoming->offer.transferId, *started.transferId);
+  QFile committed(QDir(receiveRoot).filePath(QStringLiteral("vertical-source.bin")));
+  QVERIFY2(committed.open(QIODevice::ReadOnly), qPrintable(committed.errorString()));
+  QCOMPARE(committed.readAll(), sourceBytes);
+  QVERIFY(!QFileInfo::exists(committed.fileName() + QStringLiteral(".part")));
+  QVERIFY(sender.activeTransfers().isEmpty());
+  QVERIFY(receiver.activeTransfers().isEmpty());
+  QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
+}
+
 void FileTransferRuntimeTests::runtimeSourceUsesCanonicalSenderBoundary()
 {
 #if !defined(RELAYDESK_FILE_TRANSFER_RUNTIME_SOURCE_PATH)
@@ -410,7 +515,7 @@ void FileTransferRuntimeTests::runtimeSourceUsesCanonicalSenderBoundary()
 #endif
 }
 
-void FileTransferRuntimeTests::runtimeSourceDoesNotAdvertiseUnwiredReceiver()
+void FileTransferRuntimeTests::runtimeSourceComposesPlatformReceiver()
 {
 #if !defined(RELAYDESK_FILE_TRANSFER_RUNTIME_SOURCE_PATH)
   QFAIL("runtime source path compile definition is missing");
@@ -418,13 +523,14 @@ void FileTransferRuntimeTests::runtimeSourceDoesNotAdvertiseUnwiredReceiver()
   QFile source(QString::fromUtf8(RELAYDESK_FILE_TRANSFER_RUNTIME_SOURCE_PATH));
   QVERIFY2(source.open(QIODevice::ReadOnly), qPrintable(source.errorString()));
   const QByteArray contents = source.readAll();
-  QVERIFY(contents.contains("setFileEndpoint(FileEndpointAnnouncement::disabled()"));
-  QVERIFY(!contents.contains("FileEndpointAnnouncement{"));
-  QVERIFY(!contents.contains("case MessageType::TransferOffer:"));
+  QVERIFY(contents.contains("createPlatformFileSafety"));
+  QVERIFY(contents.contains("FileEndpointAnnouncement{.port = listeningPort(), .fileV1 = true}"));
+  QVERIFY(contents.contains("case MessageType::TransferOffer:"));
+  QVERIFY(contents.contains("case MessageType::FileEnd:"));
 #endif
 }
 
-void FileTransferRuntimeTests::runtimeRejectsUnwiredReceiverCapability()
+void FileTransferRuntimeTests::runtimeEnablesComposedReceiverCapability()
 {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -441,11 +547,11 @@ void FileTransferRuntimeTests::runtimeRejectsUnwiredReceiverCapability()
   FileTransferRuntime runtime(localId, trust, discovery, identityPath, options);
   QSignalSpy errors(&runtime, &FileTransferRuntime::errorOccurred);
   QString diagnostic;
-  QVERIFY(!runtime.start(&diagnostic));
-  QVERIFY(diagnostic.contains(QStringLiteral("file.receive.v1")));
-  QCOMPARE(errors.count(), 1);
-  QCOMPARE(errors.first().at(0).value<FileTransferRuntimeError>(), FileTransferRuntimeError::CapabilityFailed);
-  QVERIFY(!runtime.isRunning());
+  QVERIFY2(runtime.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(runtime.isRunning());
+  QCOMPARE(discovery.service().localDevice().filePort, runtime.listeningPort());
+  QVERIFY(discovery.service().localDevice().capabilities.fileV1);
+  QCOMPARE(errors.count(), 0);
 }
 
 void FileTransferRuntimeTests::unknownControlOperationsPublishTypedResults()

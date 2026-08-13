@@ -168,8 +168,18 @@ void IncomingFileReceiverWorkerTests::ownsCompleteFileReceiverLifecycleOnDiskWor
   QVERIFY(committed.open(QIODevice::ReadOnly));
   QCOMPARE(committed.readAll(), bytes);
   QCOMPARE(safety.rootRequests.size(), 1);
-  QCOMPARE(safety.traversalRequests.size(), 2);
-  QCOMPARE(safety.traversalRequests.first().candidatePath, root.filePath(QStringLiteral("nested/payload.bin")));
+  QCOMPARE(safety.traversalRequests.size(), 8);
+  QCOMPARE(safety.traversalRequests.first().candidatePath, root.filePath(QStringLiteral("nested")));
+  QCOMPARE(
+      safety.traversalRequests.at(2).candidatePath,
+      root.filePath(QStringLiteral("nested/payload.bin"))
+  );
+  QVERIFY(
+      safety.traversalRequests.at(3).candidatePath.endsWith(QStringLiteral(".incoming"))
+  );
+  QVERIFY(
+      safety.traversalRequests.at(5).candidatePath.endsWith(request.begin.transferId.toString())
+  );
   QVERIFY(safety.traversalRequests.last().candidatePath.endsWith(QStringLiteral(".part")));
   QCOMPARE(safety.commitRequests.size(), 1);
   QCOMPARE(safety.commitRequests.first().receiveRoot, root.path());

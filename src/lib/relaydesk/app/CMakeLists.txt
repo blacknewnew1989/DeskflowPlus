@@ -36,3 +36,9 @@ target_link_libraries(
     Qt6::Network
     Qt6::Widgets
 )
+
+if(WIN32)
+  target_link_libraries(relaydesk_app PRIVATE relaydesk_windows_file_safety)
+elseif(APPLE)
+  target_link_libraries(relaydesk_app PRIVATE relaydesk_macos_file_safety)
+endif()

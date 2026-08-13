@@ -7,6 +7,7 @@
 #include "relaydesk/app/FileTransferRuntime.h"
 
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
+#include "relaydesk/app/IncomingTransferRuntime.h"
 #include "relaydesk/discovery/DiscoveryRegistry.h"
 #include "relaydesk/filetransport/FileTlsFrameSink.h"
 #include "relaydesk/transfer/ControlMessageCodec.h"
@@ -15,6 +16,12 @@
 #include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/transfer/TransferOfferStateMachine.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
+
+#if defined(Q_OS_WIN)
+#include "relaydesk/platform/WindowsFileSafety.h"
+#elif defined(Q_OS_MACOS)
+#include "relaydesk/platform/MacFileSafety.h"
+#endif
 
 #include <QAbstractSocket>
 #include <QFileInfo>
@@ -201,6 +208,18 @@ std::optional<QHostAddress> preferredAddress(const QList<QHostAddress> &addresse
   }
   return std::nullopt;
 }
+
+std::unique_ptr<IPlatformFileSafety> createPlatformFileSafety()
+{
+#if defined(Q_OS_WIN)
+  return std::make_unique<WindowsFileSafety>();
+#elif defined(Q_OS_MACOS)
+  return std::make_unique<MacFileSafety>();
+#else
+  return {};
+#endif
+}
+
 } // namespace
 
 struct FileTransferRuntime::OutgoingSession
@@ -246,6 +265,89 @@ FileTransferRuntime::FileTransferRuntime(
 {
   m_workerPool->setMaxThreadCount(2);
   m_workerPool->setExpiryTimeout(30'000);
+  m_fileSafety = createPlatformFileSafety();
+  if (m_fileSafety != nullptr) {
+    m_incoming = std::make_unique<IncomingTransferRuntime>(*m_fileSafety, *m_workerPool, this);
+  }
+  auto *incoming = m_incoming.get();
+  if (incoming != nullptr) {
+    if (!m_options.localCapabilities.canReceiveFiles()) {
+      m_options.localCapabilities.features.append(
+          QString::fromLatin1(::relaydesk::transfer::kFileReceiveFeature)
+      );
+    }
+    connect(incoming, &IncomingTransferRuntime::incomingOffer, this, &IFileTransferService::incomingOffer);
+    connect(
+        incoming, &IncomingTransferRuntime::transferOperationFinished, this,
+        &IFileTransferService::transferOperationFinished
+    );
+    connect(incoming, &IncomingTransferRuntime::transferAdded, this, &IFileTransferService::transferAdded);
+    connect(
+        incoming, &IncomingTransferRuntime::transferChanged, this,
+        &IFileTransferService::transferChanged
+    );
+    connect(
+        incoming, &IncomingTransferRuntime::pipelineFailed, this,
+        [this](const auto &, const auto &, QString diagnostic) {
+          Q_EMIT errorOccurred(
+              FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+              std::move(diagnostic)
+          );
+        }
+    );
+    connect(
+        incoming, &IncomingTransferRuntime::responseReady, this,
+        [this](const DeviceId &peer, const Frame &frame) {
+          QString diagnostic;
+          if (!sendPeerFrame(peer, frame, &diagnostic)) {
+            Q_EMIT errorOccurred(
+                FileTransferRuntimeError::TransportFailed, FileTlsError::ConnectionFailed,
+                std::move(diagnostic)
+            );
+          }
+        }
+    );
+    connect(
+        incoming, &IncomingTransferRuntime::transferAccepted, this,
+        [this](const DeviceId &peer, const ::relaydesk::transfer::TransferAccept &acceptance) {
+          QString diagnostic;
+          Frame frame{
+              .type = MessageType::TransferAccept,
+              .flags = ::relaydesk::transfer::Response,
+              .metadata = ::relaydesk::transfer::ControlMessageCodec::encode(
+                  ::relaydesk::transfer::kProtocolMajorVersion,
+                  ::relaydesk::transfer::ControlMessage{acceptance}, &diagnostic
+              ),
+          };
+          if (frame.metadata.isEmpty() || !sendPeerFrame(peer, frame, &diagnostic)) {
+            Q_EMIT errorOccurred(
+                FileTransferRuntimeError::TransportFailed, FileTlsError::ConnectionFailed,
+                std::move(diagnostic)
+            );
+          }
+        }
+    );
+    connect(
+        incoming, &IncomingTransferRuntime::transferRejected, this,
+        [this](const DeviceId &peer, const ::relaydesk::transfer::TransferReject &rejection) {
+          QString diagnostic;
+          Frame frame{
+              .type = MessageType::TransferReject,
+              .flags = ::relaydesk::transfer::Response,
+              .metadata = ::relaydesk::transfer::ControlMessageCodec::encode(
+                  ::relaydesk::transfer::kProtocolMajorVersion,
+                  ::relaydesk::transfer::ControlMessage{rejection}, &diagnostic
+              ),
+          };
+          if (frame.metadata.isEmpty() || !sendPeerFrame(peer, frame, &diagnostic)) {
+            Q_EMIT errorOccurred(
+                FileTransferRuntimeError::TransportFailed, FileTlsError::ConnectionFailed,
+                std::move(diagnostic)
+            );
+          }
+        }
+    );
+  }
 }
 
 FileTransferRuntime::~FileTransferRuntime()
@@ -268,9 +370,9 @@ bool FileTransferRuntime::start(QString *diagnostic)
     return true;
   }
 
-  if (m_options.localCapabilities.canReceiveFiles()) {
+  if (m_options.localCapabilities.canReceiveFiles() && m_incoming == nullptr) {
     const auto message = QStringLiteral(
-        "File transfer runtime cannot advertise file.receive.v1 until its receiver is composed"
+        "File transfer runtime cannot advertise file.receive.v1 without a platform receiver"
     );
     setDiagnostic(diagnostic, message);
     Q_EMIT errorOccurred(FileTransferRuntimeError::CapabilityFailed, FileTlsError::ProtocolError, message);
@@ -323,6 +425,14 @@ void FileTransferRuntime::stop()
   }
 
   const auto connections = m_connections.keys();
+  if (auto *incoming = m_incoming.get(); incoming != nullptr) {
+    for (auto *connection : connections) {
+      const auto context = m_connections.constFind(connection);
+      if (context != m_connections.constEnd() && context->peer.has_value()) {
+        incoming->peerDisconnected(*context->peer);
+      }
+    }
+  }
   m_connections.clear();
   m_peerConnections.clear();
   for (auto *connection : connections) {
@@ -512,9 +622,14 @@ FileTransferRuntime::negotiatedCapabilities(const DeviceId &peerDeviceId) const
 }
 
 void FileTransferRuntime::accept(
-    const ::relaydesk::transfer::TransferId &transferId, const ::relaydesk::transfer::ReceiveOptions &
+    const ::relaydesk::transfer::TransferId &transferId,
+    const ::relaydesk::transfer::ReceiveOptions &options
 )
 {
+  if (auto *incoming = m_incoming.get(); incoming != nullptr && incoming->contains(transferId)) {
+    incoming->accept(transferId, options);
+    return;
+  }
   publishOperation(
       transferId, ::relaydesk::transfer::TransferOperation::Accept,
       ::relaydesk::transfer::TransferOperationOutcome::Rejected,
@@ -524,9 +639,13 @@ void FileTransferRuntime::accept(
 }
 
 void FileTransferRuntime::reject(
-    const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::RejectReason
+    const ::relaydesk::transfer::TransferId &transferId, ::relaydesk::transfer::RejectReason reason
 )
 {
+  if (auto *incoming = m_incoming.get(); incoming != nullptr && incoming->contains(transferId)) {
+    incoming->reject(transferId, reason);
+    return;
+  }
   publishOperation(
       transferId, ::relaydesk::transfer::TransferOperation::Reject,
       ::relaydesk::transfer::TransferOperationOutcome::Rejected,
@@ -691,6 +810,9 @@ QList<::relaydesk::transfer::TransferSnapshot> FileTransferRuntime::activeTransf
       result.append(session->snapshot);
     }
   }
+  if (const auto *incoming = m_incoming.get(); incoming != nullptr) {
+    result.append(incoming->activeTransfers());
+  }
   std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
     return left.createdUtc < right.createdUtc;
   });
@@ -849,6 +971,38 @@ void FileTransferRuntime::handleFrame(FileTlsConnection &connection, Frame frame
 void FileTransferRuntime::routeTransferFrame(const DeviceId &peerDeviceId, const Frame &frame)
 {
   switch (frame.type) {
+  case MessageType::TransferOffer: {
+    using ::relaydesk::transfer::ControlMessageCodec;
+    using ::relaydesk::transfer::TransferOffer;
+    const auto decoded = ControlMessageCodec::decode(frame.version, frame.type, frame.metadata);
+    const auto *offer = decoded.ok() ? std::get_if<TransferOffer>(&*decoded.message) : nullptr;
+    const auto capabilities = negotiatedCapabilities(peerDeviceId);
+    const auto peer = m_discoveryRuntime.registry().snapshot(peerDeviceId);
+    const auto trusted = m_trustedDevices.find(peerDeviceId);
+    QString diagnostic;
+    if (offer == nullptr) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          decoded.diagnostic
+      );
+      break;
+    }
+    auto *incoming = m_incoming.get();
+    if (incoming == nullptr || !capabilities.has_value() ||
+        !incoming->receiveOffer(
+            peerDeviceId,
+            peer.has_value()
+                ? peer->displayName
+                : (trusted.has_value() ? trusted->alias : QStringLiteral("Trusted peer")),
+            trusted.has_value() && !trusted->revoked, *capabilities, *offer, &diagnostic
+        )) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          std::move(diagnostic)
+      );
+    }
+    break;
+  }
   case MessageType::TransferAccept:
   case MessageType::TransferReject:
     handleOfferResponse(peerDeviceId, frame);
@@ -856,6 +1010,21 @@ void FileTransferRuntime::routeTransferFrame(const DeviceId &peerDeviceId, const
   case MessageType::FileResult:
     handleFileResult(peerDeviceId, frame);
     break;
+  case MessageType::ManifestPage:
+  case MessageType::ManifestComplete:
+  case MessageType::FileBegin:
+  case MessageType::FileChunk:
+  case MessageType::FileEnd: {
+    QString diagnostic;
+    auto *incoming = m_incoming.get();
+    if (incoming == nullptr || !incoming->enqueueFrame(peerDeviceId, frame, &diagnostic)) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          std::move(diagnostic)
+      );
+    }
+    break;
+  }
   default:
     break;
   }
@@ -1404,6 +1573,9 @@ void FileTransferRuntime::removeConnection(FileTlsConnection &connection)
   if (peer.has_value() && m_peerConnections.value(*peer, nullptr) == &connection) {
     m_peerConnections.remove(*peer);
     if (wasReady) {
+      if (auto *incoming = m_incoming.get(); incoming != nullptr) {
+        incoming->peerDisconnected(*peer);
+      }
       Q_EMIT peerDisconnected(*peer);
     }
   }
@@ -1428,10 +1600,13 @@ void FileTransferRuntime::failConnection(
 
 bool FileTransferRuntime::publishFileEndpoint(QString *diagnostic)
 {
-  // A discovery file endpoint promises an executable incoming transfer path. The listener remains
-  // available for the independent file channel and outgoing loopback coverage, but the receiver
-  // handler is not composed yet, so none of its capabilities may be advertised.
-  return m_discoveryRuntime.setFileEndpoint(FileEndpointAnnouncement::disabled(), diagnostic);
+  if (!isRunning() || m_incoming == nullptr ||
+      !m_options.localCapabilities.canReceiveFiles()) {
+    return m_discoveryRuntime.setFileEndpoint(FileEndpointAnnouncement::disabled(), diagnostic);
+  }
+  return m_discoveryRuntime.setFileEndpoint(
+      FileEndpointAnnouncement{.port = listeningPort(), .fileV1 = true}, diagnostic
+  );
 }
 
 } // namespace deskflow::relaydesk
