@@ -172,6 +172,29 @@ bool DiscoveryService::announceNow(QString *errorMessage)
   return allSent;
 }
 
+qint64 DiscoveryService::sendPeerDatagram(
+    const QByteArray &datagram, const QHostAddress &destination, quint16 port, QString *errorMessage
+)
+{
+  if (errorMessage != nullptr) {
+    errorMessage->clear();
+  }
+  if (!isRunning()) {
+    setError(errorMessage, QStringLiteral("Discovery listener is not running"));
+    return -1;
+  }
+  if (destination.isNull() || port == 0) {
+    setError(errorMessage, QStringLiteral("Peer datagram destination is invalid"));
+    return -1;
+  }
+
+  const auto written = m_receiveSocket.writeDatagram(datagram, destination, port);
+  if (written < 0) {
+    setError(errorMessage, m_receiveSocket.errorString());
+  }
+  return written;
+}
+
 bool DiscoveryService::isRunning() const
 {
   return m_receiveSocket.state() == QAbstractSocket::BoundState;
@@ -249,6 +272,14 @@ void DiscoveryService::processPendingDatagrams()
 
     const auto decoded = DiscoveryCodec::decode(networkDatagram.data());
     if (!decoded.isSuccess()) {
+      if (decoded.error == DiscoveryCodecError::UnsupportedProtocol) {
+        const auto senderPort = networkDatagram.senderPort();
+        Q_EMIT unrecognizedDatagramReceived(
+            networkDatagram.data(), networkDatagram.senderAddress(),
+            senderPort > 0 && senderPort <= 65535 ? quint16(senderPort) : quint16(0)
+        );
+        continue;
+      }
       reportError(DiscoveryServiceError::InvalidDatagram, decoded.diagnostic);
       continue;
     }

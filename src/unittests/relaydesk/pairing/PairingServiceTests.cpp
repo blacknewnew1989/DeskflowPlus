@@ -6,6 +6,7 @@
 
 #include "relaydesk/pairing/PairingService.h"
 
+#include <QNetworkDatagram>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -45,6 +46,30 @@ DeviceSnapshot snapshotFor(const DeviceInfo &device)
   };
 }
 
+PairingTransportResult sendFrom(QUdpSocket &socket, QByteArray bytes, const PairingEndpoint &endpoint)
+{
+  const auto written = socket.writeDatagram(bytes, endpoint.address, endpoint.port);
+  return {
+      .ok = written == bytes.size(),
+      .diagnostic = written == bytes.size() ? QString() : socket.errorString(),
+  };
+}
+
+void forwardPending(QUdpSocket &socket, PairingService &service)
+{
+  while (socket.hasPendingDatagrams()) {
+    const auto datagram = socket.receiveDatagram();
+    const auto senderPort = datagram.senderPort();
+    (void)service.receiveDatagram(
+        datagram.data(),
+        {
+            .address = datagram.senderAddress(),
+            .port = senderPort > 0 && senderPort <= 65535 ? quint16(senderPort) : quint16(0),
+        }
+    );
+  }
+}
+
 } // namespace
 
 class PairingServiceTests final : public QObject
@@ -53,6 +78,7 @@ class PairingServiceTests final : public QObject
 
 private Q_SLOTS:
   void completesRealUdpLoopbackPairing();
+  void completesOverInjectedSharedDatagramTransport();
   void reportsBindAndMalformedDatagramErrors();
 };
 
@@ -97,6 +123,58 @@ void PairingServiceTests::completesRealUdpLoopbackPairing()
   QVERIFY(secondStore.find(firstId).has_value());
   QCOMPARE(firstStore.find(secondId)->lastAddresses, QStringList{QStringLiteral("127.0.0.1")});
   QCOMPARE(secondStore.find(firstId)->lastAddresses, QStringList{QStringLiteral("127.0.0.1")});
+}
+
+void PairingServiceTests::completesOverInjectedSharedDatagramTransport()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto firstInfo = deviceInfo(DeviceId::generate(), QStringLiteral("First"), '\x31');
+  const auto secondInfo = deviceInfo(DeviceId::generate(), QStringLiteral("Second"), '\x32');
+  TrustedDeviceStore firstStore(directory.filePath(QStringLiteral("first/trusted.json")));
+  TrustedDeviceStore secondStore(directory.filePath(QStringLiteral("second/trusted.json")));
+  QUdpSocket firstTransport;
+  QUdpSocket secondTransport;
+  QVERIFY(firstTransport.bind(QHostAddress::LocalHost, 0));
+  QVERIFY(secondTransport.bind(QHostAddress::LocalHost, 0));
+
+  const auto now = QDateTime::fromMSecsSinceEpoch(1'730'000'000'000LL, QTimeZone::UTC);
+  PairingService first(
+      firstInfo, firstStore, {}, [now]() { return now; }, []() { return 123456U; },
+      [&firstTransport](QByteArray bytes, PairingEndpoint endpoint) {
+        return sendFrom(firstTransport, std::move(bytes), endpoint);
+      }
+  );
+  PairingService second(
+      secondInfo, secondStore, {}, [now]() { return now; }, []() { return 654321U; },
+      [&secondTransport](QByteArray bytes, PairingEndpoint endpoint) {
+        return sendFrom(secondTransport, std::move(bytes), endpoint);
+      }
+  );
+  connect(&firstTransport, &QUdpSocket::readyRead, &first, [&]() { forwardPending(firstTransport, first); });
+  connect(&secondTransport, &QUdpSocket::readyRead, &second, [&]() { forwardPending(secondTransport, second); });
+
+  const auto started = first.startPairing(
+      snapshotFor(secondInfo), secondInfo.certificateFingerprintSha256,
+      {.address = QHostAddress::LocalHost, .port = secondTransport.localPort()}
+  );
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+  QTRY_VERIFY_WITH_TIMEOUT(second.snapshot().has_value(), 3000);
+  const auto sessionId = first.snapshot()->pairingSessionId;
+  const auto sas = first.snapshot()->sixDigitSas;
+  QVERIFY(first.confirmMatchingSas(sessionId).ok());
+  QVERIFY(second.submitDisplayedSas(sessionId, sas).ok());
+
+  QTRY_COMPARE_WITH_TIMEOUT(first.snapshot()->state, PairingState::Completed, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(second.snapshot()->state, PairingState::Completed, 3000);
+  QCOMPARE(
+      firstStore.trustStatus(secondInfo.deviceId, secondInfo.certificateFingerprintSha256),
+      TrustStatus::Trusted
+  );
+  QCOMPARE(
+      secondStore.trustStatus(firstInfo.deviceId, firstInfo.certificateFingerprintSha256),
+      TrustStatus::Trusted
+  );
 }
 
 void PairingServiceTests::reportsBindAndMalformedDatagramErrors()

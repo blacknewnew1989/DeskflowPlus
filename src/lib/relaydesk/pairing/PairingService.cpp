@@ -14,9 +14,10 @@ namespace deskflow::relaydesk {
 
 PairingService::PairingService(
     DeviceInfo localDevice, TrustedDeviceStore &trustedDevices, PairingOptions options,
-    PairingManager::Clock clock, PairingManager::SasGenerator sasGenerator, QObject *parent
+    PairingManager::Clock clock, PairingManager::SasGenerator sasGenerator,
+    PairingManager::DatagramSender datagramSender, QObject *parent
 )
-    : IPairingService(parent), m_socket(this),
+    : IPairingService(parent), m_datagramSender(std::move(datagramSender)), m_socket(this),
       m_manager(
           std::move(localDevice), trustedDevices,
           [this](QByteArray bytes, PairingEndpoint endpoint) {
@@ -31,6 +32,7 @@ PairingService::PairingService(
   connect(&m_manager, &PairingManager::operationFailed, this, &IPairingService::operationFailed);
   m_expiryTimer.setInterval(500);
   connect(&m_expiryTimer, &QTimer::timeout, &m_manager, &PairingManager::expireIfNeeded);
+  m_expiryTimer.start();
 }
 
 PairingOperationResult PairingService::listen(const QHostAddress &address, quint16 port)
@@ -62,6 +64,16 @@ bool PairingService::isListening() const
 quint16 PairingService::localPort() const
 {
   return m_socket.localPort();
+}
+
+PairingOperationResult PairingService::receiveDatagram(QByteArrayView bytes, PairingEndpoint source)
+{
+  return report(m_manager.receiveDatagram(bytes, std::move(source)));
+}
+
+bool PairingService::expireIfNeeded()
+{
+  return m_manager.expireIfNeeded();
 }
 
 PairingOperationResult PairingService::startPairing(
@@ -103,18 +115,21 @@ void PairingService::readPendingDatagrams()
   while (m_socket.hasPendingDatagrams()) {
     const auto datagram = m_socket.receiveDatagram();
     const auto senderPort = datagram.senderPort();
-    report(m_manager.receiveDatagram(
+    receiveDatagram(
         datagram.data(),
         {
             .address = datagram.senderAddress(),
             .port = senderPort > 0 && senderPort <= 65535 ? quint16(senderPort) : quint16(0),
         }
-    ));
+    );
   }
 }
 
 PairingTransportResult PairingService::sendDatagram(QByteArray bytes, PairingEndpoint endpoint)
 {
+  if (m_datagramSender) {
+    return m_datagramSender(std::move(bytes), std::move(endpoint));
+  }
   const auto written = m_socket.writeDatagram(bytes, endpoint.address, endpoint.port);
   if (written != bytes.size()) {
     return {
