@@ -77,6 +77,22 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
     const ::relaydesk::transfer::FileReceiveRequest &request
 )
 {
+  return beginInternal(request, nullptr);
+}
+
+::relaydesk::transfer::FileReceiverResult IncomingFileReceiverWorker::resume(
+    const ::relaydesk::transfer::FileReceiveRequest &request,
+    const ::relaydesk::transfer::ResumeState &state
+)
+{
+  return beginInternal(request, &state);
+}
+
+::relaydesk::transfer::FileReceiverResult IncomingFileReceiverWorker::beginInternal(
+    const ::relaydesk::transfer::FileReceiveRequest &request,
+    const ::relaydesk::transfer::ResumeState *resumeState
+)
+{
   using namespace ::relaydesk::transfer;
 
   if (!isOwningThread()) {
@@ -155,7 +171,8 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
     (void)m_conflicts.release(target->reservationId);
     return safetyFailure(safeStaging);
   }
-  const auto begun = m_receiver.begin(request);
+  const auto begun = resumeState == nullptr ? m_receiver.begin(request)
+                                            : m_receiver.resume(request, *resumeState);
   if (!begun.ok()) {
     (void)m_conflicts.release(target->reservationId);
     return begun;
@@ -231,6 +248,20 @@ IncomingFileReceiverWorker::finish(const ::relaydesk::transfer::FileEndMessage &
 ::relaydesk::transfer::FileReceiverSnapshot IncomingFileReceiverWorker::snapshot() const
 {
   return m_receiver.snapshot();
+}
+
+::relaydesk::transfer::DurableCheckpointResult IncomingFileReceiverWorker::checkpoint(
+    const ::relaydesk::transfer::ResumeStore &store,
+    ::relaydesk::transfer::ResumeState &state
+)
+{
+  if (!isOwningThread()) {
+    return {
+        .error = ::relaydesk::transfer::DurableCheckpointError::InvalidReceiverState,
+        .diagnostic = QStringLiteral("file receiver must stay on its constructing disk worker"),
+    };
+  }
+  return m_receiver.checkpoint(store, state);
 }
 
 bool IncomingFileReceiverWorker::isOwningThread() const noexcept
