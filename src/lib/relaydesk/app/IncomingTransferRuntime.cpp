@@ -13,6 +13,7 @@
 
 #include <QDir>
 #include <QFutureWatcher>
+#include <QFileInfo>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QPointer>
@@ -102,6 +103,56 @@ bool isReceivePipelineActive(::relaydesk::transfer::TransferState state)
 {
   return state == ::relaydesk::transfer::TransferState::Queued ||
          state == ::relaydesk::transfer::TransferState::Transferring;
+}
+
+FileSafetyResult ensureSafeDirectoryPath(
+    IPlatformFileSafety &fileSafety, const QString &receiveRoot, const QString &absoluteDirectory
+)
+{
+  QDir root(receiveRoot);
+  QString relative = root.relativeFilePath(absoluteDirectory);
+  relative.replace(QLatin1Char('\\'), QLatin1Char('/'));
+  if (relative == QStringLiteral(".")) {
+    return {};
+  }
+  const auto path = ::relaydesk::transfer::PathPolicy::validateRelative(relative);
+  if (!path.ok || path.normalized != relative) {
+    return {
+        .error = FileSafetyError::DestinationInvalid,
+        .diagnostic = QStringLiteral("manifest directory is not a normalized child of the receive root"),
+    };
+  }
+  QString current = QDir::cleanPath(receiveRoot);
+  for (const auto &component : relative.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+    current = QDir(current).absoluteFilePath(component);
+    auto safe = fileSafety.verifyNoLinkTraversal(
+        {.receiveRoot = receiveRoot, .candidatePath = current}
+    );
+    if (!safe.ok()) {
+      return safe;
+    }
+    const QFileInfo existing(current);
+    if (existing.exists()) {
+      if (!existing.isDir()) {
+        return {
+            .error = FileSafetyError::DestinationInvalid,
+            .diagnostic = QStringLiteral("manifest directory path contains a non-directory"),
+        };
+      }
+    } else if (!QDir().mkdir(current)) {
+      return {
+          .error = FileSafetyError::DestinationInvalid,
+          .diagnostic = QStringLiteral("could not create a verified manifest directory"),
+      };
+    }
+    safe = fileSafety.verifyNoLinkTraversal(
+        {.receiveRoot = receiveRoot, .candidatePath = current}
+    );
+    if (!safe.ok()) {
+      return safe;
+    }
+  }
+  return {};
 }
 
 void setDiagnostic(QString *output, QString diagnostic)
@@ -323,15 +374,11 @@ private:
         diagnostic = joined.diagnostic;
         return false;
       }
-      const auto safe = m_fileSafety.verifyNoLinkTraversal(
-          {.receiveRoot = m_options.destinationRoot, .candidatePath = absolutePath}
+      const auto safe = ensureSafeDirectoryPath(
+          m_fileSafety, m_options.destinationRoot, absolutePath
       );
       if (!safe.ok()) {
         diagnostic = safe.diagnostic;
-        return false;
-      }
-      if (!QDir().mkpath(absolutePath)) {
-        diagnostic = QStringLiteral("could not create accepted manifest directory");
         return false;
       }
     }
