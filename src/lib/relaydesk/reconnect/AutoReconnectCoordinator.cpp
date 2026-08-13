@@ -23,12 +23,12 @@ AutoReconnectCoordinator::AutoReconnectCoordinator(
 {
   m_options.maxCandidatesPerRound = std::max<qsizetype>(1, m_options.maxCandidatesPerRound);
   m_options.maxRememberedAddresses = std::max<qsizetype>(1, m_options.maxRememberedAddresses);
-  m_options.initialRetryDelayMs = std::max(1, m_options.initialRetryDelayMs);
-  m_options.maxRetryDelayMs = std::max(m_options.initialRetryDelayMs, m_options.maxRetryDelayMs);
+  m_options.initialRetryDelay = std::max(ReconnectDelay{1}, m_options.initialRetryDelay);
+  m_options.maxRetryDelay = std::max(m_options.initialRetryDelay, m_options.maxRetryDelay);
 
   if (!m_scheduler) {
-    m_scheduler = [this](int delayMs, std::function<void()> callback) {
-      QTimer::singleShot(delayMs, this, std::move(callback));
+    m_scheduler = [this](ReconnectDelay delay, std::function<void()> callback) {
+      QTimer::singleShot(delay, this, std::move(callback));
     };
   }
 
@@ -79,7 +79,7 @@ void AutoReconnectCoordinator::stop()
 
 void AutoReconnectCoordinator::beginRound()
 {
-  const auto pinning = verifyCurrentPeer();
+  const auto pinning = verifyTrustedDevice();
   if (!pinning.ok()) {
     m_waitingForCandidates = false;
     Q_EMIT trustBlocked(m_request->deviceId, pinning.error, pinning.diagnostic);
@@ -114,10 +114,34 @@ void AutoReconnectCoordinator::beginRound()
   });
 }
 
-PeerPinningResult AutoReconnectCoordinator::verifyCurrentPeer() const
+PeerPinningResult AutoReconnectCoordinator::verifyTrustedDevice() const
 {
+  const auto trustedDevice = m_trustedDevices.find(m_request->deviceId);
+  if (!trustedDevice.has_value()) {
+    return {
+        .error = PeerPinningError::UnknownPeer,
+        .diagnostic = QStringLiteral("TLS peer device is not paired"),
+    };
+  }
+  if (trustedDevice->revoked) {
+    return {
+        .error = PeerPinningError::RevokedPeer,
+        .diagnostic = QStringLiteral("TLS peer trust was revoked"),
+    };
+  }
+  return {};
+}
+
+PeerPinningResult AutoReconnectCoordinator::verifyAuthenticatedPeer(const AuthenticatedReconnectPeer &peer) const
+{
+  if (peer.deviceId != m_request->deviceId) {
+    return {
+        .error = PeerPinningError::DeviceIdMismatch,
+        .diagnostic = QStringLiteral("TLS authenticated device ID does not match the requested peer"),
+    };
+  }
   return TlsPeerPinningPolicy::verify(
-      m_trustedDevices, m_request->deviceId, QByteArrayView(m_request->presentedFingerprintSha256)
+      m_trustedDevices, peer.deviceId, QByteArrayView(peer.certificateFingerprintSha256)
   );
 }
 
@@ -142,7 +166,7 @@ void AutoReconnectCoordinator::tryNextCandidate(quint64 generation)
     return;
   }
 
-  const auto pinning = verifyCurrentPeer();
+  const auto pinning = verifyTrustedDevice();
   if (!pinning.ok()) {
     Q_EMIT trustBlocked(m_request->deviceId, pinning.error, pinning.diagnostic);
     return;
@@ -173,19 +197,27 @@ void AutoReconnectCoordinator::candidateFinished(
   if (!m_hasRequest || generation != m_generation) {
     return;
   }
-  if (result.error == AutoReconnectConnectError::FingerprintChanged) {
+  if (result.error == AutoReconnectConnectError::AuthenticationFailed) {
     Q_EMIT trustBlocked(
-        m_request->deviceId, PeerPinningError::FingerprintChanged,
-        result.diagnostic.isEmpty() ? QStringLiteral("TLS peer certificate fingerprint changed") : result.diagnostic
+        m_request->deviceId, PeerPinningError::UnauthenticatedPeer,
+        result.diagnostic.isEmpty() ? QStringLiteral("TLS connector could not authenticate the peer")
+                                    : result.diagnostic
     );
     return;
   }
-  if (!result.ok()) {
+  if (result.error != AutoReconnectConnectError::None) {
     tryNextCandidate(generation);
     return;
   }
+  if (!result.authenticatedPeer.has_value()) {
+    Q_EMIT trustBlocked(
+        m_request->deviceId, PeerPinningError::UnauthenticatedPeer,
+        QStringLiteral("TLS connector reported success without an authenticated peer identity")
+    );
+    return;
+  }
 
-  const auto pinning = verifyCurrentPeer();
+  const auto pinning = verifyAuthenticatedPeer(*result.authenticatedPeer);
   if (!pinning.ok()) {
     Q_EMIT trustBlocked(m_request->deviceId, pinning.error, pinning.diagnostic);
     return;
@@ -202,15 +234,15 @@ void AutoReconnectCoordinator::scheduleRetry(quint64 generation, QString diagnos
     return;
   }
   Q_EMIT roundFailed(m_request->deviceId, diagnostic);
-  if (m_retryAttempt < m_options.maxRetryDelayMs) {
+  if (m_retryAttempt < m_options.maxRetryDelay.count()) {
     ++m_retryAttempt;
   }
-  const qint64 uncappedDelay = qint64(m_options.initialRetryDelayMs) * m_retryAttempt;
-  const int delayMs = int(std::min<qint64>(uncappedDelay, m_options.maxRetryDelayMs));
+  const auto uncappedDelay = ReconnectDelay{m_options.initialRetryDelay.count() * m_retryAttempt};
+  const auto delay = std::min(uncappedDelay, m_options.maxRetryDelay);
   const auto deviceId = m_request->deviceId;
-  Q_EMIT retryScheduled(deviceId, delayMs);
+  Q_EMIT retryScheduled(deviceId, delay);
   QPointer<AutoReconnectCoordinator> guard(this);
-  m_scheduler(delayMs, [guard, generation]() {
+  m_scheduler(delay, [guard, generation]() {
     if (guard != nullptr && guard->m_hasRequest && generation == guard->m_generation) {
       ++guard->m_generation;
       guard->beginRound();

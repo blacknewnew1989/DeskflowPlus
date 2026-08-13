@@ -54,6 +54,9 @@ FileTlsError mapPinningError(PeerPinningError error)
     return FileTlsError::RevokedPeer;
   case PeerPinningError::FingerprintChanged:
     return FileTlsError::FingerprintChanged;
+  case PeerPinningError::DeviceIdMismatch:
+  case PeerPinningError::UnauthenticatedPeer:
+    return FileTlsError::NotAuthenticated;
   }
   return FileTlsError::FingerprintChanged;
 }

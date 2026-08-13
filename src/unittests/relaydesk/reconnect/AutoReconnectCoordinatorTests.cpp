@@ -39,15 +39,29 @@ TrustedDevice trustedDevice(
 }
 
 AutoReconnectRequest requestFor(
-    const DeviceId &deviceId, QList<QHostAddress> discoveredAddresses = {}, QByteArray presented = fingerprint()
+    const DeviceId &deviceId, QList<QHostAddress> discoveredAddresses = {}
 )
 {
   return {
       .deviceId = deviceId,
-      .presentedFingerprintSha256 = std::move(presented),
       .discoveredAddresses = std::move(discoveredAddresses),
   };
 }
+
+AutoReconnectConnectResult authenticated(const DeviceId &deviceId, QByteArray peerFingerprint = fingerprint())
+{
+  return {
+      .authenticatedPeer = AuthenticatedReconnectPeer{
+          .deviceId = deviceId,
+          .certificateFingerprintSha256 = std::move(peerFingerprint),
+      },
+  };
+}
+
+template <typename T>
+concept HasCallerPresentedFingerprint = requires(T value) { value.presentedFingerprintSha256; };
+
+static_assert(!HasCallerPresentedFingerprint<AutoReconnectRequest>);
 
 struct PendingAttempt
 {
@@ -66,8 +80,11 @@ private Q_SLOTS:
   void changedIpFallsThroughAndPersistsRecentSuccess();
   void sameAliasNeverOverridesDeviceIdentity();
   void unknownAndRevokedDevicesNeverConnect();
-  void advertisedFingerprintMismatchNeverConnects();
-  void connectorFingerprintChangeStopsCandidateRound();
+  void discoveryFingerprintIsNotAnAuthenticationInput();
+  void authenticatedFingerprintMismatchNeverConnects();
+  void authenticatedDeviceMismatchNeverConnects();
+  void unauthenticatedSuccessNeverConnects();
+  void connectorAuthenticationFailureStopsCandidateRound();
   void failedCandidateAdvancesSerially();
   void networkRecoveryStartsFreshRoundAndStaleCallbacksAreIgnored();
   void candidateRoundsAreBoundedAndBackoffIsCapped();
@@ -86,13 +103,13 @@ void AutoReconnectCoordinatorTests::changedIpFallsThroughAndPersistsRecentSucces
   QList<AddressCandidate> attempted;
   AutoReconnectCoordinator coordinator(
       store, provider,
-      [&attempted](const DeviceId &, const AddressCandidate &candidate, auto callback) {
+      [&attempted](const DeviceId &id, const AddressCandidate &candidate, auto callback) {
         attempted.append(candidate);
-        callback({
-            .error = candidate.address == QHostAddress(QStringLiteral("10.0.0.9"))
-                         ? AutoReconnectConnectError::None
-                         : AutoReconnectConnectError::NetworkError,
-        });
+        if (candidate.address == QHostAddress(QStringLiteral("10.0.0.9"))) {
+          callback(authenticated(id));
+        } else {
+          callback({.error = AutoReconnectConnectError::NetworkError});
+        }
       }
   );
   QSignalSpy connected(&coordinator, &AutoReconnectCoordinator::connected);
@@ -128,7 +145,7 @@ void AutoReconnectCoordinatorTests::sameAliasNeverOverridesDeviceIdentity()
       store, provider,
       [&attemptedIds](const DeviceId &deviceId, const AddressCandidate &, auto callback) {
         attemptedIds.append(deviceId);
-        callback({});
+        callback(authenticated(deviceId));
       }
   );
   QSignalSpy connected(&coordinator, &AutoReconnectCoordinator::connected);
@@ -165,7 +182,31 @@ void AutoReconnectCoordinatorTests::unknownAndRevokedDevicesNeverConnect()
   QCOMPARE(blocked.at(1).at(1).value<PeerPinningError>(), PeerPinningError::RevokedPeer);
 }
 
-void AutoReconnectCoordinatorTests::advertisedFingerprintMismatchNeverConnects()
+void AutoReconnectCoordinatorTests::discoveryFingerprintIsNotAnAuthenticationInput()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  TrustedDeviceStore store(directory.filePath(QStringLiteral("trusted.json")));
+  QVERIFY(store.load().ok);
+  const auto deviceId = DeviceId::generate();
+  QVERIFY(store.upsert(trustedDevice(deviceId, QStringLiteral("Peer"))));
+
+  AddressCandidateProvider provider;
+  AutoReconnectCoordinator coordinator(
+      store, provider,
+      [](const DeviceId &id, const AddressCandidate &, auto callback) { callback(authenticated(id)); }
+  );
+  QSignalSpy connected(&coordinator, &AutoReconnectCoordinator::connected);
+
+  // AutoReconnectRequest deliberately has no advertised/presented
+  // fingerprint field. Only the connector's TLS-authenticated result can
+  // satisfy pinning, regardless of what discovery may have advertised.
+  coordinator.start(requestFor(deviceId, {QHostAddress(QStringLiteral("192.0.2.7"))}));
+
+  QTRY_COMPARE(connected.count(), 1);
+}
+
+void AutoReconnectCoordinatorTests::authenticatedFingerprintMismatchNeverConnects()
 {
   QTemporaryDir directory;
   TrustedDeviceStore store(directory.filePath(QStringLiteral("trusted.json")));
@@ -177,20 +218,72 @@ void AutoReconnectCoordinatorTests::advertisedFingerprintMismatchNeverConnects()
   int attemptCount = 0;
   AutoReconnectCoordinator coordinator(
       store, provider,
-      [&attemptCount](const DeviceId &, const AddressCandidate &, auto) { ++attemptCount; }
+      [&attemptCount](const DeviceId &id, const AddressCandidate &, auto callback) {
+        ++attemptCount;
+        callback(authenticated(id, fingerprint('\x55')));
+      }
   );
   QSignalSpy blocked(&coordinator, &AutoReconnectCoordinator::trustBlocked);
 
-  coordinator.start(requestFor(
-      deviceId, {QHostAddress(QStringLiteral("192.0.2.1"))}, fingerprint('\x55')
-  ));
+  coordinator.start(requestFor(deviceId, {QHostAddress(QStringLiteral("192.0.2.1"))}));
 
-  QCOMPARE(attemptCount, 0);
-  QCOMPARE(blocked.count(), 1);
+  QTRY_COMPARE(blocked.count(), 1);
+  QCOMPARE(attemptCount, 1);
   QCOMPARE(blocked.first().at(1).value<PeerPinningError>(), PeerPinningError::FingerprintChanged);
 }
 
-void AutoReconnectCoordinatorTests::connectorFingerprintChangeStopsCandidateRound()
+void AutoReconnectCoordinatorTests::authenticatedDeviceMismatchNeverConnects()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  TrustedDeviceStore store(directory.filePath(QStringLiteral("trusted.json")));
+  QVERIFY(store.load().ok);
+  const auto requestedId = DeviceId::generate();
+  const auto otherTrustedId = DeviceId::generate();
+  QVERIFY(store.upsert(trustedDevice(requestedId, QStringLiteral("Requested"))));
+  QVERIFY(store.upsert(trustedDevice(otherTrustedId, QStringLiteral("Other"))));
+
+  AddressCandidateProvider provider;
+  AutoReconnectCoordinator coordinator(
+      store, provider,
+      [&otherTrustedId](const DeviceId &, const AddressCandidate &, auto callback) {
+        callback(authenticated(otherTrustedId));
+      }
+  );
+  QSignalSpy connected(&coordinator, &AutoReconnectCoordinator::connected);
+  QSignalSpy blocked(&coordinator, &AutoReconnectCoordinator::trustBlocked);
+
+  coordinator.start(requestFor(requestedId, {QHostAddress(QStringLiteral("192.0.2.9"))}));
+
+  QTRY_COMPARE(blocked.count(), 1);
+  QCOMPARE(connected.count(), 0);
+  QCOMPARE(blocked.first().at(1).value<PeerPinningError>(), PeerPinningError::DeviceIdMismatch);
+}
+
+void AutoReconnectCoordinatorTests::unauthenticatedSuccessNeverConnects()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  TrustedDeviceStore store(directory.filePath(QStringLiteral("trusted.json")));
+  QVERIFY(store.load().ok);
+  const auto deviceId = DeviceId::generate();
+  QVERIFY(store.upsert(trustedDevice(deviceId, QStringLiteral("Peer"))));
+
+  AddressCandidateProvider provider;
+  AutoReconnectCoordinator coordinator(
+      store, provider, [](const DeviceId &, const AddressCandidate &, auto callback) { callback({}); }
+  );
+  QSignalSpy connected(&coordinator, &AutoReconnectCoordinator::connected);
+  QSignalSpy blocked(&coordinator, &AutoReconnectCoordinator::trustBlocked);
+
+  coordinator.start(requestFor(deviceId, {QHostAddress(QStringLiteral("192.0.2.8"))}));
+
+  QTRY_COMPARE(blocked.count(), 1);
+  QCOMPARE(connected.count(), 0);
+  QCOMPARE(blocked.first().at(1).value<PeerPinningError>(), PeerPinningError::UnauthenticatedPeer);
+}
+
+void AutoReconnectCoordinatorTests::connectorAuthenticationFailureStopsCandidateRound()
 {
   QTemporaryDir directory;
   TrustedDeviceStore store(directory.filePath(QStringLiteral("trusted.json")));
@@ -205,8 +298,8 @@ void AutoReconnectCoordinatorTests::connectorFingerprintChangeStopsCandidateRoun
       [&attemptCount](const DeviceId &, const AddressCandidate &, auto callback) {
         ++attemptCount;
         callback({
-            .error = AutoReconnectConnectError::FingerprintChanged,
-            .diagnostic = QStringLiteral("handshake pin mismatch"),
+            .error = AutoReconnectConnectError::AuthenticationFailed,
+            .diagnostic = QStringLiteral("handshake authentication failed"),
         });
       }
   );
@@ -221,7 +314,7 @@ void AutoReconnectCoordinatorTests::connectorFingerprintChangeStopsCandidateRoun
   QTRY_COMPARE(blocked.count(), 1);
   QCOMPARE(attemptCount, 1);
   QCOMPARE(retry.count(), 0);
-  QCOMPARE(blocked.first().at(1).value<PeerPinningError>(), PeerPinningError::FingerprintChanged);
+  QCOMPARE(blocked.first().at(1).value<PeerPinningError>(), PeerPinningError::UnauthenticatedPeer);
 }
 
 void AutoReconnectCoordinatorTests::failedCandidateAdvancesSerially()
@@ -250,7 +343,7 @@ void AutoReconnectCoordinatorTests::failedCandidateAdvancesSerially()
   attempts[0].callback({.error = AutoReconnectConnectError::NetworkError});
   QCOMPARE(attempts.size(), 2);
   QCOMPARE(attempts.at(1).candidate.address, QHostAddress(QStringLiteral("192.0.2.41")));
-  attempts[1].callback({});
+  attempts[1].callback(authenticated(attempts[1].deviceId));
   QCOMPARE(connected.count(), 1);
 }
 
@@ -277,9 +370,9 @@ void AutoReconnectCoordinatorTests::networkRecoveryStartsFreshRoundAndStaleCallb
   coordinator.networkAvailable();
   QTRY_COMPARE(attempts.size(), 2);
 
-  attempts[0].callback({});
+  attempts[0].callback(authenticated(attempts[0].deviceId));
   QCOMPARE(connected.count(), 0);
-  attempts[1].callback({});
+  attempts[1].callback(authenticated(attempts[1].deviceId));
   QCOMPARE(connected.count(), 1);
 }
 
@@ -295,7 +388,7 @@ void AutoReconnectCoordinatorTests::candidateRoundsAreBoundedAndBackoffIsCapped(
   for (int index = 1; index <= 20; ++index) {
     discovered.append(QHostAddress(QStringLiteral("198.51.100.%1").arg(index)));
   }
-  QList<std::pair<int, std::function<void()>>> scheduled;
+  QList<std::pair<ReconnectDelay, std::function<void()>>> scheduled;
   AddressCandidateProvider provider;
   int attemptCount = 0;
   AutoReconnectCoordinator coordinator(
@@ -304,23 +397,23 @@ void AutoReconnectCoordinatorTests::candidateRoundsAreBoundedAndBackoffIsCapped(
         ++attemptCount;
         callback({.error = AutoReconnectConnectError::NetworkError});
       },
-      [&scheduled](int delayMs, std::function<void()> callback) {
-        scheduled.emplaceBack(delayMs, std::move(callback));
+      [&scheduled](ReconnectDelay delay, std::function<void()> callback) {
+        scheduled.emplaceBack(delay, std::move(callback));
       },
-      {.initialRetryDelayMs = 100, .maxRetryDelayMs = 250}
+      {.initialRetryDelay = ReconnectDelay{100}, .maxRetryDelay = ReconnectDelay{250}}
   );
 
   coordinator.start(requestFor(deviceId, discovered));
   QTRY_COMPARE(scheduled.size(), 1);
   QCOMPARE(attemptCount, int(kDefaultMaxReconnectCandidates));
-  QCOMPARE(scheduled.at(0).first, 100);
+  QCOMPARE(scheduled.at(0).first, ReconnectDelay{100});
 
   scheduled.at(0).second();
   QTRY_COMPARE(scheduled.size(), 2);
-  QCOMPARE(scheduled.at(1).first, 200);
+  QCOMPARE(scheduled.at(1).first, ReconnectDelay{200});
   scheduled.at(1).second();
   QTRY_COMPARE(scheduled.size(), 3);
-  QCOMPARE(scheduled.at(2).first, 250);
+  QCOMPARE(scheduled.at(2).first, ReconnectDelay{250});
 }
 
 QTEST_MAIN(AutoReconnectCoordinatorTests)

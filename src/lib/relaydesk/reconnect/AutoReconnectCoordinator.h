@@ -18,6 +18,7 @@
 #include <QString>
 
 #include <functional>
+#include <chrono>
 #include <optional>
 
 namespace deskflow::relaydesk {
@@ -29,36 +30,49 @@ enum class AutoReconnectConnectError
 {
   None,
   NetworkError,
-  FingerprintChanged,
+  AuthenticationFailed,
+};
+
+struct AuthenticatedReconnectPeer
+{
+  DeviceId deviceId;
+  QByteArray certificateFingerprintSha256;
+
+  [[nodiscard]] bool operator==(const AuthenticatedReconnectPeer &) const = default;
 };
 
 struct AutoReconnectConnectResult
 {
   AutoReconnectConnectError error = AutoReconnectConnectError::None;
+  // Populated only after the connector has completed TLS and derived the
+  // identity from the peer certificate/HELLO exchange. Discovery data and
+  // callers are never an authentication source.
+  std::optional<AuthenticatedReconnectPeer> authenticatedPeer;
   QString diagnostic;
 
   [[nodiscard]] bool ok() const noexcept
   {
-    return error == AutoReconnectConnectError::None;
+    return error == AutoReconnectConnectError::None && authenticatedPeer.has_value();
   }
 };
 
 struct AutoReconnectRequest
 {
   DeviceId deviceId;
-  QByteArray presentedFingerprintSha256;
   QList<QHostAddress> discoveredAddresses;
   DiscoverySettings settings;
   quint16 inputPort = kDefaultManualInputPort;
   quint16 filePort = kDefaultManualFilePort;
 };
 
+using ReconnectDelay = std::chrono::milliseconds;
+
 struct AutoReconnectOptions
 {
   qsizetype maxCandidatesPerRound = kDefaultMaxReconnectCandidates;
   qsizetype maxRememberedAddresses = kDefaultMaxRememberedAddresses;
-  int initialRetryDelayMs = 1000;
-  int maxRetryDelayMs = 10000;
+  ReconnectDelay initialRetryDelay{1000};
+  ReconnectDelay maxRetryDelay{10000};
 };
 
 class AutoReconnectCoordinator final : public QObject
@@ -68,7 +82,7 @@ class AutoReconnectCoordinator final : public QObject
 public:
   using ConnectCallback = std::function<void(AutoReconnectConnectResult)>;
   using Connector = std::function<void(const DeviceId &, const AddressCandidate &, ConnectCallback)>;
-  using Scheduler = std::function<void(int, std::function<void()>)>;
+  using Scheduler = std::function<void(ReconnectDelay, std::function<void()>)>;
 
   AutoReconnectCoordinator(
       TrustedDeviceStore &trustedDevices, AddressCandidateProvider &candidateProvider, Connector connector,
@@ -82,14 +96,15 @@ public:
 Q_SIGNALS:
   void connecting(DeviceId deviceId, AddressCandidate candidate);
   void connected(DeviceId deviceId, AddressCandidate candidate);
-  void retryScheduled(DeviceId deviceId, int delayMs);
+  void retryScheduled(DeviceId deviceId, ReconnectDelay delay);
   void trustBlocked(DeviceId deviceId, PeerPinningError error, QString diagnostic);
   void roundFailed(DeviceId deviceId, QString diagnostic);
   void persistenceFailed(DeviceId deviceId, QString diagnostic);
 
 private:
   void beginRound();
-  [[nodiscard]] PeerPinningResult verifyCurrentPeer() const;
+  [[nodiscard]] PeerPinningResult verifyTrustedDevice() const;
+  [[nodiscard]] PeerPinningResult verifyAuthenticatedPeer(const AuthenticatedReconnectPeer &peer) const;
   void candidatesReady(AddressCandidateResult result);
   void tryNextCandidate(quint64 generation);
   void candidateFinished(quint64 generation, AddressCandidate candidate, AutoReconnectConnectResult result);
@@ -114,5 +129,7 @@ private:
 } // namespace deskflow::relaydesk
 
 Q_DECLARE_METATYPE(deskflow::relaydesk::AutoReconnectConnectError)
+Q_DECLARE_METATYPE(deskflow::relaydesk::AuthenticatedReconnectPeer)
 Q_DECLARE_METATYPE(deskflow::relaydesk::AutoReconnectConnectResult)
 Q_DECLARE_METATYPE(deskflow::relaydesk::PeerPinningError)
+Q_DECLARE_METATYPE(deskflow::relaydesk::ReconnectDelay)
