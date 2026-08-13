@@ -7,6 +7,7 @@
 #include "relaydesk/transfer/Protocol.h"
 
 #include <QHash>
+#include <QMetaType>
 #include <QMutex>
 #include <QString>
 #include <QUuid>
@@ -26,6 +27,12 @@ enum class ConflictResolverError
   TargetReserved,
 };
 
+enum class TargetCommitDisposition : quint8
+{
+  FailIfExists = 0,
+  ReplaceExisting = 1,
+};
+
 struct UseTarget
 {
   QString absolutePath;
@@ -33,7 +40,7 @@ struct UseTarget
   QUuid reservationId;
   // The receiver commit boundary must use an atomic platform replacement.
   // ConflictResolver never deletes or mutates the existing target itself.
-  bool replaceExisting = false;
+  TargetCommitDisposition commitDisposition = TargetCommitDisposition::FailIfExists;
 
   [[nodiscard]] bool operator==(const UseTarget &) const = default;
 };
@@ -94,3 +101,5 @@ private:
 };
 
 } // namespace relaydesk::transfer
+
+Q_DECLARE_METATYPE(relaydesk::transfer::TargetCommitDisposition)
