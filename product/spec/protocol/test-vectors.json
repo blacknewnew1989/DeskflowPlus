@@ -144,6 +144,35 @@
     },
     {
       "kind": "frame-positive",
+      "name": "goodbye-application-shutdown",
+      "headerHex": "5244465400017fff000000040000000300000000000000000000000000000000",
+      "metadataHex": "a10101",
+      "payloadHex": "",
+      "expected": {
+        "version": 1,
+        "messageType": 32767,
+        "flags": 4,
+        "metadataLength": 3,
+        "payloadLength": 0,
+        "streamId": 0
+      }
+    },
+    {
+      "kind": "metadata-negative",
+      "name": "goodbye-unknown-reason",
+      "metadataHex": "a1011863",
+      "messageType": 32767,
+      "expectedCodecError": "InvalidGoodbyeReason"
+    },
+    {
+      "kind": "metadata-negative",
+      "name": "goodbye-protocol-error-without-diagnostic",
+      "metadataHex": "a10102",
+      "messageType": 32767,
+      "expectedCodecError": "InvalidDiagnostic"
+    },
+    {
+      "kind": "frame-positive",
       "name": "file-chunk-three-bytes-no-metadata",
       "headerHex": "524446540001020100000001000000000000000000000003000000000000002a",
       "metadataHex": "",

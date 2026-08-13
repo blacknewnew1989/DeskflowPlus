@@ -38,6 +38,12 @@ enum HeartbeatKey : qint64
   HeartbeatTimestampKey = 2,
 };
 
+enum GoodbyeKey : qint64
+{
+  GoodbyeReasonKey = 1,
+  GoodbyeDiagnosticKey = 2,
+};
+
 constexpr qsizetype kMaximumAppVersionUtf8Bytes = 64;
 constexpr qsizetype kMaximumSupportedVersions = 16;
 constexpr qsizetype kMaximumDiagnosticUtf8Bytes = 512;
@@ -128,6 +134,18 @@ bool validateVersions(const QList<quint16> &versions, QString *error)
     unique.insert(version);
   }
   return true;
+}
+
+bool knownGoodbyeReason(GoodbyeReason reason)
+{
+  switch (reason) {
+  case GoodbyeReason::Normal:
+  case GoodbyeReason::ApplicationShutdown:
+  case GoodbyeReason::ProtocolError:
+  case GoodbyeReason::IdleTimeout:
+    return true;
+  }
+  return false;
 }
 
 } // namespace
@@ -405,6 +423,92 @@ SessionMessageCodec::decodeHeartbeat(quint16 protocolVersion, MessageType type, 
               .timestampMs = static_cast<quint64>(timestamp.toInteger()),
           },
   };
+}
+
+QByteArray SessionMessageCodec::encodeGoodbye(const GoodbyeMessage &message, QString *error)
+{
+  if (error != nullptr) {
+    error->clear();
+  }
+  if (!knownGoodbyeReason(message.reason)) {
+    setError(error, QStringLiteral("GOODBYE reason is unknown"));
+    return {};
+  }
+  const bool protocolError = message.reason == GoodbyeReason::ProtocolError;
+  const qsizetype diagnosticBytes = message.diagnostic.toUtf8().size();
+  if ((protocolError &&
+       (message.diagnostic.isEmpty() || diagnosticBytes > kMaximumDiagnosticUtf8Bytes)) ||
+      (!protocolError && !message.diagnostic.isEmpty())) {
+    setError(error, QStringLiteral("GOODBYE reason and diagnostic disagree"));
+    return {};
+  }
+
+  QCborMap map{{key(GoodbyeReasonKey), static_cast<qint64>(message.reason)}};
+  if (protocolError) {
+    map.insert(key(GoodbyeDiagnosticKey), message.diagnostic);
+  }
+  return QCborValue(map).toCbor(QCborValue::EncodingOption::SortKeysInMaps);
+}
+
+GoodbyeDecodeResult
+SessionMessageCodec::decodeGoodbye(quint16 protocolVersion, MessageType type, QByteArrayView metadata)
+{
+  if (protocolVersion != kProtocolMajorVersion) {
+    return failure<GoodbyeMessage>(
+        SessionMessageError::UnsupportedVersion, QStringLiteral("GOODBYE version is unsupported")
+    );
+  }
+  if (type != MessageType::Goodbye) {
+    return failure<GoodbyeMessage>(
+        SessionMessageError::UnsupportedMessageType, QStringLiteral("session metadata is not a GOODBYE message")
+    );
+  }
+  if (metadata.isEmpty() || static_cast<quint64>(metadata.size()) > kMaximumSessionMetadataBytes) {
+    return failure<GoodbyeMessage>(
+        SessionMessageError::TooLarge, QStringLiteral("GOODBYE metadata is empty or too large")
+    );
+  }
+  const auto parsed = parseMap(metadata);
+  if (!parsed.has_value()) {
+    return failure<GoodbyeMessage>(
+        SessionMessageError::MalformedCbor, QStringLiteral("GOODBYE metadata is not one CBOR map")
+    );
+  }
+  const auto &map = *parsed;
+  if (!hasExactIntegerKeys(map, {GoodbyeReasonKey}) &&
+      !hasExactIntegerKeys(map, {GoodbyeReasonKey, GoodbyeDiagnosticKey})) {
+    return failure<GoodbyeMessage>(
+        SessionMessageError::InvalidFields,
+        QStringLiteral("GOODBYE contains missing, duplicate, or unknown fields")
+    );
+  }
+
+  const QCborValue encodedReason = valueFor(map, GoodbyeReasonKey);
+  if (!encodedReason.isInteger() || encodedReason.toInteger() < 0 ||
+      encodedReason.toInteger() > std::numeric_limits<quint32>::max() ||
+      !knownGoodbyeReason(static_cast<GoodbyeReason>(encodedReason.toInteger()))) {
+    return failure<GoodbyeMessage>(
+        SessionMessageError::InvalidGoodbyeReason, QStringLiteral("GOODBYE reason is unknown")
+    );
+  }
+  const auto reason = static_cast<GoodbyeReason>(encodedReason.toInteger());
+  QString diagnostic;
+  if (map.contains(key(GoodbyeDiagnosticKey))) {
+    const QCborValue encodedDiagnostic = valueFor(map, GoodbyeDiagnosticKey);
+    if (!encodedDiagnostic.isString() || encodedDiagnostic.toString().isEmpty() ||
+        encodedDiagnostic.toString().toUtf8().size() > kMaximumDiagnosticUtf8Bytes) {
+      return failure<GoodbyeMessage>(
+          SessionMessageError::InvalidDiagnostic, QStringLiteral("GOODBYE diagnostic is invalid")
+      );
+    }
+    diagnostic = encodedDiagnostic.toString();
+  }
+  if ((reason == GoodbyeReason::ProtocolError) != !diagnostic.isEmpty()) {
+    return failure<GoodbyeMessage>(
+        SessionMessageError::InvalidDiagnostic, QStringLiteral("GOODBYE reason and diagnostic disagree")
+    );
+  }
+  return {.message = GoodbyeMessage{.reason = reason, .diagnostic = diagnostic}};
 }
 
 } // namespace relaydesk::transfer
