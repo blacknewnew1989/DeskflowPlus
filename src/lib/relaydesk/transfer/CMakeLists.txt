@@ -38,6 +38,8 @@ add_library(relaydesk_transfer STATIC
   TransferControlStateMachine.h
   TransferCommandCodec.cpp
   TransferCommandCodec.h
+  TransferCompletionCodec.cpp
+  TransferCompletionCodec.h
   TransferHistoryStore.cpp
   TransferHistoryStore.h
   TransferSender.cpp
