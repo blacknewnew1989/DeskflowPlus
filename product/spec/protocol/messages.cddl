@@ -123,10 +123,18 @@ file-result = {
   ? 4: tstr
 }
 
-transfer-command = {
+transfer-pause = {
+  1: transfer-id
+}
+
+transfer-resume = {
+  1: transfer-id
+}
+
+transfer-cancel = {
   1: transfer-id,
-  ? 2: uint,               ; reason
-  ? 3: bool                ; keep partial
+  2: 1..2,                 ; TransferCancelReason
+  3: bool                  ; keep partial
 }
 
 transfer-complete = {

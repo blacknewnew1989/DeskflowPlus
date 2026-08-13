@@ -41,6 +41,65 @@
     },
     {
       "kind": "frame-positive",
+      "name": "transfer-pause",
+      "headerHex": "5244465400010300000000010000001300000000000000000000000000000000",
+      "metadataHex": "a1015011111111222243338444555555555555",
+      "payloadHex": "",
+      "expected": {
+        "version": 1,
+        "messageType": 768,
+        "flags": 1,
+        "metadataLength": 19,
+        "payloadLength": 0,
+        "streamId": 0
+      }
+    },
+    {
+      "kind": "frame-positive",
+      "name": "transfer-resume",
+      "headerHex": "5244465400010301000000010000001300000000000000000000000000000000",
+      "metadataHex": "a1015011111111222243338444555555555555",
+      "payloadHex": "",
+      "expected": {
+        "version": 1,
+        "messageType": 769,
+        "flags": 1,
+        "metadataLength": 19,
+        "payloadLength": 0,
+        "streamId": 0
+      }
+    },
+    {
+      "kind": "frame-positive",
+      "name": "transfer-cancel-user-keep-partial",
+      "headerHex": "5244465400010302000000010000001700000000000000000000000000000000",
+      "metadataHex": "a3015011111111222243338444555555555555020103f5",
+      "payloadHex": "",
+      "expected": {
+        "version": 1,
+        "messageType": 770,
+        "flags": 1,
+        "metadataLength": 23,
+        "payloadLength": 0,
+        "streamId": 0
+      }
+    },
+    {
+      "kind": "metadata-negative",
+      "name": "transfer-pause-unknown-field",
+      "metadataHex": "a201501111111122224333844455555555555502f5",
+      "messageType": 768,
+      "expectedCodecError": "InvalidFields"
+    },
+    {
+      "kind": "metadata-negative",
+      "name": "transfer-cancel-invalid-reason",
+      "metadataHex": "a3015011111111222243338444555555555555020003f5",
+      "messageType": 770,
+      "expectedCodecError": "InvalidReason"
+    },
+    {
+      "kind": "frame-positive",
       "name": "file-chunk-three-bytes-no-metadata",
       "headerHex": "524446540001020100000001000000000000000000000003000000000000002a",
       "metadataHex": "",
