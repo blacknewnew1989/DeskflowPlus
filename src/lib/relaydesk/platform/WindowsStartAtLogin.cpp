@@ -7,7 +7,6 @@
 #include "relaydesk/platform/WindowsStartAtLogin.h"
 
 #include <QDir>
-#include <QFileInfo>
 
 #include <string>
 #include <utility>
@@ -241,11 +240,23 @@ QString WindowsStartAtLogin::quoteCommandLineArgument(const QString &argument)
 QString WindowsStartAtLogin::buildCommand(const QString &executablePath, const QStringList &arguments)
 {
   if (executablePath.trimmed().isEmpty() || executablePath.contains(QChar::Null) ||
-      executablePath.contains(QChar('"')) || !QFileInfo(executablePath).isAbsolute()) {
+      executablePath.contains(QChar('"'))) {
     return {};
   }
 
-  const auto nativePath = QDir::toNativeSeparators(QDir::cleanPath(executablePath));
+  auto forwardPath = executablePath;
+  forwardPath.replace(QChar('\\'), QChar('/'));
+  const bool driveAbsolute = forwardPath.size() >= 3 && forwardPath.at(0).isLetter() &&
+                             forwardPath.at(1) == QChar(':') && forwardPath.at(2) == QChar('/');
+  const bool uncAbsolute =
+      forwardPath.size() > 2 && forwardPath.startsWith(QStringLiteral("//")) && forwardPath.at(2) != QChar('/');
+  if (!driveAbsolute && !uncAbsolute) {
+    return {};
+  }
+
+  auto nativePath = uncAbsolute ? QStringLiteral("//") + QDir::cleanPath(forwardPath.sliced(2))
+                                : QDir::cleanPath(forwardPath);
+  nativePath.replace(QChar('/'), QChar('\\'));
   QStringList commandParts{quoteCommandLineArgument(nativePath)};
   for (const auto &argument : arguments) {
     if (argument.contains(QChar::Null)) {

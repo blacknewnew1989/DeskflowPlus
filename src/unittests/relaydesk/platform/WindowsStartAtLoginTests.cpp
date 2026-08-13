@@ -81,6 +81,10 @@ private Q_SLOTS:
         WindowsStartAtLogin::quoteCommandLineArgument(QStringLiteral("quoted\\\"value")),
         QStringLiteral("\"quoted\\\\\\\"value\"")
     );
+    QCOMPARE(
+        WindowsStartAtLogin::buildCommand(QStringLiteral("\\\\server\\share\\RelayDesk\\deskflow.exe")),
+        QStringLiteral("\\\\server\\share\\RelayDesk\\deskflow.exe")
+    );
   }
 
   void invalidExecutableIsRejected()
