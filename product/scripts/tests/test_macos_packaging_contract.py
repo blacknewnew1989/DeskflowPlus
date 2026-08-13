@@ -72,6 +72,9 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn('-libpath=${RELAYDESK_QT_LIBRARY_PATH}', deploy)
         self.assertIn('"${RELAYDESK_QTPATHS}" --query QT_INSTALL_LIBS', deploy)
         self.assertIn("OUTPUT_STRIP_TRAILING_WHITESPACE", deploy)
+        self.assertEqual(deploy.count('COMMAND \\"${DEPLOYQT}\\"'), 2)
+        self.assertIn('\\"-no-codesign\\"', deploy)
+        self.assertIn("discovering RelayDesk plugins", deploy)
         self.assertIn("sanitize_bundle_rpaths.sh", deploy)
 
     def test_package_readme_documents_retained_user_data(self) -> None:
