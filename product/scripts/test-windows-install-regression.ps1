@@ -501,10 +501,14 @@ $Logs = [ordered]@{
 
 $UserDataRoot = Join-Path $env:APPDATA $ExpectedProductName
 $UserDataCreatedByHarness = -not (Test-Path -LiteralPath $UserDataRoot)
+$UserDataMarkerId = [guid]::NewGuid().ToString("N")
+$UserConfigPath = Join-Path $UserDataRoot "$ExpectedProductName.conf"
+$UserConfigPreExisted = Test-Path -LiteralPath $UserConfigPath -PathType Leaf
+$UserConfigBackup = Join-Path $TestRoot "user-config-before-test005.conf"
 $UserDataPaths = @(
-    (Join-Path $UserDataRoot "$ExpectedProductName.conf"),
-    (Join-Path $UserDataRoot "test005-trusted-devices.json"),
-    (Join-Path $UserDataRoot "test005-transfer-history.json")
+    $UserConfigPath,
+    (Join-Path $UserDataRoot "test005-$UserDataMarkerId-trusted-devices.json"),
+    (Join-Path $UserDataRoot "test005-$UserDataMarkerId-transfer-history.json")
 )
 $UserDataHashes = @{}
 $UserDataFilesCreatedByHarness = @()
@@ -536,6 +540,7 @@ $Result = [ordered]@{
     userDataPreserved = "NOT_RUN"
     interactiveUnsignedWarning = "NOT_RUN"
     interactiveUnsignedWarningNote = "quiet runner install cannot observe SmartScreen or interactive UAC UI"
+    userConfigMode = if ($UserConfigPreExisted) { "backup-append-restore" } else { "created-for-test" }
     previousPackageSource = "NOT_RUN"
     logs = $Logs
 }
@@ -553,17 +558,25 @@ try {
     if ($ExistingFirewallRules.Count -ne 0) {
         throw "TEST005_EXISTING_FIREWALL_RULE_REFUSED: $ExpectedProductName"
     }
-    foreach ($UserDataPath in $UserDataPaths) {
+    foreach ($UserDataPath in $UserDataPaths[1..2]) {
         if (Test-Path -LiteralPath $UserDataPath) {
             throw "TEST005_EXISTING_USER_DATA_REFUSED: $UserDataPath"
         }
     }
 
     New-Item -ItemType Directory -Path $UserDataRoot -Force | Out-Null
-    Set-Content -LiteralPath $UserDataPaths[0] -Value @(
-        "[test005]", "sentinel=$([guid]::NewGuid().ToString('D'))"
-    ) -Encoding UTF8
-    $UserDataFilesCreatedByHarness += $UserDataPaths[0]
+    if ($UserConfigPreExisted) {
+        [IO.File]::Copy($UserConfigPath, $UserConfigBackup, $true)
+        Add-Content -LiteralPath $UserConfigPath -Value @(
+            "", "[test005-$UserDataMarkerId]", "sentinel=$UserDataMarkerId"
+        ) -Encoding UTF8
+    }
+    else {
+        Set-Content -LiteralPath $UserConfigPath -Value @(
+            "[test005-$UserDataMarkerId]", "sentinel=$UserDataMarkerId"
+        ) -Encoding UTF8
+        $UserDataFilesCreatedByHarness += $UserConfigPath
+    }
     Set-Content -LiteralPath $UserDataPaths[1] -Value '{"test005":"trusted-device-sentinel"}' -Encoding UTF8
     $UserDataFilesCreatedByHarness += $UserDataPaths[1]
     Set-Content -LiteralPath $UserDataPaths[2] -Value '{"test005":"transfer-history-sentinel"}' -Encoding UTF8
@@ -780,6 +793,9 @@ finally {
     }
     $Result | ConvertTo-Json -Depth 6
 
+    if ($UserConfigPreExisted -and (Test-Path -LiteralPath $UserConfigBackup -PathType Leaf)) {
+        [IO.File]::Copy($UserConfigBackup, $UserConfigPath, $true)
+    }
     foreach ($UserDataPath in $UserDataFilesCreatedByHarness) {
         if (Test-Path -LiteralPath $UserDataPath -PathType Leaf) {
             [IO.File]::Delete($UserDataPath)

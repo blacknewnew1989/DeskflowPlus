@@ -46,6 +46,10 @@ class WindowsInstallRegressionScriptTests(unittest.TestCase):
         self.assertIn("RelayDesk.conf, trust marker, and history marker", SCRIPT)
         self.assertIn("$UserDataFilesCreatedByHarness", SCRIPT)
         self.assertIn("foreach ($UserDataPath in $UserDataFilesCreatedByHarness)", SCRIPT)
+        self.assertIn("$UserConfigPreExisted", SCRIPT)
+        self.assertIn("$UserConfigBackup", SCRIPT)
+        self.assertIn("backup-append-restore", SCRIPT)
+        self.assertIn("[IO.File]::Copy($UserConfigBackup, $UserConfigPath, $true)", SCRIPT)
 
     def test_exercises_same_upgrade_code_lower_version_major_upgrade(self) -> None:
         self.assertIn("New-SyntheticPreviousMsi", SCRIPT)
