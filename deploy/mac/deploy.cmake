@@ -31,8 +31,23 @@ if (OSX_BUNDLE)
   if(NOT DEFINED Qt6_DIR OR NOT IS_DIRECTORY "${Qt6_DIR}")
     message(FATAL_ERROR "Qt6_DIR is required to locate all macOS deployment frameworks")
   endif()
-  get_filename_component(RELAYDESK_QT_CMAKE_PATH "${Qt6_DIR}" DIRECTORY)
-  get_filename_component(RELAYDESK_QT_LIBRARY_PATH "${RELAYDESK_QT_CMAKE_PATH}" DIRECTORY)
+  get_filename_component(RELAYDESK_QT_PREFIX "${Qt6_DIR}/../../.." ABSOLUTE)
+  find_program(
+    RELAYDESK_QTPATHS
+    NAMES qtpaths6 qtpaths
+    HINTS "${RELAYDESK_QT_PREFIX}/bin"
+    NO_DEFAULT_PATH
+    REQUIRED
+  )
+  execute_process(
+    COMMAND "${RELAYDESK_QTPATHS}" --query QT_INSTALL_LIBS
+    RESULT_VARIABLE RELAYDESK_QTPATHS_RESULT
+    OUTPUT_VARIABLE RELAYDESK_QT_LIBRARY_PATH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if(NOT RELAYDESK_QTPATHS_RESULT EQUAL 0)
+    message(FATAL_ERROR "qtpaths failed to report the Qt library path")
+  endif()
   if(NOT IS_DIRECTORY "${RELAYDESK_QT_LIBRARY_PATH}")
     message(FATAL_ERROR "RelayDesk Qt library path does not exist: ${RELAYDESK_QT_LIBRARY_PATH}")
   endif()
