@@ -67,6 +67,7 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("custom Finder layout skipped", dmg_layout)
         self.assertIn("${RELAYDESK_MACOS_ICON_SOURCE}", gui)
         self.assertIn("@BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION@", plist)
+        self.assertIn('-executable=\\${relaydesk_core}', deploy)
 
     def test_package_readme_documents_retained_user_data(self) -> None:
         readme = (ROOT / "deploy/mac/README-macOS.txt.in").read_text(encoding="utf-8")
