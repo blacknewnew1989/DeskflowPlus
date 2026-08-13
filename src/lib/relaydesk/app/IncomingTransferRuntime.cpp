@@ -306,7 +306,7 @@ private:
       return false;
     }
     if (const auto *begin = std::get_if<FileBeginMessage>(&*decoded.message)) {
-      if (m_receiver != nullptr) {
+      if (m_receiver != nullptr || m_skippedBegin.has_value()) {
         fail(TransferErrorCode::InternalError, QStringLiteral("FILE_BEGIN arrived while a file is active"));
         return false;
       }
@@ -337,6 +337,15 @@ private:
         fail(receiverErrorCode(result.error), result.diagnostic);
         return false;
       }
+      if (m_receiver->disposition() == IncomingFileDisposition::Skip) {
+        m_receiver.reset();
+        m_skippedBegin = *begin;
+        m_skippedEntry = *entry;
+        m_skippedBytes = 0;
+        m_skippedNextSequence = 0;
+        publishProgress(m_completedBytes, m_completedFiles, entry->relativeProtocolPath);
+        return true;
+      }
       publishProgress(
           m_completedBytes + m_receiver->snapshot().receivedBytes, m_completedFiles,
           entry->relativeProtocolPath
@@ -344,6 +353,20 @@ private:
       return true;
     }
     if (const auto *chunk = std::get_if<FileChunkMessage>(&*decoded.message)) {
+      if (m_skippedBegin.has_value()) {
+        const quint64 payloadBytes = static_cast<quint64>(frame.payload.size());
+        if (!m_skippedEntry.has_value() || chunk->transferId != m_offer.transferId ||
+            chunk->fileId != m_skippedBegin->fileId || chunk->offset != m_skippedBytes ||
+            chunk->sequence != m_skippedNextSequence || frame.payload.isEmpty() ||
+            payloadBytes > m_skippedBegin->chunkBytes ||
+            payloadBytes > m_skippedBegin->size - m_skippedBytes) {
+          fail(TransferErrorCode::InternalError, QStringLiteral("skipped file stream is invalid"));
+          return false;
+        }
+        m_skippedBytes += payloadBytes;
+        ++m_skippedNextSequence;
+        return true;
+      }
       if (m_receiver == nullptr) {
         fail(TransferErrorCode::InternalError, QStringLiteral("FILE_CHUNK arrived without FILE_BEGIN"));
         return false;
@@ -370,36 +393,69 @@ private:
       return true;
     }
     if (const auto *end = std::get_if<FileEndMessage>(&*decoded.message)) {
+      if (m_skippedBegin.has_value()) {
+        if (!m_skippedEntry.has_value() || end->transferId != m_offer.transferId ||
+            end->fileId != m_skippedBegin->fileId || end->size != m_skippedBegin->size ||
+            m_skippedBytes != m_skippedBegin->size || end->sha256 != m_skippedEntry->sha256) {
+          fail(TransferErrorCode::InternalError, QStringLiteral("skipped FILE_END is invalid"));
+          return false;
+        }
+        const FileReceiverResult skipped{
+            .error = FileReceiverError::TargetExists,
+            .diagnostic = QStringLiteral("TARGET_SKIPPED"),
+            .fileResult = FileResultMessage{
+                .transferId = end->transferId,
+                .fileId = end->fileId,
+                .code = FileResultCode::TargetExists,
+                .diagnostic = QStringLiteral("TARGET_SKIPPED"),
+            },
+        };
+        if (!persistCompletedFile(end->fileId, diagnostic)) {
+          fail(TransferErrorCode::InternalError, diagnostic);
+          return false;
+        }
+        sendFileResult(skipped);
+        m_completedBytes += m_skippedEntry->size;
+        ++m_completedFiles;
+        publishProgress(m_completedBytes, m_completedFiles, m_skippedEntry->relativeProtocolPath);
+        m_skippedBegin.reset();
+        m_skippedEntry.reset();
+        if (m_completedFiles == m_offer.fileCount) {
+          publishCompleted();
+          return false;
+        }
+        return true;
+      }
       if (m_receiver == nullptr) {
         fail(TransferErrorCode::InternalError, QStringLiteral("FILE_END arrived without FILE_BEGIN"));
         return false;
       }
       const auto result = m_receiver->finish(*end);
       if (!result.ok()) {
+        const auto snapshot = m_receiver->snapshot();
+        const bool skippedRace = m_options.conflictPolicy == ConflictPolicy::Skip &&
+                                 result.fileResult.has_value() &&
+                                 result.fileResult->code == FileResultCode::TargetExists;
+        if (skippedRace && snapshot.fileId.has_value() &&
+            persistCompletedFile(*snapshot.fileId, diagnostic)) {
+          sendFileResult(result);
+          m_completedBytes += snapshot.expectedSize;
+          ++m_completedFiles;
+          publishProgress(m_completedBytes, m_completedFiles, snapshot.relativeProtocolPath);
+          m_receiver.reset();
+          if (m_completedFiles == m_offer.fileCount) {
+            publishCompleted();
+            return false;
+          }
+          return true;
+        }
         sendFileResult(result);
         fail(receiverErrorCode(result.error), result.diagnostic);
         return false;
       }
       const auto snapshot = m_receiver->snapshot();
-      auto *resumeFile = resumeFileFor(snapshot.fileId.value());
-      if (resumeFile == nullptr) {
-        fail(TransferErrorCode::InternalError, QStringLiteral("completed file is absent from resume state"));
-        return false;
-      }
-      if (resumeFile->totalBytes == 0) {
-        for (auto iterator = m_resumeState->files.begin(); iterator != m_resumeState->files.end(); ++iterator) {
-          if (iterator->fileId == snapshot.fileId.value()) {
-            m_resumeState->files.erase(iterator);
-            break;
-          }
-        }
-      } else {
-        resumeFile->durableOffset = resumeFile->totalBytes;
-      }
-      m_resumeState->updatedUtc = QDateTime::currentDateTimeUtc();
-      const auto persisted = m_resumeStore.save(*m_resumeState);
-      if (!persisted.ok()) {
-        fail(TransferErrorCode::InternalError, persisted.diagnostic);
+      if (!persistCompletedFile(snapshot.fileId.value(), diagnostic)) {
+        fail(TransferErrorCode::InternalError, diagnostic);
         return false;
       }
       sendFileResult(result);
@@ -527,6 +583,34 @@ private:
     }
     if (matchedFiles != m_resumeState->files.size()) {
       diagnostic = QStringLiteral("stored resume state has a different file set");
+      return false;
+    }
+    return true;
+  }
+
+  [[nodiscard]] bool persistCompletedFile(
+      const ::relaydesk::transfer::FileId &fileId, QString &diagnostic
+  )
+  {
+    auto *resumeFile = resumeFileFor(fileId);
+    if (resumeFile == nullptr) {
+      diagnostic = QStringLiteral("completed file is absent from resume state");
+      return false;
+    }
+    if (resumeFile->totalBytes == 0) {
+      for (auto iterator = m_resumeState->files.begin(); iterator != m_resumeState->files.end(); ++iterator) {
+        if (iterator->fileId == fileId) {
+          m_resumeState->files.erase(iterator);
+          break;
+        }
+      }
+    } else {
+      resumeFile->durableOffset = resumeFile->totalBytes;
+    }
+    m_resumeState->updatedUtc = QDateTime::currentDateTimeUtc();
+    const auto persisted = m_resumeStore.save(*m_resumeState);
+    if (!persisted.ok()) {
+      diagnostic = persisted.diagnostic;
       return false;
     }
     return true;
@@ -690,6 +774,10 @@ private:
   ::relaydesk::transfer::ManifestPageReassembler m_reassembler;
   QList<::relaydesk::transfer::ManifestEntry> m_entries;
   std::unique_ptr<IncomingFileReceiverWorker> m_receiver;
+  std::optional<::relaydesk::transfer::FileBeginMessage> m_skippedBegin;
+  std::optional<::relaydesk::transfer::ManifestEntry> m_skippedEntry;
+  quint64 m_skippedBytes = 0;
+  quint64 m_skippedNextSequence = 0;
   quint64 m_completedBytes = 0;
   quint64 m_completedFiles = 0;
   quint32 m_activeStreamId = 0;
@@ -1049,6 +1137,12 @@ void IncomingTransferRuntime::finishAcceptPreflight(
         TransferOperationError::InvalidState, result.safety.diagnostic
     );
     return;
+  }
+  // The frozen service facade has no per-file conflict-decision intent. An
+  // explicit user Accept is therefore the minimal Ask decision bridge and
+  // selects the non-destructive AutoRename policy for this transfer.
+  if (options.conflictPolicy == ConflictPolicy::Ask) {
+    options.conflictPolicy = ConflictPolicy::AutoRename;
   }
   const auto accepted = session->stateMachine.acceptIncoming(
       options.conflictPolicy, logicalDestination(options.destinationRoot), result.freeBytes,

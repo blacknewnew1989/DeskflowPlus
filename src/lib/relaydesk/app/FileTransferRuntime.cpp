@@ -250,6 +250,8 @@ struct FileTransferRuntime::OutgoingSession
   qsizetype currentEntry = 0;
   quint64 completedBytes = 0;
   quint64 completedFiles = 0;
+  ::relaydesk::transfer::ConflictPolicy effectiveConflictPolicy =
+      ::relaydesk::transfer::ConflictPolicy::AutoRename;
   QHash<QByteArray, quint64> resumeOffsets;
   std::optional<::relaydesk::transfer::ResumeQueryMessage> resumeQuery;
   quint64 senderGeneration = 0;
@@ -287,6 +289,16 @@ FileTransferRuntime::FileTransferRuntime(
     }
     if (!m_options.localCapabilities.features.contains(QStringLiteral("resume.v1"))) {
       m_options.localCapabilities.features.append(QStringLiteral("resume.v1"));
+    }
+    for (const auto policy : {
+             ::relaydesk::transfer::ConflictPolicy::AutoRename,
+             ::relaydesk::transfer::ConflictPolicy::Overwrite,
+             ::relaydesk::transfer::ConflictPolicy::Skip,
+             ::relaydesk::transfer::ConflictPolicy::Ask,
+         }) {
+      if (!m_options.localCapabilities.conflictPolicies.contains(policy)) {
+        m_options.localCapabilities.conflictPolicies.append(policy);
+      }
     }
     connect(incoming, &IncomingTransferRuntime::incomingOffer, this, &IFileTransferService::incomingOffer);
     connect(
@@ -1389,6 +1401,7 @@ void FileTransferRuntime::handleOfferResponse(const DeviceId &peerDeviceId, cons
       failOutgoing(*session, TransferErrorCode::OfferFailed, accepted.diagnostic);
       return;
     }
+    session->effectiveConflictPolicy = acceptance->effectiveConflictPolicy;
     session->snapshot = session->control->snapshot();
     Q_EMIT transferChanged(session->snapshot);
     QTimer::singleShot(0, this, [this, id = session->id]() { sendNextManifestPage(id); });
@@ -1647,7 +1660,9 @@ void FileTransferRuntime::handleFileResult(const DeviceId &peerDeviceId, const F
       session->manifest->entries.at(session->currentEntry).entry.id != result->fileId) {
     return;
   }
-  if (result->code != FileResultCode::Ok) {
+  const bool skipped = result->code == FileResultCode::TargetExists &&
+                       session->effectiveConflictPolicy == ::relaydesk::transfer::ConflictPolicy::Skip;
+  if (result->code != FileResultCode::Ok && !skipped) {
     failOutgoing(*session, TransferErrorCode::PeerFileFailed, result->diagnostic);
     return;
   }
