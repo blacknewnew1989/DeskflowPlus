@@ -42,6 +42,7 @@ class SessionMessageCodecTests final : public QObject
 
 private Q_SLOTS:
   void helloRoundTrip();
+  void authResultErrorCatalogIsStable();
   void authResultRoundTrip();
   void heartbeatAndAckMatchFrozenVectors();
   void goodbyeMatchesFrozenVectorAndRoundTrips();
@@ -67,7 +68,9 @@ void SessionMessageCodecTests::authResultRoundTrip()
 {
   const QList<AuthResultMessage> messages = {
       {.accepted = true},
-      {.accepted = false, .errorCode = 7, .diagnostic = QStringLiteral("fingerprint mismatch")},
+      {.accepted = false,
+       .errorCode = AuthResultErrorCode::FingerprintMismatch,
+       .diagnostic = QStringLiteral("fingerprint mismatch")},
   };
   for (const auto &expected : messages) {
     const auto decoded =
@@ -75,6 +78,20 @@ void SessionMessageCodecTests::authResultRoundTrip()
     QVERIFY2(decoded.ok(), qPrintable(decoded.diagnostic));
     QCOMPARE(*decoded.message, expected);
   }
+}
+
+void SessionMessageCodecTests::authResultErrorCatalogIsStable()
+{
+  QCOMPARE(static_cast<quint32>(AuthResultErrorCode::None), quint32{0});
+  QCOMPARE(static_cast<quint32>(AuthResultErrorCode::InvalidHello), quint32{1});
+  QCOMPARE(static_cast<quint32>(AuthResultErrorCode::UnsupportedVersion), quint32{2});
+  QCOMPARE(static_cast<quint32>(AuthResultErrorCode::UnknownPeer), quint32{3});
+  QCOMPARE(static_cast<quint32>(AuthResultErrorCode::RevokedPeer), quint32{4});
+  QCOMPARE(static_cast<quint32>(AuthResultErrorCode::FingerprintMismatch), quint32{5});
+  QCOMPARE(static_cast<quint32>(AuthResultErrorCode::InternalError), quint32{6});
+  QVERIFY(!isKnownAuthResultErrorCode(AuthResultErrorCode::None));
+  QVERIFY(isKnownAuthResultErrorCode(AuthResultErrorCode::FingerprintMismatch));
+  QVERIFY(!isKnownAuthResultErrorCode(static_cast<AuthResultErrorCode>(7)));
 }
 
 void SessionMessageCodecTests::heartbeatAndAckMatchFrozenVectors()
@@ -208,9 +225,23 @@ void SessionMessageCodecTests::rejectsInvalidVersions()
 void SessionMessageCodecTests::rejectsUnsafeAuthCombinations()
 {
   QString error;
-  QVERIFY(SessionMessageCodec::encodeAuthResult({.accepted = true, .errorCode = 1}, &error).isEmpty());
+  QVERIFY(
+      SessionMessageCodec::encodeAuthResult(
+          {.accepted = true, .errorCode = AuthResultErrorCode::InvalidHello}, &error
+      )
+          .isEmpty()
+  );
   QVERIFY(!error.isEmpty());
   QVERIFY(SessionMessageCodec::encodeAuthResult({.accepted = false}, &error).isEmpty());
+  QVERIFY(
+      SessionMessageCodec::encodeAuthResult(
+          {.accepted = false,
+           .errorCode = static_cast<AuthResultErrorCode>(99),
+           .diagnostic = QStringLiteral("unknown")},
+          &error
+      )
+          .isEmpty()
+  );
 
   const auto accepted = SessionMessageCodec::encodeAuthResult({.accepted = true});
   const auto acceptedWithError = mutate(accepted, [](QCborMap &map) { map.insert(2, 1); });
@@ -224,6 +255,15 @@ void SessionMessageCodecTests::rejectsUnsafeAuthCombinations()
   });
   QCOMPARE(
       SessionMessageCodec::decodeAuthResult(MessageType::AuthResult, rejectedWithoutDiagnostic).error,
+      SessionMessageError::InvalidAuthResult
+  );
+  const auto rejectedWithUnknownCode = mutate(accepted, [](QCborMap &map) {
+    map.insert(1, false);
+    map.insert(2, 99);
+    map.insert(3, QStringLiteral("unknown"));
+  });
+  QCOMPARE(
+      SessionMessageCodec::decodeAuthResult(MessageType::AuthResult, rejectedWithUnknownCode).error,
       SessionMessageError::InvalidAuthResult
   );
 }
