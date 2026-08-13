@@ -25,6 +25,7 @@ class QThreadPool;
 namespace deskflow::relaydesk {
 
 class DeviceDiscoveryRuntime;
+class AutoReconnectRuntime;
 class IncomingTransferRuntime;
 class IPlatformFileSafety;
 class TrustedDeviceStore;
@@ -109,6 +110,7 @@ Q_SIGNALS:
   );
 
 private:
+  friend class AutoReconnectRuntime;
   struct ConnectionContext
   {
     std::optional<DeviceId> expectedPeer;
@@ -118,6 +120,10 @@ private:
   struct OutgoingSession;
 
   [[nodiscard]] bool onOwningThread(QString *diagnostic);
+  [[nodiscard]] bool connectPeerAt(
+      const DeviceId &peerDeviceId, const QHostAddress &address, quint16 filePort,
+      QString *diagnostic = nullptr
+  );
   void attachConnection(FileTlsConnection &connection, std::optional<DeviceId> expectedPeer = std::nullopt);
   void handleAuthenticated(FileTlsConnection &connection);
   void handleFrame(FileTlsConnection &connection, ::relaydesk::transfer::Frame frame);

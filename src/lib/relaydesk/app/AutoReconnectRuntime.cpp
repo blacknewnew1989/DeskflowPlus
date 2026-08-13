@@ -65,7 +65,7 @@ void AutoReconnectRuntime::observe(DeviceSnapshot snapshot)
 }
 
 void AutoReconnectRuntime::connectCandidate(
-    const DeviceId &deviceId, const AddressCandidate &, AutoReconnectCoordinator::ConnectCallback callback
+    const DeviceId &deviceId, const AddressCandidate &candidate, AutoReconnectCoordinator::ConnectCallback callback
 )
 {
   if (m_files.isPeerReady(deviceId)) {
@@ -75,7 +75,7 @@ void AutoReconnectRuntime::connectCandidate(
   }
   m_pending.insert(deviceId, std::move(callback));
   QString diagnostic;
-  if (!m_files.connectPeer(deviceId, &diagnostic)) {
+  if (!m_files.connectPeerAt(deviceId, candidate.address, candidate.filePort, &diagnostic)) {
     auto completion = m_pending.take(deviceId);
     completion({.error = AutoReconnectConnectError::NetworkError, .diagnostic = std::move(diagnostic)});
   }

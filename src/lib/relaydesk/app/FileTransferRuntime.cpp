@@ -521,6 +521,27 @@ bool FileTransferRuntime::connectPeer(const DeviceId &peerDeviceId, QString *dia
     return false;
   }
 
+  return connectPeerAt(peerDeviceId, *address, peerInfo->filePort, diagnostic);
+}
+
+bool FileTransferRuntime::connectPeerAt(
+    const DeviceId &peerDeviceId, const QHostAddress &address, quint16 filePort, QString *diagnostic
+)
+{
+  if (diagnostic != nullptr) diagnostic->clear();
+  if (!onOwningThread(diagnostic) || !isRunning() || address.isNull() || filePort == 0) {
+    const auto message = QStringLiteral("Reconnect candidate is unavailable");
+    setDiagnostic(diagnostic, message);
+    return false;
+  }
+  const auto trusted = m_trustedDevices.find(peerDeviceId);
+  if (!trusted.has_value() || trusted->revoked) {
+    const auto message = QStringLiteral("Peer file-transfer identity is not trusted");
+    setDiagnostic(diagnostic, message);
+    return false;
+  }
+  if (m_peerConnections.contains(peerDeviceId) || m_clients.contains(peerDeviceId)) return true;
+
   auto *client = new FileTlsClient(
       m_localDeviceId, &m_trustedDevices, m_combinedPemPath, m_options.tlsSettings, this
   );
@@ -532,7 +553,7 @@ bool FileTransferRuntime::connectPeer(const DeviceId &peerDeviceId, QString *dia
   });
 
   QString connectDiagnostic;
-  const auto result = client->connectToHost(*address, peerInfo->filePort, &connectDiagnostic);
+  const auto result = client->connectToHost(address, filePort, &connectDiagnostic);
   if (result != FileTlsError::None) {
     m_clients.remove(peerDeviceId);
     delete client;
