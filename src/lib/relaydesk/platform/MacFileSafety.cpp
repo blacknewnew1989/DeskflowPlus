@@ -379,7 +379,10 @@ FileSafetyResult MacFileSafety::commitStagedFile(const CommitStagedFileRequest &
     return failure(FileSafetyError::DestinationExists, QStringLiteral("destination already exists"));
   }
 
-  unsigned int renameFlags = RENAME_NOFOLLOW_ANY | RENAME_RESOLVE_BENEATH;
+  // Both names are single path components relative to parent descriptors opened
+  // beneath the verified receive root. RENAME_NOFOLLOW_ANY is available on the
+  // macOS 14 deployment baseline and closes the remaining leaf-symlink race.
+  unsigned int renameFlags = RENAME_NOFOLLOW_ANY;
   if (request.disposition == CommitDisposition::FailIfExists)
     renameFlags |= RENAME_EXCL;
   const int renameResult = ::renameatx_np(
