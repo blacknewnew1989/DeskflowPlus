@@ -448,6 +448,26 @@ void FileTransferRuntime::stop()
     return;
   }
 
+  for (auto *session : std::as_const(m_outgoing)) {
+    if (session == nullptr || session->cancelled || session->control == nullptr ||
+        ::relaydesk::transfer::TransferControlStateMachine::isTerminal(session->snapshot.state)) {
+      continue;
+    }
+    const auto interrupted = session->control->interrupt();
+    if (!interrupted.ok()) {
+      continue;
+    }
+    session->interrupted = true;
+    session->paused = false;
+    session->resumeQueryPending = false;
+    session->resumeQuery.reset();
+    session->awaitingFileResult = false;
+    ++session->senderGeneration;
+    session->sender.reset();
+    session->snapshot = session->control->snapshot();
+    Q_EMIT transferChanged(session->snapshot);
+  }
+
   const auto connections = m_connections.keys();
   if (auto *incoming = m_incoming.get(); incoming != nullptr) {
     for (auto *connection : connections) {

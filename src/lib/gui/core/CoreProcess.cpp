@@ -365,7 +365,11 @@ void CoreProcess::stop(std::optional<ProcessMode> processModeOption)
 
   qInfo("stopping core process (%s mode)", qPrintable(processModeToString(processMode)));
 
-  if (m_processState == ProcessState::Starting) {
+  if (m_processState == ProcessState::RetryPending) {
+    qDebug("core process retry is pending, cancelling");
+    m_retryTimer.stop();
+    setProcessState(ProcessState::Stopped);
+  } else if (m_processState == ProcessState::Starting) {
     qDebug("core process is starting, cancelling");
     setProcessState(ProcessState::Stopped);
   } else if (m_processState != ProcessState::Stopped) {

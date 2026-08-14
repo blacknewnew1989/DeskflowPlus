@@ -23,6 +23,7 @@
 #include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 
 #include <limits>
 
@@ -66,6 +67,7 @@ private Q_SLOTS:
   void incomingConflictPolicies_data();
   void incomingConflictPolicies();
   void interruptedIncomingFileResumesFromDurableCheckpoint();
+  void stoppingSenderLeavesOutgoingAtResumableCheckpoint();
   void incomingFolderCommitsEveryFileAndPreservesEmptyDirectories();
   void runtimeSourceUsesCanonicalSenderBoundary();
   void runtimeSourceComposesPlatformReceiver();
@@ -747,6 +749,129 @@ void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoi
   QVERIFY2(committed.open(QIODevice::ReadOnly), qPrintable(committed.errorString()));
   QCOMPARE(committed.readAll(), sourceBytes);
   QVERIFY(QDir(partPath).entryList(QDir::Files | QDir::NoDotAndDotDot).isEmpty());
+  QVERIFY2(errors.isEmpty(), qPrintable(evidence));
+}
+
+void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint()
+{
+  using namespace ::relaydesk::transfer;
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  const QByteArray sourceBytes(8 * 1024 * 1024 + 113, '\x4f');
+  const auto sourcePath = directory.filePath(QStringLiteral("sender-stop-source.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+  source.close();
+  const auto receiveRoot = directory.filePath(QStringLiteral("sender-stop-received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("sender-stop-trust.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("receiver-stop-trust.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  model::DeviceHomeModel senderModel;
+  model::DeviceHomeModel receiverModel;
+  DeviceDiscoveryRuntime senderDiscovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender stop sender")), senderModel
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Sender stop receiver")), receiverModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  options.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+
+  QStringList errors;
+  bool senderStopRequested = false;
+  bool senderStoppedAtCheckpoint = false;
+  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto error, auto, const QString &message) {
+    if (!senderStoppedAtCheckpoint || error != FileTransferRuntimeError::TransportFailed) {
+      errors.append(QStringLiteral("sender: ") + message);
+    }
+  });
+  connect(&receiver, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("receiver: ") + message);
+  });
+  connect(&receiver, &IFileTransferService::incomingOffer, this, [&](const IncomingOffer &offer) {
+    receiver.accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
+  });
+
+  std::optional<TransferSnapshot> senderLatest;
+  std::optional<TransferSnapshot> receiverLatest;
+  quint64 interruptedBytes = 0;
+  QStringList senderStates;
+  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction != TransferDirection::Sending) {
+      return;
+    }
+    senderLatest = snapshot;
+    senderStates.append(QString::number(static_cast<int>(snapshot.state)));
+    if (!senderStopRequested && snapshot.state == TransferState::Transferring &&
+        snapshot.progress.completedBytes >= 1024U * 1024U &&
+        snapshot.progress.completedBytes < snapshot.progress.totalBytes) {
+      senderStopRequested = true;
+      interruptedBytes = snapshot.progress.completedBytes;
+      QTimer::singleShot(0, &sender, [&] {
+        senderStoppedAtCheckpoint = true;
+        sender.stop();
+      });
+    }
+  });
+  connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Receiving) {
+      receiverLatest = snapshot;
+    }
+  });
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+  const auto started = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+  QTRY_VERIFY_WITH_TIMEOUT(senderStoppedAtCheckpoint, 15'000);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderLatest.has_value() && senderLatest->state == TransferState::Interrupted && senderLatest->canResume &&
+          receiverLatest.has_value() && receiverLatest->state == TransferState::Interrupted,
+      10'000
+  );
+  QVERIFY(interruptedBytes >= 1024U * 1024U);
+  QVERIFY(interruptedBytes < static_cast<quint64>(sourceBytes.size()));
+
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(sender.connectPeer(receiverId, &diagnostic), qPrintable(diagnostic));
+
+  QElapsedTimer wait;
+  wait.start();
+  while (wait.elapsed() < 30'000 && (!senderLatest.has_value() || senderLatest->state != TransferState::Completed ||
+                                     !receiverLatest.has_value() || receiverLatest->state != TransferState::Completed)
+  ) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+  }
+  const auto evidence = QStringLiteral("errors=[%1] states=[%2] stopped=%3 checkpoint=%4 sender=%5 receiver=%6")
+                            .arg(errors.join(QStringLiteral("; ")), senderStates.join(QLatin1Char(',')))
+                            .arg(senderStoppedAtCheckpoint)
+                            .arg(interruptedBytes)
+                            .arg(senderLatest.has_value() ? static_cast<int>(senderLatest->state) : -1)
+                            .arg(receiverLatest.has_value() ? static_cast<int>(receiverLatest->state) : -1);
+  QVERIFY2(senderLatest.has_value() && senderLatest->state == TransferState::Completed, qPrintable(evidence));
+  QVERIFY2(receiverLatest.has_value() && receiverLatest->state == TransferState::Completed, qPrintable(evidence));
+  QVERIFY(senderStates.contains(QString::number(static_cast<int>(TransferState::Interrupted))));
+  QVERIFY(senderStates.contains(QString::number(static_cast<int>(TransferState::Resuming))));
+  QFile committed(QDir(receiveRoot).filePath(QStringLiteral("sender-stop-source.bin")));
+  QVERIFY2(committed.open(QIODevice::ReadOnly), qPrintable(committed.errorString()));
+  QCOMPARE(committed.readAll(), sourceBytes);
   QVERIFY2(errors.isEmpty(), qPrintable(evidence));
 }
 
