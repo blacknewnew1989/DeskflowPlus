@@ -48,6 +48,10 @@ add_executable(${target} WIN32 MACOSX_BUNDLE
   deskflow-gui.cpp
 )
 
+# The GUI must never be assembled before its complete Deskflow + RelayDesk
+# translation catalogs have been generated and copied into the app bundle.
+add_dependencies(${target} app_translations)
+
 target_link_libraries(
   ${target}
   gui

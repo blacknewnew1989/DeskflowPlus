@@ -83,6 +83,15 @@ Q_SIGNALS:
   );
 
 private:
+  enum class Error
+  {
+    None,
+    PairFirst,
+    DestinationUnavailable,
+    DiskFull,
+    Expired,
+  };
+
   [[nodiscard]] bool acceptInternal(::relaydesk::transfer::AcceptanceOrigin origin);
   void scheduleExpiry();
   void updateSafeError();
@@ -92,7 +101,7 @@ private:
   QTimer m_expiryTimer;
   std::optional<::relaydesk::transfer::IncomingOffer> m_offer;
   Status m_status = Status::Idle;
-  QString m_errorText;
+  Error m_error = Error::None;
   qint64 m_receivedAtMs = 0;
   bool m_dismissed = false;
 };

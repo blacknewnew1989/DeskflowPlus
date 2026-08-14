@@ -82,12 +82,27 @@ private Q_SLOTS:
   void pairingChanged(const PairingSnapshot &snapshot);
 
 private:
+  enum class ActionError
+  {
+    None,
+    CodeInvalid,
+    ActiveSessionExists,
+    IdentityNotReady,
+    CodeMismatch,
+    SessionUnavailable,
+    ActionUnavailable,
+    CodeExpired,
+    TooManyAttempts,
+    PairingFailed,
+  };
+
   [[nodiscard]] static QString displayName(const DeviceSnapshot &peer);
   [[nodiscard]] static QString formatFingerprint(const QByteArray &fingerprint, bool shortened);
   [[nodiscard]] static QString failureText(PairingFailureReason reason);
   [[nodiscard]] static bool isTerminal(PairingState state);
   [[nodiscard]] static QString stateText(PairingState state);
-  [[nodiscard]] static QString actionErrorText(PairingError error);
+  [[nodiscard]] static ActionError actionError(PairingError error);
+  [[nodiscard]] static QString actionErrorText(ActionError error);
   bool applyResult(const PairingActionResult &result);
   bool applyResult(const PairingOperationResult &result);
   void updateSnapshot(const PairingSnapshot &snapshot);
@@ -95,7 +110,7 @@ private:
   IPairingService *m_service = nullptr;
   std::optional<PairingSnapshot> m_snapshot;
   QByteArray m_peerFingerprint;
-  QString m_actionErrorText;
+  ActionError m_actionError = ActionError::None;
 };
 
 } // namespace deskflow::relaydesk::model

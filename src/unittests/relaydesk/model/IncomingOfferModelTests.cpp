@@ -6,14 +6,46 @@
 
 #include "relaydesk/model/IncomingOfferModel.h"
 
+#include <QCoreApplication>
 #include <QSignalSpy>
 #include <QTest>
+#include <QTranslator>
 
 using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
 using namespace relaydesk::transfer;
 
 namespace {
+
+class ErrorTranslator final : public QTranslator
+{
+public:
+  QString translate(const char *context, const char *sourceText, const char *, int) const override
+  {
+    if (QString::fromLatin1(context) == QStringLiteral("RelayDesk") &&
+        QString::fromLatin1(sourceText) == QStringLiteral("transfer.incoming.pair_first")) {
+      return QStringLiteral("TEST translated incoming error");
+    }
+    return {};
+  }
+};
+
+class TranslatorGuard final
+{
+public:
+  explicit TranslatorGuard(QTranslator &translator) : m_translator(translator)
+  {
+    QCoreApplication::installTranslator(&m_translator);
+  }
+
+  ~TranslatorGuard()
+  {
+    QCoreApplication::removeTranslator(&m_translator);
+  }
+
+private:
+  QTranslator &m_translator;
+};
 
 TransferOffer transferOffer()
 {
@@ -64,6 +96,7 @@ private Q_SLOTS:
   void expiresOnceAndCanBeDismissed();
   void blocksUntrustedPeerAndMapsErrorsSafely();
   void settingsUpdateEmitsAndReevaluatesAvailability();
+  void translatesActiveErrorAfterLanguageChange();
 };
 
 void IncomingOfferModelTests::presentsAndAcceptsValidatedOffer()
@@ -217,6 +250,17 @@ void IncomingOfferModelTests::settingsUpdateEmitsAndReevaluatesAvailability()
   QVERIFY(model.errorText().isEmpty());
   model.setSettings(settings());
   QCOMPARE(changed.count(), 1);
+}
+
+void IncomingOfferModelTests::translatesActiveErrorAfterLanguageChange()
+{
+  IncomingOfferModel model(settings());
+  QVERIFY(model.receiveOffer(incomingOffer(false)));
+  QCOMPARE(model.errorText(), QStringLiteral("Pair this device before receiving files"));
+
+  ErrorTranslator translator;
+  TranslatorGuard guard(translator);
+  QCOMPARE(model.errorText(), QStringLiteral("TEST translated incoming error"));
 }
 
 QTEST_MAIN(IncomingOfferModelTests)

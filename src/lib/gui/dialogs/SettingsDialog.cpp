@@ -22,6 +22,7 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QSignalBlocker>
 
 using namespace deskflow::gui;
 
@@ -36,8 +37,7 @@ SettingsDialog::SettingsDialog(QWidget *parent, const IServerConfig &serverConfi
 
   // set up the language combo
   I18N::reDetectLanguages();
-  ui->comboLanguage->addItems(I18N::detectedLanguages());
-  ui->comboLanguage->setCurrentText(I18N::toNativeName(I18N::currentLanguage()));
+  populateLanguages();
 
   updateText();
 
@@ -95,10 +95,24 @@ void SettingsDialog::initConnections() const
   connect(ui->btnBrowseLog, &QPushButton::clicked, this, &SettingsDialog::browseLogPath);
   connect(ui->cbLogToFile, &QCheckBox::toggled, this, &SettingsDialog::setLogToFile);
   connect(ui->comboLogLevel, &QComboBox::currentIndexChanged, this, &SettingsDialog::logLevelChanged);
-  connect(ui->comboLanguage, &QComboBox::currentTextChanged, this, [](const QString &lang) {
-    const auto shortName = I18N::nativeTo639Name(lang);
-    I18N::setLanguage(shortName);
+  connect(ui->comboLanguage, &QComboBox::currentIndexChanged, this, [this](int index) {
+    I18N::setLanguage(ui->comboLanguage->itemData(index).toString());
   });
+}
+
+void SettingsDialog::populateLanguages()
+{
+  const QSignalBlocker blocker(ui->comboLanguage);
+  ui->comboLanguage->clear();
+
+  for (const auto &nativeName : I18N::detectedLanguages()) {
+    const auto languageCode = I18N::nativeTo639Name(nativeName);
+    ui->comboLanguage->addItem(nativeName, languageCode);
+  }
+
+  const auto currentIndex = ui->comboLanguage->findData(I18N::currentLanguage());
+  if (currentIndex >= 0)
+    ui->comboLanguage->setCurrentIndex(currentIndex);
 }
 
 void SettingsDialog::regenCertificates()
@@ -191,7 +205,7 @@ void SettingsDialog::accept()
   Settings::setValue(Settings::Gui::CloseToTray, ui->cbCloseToTray->isChecked());
   Settings::setValue(Settings::Gui::SymbolicTrayIcon, ui->rbIconMono->isChecked());
   Settings::setValue(Settings::Security::CheckPeers, ui->cbRequireClientCert->isChecked());
-  Settings::setValue(Settings::Core::Language, I18N::nativeTo639Name(ui->comboLanguage->currentText()));
+  Settings::setValue(Settings::Core::Language, ui->comboLanguage->currentData().toString());
   Settings::setValue(Settings::Log::GuiDebug, ui->cbGuiDebug->isChecked());
   Settings::setValue(Settings::Core::UseWlClipboard, ui->cbUseWlClipboard->isChecked());
   Settings::setValue(Settings::Gui::ShowVersionInTitle, ui->cbShowVersion->isChecked());

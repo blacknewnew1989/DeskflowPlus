@@ -95,8 +95,8 @@ QString PairingWizardModel::attemptsRemainingText() const
 
 QString PairingWizardModel::errorText() const
 {
-  if (!m_actionErrorText.isEmpty())
-    return m_actionErrorText;
+  if (m_actionError != ActionError::None)
+    return actionErrorText(m_actionError);
   return m_snapshot.has_value() ? failureText(m_snapshot->failureReason) : QString();
 }
 
@@ -166,9 +166,10 @@ bool PairingWizardModel::confirmMatchingSas()
 bool PairingWizardModel::submitDisplayedSas(const QString &sixDigits)
 {
   if (!kSixDigitPattern.match(sixDigits).hasMatch()) {
-    m_actionErrorText = i18n::translate(Text::PairingCodeInvalid);
+    m_actionError = ActionError::CodeInvalid;
+    const auto message = errorText();
     Q_EMIT changed();
-    Q_EMIT actionFailed(m_actionErrorText);
+    Q_EMIT actionFailed(message);
     return false;
   }
   if (!m_snapshot.has_value())
@@ -188,7 +189,7 @@ bool PairingWizardModel::cancel()
 
 void PairingWizardModel::pairingChanged(const PairingSnapshot &snapshot)
 {
-  m_actionErrorText.clear();
+  m_actionError = ActionError::None;
   m_peerFingerprint = m_service != nullptr
                           ? m_service->pendingFingerprint(snapshot.pairingSessionId).value_or(QByteArray{})
                           : QByteArray{};
@@ -269,25 +270,52 @@ QString PairingWizardModel::stateText(PairingState state)
   return i18n::translate(Text::PairingStateFailed);
 }
 
-QString PairingWizardModel::actionErrorText(PairingError error)
+PairingWizardModel::ActionError PairingWizardModel::actionError(PairingError error)
 {
   switch (error) {
   case PairingError::None:
-    return {};
+    return ActionError::None;
   case PairingError::ActiveSessionExists:
-    return i18n::translate(Text::PairingAlreadyActive);
+    return ActionError::ActiveSessionExists;
   case PairingError::InvalidFingerprint:
-    return i18n::translate(Text::PairingIdentityNotReady);
+    return ActionError::IdentityNotReady;
   case PairingError::InvalidSas:
-    return i18n::translate(Text::PairingCodeMismatch);
+    return ActionError::CodeMismatch;
   case PairingError::SessionNotFound:
-    return i18n::translate(Text::PairingSessionUnavailable);
+    return ActionError::SessionUnavailable;
   case PairingError::InvalidState:
-    return i18n::translate(Text::PairingActionUnavailable);
+    return ActionError::ActionUnavailable;
   case PairingError::Expired:
-    return i18n::translate(Text::PairingCodeExpired);
+    return ActionError::CodeExpired;
   case PairingError::AttemptsExhausted:
+    return ActionError::TooManyAttempts;
+  }
+  return ActionError::PairingFailed;
+}
+
+QString PairingWizardModel::actionErrorText(ActionError error)
+{
+  switch (error) {
+  case ActionError::None:
+    return {};
+  case ActionError::CodeInvalid:
+    return i18n::translate(Text::PairingCodeInvalid);
+  case ActionError::ActiveSessionExists:
+    return i18n::translate(Text::PairingAlreadyActive);
+  case ActionError::IdentityNotReady:
+    return i18n::translate(Text::PairingIdentityNotReady);
+  case ActionError::CodeMismatch:
+    return i18n::translate(Text::PairingCodeMismatch);
+  case ActionError::SessionUnavailable:
+    return i18n::translate(Text::PairingSessionUnavailable);
+  case ActionError::ActionUnavailable:
+    return i18n::translate(Text::PairingActionUnavailable);
+  case ActionError::CodeExpired:
+    return i18n::translate(Text::PairingCodeExpired);
+  case ActionError::TooManyAttempts:
     return i18n::translate(Text::PairingTooManyAttempts);
+  case ActionError::PairingFailed:
+    return i18n::translate(Text::PairingStateFailed);
   }
   return i18n::translate(Text::PairingStateFailed);
 }
@@ -295,20 +323,21 @@ QString PairingWizardModel::actionErrorText(PairingError error)
 bool PairingWizardModel::applyResult(const PairingActionResult &result)
 {
   if (result.ok()) {
-    m_actionErrorText.clear();
+    m_actionError = ActionError::None;
     return true;
   }
 
-  m_actionErrorText = actionErrorText(result.error);
+  m_actionError = actionError(result.error);
+  const auto message = errorText();
   Q_EMIT changed();
-  Q_EMIT actionFailed(m_actionErrorText);
+  Q_EMIT actionFailed(message);
   return false;
 }
 
 bool PairingWizardModel::applyResult(const PairingOperationResult &result)
 {
   if (result.ok()) {
-    m_actionErrorText.clear();
+    m_actionError = ActionError::None;
     return true;
   }
   if (result.stateError != PairingError::None) {

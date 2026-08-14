@@ -10,6 +10,8 @@
 #include "relaydesk/widgets/TransferHistoryDetailsDialog.h"
 
 #include <QAction>
+#include <QCoreApplication>
+#include <QEvent>
 #include <QLabel>
 #include <QListView>
 #include <QPointer>
@@ -17,6 +19,7 @@
 #include <QSignalSpy>
 #include <QTest>
 #include <QToolButton>
+#include <QTranslator>
 
 #include <optional>
 #include <utility>
@@ -27,6 +30,44 @@ using namespace deskflow::relaydesk::widgets;
 using namespace relaydesk::transfer;
 
 namespace {
+
+class SemanticTranslator final : public QTranslator
+{
+public:
+  QString translate(const char *context, const char *sourceText, const char *, int) const override
+  {
+    if (QString::fromLatin1(context) != QStringLiteral("RelayDesk"))
+      return {};
+
+    const auto key = QString::fromLatin1(sourceText);
+    if (key == QStringLiteral("transfer.title"))
+      return QStringLiteral("Transferts test");
+    if (key == QStringLiteral("transfer.empty"))
+      return QStringLiteral("Aucun transfert test");
+    if (key == QStringLiteral("transfer.action.pause"))
+      return QStringLiteral("Suspendre test");
+    if (key == QStringLiteral("transfer.state.transferring"))
+      return QStringLiteral("Transfert test");
+    return {};
+  }
+};
+
+class TranslatorGuard final
+{
+public:
+  explicit TranslatorGuard(QTranslator &translator) : m_translator(translator)
+  {
+    QCoreApplication::installTranslator(&m_translator);
+  }
+
+  ~TranslatorGuard()
+  {
+    QCoreApplication::removeTranslator(&m_translator);
+  }
+
+private:
+  QTranslator &m_translator;
+};
 
 TransferSnapshot snapshot()
 {
@@ -72,6 +113,7 @@ class TransferCenterDockTests final : public QObject
 private Q_SLOTS:
   void showsEmptyAndUsesKeyboardAccessibleControls();
   void presentsHistoryDetailsAndEmitsSafeKeyboardIntents();
+  void refreshesSemanticTextOnLanguageChange();
 };
 
 void TransferCenterDockTests::showsEmptyAndUsesKeyboardAccessibleControls()
@@ -232,6 +274,46 @@ void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents(
   QCOMPARE(error->text(), QStringLiteral("Transfer failed. Try again."));
   QVERIFY(!error->text().contains(QStringLiteral("stacktrace")));
   QVERIFY(!error->text().contains(QStringLiteral("4008")));
+}
+
+void TransferCenterDockTests::refreshesSemanticTextOnLanguageChange()
+{
+  TransferCenterModel model;
+  TransferCenterDock dock(model);
+  dock.resize(532, 300);
+  dock.show();
+
+  auto *empty = dock.findChild<QLabel *>(QStringLiteral("relaydeskTransfersEmptyLabel"));
+  auto *list = dock.findChild<QListView *>(QStringLiteral("relaydeskTransfersView"));
+  auto *pause = dock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferPauseButton"));
+  QVERIFY(empty != nullptr);
+  QVERIFY(list != nullptr);
+  QVERIFY(pause != nullptr);
+  QCOMPARE(dock.windowTitle(), QStringLiteral("Transfers"));
+  QCOMPARE(empty->text(), QStringLiteral("Transfers will appear here"));
+
+  const auto active = snapshot();
+  QVERIFY(model.upsertTransfer(active));
+  list->setCurrentIndex(model.index(0, 0));
+  QTRY_VERIFY(pause->isVisible());
+  QCOMPARE(pause->text(), QStringLiteral("Pause"));
+  QCOMPARE(
+      model.index(0, 0).data(TransferCenterModel::StateTextRole).toString(), QStringLiteral("Transferring")
+  );
+
+  SemanticTranslator translator;
+  TranslatorGuard guard(translator);
+  QEvent languageChange(QEvent::LanguageChange);
+  QCoreApplication::sendEvent(&dock, &languageChange);
+
+  QCOMPARE(dock.windowTitle(), QStringLiteral("Transferts test"));
+  QCOMPARE(list->accessibleName(), dock.windowTitle());
+  QCOMPARE(empty->text(), QStringLiteral("Aucun transfert test"));
+  QCOMPARE(pause->text(), QStringLiteral("Suspendre test"));
+  QCOMPARE(pause->accessibleName(), pause->text());
+  QCOMPARE(
+      model.index(0, 0).data(TransferCenterModel::StateTextRole).toString(), QStringLiteral("Transfert test")
+  );
 }
 
 QTEST_MAIN(TransferCenterDockTests)

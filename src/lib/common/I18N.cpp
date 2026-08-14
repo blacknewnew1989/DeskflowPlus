@@ -12,6 +12,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QList>
+#include <QLocale>
 #include <QMap>
 #include <QObject>
 #include <QTranslator>
@@ -82,7 +83,8 @@ I18N::I18N(QObject *parent) : QObject{parent}
 
   static const auto s_prefix = QStringLiteral("_");
 
-  if (Settings::value(Settings::Core::Language).toString().isEmpty()) {
+  const auto configuredLanguage = Settings::value(Settings::Core::Language).toString();
+  if (configuredLanguage.isEmpty()) {
     auto appTranslator = new QTranslator(this);
     if (appTranslator->load(QLocale(), kAppId, s_prefix, m_appTrPath)) {
       m_currentTranslations.append(appTranslator);
@@ -105,7 +107,13 @@ I18N::I18N(QObject *parent) : QObject{parent}
       QCoreApplication::installTranslator(qtTranslator);
     }
   } else {
-    m_currentLang = Settings::value(Settings::Core::Language).toString();
+    m_currentLang = configuredLanguage;
+    if (!m_translations.contains(m_currentLang)) {
+      m_currentLang = m_translations.contains(QStringLiteral("en"))
+                          ? QStringLiteral("en")
+                          : (m_translations.isEmpty() ? QStringLiteral("en") : m_translations.firstKey());
+      Settings::setValue(Settings::Core::Language, m_currentLang);
+    }
     const auto translations = m_translations.value(m_currentLang);
     for (const auto &translation : translations) {
       auto translator = new QTranslator(this);
@@ -115,6 +123,11 @@ I18N::I18N(QObject *parent) : QObject{parent}
       }
     }
   }
+
+  // Keep locale-sensitive numbers, dates, sizes and durations aligned with
+  // the language that was actually selected (including an English fallback
+  // when the system locale has no complete application catalog).
+  QLocale::setDefault(QLocale(m_currentLang));
 }
 
 QStringList I18N::detectedLanguages()
@@ -149,6 +162,7 @@ void I18N::setLanguage(const QString &langName)
 
   instance()->m_currentLang = langName;
   Settings::setValue(Settings::Core::Language, langName);
+  QLocale::setDefault(QLocale(langName));
 
   for (const auto &translation : std::as_const(instance()->m_currentTranslations))
     QCoreApplication::removeTranslator(translation);
@@ -233,11 +247,18 @@ void I18N::detectLanguages()
     qtTranslations.insert(lang, QStringLiteral("%1/%2").arg(m_qtTrPath, translation));
   }
 
+  // Only advertise languages that cover both the inherited Deskflow UI and
+  // RelayDesk's semantic product strings.  Otherwise selecting a language can
+  // leave the compact home, pairing, permissions, or transfer UI in English.
   const QStringList keys = appTranslations.keys();
   for (const QString &lang : keys) {
+    if (!productTranslations.contains(lang)) {
+      m_nameMap.remove(lang);
+      continue;
+    }
+
     QStringList translations{appTranslations.value(lang)};
-    if (productTranslations.contains(lang))
-      translations.append(productTranslations.value(lang));
+    translations.append(productTranslations.value(lang));
     if (qtTranslations.contains(lang))
       translations.append(qtTranslations.value(lang));
     m_translations.insert(lang, translations);

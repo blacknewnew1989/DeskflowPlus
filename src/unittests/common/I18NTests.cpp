@@ -10,6 +10,7 @@
 #include "common/Settings.h"
 #include <QDir>
 #include <QFile>
+#include <QLocale>
 #include <QSignalSpy>
 
 void I18NTests::initTestCase()
@@ -44,6 +45,7 @@ void I18NTests::creationTest()
 
 void I18NTests::detectedLangTest()
 {
+  QCOMPARE(I18N::detectedLanguages().size(), m_langMap.size());
   for (const auto &lang : I18N::detectedLanguages())
     QVERIFY(m_langMap.contains(lang));
 }
@@ -97,17 +99,53 @@ void I18NTests::setLangTest_currentLang()
   QCOMPARE(spy.count(), 0);
 }
 
+void I18NTests::selectedLanguageIsPersisted()
+{
+  I18N::setLanguage(QStringLiteral("ja"));
+  QCOMPARE(Settings::value(Settings::Core::Language).toString(), QStringLiteral("ja"));
+}
+
+void I18NTests::selectedLocaleFollowsLanguage()
+{
+  I18N::setLanguage(QStringLiteral("ja"));
+  QCOMPARE(QLocale().language(), QLocale::Japanese);
+
+  I18N::setLanguage(QStringLiteral("ru"));
+  QCOMPARE(QLocale().language(), QLocale::Russian);
+}
+
 void I18NTests::productCatalogTest()
 {
   I18N::setLanguage(QStringLiteral("zh_CN"));
   QCOMPARE(QCoreApplication::translate("RelayDesk", "devices.status.online"), QStringLiteral("在线"));
-  QCOMPARE(QCoreApplication::translate("RelayDesk", "transfer.action.open_folder"), QStringLiteral("打开目录"));
+  QCOMPARE(QCoreApplication::translate("RelayDesk", "transfer.action.open_folder"), QStringLiteral("打开文件夹"));
   QCOMPARE(
       QCoreApplication::translate("RelayDesk", "devices.drop.items", nullptr, 3), QStringLiteral("3 个项目")
   );
 
   I18N::setLanguage(QStringLiteral("en"));
   QCOMPARE(QCoreApplication::translate("RelayDesk", "devices.status.online"), QStringLiteral("Online"));
+}
+
+void I18NTests::productCatalogsCoverEverySelectableLanguage()
+{
+  const QMap<QString, QString> expectedOnlineTranslations{
+      {QStringLiteral("en"), QStringLiteral("Online")},
+      {QStringLiteral("es"), QStringLiteral("En línea")},
+      {QStringLiteral("it"), QStringLiteral("Online")},
+      {QStringLiteral("ja"), QStringLiteral("オンライン")},
+      {QStringLiteral("ko"), QStringLiteral("온라인")},
+      {QStringLiteral("ru"), QStringLiteral("В сети")},
+      {QStringLiteral("zh_CN"), QStringLiteral("在线")},
+  };
+
+  for (auto it = expectedOnlineTranslations.cbegin(); it != expectedOnlineTranslations.cend(); ++it) {
+    I18N::setLanguage(it.key());
+    QCOMPARE(QCoreApplication::translate("RelayDesk", "devices.status.online"), it.value());
+    QVERIFY(QCoreApplication::translate("RelayDesk", "transfer.action.open_folder") !=
+            QStringLiteral("transfer.action.open_folder"));
+    QVERIFY(QCoreApplication::translate("RelayDesk", "pairing.success") != QStringLiteral("pairing.success"));
+  }
 }
 
 void I18NTests::reDetectTest()
@@ -117,10 +155,11 @@ void I18NTests::reDetectTest()
   I18N::reDetectLanguages();
   QCOMPARE(spy.count(), 0);
 
-  QFile::remove(QStringLiteral("%1/deskflow_en.qm").arg(m_myTDir));
+  QFile::remove(QStringLiteral("%1/relaydesk_en.qm").arg(m_myTDir));
 
   I18N::reDetectLanguages();
   QCOMPARE(spy.count(), 1);
+  QVERIFY(!I18N::detectedLanguages().contains(QStringLiteral("English")));
 }
 
 QTEST_MAIN(I18NTests)

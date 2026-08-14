@@ -49,6 +49,7 @@ private:
   void updateTlsControlsEnabled();
   void showReadOnlyMessage();
   void updateText();
+  void populateLanguages();
 
   /// @brief Load all settings.
   void loadFromConfig();

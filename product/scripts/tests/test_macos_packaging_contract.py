@@ -145,6 +145,24 @@ configure_file(
         self.assertLess(stage.index("cmake --install"), stage.index("codesign --verify"))
         self.assertIn("--deep --strict --verbose=4", stage)
 
+    def test_translation_catalogs_are_explicitly_copied_into_bundle(self) -> None:
+        translations = (ROOT / "translations/CMakeLists.txt").read_text(encoding="utf-8")
+        gui = (ROOT / "src/apps/deskflow-gui/CMakeLists.txt").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "copy_if_different ${TRS} ${RELAYDESK_TRS} ${BUNDLE_TR_DIR}",
+            translations,
+        )
+        self.assertNotIn('${CMAKE_CURRENT_BINARY_DIR}/*.qm', translations)
+        self.assertIn("add_dependencies(${target} app_translations)", gui)
+        self.assertIn("set(ALL_TRANSLATION_TS", translations)
+        self.assertIn("COMMAND Qt6::lrelease", translations)
+        for language in ("en", "es", "it", "ja", "ko", "ru", "zh_CN"):
+            self.assertIn(
+                f"${{RELAYDESK_TRANSLATION_CATALOG}}_{language}.ts",
+                translations,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

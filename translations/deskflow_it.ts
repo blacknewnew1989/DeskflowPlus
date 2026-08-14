@@ -37,7 +37,7 @@ p, li { white-space: pre-wrap; }
 &lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;  
 p, li { white-space: pre-wrap; }  
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:&apos;Ubuntu&apos;; font-size:10pt; font-weight:400; font-style:normal;&quot;&gt;  
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;a href=&quot;https://www.gnu.org/licenses/old-licenses/gpl-2.0.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#508ed8;&quot;&gt;Licenza: GNU GPL Versione 2&lt;/a&gt;&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;a href=&quot;https://www.gnu.org/licenses/old-licenses/gpl-2.0.html&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#508ed8;&quot;&gt;Licenza: GNU GPL Versione 2&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
@@ -143,47 +143,47 @@ p, li { white-space: pre-wrap; }
     <name>ClientConfigDialog</name>
     <message>
         <source>Client Configuration</source>
-        <translation type="unfinished">Configurazione del client</translation>
+        <translation>Configurazione del client</translation>
     </message>
     <message>
         <source>Use server&apos;s keyboard language on this computer</source>
-        <translation type="unfinished">Usa la lingua della tastiera del server su questo computer</translation>
+        <translation>Usa su questo computer la lingua della tastiera del server</translation>
     </message>
     <message>
         <source>Scroll Modifiers</source>
-        <translation type="unfinished">Modificatori di scorrimento</translation>
+        <translation>Tasti modificatori dello scorrimento</translation>
     </message>
     <message>
         <source>Invert</source>
-        <translation type="unfinished">Invertire</translation>
+        <translation>Inverti</translation>
     </message>
     <message>
         <source>Horizontal Scroll</source>
-        <translation type="unfinished">Scorrimento orizzontale</translation>
+        <translation>Scorrimento orizzontale</translation>
     </message>
     <message>
         <source>Vertical Scroll</source>
-        <translation type="unfinished">Scorrimento verticale</translation>
+        <translation>Scorrimento verticale</translation>
     </message>
     <message>
         <source>Scale</source>
-        <translation type="unfinished">Scala</translation>
+        <translation>Fattore di scala</translation>
     </message>
     <message>
         <source>Close and save changes</source>
-        <translation type="unfinished">Chiudi e salva le modifiche</translation>
+        <translation>Salva le modifiche e chiudi</translation>
     </message>
     <message>
         <source>Close and forget changes</source>
-        <translation type="unfinished">Chiudi e dimentica le modifiche</translation>
+        <translation>Chiudi senza salvare le modifiche</translation>
     </message>
     <message>
         <source>Reset to stored values</source>
-        <translation type="unfinished">Ripristina i valori memorizzati</translation>
+        <translation>Ripristina i valori salvati</translation>
     </message>
     <message>
         <source>Reset to default values</source>
-        <translation type="unfinished">Ripristina i valori predefiniti</translation>
+        <translation>Ripristina i valori predefiniti</translation>
     </message>
 </context>
 <context>
@@ -439,6 +439,34 @@ Vuoi connetterti al server?
         <translation>Crittografia disabilitata</translation>
     </message>
     <message>
+        <source>&amp;Pause sharing</source>
+        <translation>&amp;Sospendi la condivisione</translation>
+    </message>
+    <message>
+        <source>Pause keyboard and clipboard sharing; file transfers keep running</source>
+        <translation>Sospendi la condivisione di tastiera e appunti; i trasferimenti di file continuano</translation>
+    </message>
+    <message>
+        <source>&amp;Continue sharing</source>
+        <translation>&amp;Continua la condivisione</translation>
+    </message>
+    <message>
+        <source>Resume keyboard and clipboard sharing</source>
+        <translation>Riprendi la condivisione di tastiera e appunti</translation>
+    </message>
+    <message>
+        <source>%1 is still running in the menu bar. Keyboard sharing and file transfers continue in the background. Pausing sharing stops keyboard and clipboard sharing only; quitting the app stops everything.</source>
+        <translation>%1 è ancora in esecuzione nella barra dei menu. La condivisione della tastiera e i trasferimenti di file continuano in background. La sospensione della condivisione interrompe solo la condivisione di tastiera e appunti; la chiusura dell&apos;app interrompe tutto.</translation>
+    </message>
+    <message>
+        <source>Got it</source>
+        <translation>Ho capito</translation>
+    </message>
+    <message>
+        <source>Open Preferences</source>
+        <translation>Apri Preferenze</translation>
+    </message>
+    <message>
         <source>No IP Detected</source>
         <translation>Nessun IP rilevato</translation>
     </message>
@@ -448,11 +476,11 @@ Vuoi connetterti al server?
     </message>
     <message>
         <source>Using IP: </source>
-        <translation type="unfinished">Utilizzo dell&apos;indirizzo IP: </translation>
+        <translation>IP in uso: </translation>
     </message>
     <message>
         <source>Suggested IP: </source>
-        <translation type="unfinished">IP suggerito: </translation>
+        <translation>IP suggerito: </translation>
     </message>
     <message>
         <source>&lt;p&gt;If connecting via the hostname fails, try %1&lt;/p&gt;</source>
@@ -469,8 +497,8 @@ Vuoi connetterti al server?
     <message>
         <source>
 A bound IP is now invalid, you may need to restart the server.</source>
-        <translation type="unfinished">
-L&apos;indirizzo IP associato non è più valido, potrebbe essere necessario riavviare il server.</translation>
+        <translation>
+L&apos;indirizzo IP associato non è più valido. Potrebbe essere necessario riavviare il server.</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -514,7 +542,7 @@ Nomi validi:
     </message>
     <message>
         <source>invalid certificate, generating a new one</source>
-        <translation type="unfinished">certificato non valido, ne viene generato uno nuovo</translation>
+        <translation>certificato non valido; ne viene generato uno nuovo</translation>
     </message>
     <message>
         <source>%1 will retry in a moment...</source>
@@ -561,8 +589,8 @@ Nomi validi:
         <source>%1 is connected, with %n client(s): %2</source>
         <extracomment>Shown when in server mode and at least 1 client is connected %1 is replaced by the app name %2 will be a list of at least one client %n will be replaced by the number of clients (n is &gt;=1), it is not requried to be in the translation</extracomment>
         <translation>
-            <numerusform>%1 è connesso con un client %2</numerusform>
-            <numerusform>%1 è connesso con %n client: %2</numerusform>
+            <numerusform>%1 è connesso, con %n client: %2</numerusform>
+            <numerusform>%1 è connesso, con %n client: %2</numerusform>
         </translation>
     </message>
     <message>
@@ -583,19 +611,19 @@ Nomi validi:
     </message>
     <message>
         <source>The Core executable could not be successfully started, although it does exist. Please check if you have sufficient permissions to run this program.</source>
-        <translation type="unfinished">Non è stato possibile avviare correttamente l&apos;eseguibile Core, sebbene esista. Verifica di disporre delle autorizzazioni necessarie per eseguire questo programma.</translation>
+        <translation>Non è stato possibile avviare correttamente l&apos;eseguibile Core, anche se esiste. Verificare di disporre delle autorizzazioni necessarie per eseguire questo programma.</translation>
     </message>
     <message>
         <source>&amp;Configure Client</source>
-        <translation type="unfinished">&amp;Configurare il client</translation>
+        <translation>&amp;Configura client</translation>
     </message>
     <message>
         <source>Connect to:</source>
-        <translation type="unfinished">Connettiti a:</translation>
+        <translation>Connettiti a:</translation>
     </message>
     <message>
         <source>&lt;html&gt;Hostname or IP address of the server computer.&lt;br/&gt;May contain a comma seperated list.&lt;/html&gt;</source>
-        <translation type="unfinished">&lt;html&gt;Nome host o indirizzo IP del computer server.&lt;br/&gt;Può contenere un elenco separato da virgole.&lt;/html&gt;</translation>
+        <translation>&lt;html&gt;Nome host o indirizzo IP del computer server.&lt;br/&gt;Può contenere un elenco separato da virgole.&lt;/html&gt;</translation>
     </message>
 </context>
 <context>
@@ -682,7 +710,7 @@ Nomi validi:
     </message>
     <message>
         <source>&lt;p&gt;A Client with your name is already connected to the server.&lt;/p&gt;Please ensure that you&apos;re using a unique name and that only a single instance of the client process is running.&lt;/p&gt;</source>
-        <translation>&lt;p&gt;Un client con il tuo nome è già connesso al server.&lt;/p&gt;Assicurati di utilizzare un nome univoco e che sia in esecuzione una sola istanza del processo client.&lt;/p&gt;</translation>
+        <translation>&lt;p&gt;Un client con questo nome è già connesso al server.&lt;/p&gt;&lt;p&gt;Assicurarsi di utilizzare un nome univoco e che sia in esecuzione una sola istanza del processo client.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>&lt;p&gt;Please try to connect to the server using the server IP address instead of the hostname. &lt;/p&gt;&lt;p&gt;If that doesn&apos;t work, please check your TLS and firewall settings.&lt;/p&gt;</source>
@@ -771,25 +799,753 @@ Nomi validi:
     <message>
         <source>failed to read key from certificate file: %1</source>
         <extracomment>%1 will be replaced by the certificate path</extracomment>
-        <translation type="unfinished">impossibile leggere la chiave dal file del certificato: %1</translation>
+        <translation type="vanished">impossibile leggere la chiave dal file del certificato: %1</translation>
     </message>
     <message>
         <source>failed to parse certificate file: %1</source>
         <extracomment>%1 will be replaced by the certificate path</extracomment>
-        <translation type="unfinished">impossibile analizzare il file del certificato: %1</translation>
+        <translation type="vanished">impossibile analizzare il file del certificato: %1</translation>
     </message>
     <message>
         <source>key detected is the incorrect size</source>
-        <translation type="unfinished">la chiave rilevata ha una dimensione errata</translation>
+        <translation type="vanished">la chiave rilevata ha una dimensione errata</translation>
     </message>
     <message>
         <source>failed to read RSA key from certificate file: %1</source>
         <extracomment>%1 will be replaced by the certificate path</extracomment>
-        <translation type="unfinished">impossibile leggere la chiave RSA dal file del certificato: %1</translation>
+        <translation type="vanished">impossibile leggere la chiave RSA dal file del certificato: %1</translation>
     </message>
     <message>
         <source>%1 is already running</source>
         <translation>%1 è già in esecuzione</translation>
+    </message>
+</context>
+<context>
+    <name>RelayDesk</name>
+    <message>
+        <source>devices.title</source>
+        <translation>Dispositivi</translation>
+    </message>
+    <message>
+        <source>devices.current</source>
+        <translation>Questo dispositivo</translation>
+    </message>
+    <message>
+        <source>devices.empty.waiting</source>
+        <translation>I dispositivi nelle vicinanze appariranno qui</translation>
+    </message>
+    <message>
+        <source>devices.latency</source>
+        <translation>%1 ms</translation>
+    </message>
+    <message>
+        <source>devices.status.online</source>
+        <translation>Online</translation>
+    </message>
+    <message>
+        <source>devices.status.offline</source>
+        <translation>Offline</translation>
+    </message>
+    <message>
+        <source>devices.status.connecting</source>
+        <translation>Connessione</translation>
+    </message>
+    <message>
+        <source>devices.status.permission_required</source>
+        <translation>Autorizzazione necessaria</translation>
+    </message>
+    <message>
+        <source>devices.status.paused</source>
+        <translation>In pausa</translation>
+    </message>
+    <message>
+        <source>devices.status.error</source>
+        <translation>Errore</translation>
+    </message>
+    <message>
+        <source>devices.status.discovered</source>
+        <translation>Rilevato</translation>
+    </message>
+    <message>
+        <source>devices.status.pairing</source>
+        <translation>Abbinamento</translation>
+    </message>
+    <message>
+        <source>devices.status.trust_violation</source>
+        <translation>Attendibilità modificata</translation>
+    </message>
+    <message>
+        <source>devices.status.transfer_busy</source>
+        <translation>Trasferimento file in corso</translation>
+    </message>
+    <message>
+        <source>devices.action.send_file</source>
+        <translation>Invia file</translation>
+    </message>
+    <message>
+        <source>devices.action.send_folder</source>
+        <translation>Invia cartella</translation>
+    </message>
+    <message>
+        <source>devices.action.more</source>
+        <translation>Altro</translation>
+    </message>
+    <message>
+        <source>devices.action.auto_arrange</source>
+        <translation>Disponi automaticamente</translation>
+    </message>
+    <message>
+        <source>devices.action.reset_layout</source>
+        <translation>Ripristina disposizione</translation>
+    </message>
+    <message>
+        <source>devices.drop.send_here</source>
+        <translation>Trascina qui i file da inviare</translation>
+    </message>
+    <message numerus="yes">
+        <source>devices.drop.items</source>
+        <translation>
+            <numerusform>%n elemento</numerusform>
+            <numerusform>%n elementi</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>devices.send.select_device</source>
+        <translation>Seleziona prima un dispositivo</translation>
+    </message>
+    <message>
+        <source>devices.send.unavailable</source>
+        <translation>I file possono essere inviati solo a un dispositivo attendibile online</translation>
+    </message>
+    <message>
+        <source>devices.send.local_only</source>
+        <translation>Scegli file o cartelle archiviati su questo dispositivo</translation>
+    </message>
+    <message>
+        <source>devices.send.empty</source>
+        <translation>Scegli almeno un file o una cartella</translation>
+    </message>
+    <message>
+        <source>devices.send.unreadable</source>
+        <translation>Impossibile leggere uno o più elementi selezionati</translation>
+    </message>
+    <message>
+        <source>pairing.title</source>
+        <translation>Abbina dispositivo</translation>
+    </message>
+    <message>
+        <source>pairing.code.prompt</source>
+        <translation>Inserisci il codice a sei cifre</translation>
+    </message>
+    <message>
+        <source>pairing.state.ready</source>
+        <translation>Pronto per l&apos;abbinamento</translation>
+    </message>
+    <message>
+        <source>pairing.state.requesting</source>
+        <translation>Richiesta di abbinamento</translation>
+    </message>
+    <message>
+        <source>pairing.state.securing</source>
+        <translation>Protezione della connessione</translation>
+    </message>
+    <message>
+        <source>pairing.state.compare</source>
+        <translation>Confronta il codice su entrambi i dispositivi</translation>
+    </message>
+    <message>
+        <source>pairing.state.confirming</source>
+        <translation>Conferma dell&apos;abbinamento</translation>
+    </message>
+    <message>
+        <source>pairing.state.rejected</source>
+        <translation>Abbinamento annullato</translation>
+    </message>
+    <message>
+        <source>pairing.state.failed</source>
+        <translation>Abbinamento non riuscito</translation>
+    </message>
+    <message>
+        <source>pairing.action.start</source>
+        <translation>Abbina</translation>
+    </message>
+    <message>
+        <source>pairing.action.pair_again</source>
+        <translation>Abbina di nuovo</translation>
+    </message>
+    <message>
+        <source>pairing.action.codes_match</source>
+        <translation>I codici corrispondono</translation>
+    </message>
+    <message>
+        <source>pairing.action.submit_code</source>
+        <translation>Conferma codice</translation>
+    </message>
+    <message>
+        <source>pairing.action.cancel</source>
+        <translation>Annulla</translation>
+    </message>
+    <message>
+        <source>pairing.code.invalid</source>
+        <translation>Inserisci esattamente sei cifre</translation>
+    </message>
+    <message>
+        <source>pairing.code.mismatch</source>
+        <translation>Il codice di abbinamento non corrisponde</translation>
+    </message>
+    <message>
+        <source>pairing.code.expired</source>
+        <translation>Il codice di abbinamento è scaduto. Generane uno nuovo.</translation>
+    </message>
+    <message>
+        <source>pairing.error.already_active</source>
+        <translation>È già in corso un altro abbinamento</translation>
+    </message>
+    <message>
+        <source>pairing.error.identity_not_ready</source>
+        <translation>L&apos;identità del dispositivo non è pronta. Riprova.</translation>
+    </message>
+    <message>
+        <source>pairing.error.action_unavailable</source>
+        <translation>Questa azione di abbinamento non è disponibile ora</translation>
+    </message>
+    <message>
+        <source>pairing.error.session_unavailable</source>
+        <translation>La sessione di abbinamento non è più disponibile</translation>
+    </message>
+    <message>
+        <source>pairing.certificate_changed</source>
+        <translation>Il certificato dell&apos;altro dispositivo è cambiato. La connessione automatica è stata interrotta.</translation>
+    </message>
+    <message>
+        <source>pairing.too_many_attempts</source>
+        <translation>Troppi tentativi errati. Riprova più tardi.</translation>
+    </message>
+    <message>
+        <source>pairing.not_direct</source>
+        <translation>I dispositivi non possono connettersi direttamente. Prova un indirizzo manuale.</translation>
+    </message>
+    <message>
+        <source>pairing.success</source>
+        <translation>Dispositivo abbinato</translation>
+    </message>
+    <message>
+        <source>pairing.fingerprint.label</source>
+        <translation>Impronta digitale del certificato</translation>
+    </message>
+    <message>
+        <source>pairing.fingerprint.unavailable</source>
+        <translation>Impronta digitale non disponibile</translation>
+    </message>
+    <message numerus="yes">
+        <source>pairing.attempts_remaining</source>
+        <translation>
+            <numerusform>%n tentativo rimasto</numerusform>
+            <numerusform>%n tentativi rimasti</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>pairing.expires_at</source>
+        <translation>Scade: %1</translation>
+    </message>
+    <message>
+        <source>permissions.banner.attention_title</source>
+        <translation>Autorizzazione necessaria</translation>
+    </message>
+    <message>
+        <source>permissions.banner.unknown_title</source>
+        <translation>Stato autorizzazioni non verificato</translation>
+    </message>
+    <message>
+        <source>permissions.banner.ready_title</source>
+        <translation>Autorizzazioni pronte</translation>
+    </message>
+    <message>
+        <source>permissions.banner.ready_message</source>
+        <translation>Tutte le autorizzazioni di sistema necessarie sono pronte.</translation>
+    </message>
+    <message>
+        <source>permissions.kind.windows_firewall</source>
+        <translation>Windows Firewall</translation>
+    </message>
+    <message>
+        <source>permissions.kind.windows_port</source>
+        <translation>Porta della rete locale</translation>
+    </message>
+    <message>
+        <source>permissions.kind.macos_local_network</source>
+        <translation>Rete locale</translation>
+    </message>
+    <message>
+        <source>permissions.kind.macos_accessibility</source>
+        <translation>Accessibilità</translation>
+    </message>
+    <message>
+        <source>permissions.kind.macos_input_monitoring</source>
+        <translation>Monitoraggio input</translation>
+    </message>
+    <message>
+        <source>permissions.status.unknown</source>
+        <translation>Non verificato</translation>
+    </message>
+    <message>
+        <source>permissions.status.not_required</source>
+        <translation>Non necessario</translation>
+    </message>
+    <message>
+        <source>permissions.status.granted</source>
+        <translation>Consentito</translation>
+    </message>
+    <message>
+        <source>permissions.status.denied</source>
+        <translation>Bloccato</translation>
+    </message>
+    <message>
+        <source>permissions.status.needs_action</source>
+        <translation>Azione necessaria</translation>
+    </message>
+    <message>
+        <source>permissions.message.unknown</source>
+        <translation>RelayDesk non ha ancora ricevuto una verifica delle autorizzazioni.</translation>
+    </message>
+    <message>
+        <source>permissions.message.probe_unavailable</source>
+        <translation>RelayDesk non ha potuto verificare questa impostazione. Riprova.</translation>
+    </message>
+    <message>
+        <source>permissions.message.review</source>
+        <translation>Controlla questa impostazione di sistema per mantenere attive le connessioni ai dispositivi locali.</translation>
+    </message>
+    <message>
+        <source>permissions.message.windows_firewall</source>
+        <translation>Consenti a RelayDesk di comunicare attraverso Windows Firewall sulle reti private.</translation>
+    </message>
+    <message>
+        <source>permissions.message.windows_port</source>
+        <translation>RelayDesk non può ascoltare sulla porta della rete locale. Controlla il firewall e le impostazioni della porta.</translation>
+    </message>
+    <message>
+        <source>permissions.message.macos_local_network</source>
+        <translation>Consenti l&apos;accesso alla rete locale affinché RelayDesk possa trovare i dispositivi vicini.</translation>
+    </message>
+    <message>
+        <source>permissions.message.macos_accessibility</source>
+        <translation>Consenti a RelayDesk di usare Accessibilità per controllare tastiera e puntatore.</translation>
+    </message>
+    <message>
+        <source>permissions.message.macos_input_monitoring</source>
+        <translation>Consenti il Monitoraggio input quando macOS lo richiede per condividere l&apos;input.</translation>
+    </message>
+    <message>
+        <source>permissions.action.open_settings</source>
+        <translation>Apri impostazioni</translation>
+    </message>
+    <message>
+        <source>transfer.title</source>
+        <translation>Trasferimenti</translation>
+    </message>
+    <message>
+        <source>transfer.empty</source>
+        <translation>I trasferimenti appariranno qui</translation>
+    </message>
+    <message>
+        <source>transfer.direction.sending</source>
+        <translation>Invio</translation>
+    </message>
+    <message>
+        <source>transfer.direction.receiving</source>
+        <translation>Ricezione</translation>
+    </message>
+    <message>
+        <source>transfer.state.preparing</source>
+        <translation>Preparazione</translation>
+    </message>
+    <message>
+        <source>transfer.state.awaiting_confirmation</source>
+        <translation>In attesa di conferma</translation>
+    </message>
+    <message>
+        <source>transfer.state.queued</source>
+        <translation>In coda</translation>
+    </message>
+    <message>
+        <source>transfer.state.transferring</source>
+        <translation>Trasferimento</translation>
+    </message>
+    <message>
+        <source>transfer.state.paused</source>
+        <translation>In pausa</translation>
+    </message>
+    <message>
+        <source>transfer.state.interrupted</source>
+        <translation>Connessione persa, in attesa di riprendere</translation>
+    </message>
+    <message>
+        <source>transfer.state.resuming</source>
+        <translation>Ripresa</translation>
+    </message>
+    <message>
+        <source>transfer.state.verifying</source>
+        <translation>Verifica</translation>
+    </message>
+    <message>
+        <source>transfer.state.saving</source>
+        <translation>Salvataggio</translation>
+    </message>
+    <message>
+        <source>transfer.state.completed</source>
+        <translation>Completato</translation>
+    </message>
+    <message>
+        <source>transfer.state.rejected</source>
+        <translation>Rifiutato</translation>
+    </message>
+    <message>
+        <source>transfer.state.canceling</source>
+        <translation>Annullamento</translation>
+    </message>
+    <message>
+        <source>transfer.state.canceled</source>
+        <translation>Annullato</translation>
+    </message>
+    <message>
+        <source>transfer.state.failed</source>
+        <translation>Non riuscito</translation>
+    </message>
+    <message>
+        <source>transfer.action.pause</source>
+        <translation>Metti in pausa</translation>
+    </message>
+    <message>
+        <source>transfer.action.resume</source>
+        <translation>Riprendi</translation>
+    </message>
+    <message>
+        <source>transfer.action.cancel</source>
+        <translation>Annulla</translation>
+    </message>
+    <message>
+        <source>transfer.action.retry</source>
+        <translation>Riprova</translation>
+    </message>
+    <message>
+        <source>transfer.action.open_folder</source>
+        <translation>Apri cartella</translation>
+    </message>
+    <message>
+        <source>transfer.action.open_file</source>
+        <translation>Apri file</translation>
+    </message>
+    <message>
+        <source>transfer.action.details</source>
+        <translation>Dettagli</translation>
+    </message>
+    <message>
+        <source>transfer.action.close</source>
+        <translation>Chiudi</translation>
+    </message>
+    <message>
+        <source>transfer.history.details_title</source>
+        <translation>Dettagli trasferimento</translation>
+    </message>
+    <message>
+        <source>transfer.history.name_label</source>
+        <translation>Trasferimento</translation>
+    </message>
+    <message>
+        <source>transfer.history.peer_label</source>
+        <translation>Dispositivo</translation>
+    </message>
+    <message>
+        <source>transfer.history.direction_label</source>
+        <translation>Direzione</translation>
+    </message>
+    <message>
+        <source>transfer.history.status_label</source>
+        <translation>Stato</translation>
+    </message>
+    <message>
+        <source>transfer.history.items_label</source>
+        <translation>Elementi</translation>
+    </message>
+    <message>
+        <source>transfer.history.size_label</source>
+        <translation>Dimensione</translation>
+    </message>
+    <message>
+        <source>transfer.history.started_label</source>
+        <translation>Inizio</translation>
+    </message>
+    <message>
+        <source>transfer.history.finished_label</source>
+        <translation>Fine</translation>
+    </message>
+    <message>
+        <source>transfer.history.duration_label</source>
+        <translation>Durata</translation>
+    </message>
+    <message>
+        <source>transfer.history.error_label</source>
+        <translation>Errore</translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.history.items</source>
+        <translation>
+            <numerusform>%1 elemento</numerusform>
+            <numerusform>%1 elementi</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.history.duration_seconds</source>
+        <translation>
+            <numerusform>%1 secondo</numerusform>
+            <numerusform>%1 secondi</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.history.duration_minutes</source>
+        <translation>
+            <numerusform>%1 minuto</numerusform>
+            <numerusform>%1 minuti</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.history.duration_hours</source>
+        <translation>
+            <numerusform>%1 ora</numerusform>
+            <numerusform>%1 ore</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>transfer.action.accept</source>
+        <translation>Accetta</translation>
+    </message>
+    <message>
+        <source>transfer.action.reject</source>
+        <translation>Rifiuta</translation>
+    </message>
+    <message>
+        <source>transfer.action.dismiss</source>
+        <translation>Ignora</translation>
+    </message>
+    <message>
+        <source>transfer.action.change_settings</source>
+        <translation>Modifica impostazioni</translation>
+    </message>
+    <message>
+        <source>transfer.error.disk_full</source>
+        <translation>Spazio su disco insufficiente</translation>
+    </message>
+    <message>
+        <source>transfer.error.unsafe_path</source>
+        <translation>Il percorso ricevuto non è sicuro</translation>
+    </message>
+    <message>
+        <source>transfer.error.unreadable</source>
+        <translation>Impossibile leggere uno o più elementi</translation>
+    </message>
+    <message>
+        <source>transfer.error.connection_lost</source>
+        <translation>Connessione persa</translation>
+    </message>
+    <message>
+        <source>transfer.error.checksum_mismatch</source>
+        <translation>Verifica del file non riuscita</translation>
+    </message>
+    <message>
+        <source>transfer.error.unknown</source>
+        <translation>Trasferimento non riuscito. Riprova.</translation>
+    </message>
+    <message>
+        <source>transfer.progress.bytes</source>
+        <translation>%1 di %2</translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.progress.items</source>
+        <translation>
+            <numerusform>%1 di %n elemento</numerusform>
+            <numerusform>%1 di %n elementi</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>transfer.speed</source>
+        <translation>%1/s</translation>
+    </message>
+    <message>
+        <source>transfer.speed.unknown</source>
+        <translation>Velocità non disponibile</translation>
+    </message>
+    <message>
+        <source>transfer.eta.unknown</source>
+        <translation>Calcolo del tempo rimanente</translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.eta.seconds</source>
+        <translation>
+            <numerusform>%n secondo rimanente</numerusform>
+            <numerusform>%n secondi rimanenti</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.eta.minutes</source>
+        <translation>
+            <numerusform>%n minuto rimanente</numerusform>
+            <numerusform>%n minuti rimanenti</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.eta.hours</source>
+        <translation>
+            <numerusform>%n ora rimanente</numerusform>
+            <numerusform>%n ore rimanenti</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.eta.days</source>
+        <translation>
+            <numerusform>%n giorno rimanente</numerusform>
+            <numerusform>%n giorni rimanenti</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>transfer.eta.long</source>
+        <translation>99 giorni o più rimanenti</translation>
+    </message>
+    <message>
+        <source>transfer.accessible.summary</source>
+        <translation>%1, %2, %3, %4, %5</translation>
+    </message>
+    <message>
+        <source>transfer.notification.completed</source>
+        <translation>Trasferimento completato</translation>
+    </message>
+    <message>
+        <source>transfer.notification.rejected</source>
+        <translation>Trasferimento rifiutato</translation>
+    </message>
+    <message>
+        <source>transfer.notification.canceled</source>
+        <translation>Trasferimento annullato</translation>
+    </message>
+    <message>
+        <source>transfer.notification.failed</source>
+        <translation>Trasferimento non riuscito</translation>
+    </message>
+    <message>
+        <source>transfer.notification.body</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.wants_to_send</source>
+        <translation>%1 vuole inviare</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.save_to</source>
+        <translation>Salva in: %1</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.auto_rename</source>
+        <translation>Conflitto: rinomina automatica</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.always_accept</source>
+        <translation>Accetta sempre i file da questo dispositivo</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.unknown_device</source>
+        <translation>Dispositivo sconosciuto</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.pair_first</source>
+        <translation>Abbina questo dispositivo prima di ricevere file</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.expired</source>
+        <translation>Questa richiesta di trasferimento è scaduta</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.destination_unavailable</source>
+        <translation>Scegli una cartella di ricezione valida nelle impostazioni</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.invalid</source>
+        <translation>La richiesta di trasferimento in arrivo non è valida</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.busy</source>
+        <translation>Un&apos;altra richiesta di trasferimento è in attesa</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.decision_unavailable</source>
+        <translation>Questa richiesta di trasferimento non può essere accettata ora</translation>
+    </message>
+    <message>
+        <source>settings.title</source>
+        <translation>Impostazioni</translation>
+    </message>
+    <message>
+        <source>settings.general</source>
+        <translation>Generali</translation>
+    </message>
+    <message>
+        <source>settings.input</source>
+        <translation>Tastiera e mouse</translation>
+    </message>
+    <message>
+        <source>settings.clipboard</source>
+        <translation>Appunti</translation>
+    </message>
+    <message>
+        <source>settings.file_transfer</source>
+        <translation>Trasferimento file</translation>
+    </message>
+    <message>
+        <source>settings.network</source>
+        <translation>Rilevamento e rete</translation>
+    </message>
+    <message>
+        <source>settings.trusted_devices</source>
+        <translation>Dispositivi attendibili</translation>
+    </message>
+    <message>
+        <source>settings.startup</source>
+        <translation>Avvia con il sistema</translation>
+    </message>
+    <message>
+        <source>settings.advanced</source>
+        <translation>Avanzate e registri</translation>
+    </message>
+    <message>
+        <source>about.title</source>
+        <translation>Informazioni su RelayDesk</translation>
+    </message>
+    <message>
+        <source>about.diagnostics</source>
+        <translation>Diagnostica</translation>
+    </message>
+    <message>
+        <source>permissions.purpose.macos_local_network</source>
+        <translation>Trova e connettiti ai dispositivi vicini sulla rete locale.</translation>
+    </message>
+    <message>
+        <source>permissions.purpose.macos_accessibility</source>
+        <translation>Controlla tastiera e puntatore su questo Mac.</translation>
+    </message>
+    <message>
+        <source>permissions.purpose.macos_input_monitoring</source>
+        <translation>Legge l&apos;input globale di tastiera e puntatore per condividerlo con un altro dispositivo.</translation>
+    </message>
+    <message>
+        <source>permissions.affected.macos_local_network</source>
+        <translation>Rilevamento nelle vicinanze e connessioni locali dirette</translation>
+    </message>
+    <message>
+        <source>permissions.affected.macos_accessibility</source>
+        <translation>Controllo dell&apos;input su questo Mac</translation>
+    </message>
+    <message>
+        <source>permissions.affected.macos_input_monitoring</source>
+        <translation>Condivisione dell&apos;input da questo Mac</translation>
     </message>
 </context>
 <context>
@@ -938,19 +1694,19 @@ Nomi validi:
     <name>SearchWidget</name>
     <message>
         <source>Search</source>
-        <translation type="unfinished">Ricerca</translation>
+        <translation>Cerca</translation>
     </message>
     <message>
         <source>Find next</source>
-        <translation type="unfinished">Trova successivo</translation>
+        <translation>Trova successivo</translation>
     </message>
     <message>
         <source>Find previous</source>
-        <translation type="unfinished">Trova precedente</translation>
+        <translation>Trova precedente</translation>
     </message>
     <message>
         <source>Find...</source>
-        <translation type="unfinished">Trova...</translation>
+        <translation>Trova...</translation>
     </message>
 </context>
 <context>
@@ -1142,7 +1898,7 @@ L&apos;abilitazione di questa impostazione disabiliterà l&apos;interfaccia graf
     </message>
     <message>
         <source>Enable lock to computer at startup</source>
-        <translation type="unfinished">Abilita il blocco al computer all&apos;avvio</translation>
+        <translation>Abilita il blocco al computer all&apos;avvio</translation>
     </message>
 </context>
 <context>
@@ -1173,7 +1929,7 @@ L&apos;abilitazione di questa impostazione disabiliterà l&apos;interfaccia graf
     </message>
     <message>
         <source>Leave app running in notification area when the window is closed</source>
-        <translation>Lascia l&apos;app in esecuzione nell&apos;area di notifica quando la finestra viene chiusa</translation>
+        <translation type="vanished">Lascia l&apos;app in esecuzione nell&apos;area di notifica quando la finestra viene chiusa</translation>
     </message>
     <message>
         <source>Tray icon style</source>
@@ -1316,6 +2072,24 @@ L&apos;abilitazione di questa impostazione disabiliterà l&apos;interfaccia graf
         <translation>Output di debug dettagliato</translation>
     </message>
     <message>
+        <source>Start-at-login status could not be read (code %1, native %2). %3</source>
+        <translation>Impossibile leggere lo stato dell&apos;avvio all&apos;accesso (codice %1, codice di sistema %2). %3</translation>
+    </message>
+    <message>
+        <source>The application path will be updated when preferences are saved.</source>
+        <translation>Il percorso dell&apos;applicazione verrà aggiornato al salvataggio delle preferenze.</translation>
+    </message>
+    <message>
+        <source>Start at login</source>
+        <translation>Avvia all&apos;accesso</translation>
+    </message>
+    <message>
+        <source>The start-at-login setting could not be updated (code %1, native %2).
+%3</source>
+        <translation>Impossibile aggiornare l&apos;impostazione di avvio all&apos;accesso (codice %1, codice di sistema %2).
+%3</translation>
+    </message>
+    <message>
         <source>TLS Certificate Regenerated</source>
         <translation>Certificato TLS rigenerato</translation>
     </message>
@@ -1353,11 +2127,37 @@ L&apos;abilitazione di questa impostazione disabiliterà l&apos;interfaccia graf
     </message>
     <message>
         <source>Automatic</source>
-        <translation type="unfinished">Automatica</translation>
+        <translation>Automatico</translation>
     </message>
     <message>
         <source>Include version in the window title</source>
-        <translation type="unfinished">Includi la versione nel titolo della finestra</translation>
+        <translation>Mostra la versione nel titolo della finestra</translation>
+    </message>
+    <message>
+        <source>Start with system</source>
+        <translation>Avvia con il sistema</translation>
+    </message>
+    <message>
+        <source>Hide to the notification area when the window is minimized</source>
+        <translation>Nascondi nell&apos;area di notifica quando la finestra viene ridotta a icona</translation>
+    </message>
+    <message>
+        <source>Keep running in the notification area when the window is closed</source>
+        <translation>Continua l&apos;esecuzione nell&apos;area di notifica quando la finestra viene chiusa</translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::relaydesk::FileTransferRuntime</name>
+    <message numerus="yes">
+        <source>%n items</source>
+        <translation>
+            <numerusform>%n elemento</numerusform>
+            <numerusform>%n elementi</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>File transfer</source>
+        <translation>Trasferimento file</translation>
     </message>
 </context>
 <context>
@@ -1372,34 +2172,34 @@ L&apos;abilitazione di questa impostazione disabiliterà l&apos;interfaccia graf
     <name>validators::AliasValidator</name>
     <message>
         <source>Computer name cannot contain spaces</source>
-        <translation type="unfinished">Il nome del computer non può contenere spazi</translation>
+        <translation>Il nome del computer non può contenere spazi</translation>
     </message>
     <message>
         <source>Aliases may not be ip addresses</source>
-        <translation type="unfinished">Gli alias non possono essere indirizzi IP</translation>
+        <translation>Gli alias non possono essere indirizzi IP</translation>
     </message>
     <message>
         <source>Contains invalid characters or is too long</source>
-        <translation type="unfinished">Contiene caratteri non validi o è troppo lungo</translation>
+        <translation>Contiene caratteri non validi o è troppo lungo</translation>
     </message>
 </context>
 <context>
     <name>validators::ScreenNameValidator</name>
     <message>
         <source>Computer name cannot be empty</source>
-        <translation type="unfinished">Il nome del computer non può essere vuoto</translation>
+        <translation>Il nome del computer non può essere vuoto</translation>
     </message>
     <message>
         <source>Computer name cannot contain spaces</source>
-        <translation type="unfinished">Il nome del computer non può contenere spazi</translation>
+        <translation>Il nome del computer non può contenere spazi</translation>
     </message>
     <message>
         <source>Contains invalid characters or is too long</source>
-        <translation type="unfinished">Contiene caratteri non validi o è troppo lungo</translation>
+        <translation>Contiene caratteri non validi o è troppo lungo</translation>
     </message>
     <message>
         <source>A computer with this name already exists</source>
-        <translation type="unfinished">Esiste già un computer con questo nome</translation>
+        <translation>Esiste già un computer con questo nome</translation>
     </message>
 </context>
 </TS>

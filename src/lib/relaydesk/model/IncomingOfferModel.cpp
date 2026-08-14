@@ -68,7 +68,7 @@ bool IncomingOfferModel::receiveOffer(const ::relaydesk::transfer::IncomingOffer
   m_expiryTimer.stop();
   m_offer.reset();
   m_status = Status::Idle;
-  m_errorText.clear();
+  m_error = Error::None;
   m_dismissed = false;
 
   m_offer = offer;
@@ -98,7 +98,7 @@ bool IncomingOfferModel::acceptInternal(AcceptanceOrigin origin)
 
   m_expiryTimer.stop();
   m_status = Status::Accepted;
-  m_errorText.clear();
+  m_error = Error::None;
   Q_EMIT changed();
   Q_EMIT acceptRequested(
       m_offer->offer.transferId,
@@ -119,7 +119,7 @@ bool IncomingOfferModel::reject()
 
   m_expiryTimer.stop();
   m_status = Status::Rejected;
-  m_errorText.clear();
+  m_error = Error::None;
   Q_EMIT changed();
   Q_EMIT rejectRequested(m_offer->offer.transferId, RejectReason::UserDeclined);
   return true;
@@ -136,7 +136,7 @@ bool IncomingOfferModel::expireIfNeeded()
 
   m_expiryTimer.stop();
   m_status = Status::Expired;
-  m_errorText = i18n::translate(Text::TransferIncomingExpired);
+  m_error = Error::Expired;
   Q_EMIT changed();
   Q_EMIT rejectRequested(m_offer->offer.transferId, RejectReason::PolicyDenied);
   return true;
@@ -230,7 +230,19 @@ QString IncomingOfferModel::conflictText() const
 
 QString IncomingOfferModel::errorText() const
 {
-  return m_errorText;
+  switch (m_error) {
+  case Error::None:
+    return {};
+  case Error::PairFirst:
+    return i18n::translate(Text::TransferIncomingPairFirst);
+  case Error::DestinationUnavailable:
+    return i18n::translate(Text::TransferIncomingDestinationUnavailable);
+  case Error::DiskFull:
+    return i18n::translate(Text::TransferErrorDiskFull);
+  case Error::Expired:
+    return i18n::translate(Text::TransferIncomingExpired);
+  }
+  return {};
 }
 
 std::optional<::relaydesk::transfer::IncomingOffer> IncomingOfferModel::offer() const
@@ -254,14 +266,14 @@ void IncomingOfferModel::updateSafeError()
   if (!active() || !m_offer.has_value())
     return;
   if (!m_offer->peerTrusted) {
-    m_errorText = i18n::translate(Text::TransferIncomingPairFirst);
+    m_error = Error::PairFirst;
   } else if (m_settings.destinationRoot.trimmed().isEmpty() ||
              m_settings.destinationRoot.toUtf8().size() > ::relaydesk::transfer::kMaxControlStringUtf8Bytes) {
-    m_errorText = i18n::translate(Text::TransferIncomingDestinationUnavailable);
+    m_error = Error::DestinationUnavailable;
   } else if (m_settings.availableBytes < m_offer->offer.totalBytes) {
-    m_errorText = i18n::translate(Text::TransferErrorDiskFull);
+    m_error = Error::DiskFull;
   } else {
-    m_errorText.clear();
+    m_error = Error::None;
   }
 }
 

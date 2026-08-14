@@ -143,47 +143,47 @@ p, li { white-space: pre-wrap; }
     <name>ClientConfigDialog</name>
     <message>
         <source>Client Configuration</source>
-        <translation type="unfinished">Конфигурация клиента</translation>
+        <translation>Настройка клиента</translation>
     </message>
     <message>
         <source>Use server&apos;s keyboard language on this computer</source>
-        <translation type="unfinished">Использовать язык клавиатуры сервера на этом компьютере</translation>
+        <translation>Использовать на этом компьютере раскладку клавиатуры сервера</translation>
     </message>
     <message>
         <source>Scroll Modifiers</source>
-        <translation type="unfinished">Модификаторы прокрутки</translation>
+        <translation>Модификаторы прокрутки</translation>
     </message>
     <message>
         <source>Invert</source>
-        <translation type="unfinished">Инвертировать</translation>
+        <translation>Инвертировать</translation>
     </message>
     <message>
         <source>Horizontal Scroll</source>
-        <translation type="unfinished">Горизонтальная прокрутка</translation>
+        <translation>Горизонтальная прокрутка</translation>
     </message>
     <message>
         <source>Vertical Scroll</source>
-        <translation type="unfinished">Вертикальная прокрутка</translation>
+        <translation>Вертикальная прокрутка</translation>
     </message>
     <message>
         <source>Scale</source>
-        <translation type="unfinished">Шкала</translation>
+        <translation>Масштаб</translation>
     </message>
     <message>
         <source>Close and save changes</source>
-        <translation type="unfinished">Закрыть и сохранить изменения</translation>
+        <translation>Сохранить изменения и закрыть</translation>
     </message>
     <message>
         <source>Close and forget changes</source>
-        <translation type="unfinished">Закройте изменения и забудьте о них</translation>
+        <translation>Закрыть без сохранения изменений</translation>
     </message>
     <message>
         <source>Reset to stored values</source>
-        <translation type="unfinished">Сбросить до сохраненных значений</translation>
+        <translation>Восстановить сохранённые значения</translation>
     </message>
     <message>
         <source>Reset to default values</source>
-        <translation type="unfinished">Сбросить до значений по умолчанию</translation>
+        <translation>Восстановить значения по умолчанию</translation>
     </message>
 </context>
 <context>
@@ -449,6 +449,34 @@ A bound IP is now invalid, you may need to restart the server.</source>
         <translation>%1 не запущен</translation>
     </message>
     <message>
+        <source>&amp;Pause sharing</source>
+        <translation>&amp;Приостановить общий доступ</translation>
+    </message>
+    <message>
+        <source>Pause keyboard and clipboard sharing; file transfers keep running</source>
+        <translation>Приостановить общий доступ к клавиатуре и буферу обмена; передача файлов продолжится</translation>
+    </message>
+    <message>
+        <source>&amp;Continue sharing</source>
+        <translation>&amp;Продолжить общий доступ</translation>
+    </message>
+    <message>
+        <source>Resume keyboard and clipboard sharing</source>
+        <translation>Возобновить общий доступ к клавиатуре и буферу обмена</translation>
+    </message>
+    <message>
+        <source>%1 is still running in the menu bar. Keyboard sharing and file transfers continue in the background. Pausing sharing stops keyboard and clipboard sharing only; quitting the app stops everything.</source>
+        <translation>%1 продолжает работать в строке меню. Общий доступ к клавиатуре и передача файлов продолжаются в фоновом режиме. Приостановка общего доступа прекращает только общий доступ к клавиатуре и буферу обмена; выход из приложения останавливает всё.</translation>
+    </message>
+    <message>
+        <source>Got it</source>
+        <translation>Понятно</translation>
+    </message>
+    <message>
+        <source>Open Preferences</source>
+        <translation>Открыть настройки</translation>
+    </message>
+    <message>
         <source>%1 is waiting for clients</source>
         <translation>%1 ожидает подключения клиентов</translation>
     </message>
@@ -588,15 +616,15 @@ Valid names:
     </message>
     <message>
         <source>&amp;Configure Client</source>
-        <translation type="unfinished">&amp;Настройка клиента</translation>
+        <translation>&amp;Настроить клиент</translation>
     </message>
     <message>
         <source>Connect to:</source>
-        <translation type="unfinished">Подключиться к:</translation>
+        <translation>Подключиться к:</translation>
     </message>
     <message>
         <source>&lt;html&gt;Hostname or IP address of the server computer.&lt;br/&gt;May contain a comma seperated list.&lt;/html&gt;</source>
-        <translation type="unfinished">&lt;html&gt;Имя хоста или IP-адрес серверного компьютера.&lt;br/&gt;Может содержать список, разделенный запятыми.&lt;/html&gt;</translation>
+        <translation>&lt;html&gt;Имя хоста или IP-адрес серверного компьютера.&lt;br/&gt;Может содержать список, разделенный запятыми.&lt;/html&gt;</translation>
     </message>
 </context>
 <context>
@@ -631,7 +659,7 @@ Valid names:
     </message>
     <message>
         <source>&lt;p&gt;%1 will continue to run in the background and can be accessed via the %1 icon in your system notifications area. This setting can be disabled.&lt;/p&gt;</source>
-        <translation>&lt;p&gt;%1 продолжит работу в фоновом режиме. Доступ к нему можно получить через иконку в области уведомлений. Эту настройку можно отключить.&lt;/p&gt;</translation>
+        <translation>&lt;p&gt;%1 продолжит работать в фоновом режиме; открыть приложение можно с помощью значка %1 в области системных уведомлений. Эту настройку можно отключить.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>&lt;p&gt;Please &lt;a href=&quot;%1&quot;&gt;report a bug&lt;/a&gt; and copy/paste the following error:&lt;/p&gt;&lt;pre&gt;v%2
@@ -667,7 +695,7 @@ Valid names:
     </message>
     <message>
         <source>&lt;p&gt;As you do not have the setting enabled to keep %1 running in the background, you&apos;ll need to keep this window open or minimized to keep %1 running.&lt;/p&gt;</source>
-        <translation>&lt;p&gt;Так как работа в фоновом режиме отключена, необходимо держать это окно открытым или свернутым для работы %1.&lt;/p&gt;</translation>
+        <translation>&lt;p&gt;Поскольку фоновая работа %1 отключена, оставьте это окно открытым или свёрнутым, чтобы %1 продолжал работать.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>&lt;p&gt;You can now close this window and %1 will continue to run in the background. This setting can be disabled.&lt;/p&gt;</source>
@@ -683,7 +711,7 @@ Valid names:
     </message>
     <message>
         <source>&lt;p&gt;A Client with your name is already connected to the server.&lt;/p&gt;Please ensure that you&apos;re using a unique name and that only a single instance of the client process is running.&lt;/p&gt;</source>
-        <translation>&lt;p&gt;Клиент с таким именем уже подключен к серверу.&lt;/p&gt;Убедитесь, что вы используете уникальное имя и запущен только один процесс клиента.&lt;/p&gt;</translation>
+        <translation>&lt;p&gt;Клиент с таким именем уже подключён к серверу.&lt;/p&gt;&lt;p&gt;Убедитесь, что используется уникальное имя и запущен только один экземпляр процесса клиента.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>&lt;p&gt;Please try to connect to the server using the server IP address instead of the hostname. &lt;/p&gt;&lt;p&gt;If that doesn&apos;t work, please check your TLS and firewall settings.&lt;/p&gt;</source>
@@ -739,7 +767,7 @@ Valid names:
     </message>
     <message>
         <source>&lt;p&gt;Sorry, while this version of %1 does support Wayland, this build was not linked with one or more of the required libraries.&lt;/p&gt;&lt;p&gt;Please either switch to X from your login screen or use a build that uses the correct libraries.&lt;/p&gt;&lt;p&gt;If you think this is incorrect, please &lt;a href=&quot;%2&quot;&gt;report a bug&lt;/a&gt;.&lt;/p&gt;&lt;p&gt;Please check the logs for more information.&lt;/p&gt;</source>
-        <translation>&lt;p&gt;Хотя эта версия %1 поддерживает Wayland, данная сборка не была слинкована с необходимыми библиотеками.&lt;/p&gt;&lt;p&gt;Пожалуйста, переключитесь на сессию X11 или используйте сборку с поддержкой нужных библиотек.&lt;/p&gt;&lt;p&gt;Если вы считаете это ошибкой, пожалуйста, &lt;a href=&quot;%2&quot;&gt;сообщите о ней&lt;/a&gt;.&lt;/p&gt;</translation>
+        <translation>&lt;p&gt;К сожалению, хотя эта версия %1 поддерживает Wayland, данная сборка не связана с одной или несколькими необходимыми библиотеками.&lt;/p&gt;&lt;p&gt;Переключитесь на X на экране входа или используйте сборку с необходимыми библиотеками.&lt;/p&gt;&lt;p&gt;Если вы считаете, что это ошибка, &lt;a href=&quot;%2&quot;&gt;сообщите о ней&lt;/a&gt;.&lt;/p&gt;&lt;p&gt;Дополнительные сведения см. в журналах.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>No thanks</source>
@@ -767,30 +795,769 @@ Valid names:
     </message>
     <message>
         <source>&lt;p&gt;There was a problem finding the %1 background service (daemon).&lt;/p&gt;&lt;p&gt;The background service makes %1 work with UAC prompts and the login screen.&lt;/p&gt;&lt;p&gt;If don&apos;t want to use the background service and intentionally stopped it, you can prevent it&apos;s use by disabling this feature.&lt;/p&gt;&lt;p&gt;If you did not stop the background service intentionally, there may be a problem with it. Please retry or try restarting the %1 service from the Windows services program.&lt;/p&gt;</source>
-        <translation>&lt;p&gt;Возникла проблема с поиском фоновой службы (демона) %1.&lt;/p&gt;&lt;p&gt;Эта служба позволяет %1 работать с запросами UAC и на экране входа.&lt;/p&gt;&lt;p&gt;Если вы не хотите использовать службу, вы можете отключить эту функцию.&lt;/p&gt;</translation>
+        <translation>&lt;p&gt;Не удалось найти фоновую службу %1 (демон).&lt;/p&gt;&lt;p&gt;Фоновая служба позволяет %1 работать с запросами UAC и на экране входа.&lt;/p&gt;&lt;p&gt;Если вы не хотите использовать фоновую службу и намеренно остановили её, отключите эту функцию.&lt;/p&gt;&lt;p&gt;Если вы не останавливали фоновую службу намеренно, возможно, в ней возникла проблема. Повторите попытку или перезапустите службу %1 в оснастке «Службы» Windows.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>failed to read key from certificate file: %1</source>
         <extracomment>%1 will be replaced by the certificate path</extracomment>
-        <translation>не удалось прочитать ключ из файла сертификата: %1</translation>
+        <translation type="vanished">не удалось прочитать ключ из файла сертификата: %1</translation>
     </message>
     <message>
         <source>failed to parse certificate file: %1</source>
         <extracomment>%1 will be replaced by the certificate path</extracomment>
-        <translation>не удалось разобрать файл сертификата: %1</translation>
+        <translation type="vanished">не удалось разобрать файл сертификата: %1</translation>
     </message>
     <message>
         <source>key detected is the incorrect size</source>
-        <translation>обнаружен ключ неверного размера</translation>
+        <translation type="vanished">обнаружен ключ неверного размера</translation>
     </message>
     <message>
         <source>failed to read RSA key from certificate file: %1</source>
         <extracomment>%1 will be replaced by the certificate path</extracomment>
-        <translation>не удалось прочитать RSA-ключ из файла сертификата: %1</translation>
+        <translation type="vanished">не удалось прочитать RSA-ключ из файла сертификата: %1</translation>
     </message>
     <message>
         <source>%1 is already running</source>
         <translation>%1 уже запущен</translation>
+    </message>
+</context>
+<context>
+    <name>RelayDesk</name>
+    <message>
+        <source>devices.title</source>
+        <translation>Устройства</translation>
+    </message>
+    <message>
+        <source>devices.current</source>
+        <translation>Это устройство</translation>
+    </message>
+    <message>
+        <source>devices.empty.waiting</source>
+        <translation>Устройства поблизости появятся здесь</translation>
+    </message>
+    <message>
+        <source>devices.latency</source>
+        <translation>%1 мс</translation>
+    </message>
+    <message>
+        <source>devices.status.online</source>
+        <translation>В сети</translation>
+    </message>
+    <message>
+        <source>devices.status.offline</source>
+        <translation>Не в сети</translation>
+    </message>
+    <message>
+        <source>devices.status.connecting</source>
+        <translation>Подключение</translation>
+    </message>
+    <message>
+        <source>devices.status.permission_required</source>
+        <translation>Требуется разрешение</translation>
+    </message>
+    <message>
+        <source>devices.status.paused</source>
+        <translation>Приостановлено</translation>
+    </message>
+    <message>
+        <source>devices.status.error</source>
+        <translation>Ошибка</translation>
+    </message>
+    <message>
+        <source>devices.status.discovered</source>
+        <translation>Обнаружено</translation>
+    </message>
+    <message>
+        <source>devices.status.pairing</source>
+        <translation>Сопряжение</translation>
+    </message>
+    <message>
+        <source>devices.status.trust_violation</source>
+        <translation>Доверие изменилось</translation>
+    </message>
+    <message>
+        <source>devices.status.transfer_busy</source>
+        <translation>Выполняется передача файлов</translation>
+    </message>
+    <message>
+        <source>devices.action.send_file</source>
+        <translation>Отправить файлы</translation>
+    </message>
+    <message>
+        <source>devices.action.send_folder</source>
+        <translation>Отправить папку</translation>
+    </message>
+    <message>
+        <source>devices.action.more</source>
+        <translation>Ещё</translation>
+    </message>
+    <message>
+        <source>devices.action.auto_arrange</source>
+        <translation>Расположить автоматически</translation>
+    </message>
+    <message>
+        <source>devices.action.reset_layout</source>
+        <translation>Сбросить расположение</translation>
+    </message>
+    <message>
+        <source>devices.drop.send_here</source>
+        <translation>Перетащите сюда файлы для отправки</translation>
+    </message>
+    <message numerus="yes">
+        <source>devices.drop.items</source>
+        <translation>
+            <numerusform>%n объект</numerusform>
+            <numerusform>%n объекта</numerusform>
+            <numerusform>%n объектов</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>devices.send.select_device</source>
+        <translation>Сначала выберите устройство</translation>
+    </message>
+    <message>
+        <source>devices.send.unavailable</source>
+        <translation>Файлы можно отправлять только доверенному устройству, которое находится в сети</translation>
+    </message>
+    <message>
+        <source>devices.send.local_only</source>
+        <translation>Выберите файлы или папки, сохранённые на этом устройстве</translation>
+    </message>
+    <message>
+        <source>devices.send.empty</source>
+        <translation>Выберите хотя бы один файл или папку</translation>
+    </message>
+    <message>
+        <source>devices.send.unreadable</source>
+        <translation>Не удалось прочитать один или несколько выбранных объектов</translation>
+    </message>
+    <message>
+        <source>pairing.title</source>
+        <translation>Сопряжение устройства</translation>
+    </message>
+    <message>
+        <source>pairing.code.prompt</source>
+        <translation>Введите шестизначный код</translation>
+    </message>
+    <message>
+        <source>pairing.state.ready</source>
+        <translation>Готово к сопряжению</translation>
+    </message>
+    <message>
+        <source>pairing.state.requesting</source>
+        <translation>Запрос сопряжения</translation>
+    </message>
+    <message>
+        <source>pairing.state.securing</source>
+        <translation>Защита соединения</translation>
+    </message>
+    <message>
+        <source>pairing.state.compare</source>
+        <translation>Сравните код на обоих устройствах</translation>
+    </message>
+    <message>
+        <source>pairing.state.confirming</source>
+        <translation>Подтверждение сопряжения</translation>
+    </message>
+    <message>
+        <source>pairing.state.rejected</source>
+        <translation>Сопряжение отменено</translation>
+    </message>
+    <message>
+        <source>pairing.state.failed</source>
+        <translation>Не удалось выполнить сопряжение</translation>
+    </message>
+    <message>
+        <source>pairing.action.start</source>
+        <translation>Сопрячь</translation>
+    </message>
+    <message>
+        <source>pairing.action.pair_again</source>
+        <translation>Сопрячь снова</translation>
+    </message>
+    <message>
+        <source>pairing.action.codes_match</source>
+        <translation>Коды совпадают</translation>
+    </message>
+    <message>
+        <source>pairing.action.submit_code</source>
+        <translation>Подтвердить код</translation>
+    </message>
+    <message>
+        <source>pairing.action.cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>pairing.code.invalid</source>
+        <translation>Введите ровно шесть цифр</translation>
+    </message>
+    <message>
+        <source>pairing.code.mismatch</source>
+        <translation>Код сопряжения не совпадает</translation>
+    </message>
+    <message>
+        <source>pairing.code.expired</source>
+        <translation>Срок действия кода сопряжения истёк. Создайте новый код.</translation>
+    </message>
+    <message>
+        <source>pairing.error.already_active</source>
+        <translation>Уже выполняется другое сопряжение</translation>
+    </message>
+    <message>
+        <source>pairing.error.identity_not_ready</source>
+        <translation>Идентификатор устройства ещё не готов. Повторите попытку.</translation>
+    </message>
+    <message>
+        <source>pairing.error.action_unavailable</source>
+        <translation>Это действие сопряжения сейчас недоступно</translation>
+    </message>
+    <message>
+        <source>pairing.error.session_unavailable</source>
+        <translation>Сеанс сопряжения больше недоступен</translation>
+    </message>
+    <message>
+        <source>pairing.certificate_changed</source>
+        <translation>Сертификат другого устройства изменился. Автоматическое подключение остановлено.</translation>
+    </message>
+    <message>
+        <source>pairing.too_many_attempts</source>
+        <translation>Слишком много неверных попыток. Повторите позже.</translation>
+    </message>
+    <message>
+        <source>pairing.not_direct</source>
+        <translation>Устройства не могут подключиться напрямую. Попробуйте указать адрес вручную.</translation>
+    </message>
+    <message>
+        <source>pairing.success</source>
+        <translation>Устройство сопряжено</translation>
+    </message>
+    <message>
+        <source>pairing.fingerprint.label</source>
+        <translation>Отпечаток сертификата</translation>
+    </message>
+    <message>
+        <source>pairing.fingerprint.unavailable</source>
+        <translation>Отпечаток недоступен</translation>
+    </message>
+    <message numerus="yes">
+        <source>pairing.attempts_remaining</source>
+        <translation>
+            <numerusform>Осталась %n попытка</numerusform>
+            <numerusform>Осталось %n попытки</numerusform>
+            <numerusform>Осталось %n попыток</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>pairing.expires_at</source>
+        <translation>Истекает: %1</translation>
+    </message>
+    <message>
+        <source>permissions.banner.attention_title</source>
+        <translation>Требуется разрешение</translation>
+    </message>
+    <message>
+        <source>permissions.banner.unknown_title</source>
+        <translation>Состояние разрешений не проверено</translation>
+    </message>
+    <message>
+        <source>permissions.banner.ready_title</source>
+        <translation>Разрешения готовы</translation>
+    </message>
+    <message>
+        <source>permissions.banner.ready_message</source>
+        <translation>Все необходимые системные разрешения готовы.</translation>
+    </message>
+    <message>
+        <source>permissions.kind.windows_firewall</source>
+        <translation>Брандмауэр Windows</translation>
+    </message>
+    <message>
+        <source>permissions.kind.windows_port</source>
+        <translation>Порт локальной сети</translation>
+    </message>
+    <message>
+        <source>permissions.kind.macos_local_network</source>
+        <translation>Локальная сеть</translation>
+    </message>
+    <message>
+        <source>permissions.kind.macos_accessibility</source>
+        <translation>Универсальный доступ</translation>
+    </message>
+    <message>
+        <source>permissions.kind.macos_input_monitoring</source>
+        <translation>Мониторинг ввода</translation>
+    </message>
+    <message>
+        <source>permissions.status.unknown</source>
+        <translation>Не проверено</translation>
+    </message>
+    <message>
+        <source>permissions.status.not_required</source>
+        <translation>Не требуется</translation>
+    </message>
+    <message>
+        <source>permissions.status.granted</source>
+        <translation>Разрешено</translation>
+    </message>
+    <message>
+        <source>permissions.status.denied</source>
+        <translation>Заблокировано</translation>
+    </message>
+    <message>
+        <source>permissions.status.needs_action</source>
+        <translation>Требуется действие</translation>
+    </message>
+    <message>
+        <source>permissions.message.unknown</source>
+        <translation>RelayDesk ещё не получил результат проверки разрешений.</translation>
+    </message>
+    <message>
+        <source>permissions.message.probe_unavailable</source>
+        <translation>RelayDesk не удалось проверить этот параметр. Повторите попытку.</translation>
+    </message>
+    <message>
+        <source>permissions.message.review</source>
+        <translation>Проверьте этот системный параметр, чтобы локальные подключения устройств продолжали работать.</translation>
+    </message>
+    <message>
+        <source>permissions.message.windows_firewall</source>
+        <translation>Разрешите RelayDesk в брандмауэре Windows для частных сетей.</translation>
+    </message>
+    <message>
+        <source>permissions.message.windows_port</source>
+        <translation>RelayDesk не может прослушивать порт локальной сети. Проверьте брандмауэр и настройки порта.</translation>
+    </message>
+    <message>
+        <source>permissions.message.macos_local_network</source>
+        <translation>Разрешите доступ к локальной сети, чтобы RelayDesk мог находить устройства поблизости.</translation>
+    </message>
+    <message>
+        <source>permissions.message.macos_accessibility</source>
+        <translation>Разрешите Универсальный доступ, чтобы RelayDesk мог управлять клавиатурой и указателем.</translation>
+    </message>
+    <message>
+        <source>permissions.message.macos_input_monitoring</source>
+        <translation>Разрешите мониторинг ввода, когда macOS требует его для общего ввода.</translation>
+    </message>
+    <message>
+        <source>permissions.action.open_settings</source>
+        <translation>Открыть настройки</translation>
+    </message>
+    <message>
+        <source>transfer.title</source>
+        <translation>Передачи</translation>
+    </message>
+    <message>
+        <source>transfer.empty</source>
+        <translation>Передачи появятся здесь</translation>
+    </message>
+    <message>
+        <source>transfer.direction.sending</source>
+        <translation>Отправка</translation>
+    </message>
+    <message>
+        <source>transfer.direction.receiving</source>
+        <translation>Получение</translation>
+    </message>
+    <message>
+        <source>transfer.state.preparing</source>
+        <translation>Подготовка</translation>
+    </message>
+    <message>
+        <source>transfer.state.awaiting_confirmation</source>
+        <translation>Ожидание подтверждения</translation>
+    </message>
+    <message>
+        <source>transfer.state.queued</source>
+        <translation>В очереди</translation>
+    </message>
+    <message>
+        <source>transfer.state.transferring</source>
+        <translation>Передача</translation>
+    </message>
+    <message>
+        <source>transfer.state.paused</source>
+        <translation>Приостановлено</translation>
+    </message>
+    <message>
+        <source>transfer.state.interrupted</source>
+        <translation>Соединение потеряно, ожидание возобновления</translation>
+    </message>
+    <message>
+        <source>transfer.state.resuming</source>
+        <translation>Возобновление</translation>
+    </message>
+    <message>
+        <source>transfer.state.verifying</source>
+        <translation>Проверка</translation>
+    </message>
+    <message>
+        <source>transfer.state.saving</source>
+        <translation>Сохранение</translation>
+    </message>
+    <message>
+        <source>transfer.state.completed</source>
+        <translation>Завершено</translation>
+    </message>
+    <message>
+        <source>transfer.state.rejected</source>
+        <translation>Отклонено</translation>
+    </message>
+    <message>
+        <source>transfer.state.canceling</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>transfer.state.canceled</source>
+        <translation>Отменено</translation>
+    </message>
+    <message>
+        <source>transfer.state.failed</source>
+        <translation>Ошибка</translation>
+    </message>
+    <message>
+        <source>transfer.action.pause</source>
+        <translation>Приостановить</translation>
+    </message>
+    <message>
+        <source>transfer.action.resume</source>
+        <translation>Продолжить</translation>
+    </message>
+    <message>
+        <source>transfer.action.cancel</source>
+        <translation>Отменить</translation>
+    </message>
+    <message>
+        <source>transfer.action.retry</source>
+        <translation>Повторить</translation>
+    </message>
+    <message>
+        <source>transfer.action.open_folder</source>
+        <translation>Открыть папку</translation>
+    </message>
+    <message>
+        <source>transfer.action.open_file</source>
+        <translation>Открыть файл</translation>
+    </message>
+    <message>
+        <source>transfer.action.details</source>
+        <translation>Подробнее</translation>
+    </message>
+    <message>
+        <source>transfer.action.close</source>
+        <translation>Закрыть</translation>
+    </message>
+    <message>
+        <source>transfer.history.details_title</source>
+        <translation>Сведения о передаче</translation>
+    </message>
+    <message>
+        <source>transfer.history.name_label</source>
+        <translation>Передача</translation>
+    </message>
+    <message>
+        <source>transfer.history.peer_label</source>
+        <translation>Устройство</translation>
+    </message>
+    <message>
+        <source>transfer.history.direction_label</source>
+        <translation>Направление</translation>
+    </message>
+    <message>
+        <source>transfer.history.status_label</source>
+        <translation>Состояние</translation>
+    </message>
+    <message>
+        <source>transfer.history.items_label</source>
+        <translation>Объекты</translation>
+    </message>
+    <message>
+        <source>transfer.history.size_label</source>
+        <translation>Размер</translation>
+    </message>
+    <message>
+        <source>transfer.history.started_label</source>
+        <translation>Начало</translation>
+    </message>
+    <message>
+        <source>transfer.history.finished_label</source>
+        <translation>Завершение</translation>
+    </message>
+    <message>
+        <source>transfer.history.duration_label</source>
+        <translation>Длительность</translation>
+    </message>
+    <message>
+        <source>transfer.history.error_label</source>
+        <translation>Ошибка</translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.history.items</source>
+        <translation>
+            <numerusform>%1 объект</numerusform>
+            <numerusform>%1 объекта</numerusform>
+            <numerusform>%1 объектов</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.history.duration_seconds</source>
+        <translation>
+            <numerusform>%1 секунда</numerusform>
+            <numerusform>%1 секунды</numerusform>
+            <numerusform>%1 секунд</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.history.duration_minutes</source>
+        <translation>
+            <numerusform>%1 минута</numerusform>
+            <numerusform>%1 минуты</numerusform>
+            <numerusform>%1 минут</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.history.duration_hours</source>
+        <translation>
+            <numerusform>%1 час</numerusform>
+            <numerusform>%1 часа</numerusform>
+            <numerusform>%1 часов</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>transfer.action.accept</source>
+        <translation>Принять</translation>
+    </message>
+    <message>
+        <source>transfer.action.reject</source>
+        <translation>Отклонить</translation>
+    </message>
+    <message>
+        <source>transfer.action.dismiss</source>
+        <translation>Закрыть</translation>
+    </message>
+    <message>
+        <source>transfer.action.change_settings</source>
+        <translation>Изменить настройки</translation>
+    </message>
+    <message>
+        <source>transfer.error.disk_full</source>
+        <translation>Недостаточно места на диске</translation>
+    </message>
+    <message>
+        <source>transfer.error.unsafe_path</source>
+        <translation>Полученный путь небезопасен</translation>
+    </message>
+    <message>
+        <source>transfer.error.unreadable</source>
+        <translation>Не удалось прочитать один или несколько объектов</translation>
+    </message>
+    <message>
+        <source>transfer.error.connection_lost</source>
+        <translation>Соединение потеряно</translation>
+    </message>
+    <message>
+        <source>transfer.error.checksum_mismatch</source>
+        <translation>Не удалось проверить файл</translation>
+    </message>
+    <message>
+        <source>transfer.error.unknown</source>
+        <translation>Сбой передачи. Повторите попытку.</translation>
+    </message>
+    <message>
+        <source>transfer.progress.bytes</source>
+        <translation>%1 из %2</translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.progress.items</source>
+        <translation>
+            <numerusform>%1 из %n объекта</numerusform>
+            <numerusform>%1 из %n объектов</numerusform>
+            <numerusform>%1 из %n объектов</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>transfer.speed</source>
+        <translation>%1/с</translation>
+    </message>
+    <message>
+        <source>transfer.speed.unknown</source>
+        <translation>Скорость недоступна</translation>
+    </message>
+    <message>
+        <source>transfer.eta.unknown</source>
+        <translation>Расчёт оставшегося времени</translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.eta.seconds</source>
+        <translation>
+            <numerusform>Осталась %n секунда</numerusform>
+            <numerusform>Осталось %n секунды</numerusform>
+            <numerusform>Осталось %n секунд</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.eta.minutes</source>
+        <translation>
+            <numerusform>Осталась %n минута</numerusform>
+            <numerusform>Осталось %n минуты</numerusform>
+            <numerusform>Осталось %n минут</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.eta.hours</source>
+        <translation>
+            <numerusform>Остался %n час</numerusform>
+            <numerusform>Осталось %n часа</numerusform>
+            <numerusform>Осталось %n часов</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>transfer.eta.days</source>
+        <translation>
+            <numerusform>Остался %n день</numerusform>
+            <numerusform>Осталось %n дня</numerusform>
+            <numerusform>Осталось %n дней</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>transfer.eta.long</source>
+        <translation>Осталось 99 дней или больше</translation>
+    </message>
+    <message>
+        <source>transfer.accessible.summary</source>
+        <translation>%1, %2, %3, %4, %5</translation>
+    </message>
+    <message>
+        <source>transfer.notification.completed</source>
+        <translation>Передача завершена</translation>
+    </message>
+    <message>
+        <source>transfer.notification.rejected</source>
+        <translation>Передача отклонена</translation>
+    </message>
+    <message>
+        <source>transfer.notification.canceled</source>
+        <translation>Передача отменена</translation>
+    </message>
+    <message>
+        <source>transfer.notification.failed</source>
+        <translation>Сбой передачи</translation>
+    </message>
+    <message>
+        <source>transfer.notification.body</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.wants_to_send</source>
+        <translation>%1 хочет отправить</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.save_to</source>
+        <translation>Сохранить в: %1</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.auto_rename</source>
+        <translation>Конфликт: автоматическое переименование</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.always_accept</source>
+        <translation>Всегда принимать файлы с этого устройства</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.unknown_device</source>
+        <translation>Неизвестное устройство</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.pair_first</source>
+        <translation>Сопрягите устройство перед получением файлов</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.expired</source>
+        <translation>Срок действия этого запроса на передачу истёк</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.destination_unavailable</source>
+        <translation>Выберите допустимую папку для получения в настройках</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.invalid</source>
+        <translation>Входящий запрос на передачу недействителен</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.busy</source>
+        <translation>Другой запрос на передачу ожидает ответа</translation>
+    </message>
+    <message>
+        <source>transfer.incoming.decision_unavailable</source>
+        <translation>Сейчас этот запрос на передачу нельзя принять</translation>
+    </message>
+    <message>
+        <source>settings.title</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>settings.general</source>
+        <translation>Основные</translation>
+    </message>
+    <message>
+        <source>settings.input</source>
+        <translation>Клавиатура и мышь</translation>
+    </message>
+    <message>
+        <source>settings.clipboard</source>
+        <translation>Буфер обмена</translation>
+    </message>
+    <message>
+        <source>settings.file_transfer</source>
+        <translation>Передача файлов</translation>
+    </message>
+    <message>
+        <source>settings.network</source>
+        <translation>Обнаружение и сеть</translation>
+    </message>
+    <message>
+        <source>settings.trusted_devices</source>
+        <translation>Доверенные устройства</translation>
+    </message>
+    <message>
+        <source>settings.startup</source>
+        <translation>Запускать вместе с системой</translation>
+    </message>
+    <message>
+        <source>settings.advanced</source>
+        <translation>Дополнительно и журналы</translation>
+    </message>
+    <message>
+        <source>about.title</source>
+        <translation>О RelayDesk</translation>
+    </message>
+    <message>
+        <source>about.diagnostics</source>
+        <translation>Диагностика</translation>
+    </message>
+    <message>
+        <source>permissions.purpose.macos_local_network</source>
+        <translation>Поиск и подключение устройств поблизости в локальной сети.</translation>
+    </message>
+    <message>
+        <source>permissions.purpose.macos_accessibility</source>
+        <translation>Управление клавиатурой и указателем на этом Mac.</translation>
+    </message>
+    <message>
+        <source>permissions.purpose.macos_input_monitoring</source>
+        <translation>Чтение глобального ввода с клавиатуры и указателя для передачи другому устройству.</translation>
+    </message>
+    <message>
+        <source>permissions.affected.macos_local_network</source>
+        <translation>Поиск устройств поблизости и прямые локальные подключения</translation>
+    </message>
+    <message>
+        <source>permissions.affected.macos_accessibility</source>
+        <translation>Управление вводом на этом Mac</translation>
+    </message>
+    <message>
+        <source>permissions.affected.macos_input_monitoring</source>
+        <translation>Передача ввода с этого Mac</translation>
     </message>
 </context>
 <context>
@@ -939,19 +1706,19 @@ Valid names:
     <name>SearchWidget</name>
     <message>
         <source>Search</source>
-        <translation type="unfinished">Поиск</translation>
+        <translation>Поиск</translation>
     </message>
     <message>
         <source>Find next</source>
-        <translation type="unfinished">Найти следующее</translation>
+        <translation>Найти следующее</translation>
     </message>
     <message>
         <source>Find previous</source>
-        <translation type="unfinished">Найти предыдущее</translation>
+        <translation>Найти предыдущее</translation>
     </message>
     <message>
         <source>Find...</source>
-        <translation type="unfinished">Поиск...</translation>
+        <translation>Найти...</translation>
     </message>
 </context>
 <context>
@@ -1090,7 +1857,7 @@ Valid names:
     </message>
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enables compatibility with programs that use either the Synergy or Barrier protocols:&lt;/p&gt;&lt;ul style=&quot;margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 1;&quot;&gt;&lt;li style=&quot; margin-top:12px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Synergy 3 uses the Synergy protocol.&lt;/li&gt;&lt;li style=&quot; margin-top:0px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Barrier, Input-Leap and Synergy 1 uses the Barrier protocol.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;A Deskflow client will automatically use either the Synergy or Barrier protocol depending on the server protocol.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Включает совместимость с протоколами Synergy или Barrier.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Включает совместимость с программами, использующими протокол Synergy или Barrier:&lt;/p&gt;&lt;ul style=&quot;margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 1;&quot;&gt;&lt;li style=&quot; margin-top:12px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Synergy 3 использует протокол Synergy.&lt;/li&gt;&lt;li style=&quot; margin-top:0px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Barrier, Input-Leap и Synergy 1 используют протокол Barrier.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Клиент Deskflow автоматически выбирает протокол Synergy или Barrier в зависимости от протокола сервера.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>Network protocol</source>
@@ -1172,7 +1939,7 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Leave app running in notification area when the window is closed</source>
-        <translation>Оставлять приложение в области уведомлений при закрытии окна</translation>
+        <translation type="vanished">Оставлять приложение в области уведомлений при закрытии окна</translation>
     </message>
     <message>
         <source>Tray icon style</source>
@@ -1347,8 +2114,26 @@ Enabling this setting will disable the server config GUI.</source>
         <translation>Подробный вывод отладки</translation>
     </message>
     <message>
+        <source>Start-at-login status could not be read (code %1, native %2). %3</source>
+        <translation>Не удалось прочитать состояние запуска при входе (код %1, системный код %2). %3</translation>
+    </message>
+    <message>
+        <source>The application path will be updated when preferences are saved.</source>
+        <translation>Путь к приложению будет обновлён при сохранении настроек.</translation>
+    </message>
+    <message>
+        <source>Start at login</source>
+        <translation>Запускать при входе</translation>
+    </message>
+    <message>
+        <source>The start-at-login setting could not be updated (code %1, native %2).
+%3</source>
+        <translation>Не удалось обновить настройку запуска при входе (код %1, системный код %2).
+%3</translation>
+    </message>
+    <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Requires the wl-clipboard package&lt;/p&gt;&lt;p&gt;When using wl-clipboard v2.2.1, there is a focus stealing bug that may make Deskflow harder to use. This has been fixed when using the wl-clipboard master branch, unless your Compositor lacks wlroots-data-control protocol support.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Требуется пакет wl-clipboard. В версии 2.2.1 есть ошибка перехвата фокуса.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Требуется пакет wl-clipboard&lt;/p&gt;&lt;p&gt;В wl-clipboard версии 2.2.1 есть ошибка перехвата фокуса, которая может затруднить использование Deskflow. Ошибка исправлена в основной ветке wl-clipboard при наличии у композитора поддержки протокола wlroots-data-control.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>Automatic</source>
@@ -1356,7 +2141,34 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Include version in the window title</source>
-        <translation type="unfinished">Включить номер версии в заголовок окна</translation>
+        <translation>Показывать версию в заголовке окна</translation>
+    </message>
+    <message>
+        <source>Start with system</source>
+        <translation>Запускать вместе с системой</translation>
+    </message>
+    <message>
+        <source>Hide to the notification area when the window is minimized</source>
+        <translation>Сворачивать в область уведомлений при минимизации окна</translation>
+    </message>
+    <message>
+        <source>Keep running in the notification area when the window is closed</source>
+        <translation>Продолжать работу в области уведомлений после закрытия окна</translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::relaydesk::FileTransferRuntime</name>
+    <message numerus="yes">
+        <source>%n items</source>
+        <translation>
+            <numerusform>%n объект</numerusform>
+            <numerusform>%n объекта</numerusform>
+            <numerusform>%n объектов</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>File transfer</source>
+        <translation>Передача файлов</translation>
     </message>
 </context>
 <context>

@@ -29,6 +29,11 @@ qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${${CMAKE_PROJECT_NAME}_TRS} O
 # instead of applying Deskflow's plurals-only English catalog rule.
 set(RELAYDESK_TS
   ${RELAYDESK_TRANSLATION_CATALOG}_en.ts
+  ${RELAYDESK_TRANSLATION_CATALOG}_es.ts
+  ${RELAYDESK_TRANSLATION_CATALOG}_it.ts
+  ${RELAYDESK_TRANSLATION_CATALOG}_ja.ts
+  ${RELAYDESK_TRANSLATION_CATALOG}_ko.ts
+  ${RELAYDESK_TRANSLATION_CATALOG}_ru.ts
   ${RELAYDESK_TRANSLATION_CATALOG}_zh_CN.ts
 )
 qt_create_translation(
@@ -40,6 +45,24 @@ qt_create_translation(
 
 #ensure that the targets are built always
 add_custom_target(app_translations ALL DEPENDS ${TRS} ${RELAYDESK_TRS})
+
+# qt_create_translation makes each .qm depend on lupdate's source stamp rather
+# than directly on its tracked .ts file.  Re-run lrelease before bundle/install
+# assembly so translation-only edits are never left out of an incremental build.
+set(ALL_TRANSLATION_TS
+  ${CMAKE_PROJECT_NAME}_en.ts
+  ${${CMAKE_PROJECT_NAME}_TRS}
+  ${RELAYDESK_TS}
+)
+foreach(TS_FILE IN LISTS ALL_TRANSLATION_TS)
+  get_filename_component(TS_STEM "${TS_FILE}" NAME_WE)
+  add_custom_command(
+    TARGET app_translations POST_BUILD
+    COMMAND Qt6::lrelease "${CMAKE_CURRENT_SOURCE_DIR}/${TS_FILE}"
+            -silent -qm "${CMAKE_CURRENT_BINARY_DIR}/${TS_STEM}.qm"
+    VERBATIM
+  )
+endforeach()
 
 if (NOT BUILD_OSX_BUNDLE)
   # install our translations
@@ -58,8 +81,10 @@ else()
   add_custom_command(
     TARGET app_translations POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_TR_DIR}
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/*.qm" ${BUNDLE_TR_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TRS} ${RELAYDESK_TRS} ${BUNDLE_TR_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${MAC_QT_LANG_PATH}/qtbase_en.qm" "${BUNDLE_TR_DIR}/qt_en.qm"
+    COMMAND_EXPAND_LISTS
+    VERBATIM
   )
 
   # install the other Qt lang files renamed to qt_lang.qm

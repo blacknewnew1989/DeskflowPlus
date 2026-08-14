@@ -1,640 +1,629 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="en_US" sourcelanguage="en_US">
+<TS version="2.1" language="ja_JP" sourcelanguage="en_US">
 <context>
     <name>RelayDesk</name>
     <message>
         <source>devices.title</source>
-        <translation>Devices</translation>
+        <translation>デバイス</translation>
     </message>
     <message>
         <source>devices.current</source>
-        <translation>This device</translation>
+        <translation>このデバイス</translation>
     </message>
     <message>
         <source>devices.empty.waiting</source>
-        <translation>Nearby devices will appear here</translation>
+        <translation>近くのデバイスがここに表示されます</translation>
     </message>
     <message>
         <source>devices.latency</source>
-        <translation>%1 ms</translation>
+        <translation>%1 ミリ秒</translation>
     </message>
     <message>
         <source>devices.status.online</source>
-        <translation>Online</translation>
+        <translation>オンライン</translation>
     </message>
     <message>
         <source>devices.status.offline</source>
-        <translation>Offline</translation>
+        <translation>オフライン</translation>
     </message>
     <message>
         <source>devices.status.connecting</source>
-        <translation>Connecting</translation>
+        <translation>接続中</translation>
     </message>
     <message>
         <source>devices.status.permission_required</source>
-        <translation>Permission required</translation>
+        <translation>権限が必要です</translation>
     </message>
     <message>
         <source>devices.status.paused</source>
-        <translation>Paused</translation>
+        <translation>一時停止中</translation>
     </message>
     <message>
         <source>devices.status.error</source>
-        <translation>Error</translation>
+        <translation>エラー</translation>
     </message>
     <message>
         <source>devices.status.discovered</source>
-        <translation>Discovered</translation>
+        <translation>検出済み</translation>
     </message>
     <message>
         <source>devices.status.pairing</source>
-        <translation>Pairing</translation>
+        <translation>ペアリング中</translation>
     </message>
     <message>
         <source>devices.status.trust_violation</source>
-        <translation>Trust changed</translation>
+        <translation>信頼情報が変更されました</translation>
     </message>
     <message>
         <source>devices.status.transfer_busy</source>
-        <translation>File transfer in progress</translation>
+        <translation>ファイル転送中</translation>
     </message>
     <message>
         <source>devices.action.send_file</source>
-        <translation>Send files</translation>
+        <translation>ファイルを送信</translation>
     </message>
     <message>
         <source>devices.action.send_folder</source>
-        <translation>Send folder</translation>
+        <translation>フォルダを送信</translation>
     </message>
     <message>
         <source>devices.action.more</source>
-        <translation>More</translation>
+        <translation>その他</translation>
     </message>
     <message>
         <source>devices.action.auto_arrange</source>
-        <translation>Auto arrange</translation>
+        <translation>自動配置</translation>
     </message>
     <message>
         <source>devices.action.reset_layout</source>
-        <translation>Reset layout</translation>
+        <translation>配置をリセット</translation>
     </message>
     <message>
         <source>devices.drop.send_here</source>
-        <translation>Drop files here to send</translation>
+        <translation>送信するファイルをここにドロップ</translation>
     </message>
     <message numerus="yes">
         <source>devices.drop.items</source>
         <translation>
-            <numerusform>%n item</numerusform>
-            <numerusform>%n items</numerusform>
+            <numerusform>%n 項目</numerusform>
         </translation>
     </message>
     <message>
         <source>devices.send.select_device</source>
-        <translation>Select a device first</translation>
+        <translation>先にデバイスを選択してください</translation>
     </message>
     <message>
         <source>devices.send.unavailable</source>
-        <translation>Files can be sent only to a trusted device that is online</translation>
+        <translation>ファイルはオンラインの信頼済みデバイスにのみ送信できます</translation>
     </message>
     <message>
         <source>devices.send.local_only</source>
-        <translation>Choose files or folders stored on this device</translation>
+        <translation>このデバイスに保存されているファイルまたはフォルダを選択してください</translation>
     </message>
     <message>
         <source>devices.send.empty</source>
-        <translation>Choose at least one file or folder</translation>
+        <translation>ファイルまたはフォルダを1つ以上選択してください</translation>
     </message>
     <message>
         <source>devices.send.unreadable</source>
-        <translation>One or more selected items cannot be read</translation>
+        <translation>選択した項目の一部を読み取れません</translation>
     </message>
     <message>
         <source>pairing.title</source>
-        <translation>Pair device</translation>
+        <translation>デバイスをペアリング</translation>
     </message>
     <message>
         <source>pairing.code.prompt</source>
-        <translation>Enter the six-digit code</translation>
+        <translation>6桁のコードを入力してください</translation>
     </message>
     <message>
         <source>pairing.state.ready</source>
-        <translation>Ready to pair</translation>
+        <translation>ペアリング準備完了</translation>
     </message>
     <message>
         <source>pairing.state.requesting</source>
-        <translation>Requesting pairing</translation>
+        <translation>ペアリングを要求中</translation>
     </message>
     <message>
         <source>pairing.state.securing</source>
-        <translation>Securing the connection</translation>
+        <translation>接続を保護しています</translation>
     </message>
     <message>
         <source>pairing.state.compare</source>
-        <translation>Compare the code on both devices</translation>
+        <translation>両方のデバイスでコードを比較してください</translation>
     </message>
     <message>
         <source>pairing.state.confirming</source>
-        <translation>Confirming pairing</translation>
+        <translation>ペアリングを確認中</translation>
     </message>
     <message>
         <source>pairing.state.rejected</source>
-        <translation>Pairing canceled</translation>
+        <translation>ペアリングがキャンセルされました</translation>
     </message>
     <message>
         <source>pairing.state.failed</source>
-        <translation>Pairing failed</translation>
+        <translation>ペアリングに失敗しました</translation>
     </message>
     <message>
         <source>pairing.action.start</source>
-        <translation>Pair</translation>
+        <translation>ペアリング</translation>
     </message>
     <message>
         <source>pairing.action.pair_again</source>
-        <translation>Pair again</translation>
+        <translation>もう一度ペアリング</translation>
     </message>
     <message>
         <source>pairing.action.codes_match</source>
-        <translation>Codes match</translation>
+        <translation>コードが一致</translation>
     </message>
     <message>
         <source>pairing.action.submit_code</source>
-        <translation>Confirm code</translation>
+        <translation>コードを確認</translation>
     </message>
     <message>
         <source>pairing.action.cancel</source>
-        <translation>Cancel</translation>
+        <translation>キャンセル</translation>
     </message>
     <message>
         <source>pairing.code.invalid</source>
-        <translation>Enter exactly six digits</translation>
+        <translation>6桁の数字を正確に入力してください</translation>
     </message>
     <message>
         <source>pairing.code.mismatch</source>
-        <translation>The pairing code does not match</translation>
+        <translation>ペアリングコードが一致しません</translation>
     </message>
     <message>
         <source>pairing.code.expired</source>
-        <translation>The pairing code expired. Generate a new code.</translation>
+        <translation>ペアリングコードの有効期限が切れました。新しいコードを生成してください。</translation>
     </message>
     <message>
         <source>pairing.error.already_active</source>
-        <translation>Another pairing is already in progress</translation>
+        <translation>別のペアリングがすでに進行中です</translation>
     </message>
     <message>
         <source>pairing.error.identity_not_ready</source>
-        <translation>The device identity is not ready. Try again.</translation>
+        <translation>デバイスIDの準備ができていません。もう一度お試しください。</translation>
     </message>
     <message>
         <source>pairing.error.action_unavailable</source>
-        <translation>This pairing action is not available now</translation>
+        <translation>現在このペアリング操作は利用できません</translation>
     </message>
     <message>
         <source>pairing.error.session_unavailable</source>
-        <translation>The pairing session is no longer available</translation>
+        <translation>ペアリングセッションは利用できなくなりました</translation>
     </message>
     <message>
         <source>pairing.certificate_changed</source>
-        <translation>The other device certificate changed. Automatic connection was stopped.</translation>
+        <translation>相手のデバイスの証明書が変更されました。自動接続を停止しました。</translation>
     </message>
     <message>
         <source>pairing.too_many_attempts</source>
-        <translation>Too many incorrect attempts. Try again later.</translation>
+        <translation>誤った試行が多すぎます。しばらくしてからお試しください。</translation>
     </message>
     <message>
         <source>pairing.not_direct</source>
-        <translation>The devices cannot connect directly. Try a manual address.</translation>
+        <translation>デバイス同士を直接接続できません。アドレスを手動で指定してください。</translation>
     </message>
     <message>
         <source>pairing.success</source>
-        <translation>Device paired</translation>
+        <translation>デバイスをペアリングしました</translation>
     </message>
     <message>
         <source>pairing.fingerprint.label</source>
-        <translation>Certificate fingerprint</translation>
+        <translation>証明書のフィンガープリント</translation>
     </message>
     <message>
         <source>pairing.fingerprint.unavailable</source>
-        <translation>Fingerprint unavailable</translation>
+        <translation>フィンガープリントを利用できません</translation>
     </message>
     <message numerus="yes">
         <source>pairing.attempts_remaining</source>
         <translation>
-            <numerusform>%n attempt remaining</numerusform>
-            <numerusform>%n attempts remaining</numerusform>
+            <numerusform>残り %n 回</numerusform>
         </translation>
     </message>
     <message>
         <source>pairing.expires_at</source>
-        <translation>Expires: %1</translation>
+        <translation>有効期限: %1</translation>
     </message>
     <message>
         <source>permissions.banner.attention_title</source>
-        <translation>Permission needed</translation>
+        <translation>権限が必要です</translation>
     </message>
     <message>
         <source>permissions.banner.unknown_title</source>
-        <translation>Permission status not checked</translation>
+        <translation>権限の状態が未確認です</translation>
     </message>
     <message>
         <source>permissions.banner.ready_title</source>
-        <translation>Permissions ready</translation>
+        <translation>権限の準備完了</translation>
     </message>
     <message>
         <source>permissions.banner.ready_message</source>
-        <translation>All required system permissions are ready.</translation>
+        <translation>必要なシステム権限がすべて許可されています。</translation>
     </message>
     <message>
         <source>permissions.kind.windows_firewall</source>
-        <translation>Windows Firewall</translation>
+        <translation>Windows ファイアウォール</translation>
     </message>
     <message>
         <source>permissions.kind.windows_port</source>
-        <translation>Local network port</translation>
+        <translation>ローカルネットワークポート</translation>
     </message>
     <message>
         <source>permissions.kind.macos_local_network</source>
-        <translation>Local Network</translation>
+        <translation>ローカルネットワーク</translation>
     </message>
     <message>
         <source>permissions.kind.macos_accessibility</source>
-        <translation>Accessibility</translation>
+        <translation>アクセシビリティ</translation>
     </message>
     <message>
         <source>permissions.kind.macos_input_monitoring</source>
-        <translation>Input Monitoring</translation>
+        <translation>入力監視</translation>
     </message>
     <message>
         <source>permissions.purpose.macos_local_network</source>
-        <translation>Find and connect to nearby devices on your local network.</translation>
+        <translation>ローカルネットワーク上の近くのデバイスを検出して接続します。</translation>
     </message>
     <message>
         <source>permissions.purpose.macos_accessibility</source>
-        <translation>Control keyboard and pointer input on this Mac.</translation>
+        <translation>このMacのキーボードとポインタ入力を制御します。</translation>
     </message>
     <message>
         <source>permissions.purpose.macos_input_monitoring</source>
-        <translation>Read global keyboard and pointer input to share with another device.</translation>
+        <translation>ほかのデバイスと共有するため、システム全体のキーボードとポインタ入力を読み取ります。</translation>
     </message>
     <message>
         <source>permissions.affected.macos_local_network</source>
-        <translation>Nearby discovery and direct local connections</translation>
+        <translation>近くのデバイスの検出と直接ローカル接続</translation>
     </message>
     <message>
         <source>permissions.affected.macos_accessibility</source>
-        <translation>Input control on this Mac</translation>
+        <translation>このMacでの入力制御</translation>
     </message>
     <message>
         <source>permissions.affected.macos_input_monitoring</source>
-        <translation>Sharing input from this Mac</translation>
+        <translation>このMacからの入力共有</translation>
     </message>
     <message>
         <source>permissions.status.unknown</source>
-        <translation>Not checked</translation>
+        <translation>未確認</translation>
     </message>
     <message>
         <source>permissions.status.not_required</source>
-        <translation>Not required</translation>
+        <translation>不要</translation>
     </message>
     <message>
         <source>permissions.status.granted</source>
-        <translation>Allowed</translation>
+        <translation>許可済み</translation>
     </message>
     <message>
         <source>permissions.status.denied</source>
-        <translation>Blocked</translation>
+        <translation>ブロック済み</translation>
     </message>
     <message>
         <source>permissions.status.needs_action</source>
-        <translation>Action needed</translation>
+        <translation>操作が必要です</translation>
     </message>
     <message>
         <source>permissions.message.unknown</source>
-        <translation>RelayDesk has not received a permission check yet.</translation>
+        <translation>RelayDesk はまだ権限の確認結果を受け取っていません。</translation>
     </message>
     <message>
         <source>permissions.message.probe_unavailable</source>
-        <translation>RelayDesk could not check this setting. Try again.</translation>
+        <translation>RelayDesk はこの設定を確認できませんでした。もう一度お試しください。</translation>
     </message>
     <message>
         <source>permissions.message.review</source>
-        <translation>Review this system setting to keep local device connections working.</translation>
+        <translation>ローカルデバイスとの接続を維持するには、このシステム設定を確認してください。</translation>
     </message>
     <message>
         <source>permissions.message.windows_firewall</source>
-        <translation>Allow RelayDesk through Windows Firewall on private networks.</translation>
+        <translation>プライベートネットワークで Windows ファイアウォールによる RelayDesk の通信を許可してください。</translation>
     </message>
     <message>
         <source>permissions.message.windows_port</source>
-        <translation>RelayDesk cannot listen on its local network port. Review firewall and port settings.</translation>
+        <translation>RelayDesk はローカルネットワークポートで待ち受けできません。ファイアウォールとポートの設定を確認してください。</translation>
     </message>
     <message>
         <source>permissions.message.macos_local_network</source>
-        <translation>Allow Local Network access so RelayDesk can find nearby devices.</translation>
+        <translation>RelayDesk が近くのデバイスを検出できるように、ローカルネットワークへのアクセスを許可してください。</translation>
     </message>
     <message>
         <source>permissions.message.macos_accessibility</source>
-        <translation>Allow Accessibility so RelayDesk can control keyboard and pointer input.</translation>
+        <translation>RelayDesk がキーボードとポインタを制御できるように、アクセシビリティを許可してください。</translation>
     </message>
     <message>
         <source>permissions.message.macos_input_monitoring</source>
-        <translation>Allow Input Monitoring when macOS requires it for shared input.</translation>
+        <translation>入力共有のために macOS から求められた場合は、入力監視を許可してください。</translation>
     </message>
     <message>
         <source>permissions.action.open_settings</source>
-        <translation>Open settings</translation>
+        <translation>設定を開く</translation>
     </message>
     <message>
         <source>transfer.title</source>
-        <translation>Transfers</translation>
+        <translation>転送</translation>
     </message>
     <message>
         <source>transfer.empty</source>
-        <translation>Transfers will appear here</translation>
+        <translation>転送がここに表示されます</translation>
     </message>
     <message>
         <source>transfer.direction.sending</source>
-        <translation>Sending</translation>
+        <translation>送信中</translation>
     </message>
     <message>
         <source>transfer.direction.receiving</source>
-        <translation>Receiving</translation>
+        <translation>受信中</translation>
     </message>
     <message>
         <source>transfer.state.preparing</source>
-        <translation>Preparing</translation>
+        <translation>準備中</translation>
     </message>
     <message>
         <source>transfer.state.awaiting_confirmation</source>
-        <translation>Waiting for confirmation</translation>
+        <translation>確認待ち</translation>
     </message>
     <message>
         <source>transfer.state.queued</source>
-        <translation>Queued</translation>
+        <translation>待機中</translation>
     </message>
     <message>
         <source>transfer.state.transferring</source>
-        <translation>Transferring</translation>
+        <translation>転送中</translation>
     </message>
     <message>
         <source>transfer.state.paused</source>
-        <translation>Paused</translation>
+        <translation>一時停止中</translation>
     </message>
     <message>
         <source>transfer.state.interrupted</source>
-        <translation>Connection lost, waiting to resume</translation>
+        <translation>接続が切れました。再開を待っています</translation>
     </message>
     <message>
         <source>transfer.state.resuming</source>
-        <translation>Resuming</translation>
+        <translation>再開中</translation>
     </message>
     <message>
         <source>transfer.state.verifying</source>
-        <translation>Verifying</translation>
+        <translation>検証中</translation>
     </message>
     <message>
         <source>transfer.state.saving</source>
-        <translation>Saving</translation>
+        <translation>保存中</translation>
     </message>
     <message>
         <source>transfer.state.completed</source>
-        <translation>Completed</translation>
+        <translation>完了</translation>
     </message>
     <message>
         <source>transfer.state.rejected</source>
-        <translation>Rejected</translation>
+        <translation>拒否済み</translation>
     </message>
     <message>
         <source>transfer.state.canceling</source>
-        <translation>Canceling</translation>
+        <translation>キャンセル中</translation>
     </message>
     <message>
         <source>transfer.state.canceled</source>
-        <translation>Canceled</translation>
+        <translation>キャンセル済み</translation>
     </message>
     <message>
         <source>transfer.state.failed</source>
-        <translation>Failed</translation>
+        <translation>失敗</translation>
     </message>
     <message>
         <source>transfer.action.pause</source>
-        <translation>Pause</translation>
+        <translation>一時停止</translation>
     </message>
     <message>
         <source>transfer.action.resume</source>
-        <translation>Resume</translation>
+        <translation>再開</translation>
     </message>
     <message>
         <source>transfer.action.cancel</source>
-        <translation>Cancel</translation>
+        <translation>キャンセル</translation>
     </message>
     <message>
         <source>transfer.action.retry</source>
-        <translation>Retry</translation>
+        <translation>再試行</translation>
     </message>
     <message>
         <source>transfer.action.open_folder</source>
-        <translation>Open folder</translation>
+        <translation>フォルダを開く</translation>
     </message>
     <message>
         <source>transfer.action.open_file</source>
-        <translation>Open file</translation>
+        <translation>ファイルを開く</translation>
     </message>
     <message>
         <source>transfer.action.details</source>
-        <translation>Details</translation>
+        <translation>詳細</translation>
     </message>
     <message>
         <source>transfer.action.close</source>
-        <translation>Close</translation>
+        <translation>閉じる</translation>
     </message>
     <message>
         <source>transfer.history.details_title</source>
-        <translation>Transfer details</translation>
+        <translation>転送の詳細</translation>
     </message>
     <message>
         <source>transfer.history.name_label</source>
-        <translation>Transfer</translation>
+        <translation>転送</translation>
     </message>
     <message>
         <source>transfer.history.peer_label</source>
-        <translation>Device</translation>
+        <translation>デバイス</translation>
     </message>
     <message>
         <source>transfer.history.direction_label</source>
-        <translation>Direction</translation>
+        <translation>方向</translation>
     </message>
     <message>
         <source>transfer.history.status_label</source>
-        <translation>Status</translation>
+        <translation>状態</translation>
     </message>
     <message>
         <source>transfer.history.items_label</source>
-        <translation>Items</translation>
+        <translation>項目</translation>
     </message>
     <message>
         <source>transfer.history.size_label</source>
-        <translation>Size</translation>
+        <translation>サイズ</translation>
     </message>
     <message>
         <source>transfer.history.started_label</source>
-        <translation>Started</translation>
+        <translation>開始</translation>
     </message>
     <message>
         <source>transfer.history.finished_label</source>
-        <translation>Finished</translation>
+        <translation>完了</translation>
     </message>
     <message>
         <source>transfer.history.duration_label</source>
-        <translation>Duration</translation>
+        <translation>所要時間</translation>
     </message>
     <message>
         <source>transfer.history.error_label</source>
-        <translation>Error</translation>
+        <translation>エラー</translation>
     </message>
     <message numerus="yes">
         <source>transfer.history.items</source>
         <translation>
-            <numerusform>%1 item</numerusform>
-            <numerusform>%1 items</numerusform>
+            <numerusform>%1 項目</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.history.duration_seconds</source>
         <translation>
-            <numerusform>%1 second</numerusform>
-            <numerusform>%1 seconds</numerusform>
+            <numerusform>%1 秒</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.history.duration_minutes</source>
         <translation>
-            <numerusform>%1 minute</numerusform>
-            <numerusform>%1 minutes</numerusform>
+            <numerusform>%1 分</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.history.duration_hours</source>
         <translation>
-            <numerusform>%1 hour</numerusform>
-            <numerusform>%1 hours</numerusform>
+            <numerusform>%1 時間</numerusform>
         </translation>
     </message>
     <message>
         <source>transfer.action.accept</source>
-        <translation>Accept</translation>
+        <translation>受け入れる</translation>
     </message>
     <message>
         <source>transfer.action.reject</source>
-        <translation>Reject</translation>
+        <translation>拒否</translation>
     </message>
     <message>
         <source>transfer.action.dismiss</source>
-        <translation>Dismiss</translation>
+        <translation>閉じる</translation>
     </message>
     <message>
         <source>transfer.action.change_settings</source>
-        <translation>Change settings</translation>
+        <translation>設定を変更</translation>
     </message>
     <message>
         <source>transfer.error.disk_full</source>
-        <translation>Not enough disk space</translation>
+        <translation>ディスクの空き容量が不足しています</translation>
     </message>
     <message>
         <source>transfer.error.unsafe_path</source>
-        <translation>The received path is not safe</translation>
+        <translation>受信したパスは安全ではありません</translation>
     </message>
     <message>
         <source>transfer.error.unreadable</source>
-        <translation>One or more items cannot be read</translation>
+        <translation>1つ以上の項目を読み取れません</translation>
     </message>
     <message>
         <source>transfer.error.connection_lost</source>
-        <translation>Connection lost</translation>
+        <translation>接続が切れました</translation>
     </message>
     <message>
         <source>transfer.error.checksum_mismatch</source>
-        <translation>File verification failed</translation>
+        <translation>ファイルの検証に失敗しました</translation>
     </message>
     <message>
         <source>transfer.error.unknown</source>
-        <translation>Transfer failed. Try again.</translation>
+        <translation>転送に失敗しました。もう一度お試しください。</translation>
     </message>
     <message>
         <source>transfer.progress.bytes</source>
-        <translation>%1 of %2</translation>
+        <translation>%2 中 %1</translation>
     </message>
     <message numerus="yes">
         <source>transfer.progress.items</source>
         <translation>
-            <numerusform>%1 of %n item</numerusform>
-            <numerusform>%1 of %n items</numerusform>
+            <numerusform>%n 項目中 %1</numerusform>
         </translation>
     </message>
     <message>
         <source>transfer.speed</source>
-        <translation>%1/s</translation>
+        <translation>%1/秒</translation>
     </message>
     <message>
         <source>transfer.speed.unknown</source>
-        <translation>Speed unavailable</translation>
+        <translation>速度を取得できません</translation>
     </message>
     <message>
         <source>transfer.eta.unknown</source>
-        <translation>Calculating time remaining</translation>
+        <translation>残り時間を計算中</translation>
     </message>
     <message numerus="yes">
         <source>transfer.eta.seconds</source>
         <translation>
-            <numerusform>%n second remaining</numerusform>
-            <numerusform>%n seconds remaining</numerusform>
+            <numerusform>残り %n 秒</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.eta.minutes</source>
         <translation>
-            <numerusform>%n minute remaining</numerusform>
-            <numerusform>%n minutes remaining</numerusform>
+            <numerusform>残り %n 分</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.eta.hours</source>
         <translation>
-            <numerusform>%n hour remaining</numerusform>
-            <numerusform>%n hours remaining</numerusform>
+            <numerusform>残り %n 時間</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.eta.days</source>
         <translation>
-            <numerusform>%n day remaining</numerusform>
-            <numerusform>%n days remaining</numerusform>
+            <numerusform>残り %n 日</numerusform>
         </translation>
     </message>
     <message>
         <source>transfer.eta.long</source>
-        <translation>99 days or more remaining</translation>
+        <translation>残り99日以上</translation>
     </message>
     <message>
         <source>transfer.accessible.summary</source>
-        <translation>%1, %2, %3, %4, %5</translation>
+        <translation>%1、%2、%3、%4、%5</translation>
     </message>
     <message>
         <source>transfer.notification.completed</source>
-        <translation>Transfer completed</translation>
+        <translation>転送が完了しました</translation>
     </message>
     <message>
         <source>transfer.notification.rejected</source>
-        <translation>Transfer rejected</translation>
+        <translation>転送が拒否されました</translation>
     </message>
     <message>
         <source>transfer.notification.canceled</source>
-        <translation>Transfer canceled</translation>
+        <translation>転送がキャンセルされました</translation>
     </message>
     <message>
         <source>transfer.notification.failed</source>
-        <translation>Transfer failed</translation>
+        <translation>転送に失敗しました</translation>
     </message>
     <message>
         <source>transfer.notification.body</source>
@@ -642,91 +631,91 @@
     </message>
     <message>
         <source>transfer.incoming.wants_to_send</source>
-        <translation>%1 wants to send</translation>
+        <translation>%1 が送信しようとしています</translation>
     </message>
     <message>
         <source>transfer.incoming.save_to</source>
-        <translation>Save to: %1</translation>
+        <translation>保存先: %1</translation>
     </message>
     <message>
         <source>transfer.incoming.auto_rename</source>
-        <translation>Conflict: auto rename</translation>
+        <translation>競合: 自動的に名前を変更</translation>
     </message>
     <message>
         <source>transfer.incoming.always_accept</source>
-        <translation>Always accept files from this device</translation>
+        <translation>このデバイスからのファイルを常に受け入れる</translation>
     </message>
     <message>
         <source>transfer.incoming.unknown_device</source>
-        <translation>Unknown device</translation>
+        <translation>不明なデバイス</translation>
     </message>
     <message>
         <source>transfer.incoming.pair_first</source>
-        <translation>Pair this device before receiving files</translation>
+        <translation>ファイルを受信する前にこのデバイスをペアリングしてください</translation>
     </message>
     <message>
         <source>transfer.incoming.expired</source>
-        <translation>This transfer request expired</translation>
+        <translation>この転送要求の有効期限が切れました</translation>
     </message>
     <message>
         <source>transfer.incoming.destination_unavailable</source>
-        <translation>Choose a valid receive folder in settings</translation>
+        <translation>設定で有効な受信フォルダを選択してください</translation>
     </message>
     <message>
         <source>transfer.incoming.invalid</source>
-        <translation>The incoming transfer request is invalid</translation>
+        <translation>受信した転送要求が無効です</translation>
     </message>
     <message>
         <source>transfer.incoming.busy</source>
-        <translation>Another transfer request is waiting</translation>
+        <translation>別の転送要求が待機中です</translation>
     </message>
     <message>
         <source>transfer.incoming.decision_unavailable</source>
-        <translation>This transfer request cannot be accepted right now</translation>
+        <translation>現在この転送要求を受け入れられません</translation>
     </message>
     <message>
         <source>settings.title</source>
-        <translation>Settings</translation>
+        <translation>設定</translation>
     </message>
     <message>
         <source>settings.general</source>
-        <translation>General</translation>
+        <translation>一般</translation>
     </message>
     <message>
         <source>settings.input</source>
-        <translation>Keyboard and mouse</translation>
+        <translation>キーボードとマウス</translation>
     </message>
     <message>
         <source>settings.clipboard</source>
-        <translation>Clipboard</translation>
+        <translation>クリップボード</translation>
     </message>
     <message>
         <source>settings.file_transfer</source>
-        <translation>File transfer</translation>
+        <translation>ファイル転送</translation>
     </message>
     <message>
         <source>settings.network</source>
-        <translation>Discovery and network</translation>
+        <translation>検出とネットワーク</translation>
     </message>
     <message>
         <source>settings.trusted_devices</source>
-        <translation>Trusted devices</translation>
+        <translation>信頼済みデバイス</translation>
     </message>
     <message>
         <source>settings.startup</source>
-        <translation>Start with system</translation>
+        <translation>システム起動時に開始</translation>
     </message>
     <message>
         <source>settings.advanced</source>
-        <translation>Advanced and logs</translation>
+        <translation>詳細設定とログ</translation>
     </message>
     <message>
         <source>about.title</source>
-        <translation>About RelayDesk</translation>
+        <translation>RelayDesk について</translation>
     </message>
     <message>
         <source>about.diagnostics</source>
-        <translation>Diagnostics</translation>
+        <translation>診断</translation>
     </message>
 </context>
 </TS>

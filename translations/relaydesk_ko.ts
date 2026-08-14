@@ -1,620 +1,609 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="en_US" sourcelanguage="en_US">
+<TS version="2.1" language="ko_KR" sourcelanguage="en_US">
 <context>
     <name>RelayDesk</name>
     <message>
         <source>devices.title</source>
-        <translation>Devices</translation>
+        <translation>기기</translation>
     </message>
     <message>
         <source>devices.current</source>
-        <translation>This device</translation>
+        <translation>이 기기</translation>
     </message>
     <message>
         <source>devices.empty.waiting</source>
-        <translation>Nearby devices will appear here</translation>
+        <translation>주변 기기가 여기에 표시됩니다</translation>
     </message>
     <message>
         <source>devices.latency</source>
-        <translation>%1 ms</translation>
+        <translation>%1ms</translation>
     </message>
     <message>
         <source>devices.status.online</source>
-        <translation>Online</translation>
+        <translation>온라인</translation>
     </message>
     <message>
         <source>devices.status.offline</source>
-        <translation>Offline</translation>
+        <translation>오프라인</translation>
     </message>
     <message>
         <source>devices.status.connecting</source>
-        <translation>Connecting</translation>
+        <translation>연결 중</translation>
     </message>
     <message>
         <source>devices.status.permission_required</source>
-        <translation>Permission required</translation>
+        <translation>권한 필요</translation>
     </message>
     <message>
         <source>devices.status.paused</source>
-        <translation>Paused</translation>
+        <translation>일시 정지됨</translation>
     </message>
     <message>
         <source>devices.status.error</source>
-        <translation>Error</translation>
+        <translation>오류</translation>
     </message>
     <message>
         <source>devices.status.discovered</source>
-        <translation>Discovered</translation>
+        <translation>검색됨</translation>
     </message>
     <message>
         <source>devices.status.pairing</source>
-        <translation>Pairing</translation>
+        <translation>페어링 중</translation>
     </message>
     <message>
         <source>devices.status.trust_violation</source>
-        <translation>Trust changed</translation>
+        <translation>신뢰 정보가 변경됨</translation>
     </message>
     <message>
         <source>devices.status.transfer_busy</source>
-        <translation>File transfer in progress</translation>
+        <translation>파일 전송 중</translation>
     </message>
     <message>
         <source>devices.action.send_file</source>
-        <translation>Send files</translation>
+        <translation>파일 보내기</translation>
     </message>
     <message>
         <source>devices.action.send_folder</source>
-        <translation>Send folder</translation>
+        <translation>폴더 보내기</translation>
     </message>
     <message>
         <source>devices.action.more</source>
-        <translation>More</translation>
+        <translation>더 보기</translation>
     </message>
     <message>
         <source>devices.action.auto_arrange</source>
-        <translation>Auto arrange</translation>
+        <translation>자동 정렬</translation>
     </message>
     <message>
         <source>devices.action.reset_layout</source>
-        <translation>Reset layout</translation>
+        <translation>배치 초기화</translation>
     </message>
     <message>
         <source>devices.drop.send_here</source>
-        <translation>Drop files here to send</translation>
+        <translation>보낼 파일을 여기에 놓으세요</translation>
     </message>
     <message numerus="yes">
         <source>devices.drop.items</source>
         <translation>
-            <numerusform>%n item</numerusform>
-            <numerusform>%n items</numerusform>
+            <numerusform>항목 %n개</numerusform>
         </translation>
     </message>
     <message>
         <source>devices.send.select_device</source>
-        <translation>Select a device first</translation>
+        <translation>먼저 기기를 선택하세요</translation>
     </message>
     <message>
         <source>devices.send.unavailable</source>
-        <translation>Files can be sent only to a trusted device that is online</translation>
+        <translation>온라인 상태인 신뢰할 수 있는 기기에만 파일을 보낼 수 있습니다</translation>
     </message>
     <message>
         <source>devices.send.local_only</source>
-        <translation>Choose files or folders stored on this device</translation>
+        <translation>이 기기에 저장된 파일 또는 폴더를 선택하세요</translation>
     </message>
     <message>
         <source>devices.send.empty</source>
-        <translation>Choose at least one file or folder</translation>
+        <translation>파일 또는 폴더를 하나 이상 선택하세요</translation>
     </message>
     <message>
         <source>devices.send.unreadable</source>
-        <translation>One or more selected items cannot be read</translation>
+        <translation>선택한 항목 중 하나 이상을 읽을 수 없습니다</translation>
     </message>
     <message>
         <source>pairing.title</source>
-        <translation>Pair device</translation>
+        <translation>기기 페어링</translation>
     </message>
     <message>
         <source>pairing.code.prompt</source>
-        <translation>Enter the six-digit code</translation>
+        <translation>6자리 코드를 입력하세요</translation>
     </message>
     <message>
         <source>pairing.state.ready</source>
-        <translation>Ready to pair</translation>
+        <translation>페어링 준비됨</translation>
     </message>
     <message>
         <source>pairing.state.requesting</source>
-        <translation>Requesting pairing</translation>
+        <translation>페어링 요청 중</translation>
     </message>
     <message>
         <source>pairing.state.securing</source>
-        <translation>Securing the connection</translation>
+        <translation>연결 보안 설정 중</translation>
     </message>
     <message>
         <source>pairing.state.compare</source>
-        <translation>Compare the code on both devices</translation>
+        <translation>두 기기의 코드를 비교하세요</translation>
     </message>
     <message>
         <source>pairing.state.confirming</source>
-        <translation>Confirming pairing</translation>
+        <translation>페어링 확인 중</translation>
     </message>
     <message>
         <source>pairing.state.rejected</source>
-        <translation>Pairing canceled</translation>
+        <translation>페어링 취소됨</translation>
     </message>
     <message>
         <source>pairing.state.failed</source>
-        <translation>Pairing failed</translation>
+        <translation>페어링 실패</translation>
     </message>
     <message>
         <source>pairing.action.start</source>
-        <translation>Pair</translation>
+        <translation>페어링</translation>
     </message>
     <message>
         <source>pairing.action.pair_again</source>
-        <translation>Pair again</translation>
+        <translation>다시 페어링</translation>
     </message>
     <message>
         <source>pairing.action.codes_match</source>
-        <translation>Codes match</translation>
+        <translation>코드 일치</translation>
     </message>
     <message>
         <source>pairing.action.submit_code</source>
-        <translation>Confirm code</translation>
+        <translation>코드 확인</translation>
     </message>
     <message>
         <source>pairing.action.cancel</source>
-        <translation>Cancel</translation>
+        <translation>취소</translation>
     </message>
     <message>
         <source>pairing.code.invalid</source>
-        <translation>Enter exactly six digits</translation>
+        <translation>숫자 6자리를 정확히 입력하세요</translation>
     </message>
     <message>
         <source>pairing.code.mismatch</source>
-        <translation>The pairing code does not match</translation>
+        <translation>페어링 코드가 일치하지 않습니다</translation>
     </message>
     <message>
         <source>pairing.code.expired</source>
-        <translation>The pairing code expired. Generate a new code.</translation>
+        <translation>페어링 코드가 만료되었습니다. 새 코드를 생성하세요.</translation>
     </message>
     <message>
         <source>pairing.error.already_active</source>
-        <translation>Another pairing is already in progress</translation>
+        <translation>다른 페어링이 이미 진행 중입니다</translation>
     </message>
     <message>
         <source>pairing.error.identity_not_ready</source>
-        <translation>The device identity is not ready. Try again.</translation>
+        <translation>기기 ID가 준비되지 않았습니다. 다시 시도하세요.</translation>
     </message>
     <message>
         <source>pairing.error.action_unavailable</source>
-        <translation>This pairing action is not available now</translation>
+        <translation>현재 이 페어링 작업을 사용할 수 없습니다</translation>
     </message>
     <message>
         <source>pairing.error.session_unavailable</source>
-        <translation>The pairing session is no longer available</translation>
+        <translation>페어링 세션을 더 이상 사용할 수 없습니다</translation>
     </message>
     <message>
         <source>pairing.certificate_changed</source>
-        <translation>The other device certificate changed. Automatic connection was stopped.</translation>
+        <translation>상대 기기의 인증서가 변경되어 자동 연결을 중지했습니다.</translation>
     </message>
     <message>
         <source>pairing.too_many_attempts</source>
-        <translation>Too many incorrect attempts. Try again later.</translation>
+        <translation>잘못된 시도가 너무 많습니다. 나중에 다시 시도하세요.</translation>
     </message>
     <message>
         <source>pairing.not_direct</source>
-        <translation>The devices cannot connect directly. Try a manual address.</translation>
+        <translation>기기를 직접 연결할 수 없습니다. 주소를 직접 입력해 보세요.</translation>
     </message>
     <message>
         <source>pairing.success</source>
-        <translation>Device paired</translation>
+        <translation>기기 페어링 완료</translation>
     </message>
     <message>
         <source>pairing.fingerprint.label</source>
-        <translation>Certificate fingerprint</translation>
+        <translation>인증서 지문</translation>
     </message>
     <message>
         <source>pairing.fingerprint.unavailable</source>
-        <translation>Fingerprint unavailable</translation>
+        <translation>지문을 사용할 수 없음</translation>
     </message>
     <message numerus="yes">
         <source>pairing.attempts_remaining</source>
         <translation>
-            <numerusform>%n attempt remaining</numerusform>
-            <numerusform>%n attempts remaining</numerusform>
+            <numerusform>시도 가능 횟수 %n회</numerusform>
         </translation>
     </message>
     <message>
         <source>pairing.expires_at</source>
-        <translation>Expires: %1</translation>
+        <translation>만료: %1</translation>
     </message>
     <message>
         <source>permissions.banner.attention_title</source>
-        <translation>Permission needed</translation>
+        <translation>권한 필요</translation>
     </message>
     <message>
         <source>permissions.banner.unknown_title</source>
-        <translation>Permission status not checked</translation>
+        <translation>권한 상태를 확인하지 않음</translation>
     </message>
     <message>
         <source>permissions.banner.ready_title</source>
-        <translation>Permissions ready</translation>
+        <translation>권한 준비 완료</translation>
     </message>
     <message>
         <source>permissions.banner.ready_message</source>
-        <translation>All required system permissions are ready.</translation>
+        <translation>필요한 모든 시스템 권한이 준비되었습니다.</translation>
     </message>
     <message>
         <source>permissions.kind.windows_firewall</source>
-        <translation>Windows Firewall</translation>
+        <translation>Windows 방화벽</translation>
     </message>
     <message>
         <source>permissions.kind.windows_port</source>
-        <translation>Local network port</translation>
+        <translation>로컬 네트워크 포트</translation>
     </message>
     <message>
         <source>permissions.kind.macos_local_network</source>
-        <translation>Local Network</translation>
+        <translation>로컬 네트워크</translation>
     </message>
     <message>
         <source>permissions.kind.macos_accessibility</source>
-        <translation>Accessibility</translation>
+        <translation>손쉬운 사용</translation>
     </message>
     <message>
         <source>permissions.kind.macos_input_monitoring</source>
-        <translation>Input Monitoring</translation>
+        <translation>입력 모니터링</translation>
     </message>
     <message>
         <source>permissions.purpose.macos_local_network</source>
-        <translation>Find and connect to nearby devices on your local network.</translation>
+        <translation>로컬 네트워크에서 주변 기기를 찾고 연결합니다.</translation>
     </message>
     <message>
         <source>permissions.purpose.macos_accessibility</source>
-        <translation>Control keyboard and pointer input on this Mac.</translation>
+        <translation>이 Mac의 키보드와 포인터 입력을 제어합니다.</translation>
     </message>
     <message>
         <source>permissions.purpose.macos_input_monitoring</source>
-        <translation>Read global keyboard and pointer input to share with another device.</translation>
+        <translation>다른 기기와 공유할 전역 키보드 및 포인터 입력을 읽습니다.</translation>
     </message>
     <message>
         <source>permissions.affected.macos_local_network</source>
-        <translation>Nearby discovery and direct local connections</translation>
+        <translation>주변 기기 검색 및 직접 로컬 연결</translation>
     </message>
     <message>
         <source>permissions.affected.macos_accessibility</source>
-        <translation>Input control on this Mac</translation>
+        <translation>이 Mac의 입력 제어</translation>
     </message>
     <message>
         <source>permissions.affected.macos_input_monitoring</source>
-        <translation>Sharing input from this Mac</translation>
+        <translation>이 Mac의 입력 공유</translation>
     </message>
     <message>
         <source>permissions.status.unknown</source>
-        <translation>Not checked</translation>
+        <translation>확인하지 않음</translation>
     </message>
     <message>
         <source>permissions.status.not_required</source>
-        <translation>Not required</translation>
+        <translation>필요 없음</translation>
     </message>
     <message>
         <source>permissions.status.granted</source>
-        <translation>Allowed</translation>
+        <translation>허용됨</translation>
     </message>
     <message>
         <source>permissions.status.denied</source>
-        <translation>Blocked</translation>
+        <translation>차단됨</translation>
     </message>
     <message>
         <source>permissions.status.needs_action</source>
-        <translation>Action needed</translation>
+        <translation>조치 필요</translation>
     </message>
     <message>
         <source>permissions.message.unknown</source>
-        <translation>RelayDesk has not received a permission check yet.</translation>
+        <translation>RelayDesk가 아직 권한 확인 결과를 받지 못했습니다.</translation>
     </message>
     <message>
         <source>permissions.message.probe_unavailable</source>
-        <translation>RelayDesk could not check this setting. Try again.</translation>
+        <translation>RelayDesk가 이 설정을 확인할 수 없습니다. 다시 시도하세요.</translation>
     </message>
     <message>
         <source>permissions.message.review</source>
-        <translation>Review this system setting to keep local device connections working.</translation>
+        <translation>로컬 기기 연결이 작동하도록 이 시스템 설정을 확인하세요.</translation>
     </message>
     <message>
         <source>permissions.message.windows_firewall</source>
-        <translation>Allow RelayDesk through Windows Firewall on private networks.</translation>
+        <translation>개인 네트워크의 Windows 방화벽에서 RelayDesk를 허용하세요.</translation>
     </message>
     <message>
         <source>permissions.message.windows_port</source>
-        <translation>RelayDesk cannot listen on its local network port. Review firewall and port settings.</translation>
+        <translation>RelayDesk가 로컬 네트워크 포트에서 수신할 수 없습니다. 방화벽 및 포트 설정을 확인하세요.</translation>
     </message>
     <message>
         <source>permissions.message.macos_local_network</source>
-        <translation>Allow Local Network access so RelayDesk can find nearby devices.</translation>
+        <translation>RelayDesk가 주변 기기를 찾을 수 있도록 로컬 네트워크 접근을 허용하세요.</translation>
     </message>
     <message>
         <source>permissions.message.macos_accessibility</source>
-        <translation>Allow Accessibility so RelayDesk can control keyboard and pointer input.</translation>
+        <translation>RelayDesk가 키보드와 포인터를 제어할 수 있도록 손쉬운 사용을 허용하세요.</translation>
     </message>
     <message>
         <source>permissions.message.macos_input_monitoring</source>
-        <translation>Allow Input Monitoring when macOS requires it for shared input.</translation>
+        <translation>공유 입력에 macOS가 요구하는 경우 입력 모니터링을 허용하세요.</translation>
     </message>
     <message>
         <source>permissions.action.open_settings</source>
-        <translation>Open settings</translation>
+        <translation>설정 열기</translation>
     </message>
     <message>
         <source>transfer.title</source>
-        <translation>Transfers</translation>
+        <translation>전송</translation>
     </message>
     <message>
         <source>transfer.empty</source>
-        <translation>Transfers will appear here</translation>
+        <translation>전송 항목이 여기에 표시됩니다</translation>
     </message>
     <message>
         <source>transfer.direction.sending</source>
-        <translation>Sending</translation>
+        <translation>보내는 중</translation>
     </message>
     <message>
         <source>transfer.direction.receiving</source>
-        <translation>Receiving</translation>
+        <translation>받는 중</translation>
     </message>
     <message>
         <source>transfer.state.preparing</source>
-        <translation>Preparing</translation>
+        <translation>준비 중</translation>
     </message>
     <message>
         <source>transfer.state.awaiting_confirmation</source>
-        <translation>Waiting for confirmation</translation>
+        <translation>확인 대기 중</translation>
     </message>
     <message>
         <source>transfer.state.queued</source>
-        <translation>Queued</translation>
+        <translation>대기열에 있음</translation>
     </message>
     <message>
         <source>transfer.state.transferring</source>
-        <translation>Transferring</translation>
+        <translation>전송 중</translation>
     </message>
     <message>
         <source>transfer.state.paused</source>
-        <translation>Paused</translation>
+        <translation>일시 정지됨</translation>
     </message>
     <message>
         <source>transfer.state.interrupted</source>
-        <translation>Connection lost, waiting to resume</translation>
+        <translation>연결이 끊겼습니다. 재개 대기 중</translation>
     </message>
     <message>
         <source>transfer.state.resuming</source>
-        <translation>Resuming</translation>
+        <translation>재개 중</translation>
     </message>
     <message>
         <source>transfer.state.verifying</source>
-        <translation>Verifying</translation>
+        <translation>검증 중</translation>
     </message>
     <message>
         <source>transfer.state.saving</source>
-        <translation>Saving</translation>
+        <translation>저장 중</translation>
     </message>
     <message>
         <source>transfer.state.completed</source>
-        <translation>Completed</translation>
+        <translation>완료됨</translation>
     </message>
     <message>
         <source>transfer.state.rejected</source>
-        <translation>Rejected</translation>
+        <translation>거부됨</translation>
     </message>
     <message>
         <source>transfer.state.canceling</source>
-        <translation>Canceling</translation>
+        <translation>취소 중</translation>
     </message>
     <message>
         <source>transfer.state.canceled</source>
-        <translation>Canceled</translation>
+        <translation>취소됨</translation>
     </message>
     <message>
         <source>transfer.state.failed</source>
-        <translation>Failed</translation>
+        <translation>실패</translation>
     </message>
     <message>
         <source>transfer.action.pause</source>
-        <translation>Pause</translation>
+        <translation>일시 정지</translation>
     </message>
     <message>
         <source>transfer.action.resume</source>
-        <translation>Resume</translation>
+        <translation>재개</translation>
     </message>
     <message>
         <source>transfer.action.cancel</source>
-        <translation>Cancel</translation>
+        <translation>취소</translation>
     </message>
     <message>
         <source>transfer.action.retry</source>
-        <translation>Retry</translation>
+        <translation>다시 시도</translation>
     </message>
     <message>
         <source>transfer.action.open_folder</source>
-        <translation>Open folder</translation>
+        <translation>폴더 열기</translation>
     </message>
     <message>
         <source>transfer.action.open_file</source>
-        <translation>Open file</translation>
+        <translation>파일 열기</translation>
     </message>
     <message>
         <source>transfer.action.details</source>
-        <translation>Details</translation>
+        <translation>세부 정보</translation>
     </message>
     <message>
         <source>transfer.action.close</source>
-        <translation>Close</translation>
+        <translation>닫기</translation>
     </message>
     <message>
         <source>transfer.history.details_title</source>
-        <translation>Transfer details</translation>
+        <translation>전송 세부 정보</translation>
     </message>
     <message>
         <source>transfer.history.name_label</source>
-        <translation>Transfer</translation>
+        <translation>전송</translation>
     </message>
     <message>
         <source>transfer.history.peer_label</source>
-        <translation>Device</translation>
+        <translation>기기</translation>
     </message>
     <message>
         <source>transfer.history.direction_label</source>
-        <translation>Direction</translation>
+        <translation>방향</translation>
     </message>
     <message>
         <source>transfer.history.status_label</source>
-        <translation>Status</translation>
+        <translation>상태</translation>
     </message>
     <message>
         <source>transfer.history.items_label</source>
-        <translation>Items</translation>
+        <translation>항목</translation>
     </message>
     <message>
         <source>transfer.history.size_label</source>
-        <translation>Size</translation>
+        <translation>크기</translation>
     </message>
     <message>
         <source>transfer.history.started_label</source>
-        <translation>Started</translation>
+        <translation>시작</translation>
     </message>
     <message>
         <source>transfer.history.finished_label</source>
-        <translation>Finished</translation>
+        <translation>완료</translation>
     </message>
     <message>
         <source>transfer.history.duration_label</source>
-        <translation>Duration</translation>
+        <translation>소요 시간</translation>
     </message>
     <message>
         <source>transfer.history.error_label</source>
-        <translation>Error</translation>
+        <translation>오류</translation>
     </message>
     <message numerus="yes">
         <source>transfer.history.items</source>
         <translation>
-            <numerusform>%1 item</numerusform>
-            <numerusform>%1 items</numerusform>
+            <numerusform>항목 %1개</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.history.duration_seconds</source>
         <translation>
-            <numerusform>%1 second</numerusform>
-            <numerusform>%1 seconds</numerusform>
+            <numerusform>%1초</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.history.duration_minutes</source>
         <translation>
-            <numerusform>%1 minute</numerusform>
-            <numerusform>%1 minutes</numerusform>
+            <numerusform>%1분</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.history.duration_hours</source>
         <translation>
-            <numerusform>%1 hour</numerusform>
-            <numerusform>%1 hours</numerusform>
+            <numerusform>%1시간</numerusform>
         </translation>
     </message>
     <message>
         <source>transfer.action.accept</source>
-        <translation>Accept</translation>
+        <translation>수락</translation>
     </message>
     <message>
         <source>transfer.action.reject</source>
-        <translation>Reject</translation>
+        <translation>거부</translation>
     </message>
     <message>
         <source>transfer.action.dismiss</source>
-        <translation>Dismiss</translation>
+        <translation>닫기</translation>
     </message>
     <message>
         <source>transfer.action.change_settings</source>
-        <translation>Change settings</translation>
+        <translation>설정 변경</translation>
     </message>
     <message>
         <source>transfer.error.disk_full</source>
-        <translation>Not enough disk space</translation>
+        <translation>디스크 공간이 부족합니다</translation>
     </message>
     <message>
         <source>transfer.error.unsafe_path</source>
-        <translation>The received path is not safe</translation>
+        <translation>받은 경로가 안전하지 않습니다</translation>
     </message>
     <message>
         <source>transfer.error.unreadable</source>
-        <translation>One or more items cannot be read</translation>
+        <translation>하나 이상의 항목을 읽을 수 없습니다</translation>
     </message>
     <message>
         <source>transfer.error.connection_lost</source>
-        <translation>Connection lost</translation>
+        <translation>연결이 끊어졌습니다</translation>
     </message>
     <message>
         <source>transfer.error.checksum_mismatch</source>
-        <translation>File verification failed</translation>
+        <translation>파일 검증 실패</translation>
     </message>
     <message>
         <source>transfer.error.unknown</source>
-        <translation>Transfer failed. Try again.</translation>
+        <translation>전송에 실패했습니다. 다시 시도하세요.</translation>
     </message>
     <message>
         <source>transfer.progress.bytes</source>
-        <translation>%1 of %2</translation>
+        <translation>%2 중 %1</translation>
     </message>
     <message numerus="yes">
         <source>transfer.progress.items</source>
         <translation>
-            <numerusform>%1 of %n item</numerusform>
-            <numerusform>%1 of %n items</numerusform>
+            <numerusform>항목 %n개 중 %1개</numerusform>
         </translation>
     </message>
     <message>
         <source>transfer.speed</source>
-        <translation>%1/s</translation>
+        <translation>%1/초</translation>
     </message>
     <message>
         <source>transfer.speed.unknown</source>
-        <translation>Speed unavailable</translation>
+        <translation>속도를 확인할 수 없음</translation>
     </message>
     <message>
         <source>transfer.eta.unknown</source>
-        <translation>Calculating time remaining</translation>
+        <translation>남은 시간 계산 중</translation>
     </message>
     <message numerus="yes">
         <source>transfer.eta.seconds</source>
         <translation>
-            <numerusform>%n second remaining</numerusform>
-            <numerusform>%n seconds remaining</numerusform>
+            <numerusform>%n초 남음</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.eta.minutes</source>
         <translation>
-            <numerusform>%n minute remaining</numerusform>
-            <numerusform>%n minutes remaining</numerusform>
+            <numerusform>%n분 남음</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.eta.hours</source>
         <translation>
-            <numerusform>%n hour remaining</numerusform>
-            <numerusform>%n hours remaining</numerusform>
+            <numerusform>%n시간 남음</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>transfer.eta.days</source>
         <translation>
-            <numerusform>%n day remaining</numerusform>
-            <numerusform>%n days remaining</numerusform>
+            <numerusform>%n일 남음</numerusform>
         </translation>
     </message>
     <message>
         <source>transfer.eta.long</source>
-        <translation>99 days or more remaining</translation>
+        <translation>99일 이상 남음</translation>
     </message>
     <message>
         <source>transfer.accessible.summary</source>
@@ -622,19 +611,19 @@
     </message>
     <message>
         <source>transfer.notification.completed</source>
-        <translation>Transfer completed</translation>
+        <translation>전송 완료</translation>
     </message>
     <message>
         <source>transfer.notification.rejected</source>
-        <translation>Transfer rejected</translation>
+        <translation>전송 거부됨</translation>
     </message>
     <message>
         <source>transfer.notification.canceled</source>
-        <translation>Transfer canceled</translation>
+        <translation>전송 취소됨</translation>
     </message>
     <message>
         <source>transfer.notification.failed</source>
-        <translation>Transfer failed</translation>
+        <translation>전송 실패</translation>
     </message>
     <message>
         <source>transfer.notification.body</source>
@@ -642,91 +631,91 @@
     </message>
     <message>
         <source>transfer.incoming.wants_to_send</source>
-        <translation>%1 wants to send</translation>
+        <translation>%1에서 보내려고 합니다</translation>
     </message>
     <message>
         <source>transfer.incoming.save_to</source>
-        <translation>Save to: %1</translation>
+        <translation>저장 위치: %1</translation>
     </message>
     <message>
         <source>transfer.incoming.auto_rename</source>
-        <translation>Conflict: auto rename</translation>
+        <translation>충돌: 자동 이름 변경</translation>
     </message>
     <message>
         <source>transfer.incoming.always_accept</source>
-        <translation>Always accept files from this device</translation>
+        <translation>이 기기에서 보내는 파일을 항상 수락</translation>
     </message>
     <message>
         <source>transfer.incoming.unknown_device</source>
-        <translation>Unknown device</translation>
+        <translation>알 수 없는 기기</translation>
     </message>
     <message>
         <source>transfer.incoming.pair_first</source>
-        <translation>Pair this device before receiving files</translation>
+        <translation>파일을 받기 전에 이 기기를 페어링하세요</translation>
     </message>
     <message>
         <source>transfer.incoming.expired</source>
-        <translation>This transfer request expired</translation>
+        <translation>이 전송 요청이 만료되었습니다</translation>
     </message>
     <message>
         <source>transfer.incoming.destination_unavailable</source>
-        <translation>Choose a valid receive folder in settings</translation>
+        <translation>설정에서 올바른 수신 폴더를 선택하세요</translation>
     </message>
     <message>
         <source>transfer.incoming.invalid</source>
-        <translation>The incoming transfer request is invalid</translation>
+        <translation>수신한 전송 요청이 잘못되었습니다</translation>
     </message>
     <message>
         <source>transfer.incoming.busy</source>
-        <translation>Another transfer request is waiting</translation>
+        <translation>다른 전송 요청이 대기 중입니다</translation>
     </message>
     <message>
         <source>transfer.incoming.decision_unavailable</source>
-        <translation>This transfer request cannot be accepted right now</translation>
+        <translation>현재 이 전송 요청을 수락할 수 없습니다</translation>
     </message>
     <message>
         <source>settings.title</source>
-        <translation>Settings</translation>
+        <translation>설정</translation>
     </message>
     <message>
         <source>settings.general</source>
-        <translation>General</translation>
+        <translation>일반</translation>
     </message>
     <message>
         <source>settings.input</source>
-        <translation>Keyboard and mouse</translation>
+        <translation>키보드 및 마우스</translation>
     </message>
     <message>
         <source>settings.clipboard</source>
-        <translation>Clipboard</translation>
+        <translation>클립보드</translation>
     </message>
     <message>
         <source>settings.file_transfer</source>
-        <translation>File transfer</translation>
+        <translation>파일 전송</translation>
     </message>
     <message>
         <source>settings.network</source>
-        <translation>Discovery and network</translation>
+        <translation>검색 및 네트워크</translation>
     </message>
     <message>
         <source>settings.trusted_devices</source>
-        <translation>Trusted devices</translation>
+        <translation>신뢰할 수 있는 기기</translation>
     </message>
     <message>
         <source>settings.startup</source>
-        <translation>Start with system</translation>
+        <translation>시스템 시작 시 실행</translation>
     </message>
     <message>
         <source>settings.advanced</source>
-        <translation>Advanced and logs</translation>
+        <translation>고급 및 로그</translation>
     </message>
     <message>
         <source>about.title</source>
-        <translation>About RelayDesk</translation>
+        <translation>RelayDesk 정보</translation>
     </message>
     <message>
         <source>about.diagnostics</source>
-        <translation>Diagnostics</translation>
+        <translation>진단</translation>
     </message>
 </context>
 </TS>

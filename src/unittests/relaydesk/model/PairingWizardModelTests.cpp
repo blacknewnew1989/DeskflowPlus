@@ -8,15 +8,47 @@
 
 #include "../FakePairingService.h"
 
+#include <QCoreApplication>
 #include <QSignalSpy>
 #include <QTest>
 #include <QTimeZone>
+#include <QTranslator>
 
 using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
 using namespace deskflow::relaydesk::test;
 
 namespace {
+
+class ErrorTranslator final : public QTranslator
+{
+public:
+  QString translate(const char *context, const char *sourceText, const char *, int) const override
+  {
+    if (QString::fromLatin1(context) == QStringLiteral("RelayDesk") &&
+        QString::fromLatin1(sourceText) == QStringLiteral("pairing.code.invalid")) {
+      return QStringLiteral("TEST translated pairing error");
+    }
+    return {};
+  }
+};
+
+class TranslatorGuard final
+{
+public:
+  explicit TranslatorGuard(QTranslator &translator) : m_translator(translator)
+  {
+    QCoreApplication::installTranslator(&m_translator);
+  }
+
+  ~TranslatorGuard()
+  {
+    QCoreApplication::removeTranslator(&m_translator);
+  }
+
+private:
+  QTranslator &m_translator;
+};
 
 DeviceSnapshot peerSnapshot()
 {
@@ -81,6 +113,7 @@ private Q_SLOTS:
   void mapsTypedServiceFailures();
   void rejectsActionsWithoutBoundSession();
   void formatsMissingFingerprintSafely();
+  void translatesActiveActionErrorAfterLanguageChange();
 };
 
 void PairingWizardModelTests::rendersCanonicalServiceSnapshot()
@@ -220,6 +253,17 @@ void PairingWizardModelTests::formatsMissingFingerprintSafely()
   fixture.service.publish(fixture.makeSnapshot(PairingState::AwaitingUserComparison));
   QCOMPARE(fixture.wizard.shortFingerprint(), QStringLiteral("Fingerprint unavailable"));
   QCOMPARE(fixture.wizard.fullFingerprint(), QStringLiteral("Fingerprint unavailable"));
+}
+
+void PairingWizardModelTests::translatesActiveActionErrorAfterLanguageChange()
+{
+  PairingWizardModel model;
+  QVERIFY(!model.submitDisplayedSas(QStringLiteral("not-a-code")));
+  QCOMPARE(model.errorText(), QStringLiteral("Enter exactly six digits"));
+
+  ErrorTranslator translator;
+  TranslatorGuard guard(translator);
+  QCOMPARE(model.errorText(), QStringLiteral("TEST translated pairing error"));
 }
 
 QTEST_MAIN(PairingWizardModelTests)
