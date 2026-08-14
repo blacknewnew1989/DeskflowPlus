@@ -9,12 +9,14 @@
 #include "relaydesk/model/TransferCenterModel.h"
 #include "relaydesk/widgets/TransferHistoryDetailsDialog.h"
 
+#include <QAction>
 #include <QLabel>
 #include <QListView>
 #include <QPointer>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTest>
+#include <QToolButton>
 
 #include <optional>
 #include <utility>
@@ -42,9 +44,8 @@ TransferSnapshot snapshot()
   };
 }
 
-TransferHistoryRecord historyRecord(
-    const QString &id, HistoryStatus status, quint64 fileCount = 1, int finishedOffset = 0
-)
+TransferHistoryRecord
+historyRecord(const QString &id, HistoryStatus status, quint64 fileCount = 1, int finishedOffset = 0)
 {
   const auto started = QDateTime::fromMSecsSinceEpoch(1'780'000'000'000LL, Qt::UTC).addSecs(finishedOffset);
   return {
@@ -79,18 +80,23 @@ void TransferCenterDockTests::showsEmptyAndUsesKeyboardAccessibleControls()
   qRegisterMetaType<TransferCancelOptions>();
   TransferCenterModel model;
   TransferCenterDock dock(model);
-  dock.resize(480, 420);
+  QCOMPARE(dock.minimumWidth(), 320);
+  dock.resize(532, 300);
   dock.show();
   auto *empty = dock.findChild<QLabel *>(QStringLiteral("relaydeskTransfersEmptyLabel"));
   auto *list = dock.findChild<QListView *>(QStringLiteral("relaydeskTransfersView"));
   auto *pause = dock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferPauseButton"));
   auto *resume = dock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferResumeButton"));
   auto *cancel = dock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferCancelButton"));
+  auto *more = dock.findChild<QToolButton *>(QStringLiteral("relaydeskTransferMoreButton"));
+  auto *cancelAction = dock.findChild<QAction *>(QStringLiteral("relaydeskTransferCancelMenuAction"));
   QVERIFY(empty != nullptr);
   QVERIFY(list != nullptr);
   QVERIFY(pause != nullptr);
   QVERIFY(resume != nullptr);
   QVERIFY(cancel != nullptr);
+  QVERIFY(more != nullptr);
+  QVERIFY(cancelAction != nullptr);
   QVERIFY(empty->isVisible());
   QCOMPARE(empty->text(), QStringLiteral("Transfers will appear here"));
 
@@ -99,8 +105,15 @@ void TransferCenterDockTests::showsEmptyAndUsesKeyboardAccessibleControls()
   QTRY_VERIFY(list->isVisible());
   list->setCurrentIndex(model.index(0, 0));
   QTRY_VERIFY(pause->isEnabled());
-  QVERIFY(!resume->isEnabled());
+  QTRY_VERIFY(pause->isVisible());
+  QVERIFY(!resume->isVisible());
+  QVERIFY(!cancel->isVisible());
   QVERIFY(cancel->isEnabled());
+  QVERIFY(more->isVisible());
+  QVERIFY(cancelAction->isVisible());
+  QCOMPARE(more->accessibleName(), QStringLiteral("Cancel"));
+  const auto rowHeight = list->sizeHintForRow(0);
+  QVERIFY2(rowHeight >= 52 && rowHeight <= 64, qPrintable(QStringLiteral("transfer row height: %1").arg(rowHeight)));
   QCOMPARE(list->accessibleName(), QStringLiteral("Transfers"));
   QCOMPARE(pause->accessibleName(), QStringLiteral("Pause"));
   QVERIFY(pause->focusPolicy() != Qt::NoFocus);
@@ -110,20 +123,17 @@ void TransferCenterDockTests::showsEmptyAndUsesKeyboardAccessibleControls()
   QTest::keyClick(pause, Qt::Key_Space);
   QCOMPARE(paused.count(), 1);
   QSignalSpy cancelled(&model, &TransferCenterModel::cancelRequested);
-  cancel->setFocus();
-  QTest::keyClick(cancel, Qt::Key_Space);
+  cancelAction->trigger();
   QCOMPARE(cancelled.count(), 1);
 }
 
 void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents()
 {
   TransferCenterModel model;
-  const auto completed = historyRecord(
-      QStringLiteral("11111111-1111-4111-8111-111111111111"), HistoryStatus::Completed
-  );
-  const auto failed = historyRecord(
-      QStringLiteral("22222222-2222-4222-8222-222222222222"), HistoryStatus::Failed, 3, 100
-  );
+  const auto completed =
+      historyRecord(QStringLiteral("11111111-1111-4111-8111-111111111111"), HistoryStatus::Completed);
+  const auto failed =
+      historyRecord(QStringLiteral("22222222-2222-4222-8222-222222222222"), HistoryStatus::Failed, 3, 100);
   model.setHistoryRecords({completed, failed});
 
   TransferCenterDock dock(model);
@@ -134,11 +144,17 @@ void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents(
   auto *openFolder = dock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferOpenFolderButton"));
   auto *openFile = dock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferOpenFileButton"));
   auto *retry = dock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferRetryButton"));
+  auto *more = dock.findChild<QToolButton *>(QStringLiteral("relaydeskTransferMoreButton"));
+  auto *detailsAction = dock.findChild<QAction *>(QStringLiteral("relaydeskTransferDetailsMenuAction"));
+  auto *openFolderAction = dock.findChild<QAction *>(QStringLiteral("relaydeskTransferOpenFolderMenuAction"));
   QVERIFY(list != nullptr);
   QVERIFY(details != nullptr);
   QVERIFY(openFolder != nullptr);
   QVERIFY(openFile != nullptr);
   QVERIFY(retry != nullptr);
+  QVERIFY(more != nullptr);
+  QVERIFY(detailsAction != nullptr);
+  QVERIFY(openFolderAction != nullptr);
 
   std::optional<TransferHistoryRecord> folderIntent;
   std::optional<TransferHistoryRecord> fileIntent;
@@ -154,18 +170,21 @@ void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents(
   });
 
   list->setCurrentIndex(model.index(model.indexOf(completed.transferId), 0));
-  QTRY_VERIFY(details->isVisible());
-  QTRY_VERIFY(openFolder->isVisible());
+  QTRY_VERIFY(openFile->isVisible());
+  QVERIFY(!details->isVisible());
+  QVERIFY(!openFolder->isVisible());
   QTRY_VERIFY(openFile->isVisible());
   QVERIFY(!retry->isVisible());
+  QVERIFY(more->isVisible());
+  QVERIFY(detailsAction->isVisible());
+  QVERIFY(openFolderAction->isVisible());
   QCOMPARE(details->accessibleName(), QStringLiteral("Details"));
   QCOMPARE(openFolder->accessibleName(), QStringLiteral("Open folder"));
   QCOMPARE(openFile->accessibleName(), QStringLiteral("Open file"));
   QVERIFY(details->focusPolicy() != Qt::NoFocus);
   QVERIFY(openFolder->focusPolicy() != Qt::NoFocus);
 
-  openFolder->setFocus();
-  QTest::keyClick(openFolder, Qt::Key_Space);
+  openFolderAction->trigger();
   openFile->setFocus();
   QTest::keyClick(openFile, Qt::Key_Space);
   QVERIFY(folderIntent.has_value());
@@ -173,8 +192,7 @@ void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents(
   QCOMPARE(*folderIntent, completed);
   QCOMPARE(*fileIntent, completed);
 
-  details->setFocus();
-  QTest::keyClick(details, Qt::Key_Space);
+  detailsAction->trigger();
   QTRY_VERIFY(dock.findChild<TransferHistoryDetailsDialog *>() != nullptr);
   auto *completedDialog = dock.findChild<TransferHistoryDetailsDialog *>();
   QVERIFY(completedDialog->isVisible());
@@ -195,18 +213,18 @@ void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents(
   QTRY_VERIFY(completedGuard.isNull());
 
   list->setCurrentIndex(model.index(model.indexOf(failed.transferId), 0));
-  QTRY_VERIFY(details->isVisible());
   QTRY_VERIFY(retry->isVisible());
+  QVERIFY(!details->isVisible());
   QVERIFY(!openFolder->isVisible());
   QVERIFY(!openFile->isVisible());
+  QVERIFY(detailsAction->isVisible());
   QCOMPARE(retry->accessibleName(), QStringLiteral("Retry"));
   retry->setFocus();
   QTest::keyClick(retry, Qt::Key_Space);
   QVERIFY(retryIntent.has_value());
   QCOMPARE(*retryIntent, failed.transferId);
 
-  details->setFocus();
-  QTest::keyClick(details, Qt::Key_Space);
+  detailsAction->trigger();
   QTRY_VERIFY(dock.findChild<TransferHistoryDetailsDialog *>() != nullptr);
   auto *failedDialog = dock.findChild<TransferHistoryDetailsDialog *>();
   auto *error = failedDialog->findChild<QLabel *>(QStringLiteral("relaydeskTransferHistoryErrorValue"));

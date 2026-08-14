@@ -34,6 +34,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QSizePolicy>
 #include <QStyle>
 #include <QStyledItemDelegate>
 #include <QToolButton>
@@ -79,10 +80,10 @@ public:
       accent = option.palette.color(QPalette::Disabled, QPalette::Text);
       break;
     }
-    const QRect accentRect(option.rect.left() + 4, option.rect.top() + 8, 4, option.rect.height() - 16);
+    const QRect accentRect(option.rect.left() + 4, option.rect.top() + 12, 3, option.rect.height() - 24);
     painter->fillRect(accentRect, accent);
 
-    const QRect content = option.rect.adjusted(16, 9, -12, -9);
+    const QRect content = option.rect.adjusted(15, 7, -10, -7);
     const auto foregroundRole =
         option.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
     QFont nameFont(option.font);
@@ -107,8 +108,9 @@ public:
 
     const auto pairable = index.data(model::DeviceHomeModel::CanStartPairingRole).toBool();
     const auto sendable = index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
-    const auto actionText = pairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
-                                     : sendable ? i18n::translate(Text::DevicesActionSendFile) : QString();
+    const auto actionText = pairable   ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
+                            : sendable ? i18n::translate(Text::DevicesActionSendFile)
+                                       : QString();
     const auto actionWidth = actionText.isEmpty() ? 0 : detailMetrics.horizontalAdvance(actionText) + 12;
     const QRect detailRect(
         content.left(), content.bottom() - detailMetrics.height(), content.width() - actionWidth, detailMetrics.height()
@@ -130,7 +132,7 @@ public:
 
   QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &) const override
   {
-    return {300, option.fontMetrics.height() * 2 + 30};
+    return {300, qBound(64, option.fontMetrics.height() * 2 + 32, 72)};
   }
 };
 
@@ -142,9 +144,7 @@ QString groupedSas(const QString &sas)
 QList<QUrl> chooseLocalFiles(QWidget &parent)
 {
   QList<QUrl> urls;
-  const auto paths = QFileDialog::getOpenFileNames(
-      &parent, i18n::translate(Text::DevicesActionSendFile)
-  );
+  const auto paths = QFileDialog::getOpenFileNames(&parent, i18n::translate(Text::DevicesActionSendFile));
   urls.reserve(paths.size());
   for (const auto &path : paths)
     urls.push_back(QUrl::fromLocalFile(path));
@@ -153,9 +153,7 @@ QList<QUrl> chooseLocalFiles(QWidget &parent)
 
 QList<QUrl> chooseLocalFolder(QWidget &parent)
 {
-  const auto path = QFileDialog::getExistingDirectory(
-      &parent, i18n::translate(Text::DevicesActionSendFolder)
-  );
+  const auto path = QFileDialog::getExistingDirectory(&parent, i18n::translate(Text::DevicesActionSendFolder));
   return path.isEmpty() ? QList<QUrl>{} : QList<QUrl>{QUrl::fromLocalFile(path)};
 }
 
@@ -175,33 +173,35 @@ DevicesDock::DevicesDock(
   setObjectName(QStringLiteral("relaydeskDevicesDock"));
   setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
   setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-  setMinimumWidth(300);
+  setMinimumWidth(280);
   setAcceptDrops(true);
 
   auto *body = new QWidget(this);
   auto *layout = new QVBoxLayout(body);
-  layout->setContentsMargins(12, 10, 12, 12);
-  layout->setSpacing(8);
+  layout->setContentsMargins(8, 8, 8, 8);
+  layout->setSpacing(6);
 
   m_permissionBanner = new QFrame(body);
   m_permissionBanner->setObjectName(QStringLiteral("relaydeskPermissionBanner"));
   m_permissionBanner->setFrameShape(QFrame::StyledPanel);
-  auto *permissionLayout = new QVBoxLayout(m_permissionBanner);
-  permissionLayout->setContentsMargins(10, 9, 10, 9);
-  permissionLayout->setSpacing(5);
+  auto *permissionLayout = new QHBoxLayout(m_permissionBanner);
+  permissionLayout->setContentsMargins(8, 5, 8, 5);
+  permissionLayout->setSpacing(6);
   m_permissionTitle = new QLabel(m_permissionBanner);
   m_permissionTitle->setObjectName(QStringLiteral("relaydeskPermissionTitle"));
+  m_permissionTitle->setTextFormat(Qt::PlainText);
+  m_permissionTitle->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   QFont permissionTitleFont(m_permissionTitle->font());
   permissionTitleFont.setWeight(QFont::DemiBold);
   m_permissionTitle->setFont(permissionTitleFont);
-  permissionLayout->addWidget(m_permissionTitle);
+  permissionLayout->addWidget(m_permissionTitle, 1);
   m_permissionMessage = new QLabel(m_permissionBanner);
   m_permissionMessage->setObjectName(QStringLiteral("relaydeskPermissionMessage"));
-  m_permissionMessage->setWordWrap(true);
-  permissionLayout->addWidget(m_permissionMessage);
+  m_permissionMessage->setTextFormat(Qt::PlainText);
+  m_permissionMessage->hide();
   m_openPermissionSettingsButton = new QPushButton(m_permissionBanner);
   m_openPermissionSettingsButton->setObjectName(QStringLiteral("relaydeskOpenPermissionSettingsButton"));
-  permissionLayout->addWidget(m_openPermissionSettingsButton, 0, Qt::AlignLeft);
+  permissionLayout->addWidget(m_openPermissionSettingsButton, 0, Qt::AlignVCenter);
   layout->addWidget(m_permissionBanner);
 
   m_emptyLabel = new QLabel(body);
@@ -217,6 +217,7 @@ DevicesDock::DevicesDock(
   m_deviceList->setItemDelegate(new DeviceCardDelegate(m_deviceList));
   m_deviceList->setSelectionMode(QAbstractItemView::SingleSelection);
   m_deviceList->setUniformItemSizes(true);
+  m_deviceList->setSpacing(2);
   m_deviceList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_deviceList->setFrameShape(QFrame::NoFrame);
   m_deviceList->setAcceptDrops(true);
@@ -226,18 +227,19 @@ DevicesDock::DevicesDock(
   m_deviceList->viewport()->installEventFilter(this);
   layout->addWidget(m_deviceList, 1);
 
+  auto *deviceActions = new QHBoxLayout();
+  deviceActions->setSpacing(6);
+  deviceActions->addStretch();
   m_pairButton = new QPushButton(body);
   m_pairButton->setObjectName(QStringLiteral("relaydeskPairSelectedButton"));
-  layout->addWidget(m_pairButton);
-
-  auto *sendActions = new QHBoxLayout();
+  deviceActions->addWidget(m_pairButton);
   m_sendFilesButton = new QPushButton(body);
   m_sendFilesButton->setObjectName(QStringLiteral("relaydeskSendFilesButton"));
   m_sendFolderButton = new QPushButton(body);
   m_sendFolderButton->setObjectName(QStringLiteral("relaydeskSendFolderButton"));
-  sendActions->addWidget(m_sendFilesButton);
-  sendActions->addWidget(m_sendFolderButton);
-  layout->addLayout(sendActions);
+  deviceActions->addWidget(m_sendFilesButton);
+  deviceActions->addWidget(m_sendFolderButton);
+  layout->addLayout(deviceActions);
 
   m_sendFeedback = new QLabel(body);
   m_sendFeedback->setObjectName(QStringLiteral("relaydeskSendFeedback"));
@@ -245,37 +247,51 @@ DevicesDock::DevicesDock(
   m_sendFeedback->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
   layout->addWidget(m_sendFeedback);
 
-  m_incomingOfferPanel = new QFrame(body);
+  m_activityRegion = new QWidget(body);
+  m_activityRegion->setObjectName(QStringLiteral("relaydeskDeviceActivityRegion"));
+  auto *activityLayout = new QVBoxLayout(m_activityRegion);
+  activityLayout->setContentsMargins(0, 0, 0, 0);
+  activityLayout->setSpacing(0);
+
+  m_incomingOfferPanel = new QFrame(m_activityRegion);
   m_incomingOfferPanel->setObjectName(QStringLiteral("relaydeskIncomingOfferPanel"));
   m_incomingOfferPanel->setFrameShape(QFrame::StyledPanel);
   auto *incomingLayout = new QVBoxLayout(m_incomingOfferPanel);
-  incomingLayout->setContentsMargins(12, 12, 12, 12);
-  incomingLayout->setSpacing(6);
+  incomingLayout->setContentsMargins(8, 7, 8, 7);
+  incomingLayout->setSpacing(4);
+  auto *incomingHeadingLayout = new QHBoxLayout();
+  incomingHeadingLayout->setSpacing(5);
   m_incomingOfferHeading = new QLabel(m_incomingOfferPanel);
   m_incomingOfferHeading->setObjectName(QStringLiteral("relaydeskIncomingOfferHeading"));
   m_incomingOfferHeading->setTextFormat(Qt::PlainText);
   QFont incomingHeadingFont(m_incomingOfferHeading->font());
   incomingHeadingFont.setWeight(QFont::DemiBold);
   m_incomingOfferHeading->setFont(incomingHeadingFont);
-  incomingLayout->addWidget(m_incomingOfferHeading);
+  incomingHeadingLayout->addWidget(m_incomingOfferHeading);
   m_incomingOfferName = new QLabel(m_incomingOfferPanel);
   m_incomingOfferName->setObjectName(QStringLiteral("relaydeskIncomingOfferName"));
   m_incomingOfferName->setTextFormat(Qt::PlainText);
-  m_incomingOfferName->setWordWrap(true);
-  incomingLayout->addWidget(m_incomingOfferName);
+  m_incomingOfferName->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  incomingHeadingLayout->addWidget(m_incomingOfferName, 1);
+  incomingLayout->addLayout(incomingHeadingLayout);
+
+  auto *incomingSummaryLayout = new QHBoxLayout();
+  incomingSummaryLayout->setSpacing(6);
   m_incomingOfferSummary = new QLabel(m_incomingOfferPanel);
   m_incomingOfferSummary->setObjectName(QStringLiteral("relaydeskIncomingOfferSummary"));
   m_incomingOfferSummary->setTextFormat(Qt::PlainText);
-  incomingLayout->addWidget(m_incomingOfferSummary);
-  m_incomingOfferDestination = new QLabel(m_incomingOfferPanel);
-  m_incomingOfferDestination->setObjectName(QStringLiteral("relaydeskIncomingOfferDestination"));
-  m_incomingOfferDestination->setTextFormat(Qt::PlainText);
-  m_incomingOfferDestination->setWordWrap(true);
-  incomingLayout->addWidget(m_incomingOfferDestination);
+  incomingSummaryLayout->addWidget(m_incomingOfferSummary);
+  incomingSummaryLayout->addStretch();
   m_incomingOfferConflict = new QLabel(m_incomingOfferPanel);
   m_incomingOfferConflict->setObjectName(QStringLiteral("relaydeskIncomingOfferConflict"));
   m_incomingOfferConflict->setTextFormat(Qt::PlainText);
-  incomingLayout->addWidget(m_incomingOfferConflict);
+  incomingSummaryLayout->addWidget(m_incomingOfferConflict);
+  incomingLayout->addLayout(incomingSummaryLayout);
+  m_incomingOfferDestination = new QLabel(m_incomingOfferPanel);
+  m_incomingOfferDestination->setObjectName(QStringLiteral("relaydeskIncomingOfferDestination"));
+  m_incomingOfferDestination->setTextFormat(Qt::PlainText);
+  m_incomingOfferDestination->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  incomingLayout->addWidget(m_incomingOfferDestination);
   m_incomingOfferError = new QLabel(m_incomingOfferPanel);
   m_incomingOfferError->setObjectName(QStringLiteral("relaydeskIncomingOfferError"));
   m_incomingOfferError->setTextFormat(Qt::PlainText);
@@ -297,56 +313,65 @@ DevicesDock::DevicesDock(
   incomingActions->addWidget(m_acceptIncomingOfferButton);
   incomingActions->addWidget(m_dismissIncomingOfferButton);
   incomingLayout->addLayout(incomingActions);
-  layout->addWidget(m_incomingOfferPanel);
+  activityLayout->addWidget(m_incomingOfferPanel);
 
-  m_pairingPanel = new QFrame(body);
+  m_pairingPanel = new QFrame(m_activityRegion);
   m_pairingPanel->setObjectName(QStringLiteral("relaydeskPairingPanel"));
   m_pairingPanel->setFrameShape(QFrame::StyledPanel);
   auto *pairingLayout = new QVBoxLayout(m_pairingPanel);
-  pairingLayout->setContentsMargins(12, 12, 12, 12);
-  pairingLayout->setSpacing(7);
+  pairingLayout->setContentsMargins(8, 7, 8, 7);
+  pairingLayout->setSpacing(4);
 
+  auto *pairingHeader = new QHBoxLayout();
+  pairingHeader->setSpacing(6);
   m_pairingPeer = new QLabel(m_pairingPanel);
   QFont peerFont(m_pairingPeer->font());
   peerFont.setWeight(QFont::DemiBold);
   m_pairingPeer->setFont(peerFont);
-  pairingLayout->addWidget(m_pairingPeer);
+  pairingHeader->addWidget(m_pairingPeer);
 
   m_pairingState = new QLabel(m_pairingPanel);
   m_pairingState->setObjectName(QStringLiteral("relaydeskPairingStateLabel"));
-  m_pairingState->setWordWrap(true);
-  pairingLayout->addWidget(m_pairingState);
+  m_pairingState->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  m_pairingState->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  pairingHeader->addWidget(m_pairingState, 1);
+  pairingLayout->addLayout(pairingHeader);
 
+  auto *pairingVerification = new QHBoxLayout();
+  pairingVerification->setSpacing(6);
   m_pairingCode = new QLabel(m_pairingPanel);
   m_pairingCode->setObjectName(QStringLiteral("relaydeskPairingSasLabel"));
   auto sasFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
   sasFont.setPointSizeF(qMax(sasFont.pointSizeF() + 5.0, 16.0));
   sasFont.setWeight(QFont::DemiBold);
   m_pairingCode->setFont(sasFont);
-  m_pairingCode->setAlignment(Qt::AlignCenter);
+  m_pairingCode->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
   m_pairingCode->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
-  pairingLayout->addWidget(m_pairingCode);
+  pairingVerification->addWidget(m_pairingCode);
 
   m_pairingExpiry = new QLabel(m_pairingPanel);
   m_pairingAttempts = new QLabel(m_pairingPanel);
-  pairingLayout->addWidget(m_pairingExpiry);
-  pairingLayout->addWidget(m_pairingAttempts);
+  pairingVerification->addWidget(m_pairingExpiry);
+  pairingVerification->addWidget(m_pairingAttempts);
+  pairingVerification->addStretch();
 
   m_pairingError = new QLabel(m_pairingPanel);
   m_pairingError->setObjectName(QStringLiteral("relaydeskPairingErrorLabel"));
   m_pairingError->setWordWrap(true);
   m_pairingError->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
-  pairingLayout->addWidget(m_pairingError);
 
   m_pairingCodeEntry = new QLineEdit(m_pairingPanel);
   m_pairingCodeEntry->setObjectName(QStringLiteral("relaydeskPairingCodeEntry"));
   m_pairingCodeEntry->setMaxLength(6);
   m_pairingCodeEntry->setAlignment(Qt::AlignCenter);
   m_pairingCodeEntry->setInputMethodHints(Qt::ImhDigitsOnly);
+  m_pairingCodeEntry->setMaximumWidth(110);
   m_pairingCodeEntry->setValidator(
       new QRegularExpressionValidator(QRegularExpression(QStringLiteral("^[0-9]{0,6}$")), m_pairingCodeEntry)
   );
-  pairingLayout->addWidget(m_pairingCodeEntry);
+  pairingVerification->addWidget(m_pairingCodeEntry);
+  pairingLayout->addLayout(pairingVerification);
+  pairingLayout->addWidget(m_pairingError);
 
   auto *pairingActions = new QHBoxLayout();
   m_confirmCodeButton = new QPushButton(m_pairingPanel);
@@ -355,33 +380,42 @@ DevicesDock::DevicesDock(
   m_submitCodeButton->setObjectName(QStringLiteral("relaydeskSubmitPairingCodeButton"));
   m_cancelPairingButton = new QPushButton(m_pairingPanel);
   m_cancelPairingButton->setObjectName(QStringLiteral("relaydeskCancelPairingButton"));
+  pairingActions->addStretch();
   pairingActions->addWidget(m_confirmCodeButton);
   pairingActions->addWidget(m_submitCodeButton);
   pairingActions->addWidget(m_cancelPairingButton);
   pairingLayout->addLayout(pairingActions);
 
+  auto *fingerprintLayout = new QHBoxLayout();
+  fingerprintLayout->setSpacing(5);
   m_fingerprintToggle = new QToolButton(m_pairingPanel);
   m_fingerprintToggle->setObjectName(QStringLiteral("relaydeskFingerprintToggle"));
   m_fingerprintToggle->setCheckable(true);
   m_fingerprintToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
   m_fingerprintToggle->setArrowType(Qt::RightArrow);
-  pairingLayout->addWidget(m_fingerprintToggle, 0, Qt::AlignLeft);
+  fingerprintLayout->addWidget(m_fingerprintToggle);
 
   m_fingerprintSummary = new QLabel(m_pairingPanel);
+  m_fingerprintSummary->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   m_fingerprintSummary->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
-  pairingLayout->addWidget(m_fingerprintSummary);
+  fingerprintLayout->addWidget(m_fingerprintSummary, 1);
+  pairingLayout->addLayout(fingerprintLayout);
   m_fingerprintDetails = new QLabel(m_pairingPanel);
   m_fingerprintDetails->setObjectName(QStringLiteral("relaydeskFingerprintDetails"));
   m_fingerprintDetails->setWordWrap(true);
   m_fingerprintDetails->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
   pairingLayout->addWidget(m_fingerprintDetails);
-  layout->addWidget(m_pairingPanel);
+  activityLayout->addWidget(m_pairingPanel);
+  layout->addWidget(m_activityRegion);
   setWidget(body);
 
   connect(&m_devices, &QAbstractItemModel::rowsInserted, this, &DevicesDock::updateEmptyState);
   connect(&m_devices, &QAbstractItemModel::rowsRemoved, this, &DevicesDock::updateEmptyState);
   connect(&m_devices, &QAbstractItemModel::modelReset, this, &DevicesDock::updateEmptyState);
-  connect(&m_devices, &QAbstractItemModel::dataChanged, this, &DevicesDock::updateSelection);
+  connect(&m_devices, &QAbstractItemModel::dataChanged, this, [this] {
+    updateEmptyState();
+    updateSelection();
+  });
   connect(m_deviceList->selectionModel(), &QItemSelectionModel::selectionChanged, this, &DevicesDock::updateSelection);
   connect(m_deviceList, &QListView::activated, this, &DevicesDock::requestPairing);
   connect(m_pairButton, &QPushButton::clicked, this, [this]() { requestPairing(m_deviceList->currentIndex()); });
@@ -607,7 +641,12 @@ void DevicesDock::updateText()
 
 void DevicesDock::updateEmptyState()
 {
-  const auto empty = m_devices.rowCount() == 0;
+  bool empty = true;
+  for (int row = 0; row < m_devices.rowCount(); ++row) {
+    const auto local = m_devices.index(row, 0).data(model::DeviceHomeModel::IsLocalRole).toBool();
+    m_deviceList->setRowHidden(row, local);
+    empty = empty && local;
+  }
   m_emptyLabel->setVisible(empty);
   m_deviceList->setVisible(!empty);
   if (empty)
@@ -620,14 +659,14 @@ void DevicesDock::updateSelection()
   const auto index = m_deviceList->currentIndex();
   const auto pairable = index.isValid() && index.data(model::DeviceHomeModel::CanStartPairingRole).toBool();
   m_pairButton->setEnabled(pairable);
-  m_pairButton->setVisible(m_devices.rowCount() != 0);
+  m_pairButton->setVisible(pairable);
   m_pairButton->setText(
       pairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
                : i18n::translate(Text::PairingActionStart)
   );
   const auto sendable = index.isValid() && index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
-  m_sendFilesButton->setVisible(m_devices.rowCount() != 0);
-  m_sendFolderButton->setVisible(m_devices.rowCount() != 0);
+  m_sendFilesButton->setVisible(sendable);
+  m_sendFolderButton->setVisible(sendable);
   m_sendFilesButton->setEnabled(sendable);
   m_sendFolderButton->setEnabled(sendable);
 }
@@ -698,8 +737,8 @@ bool DevicesDock::updateDropTarget(const QModelIndex &index, const QList<QUrl> &
   m_dropTargetIndex = index;
   m_deviceList->setCurrentIndex(index);
   showSendFeedback(
-      i18n::translatePlural(Text::DevicesDropItems, items.size()) + QStringLiteral(" · ")
-      + i18n::translate(Text::DevicesDropSendHere)
+      i18n::translatePlural(Text::DevicesDropItems, items.size()) + QStringLiteral(" · ") +
+      i18n::translate(Text::DevicesDropSendHere)
   );
   return true;
 }
@@ -721,8 +760,9 @@ bool DevicesDock::publishSendIntent(const QModelIndex &index, const QList<QUrl> 
 {
   const auto peer = sendTarget(index);
   if (!peer.has_value()) {
-    showSendFeedback(index.isValid() ? i18n::translate(Text::DevicesSendUnavailable)
-                                     : i18n::translate(Text::DevicesSendSelectDevice));
+    showSendFeedback(
+        index.isValid() ? i18n::translate(Text::DevicesSendUnavailable) : i18n::translate(Text::DevicesSendSelectDevice)
+    );
     Q_EMIT sendItemsRejected(m_sendFeedback->text());
     return false;
   }
@@ -751,9 +791,10 @@ void DevicesDock::requestPairing(const QModelIndex &index)
 void DevicesDock::updateIncomingOfferPanel()
 {
   const auto visible = m_incomingOffers != nullptr && m_incomingOffers->visible();
-  m_incomingOfferPanel->setVisible(visible);
-  if (!visible)
+  if (!visible) {
+    updateActivityPanel();
     return;
+  }
 
   m_incomingOfferHeading->setText(m_incomingOffers->headingText());
   m_incomingOfferName->setText(m_incomingOffers->offerName());
@@ -774,17 +815,20 @@ void DevicesDock::updateIncomingOfferPanel()
   m_incomingOfferPanel->setAccessibleDescription(
       m_incomingOffers->summaryText() + QStringLiteral(". ") + m_incomingOffers->destinationText()
   );
+  updateActivityPanel();
 }
 
 void DevicesDock::updatePairingPanel()
 {
   const auto active = m_pairing.active();
-  m_pairingPanel->setVisible(active);
-  if (!active)
+  if (!active) {
+    updateActivityPanel();
     return;
+  }
 
   m_pairingPeer->setText(m_pairing.peerName());
   m_pairingState->setText(m_pairing.stateText());
+  m_pairingState->setToolTip(m_pairing.stateText());
   m_pairingCode->setText(groupedSas(m_pairing.sixDigitSas()));
   m_pairingCode->setVisible(!m_pairing.sixDigitSas().isEmpty());
   m_pairingExpiry->setText(i18n::translate(Text::PairingExpiresAt).arg(m_pairing.expiresAtText()));
@@ -806,6 +850,16 @@ void DevicesDock::updatePairingPanel()
   m_fingerprintSummary->setText(m_pairing.shortFingerprint());
   m_fingerprintDetails->setText(m_pairing.fullFingerprint());
   m_fingerprintDetails->setVisible(m_fingerprintToggle->isChecked());
+  updateActivityPanel();
+}
+
+void DevicesDock::updateActivityPanel()
+{
+  const auto incomingVisible = m_incomingOffers != nullptr && m_incomingOffers->visible();
+  const auto pairingVisible = m_pairing.active() && !incomingVisible;
+  m_incomingOfferPanel->setVisible(incomingVisible);
+  m_pairingPanel->setVisible(pairingVisible);
+  m_activityRegion->setVisible(incomingVisible || pairingVisible);
 }
 
 void DevicesDock::submitPairingCode()
@@ -823,12 +877,19 @@ void DevicesDock::updatePermissionBanner()
   if (!visible)
     return;
 
-  m_permissionTitle->setText(m_permissions.bannerTitle());
-  m_permissionMessage->setText(m_permissions.bannerMessage());
+  const auto title = m_permissions.bannerTitle();
+  const auto message = m_permissions.bannerMessage();
+  const auto summary = message.isEmpty() ? title : title + QStringLiteral(" · ") + message;
+  m_permissionTitle->setText(summary);
+  m_permissionTitle->setToolTip(summary);
+  m_permissionTitle->setAccessibleName(summary);
+  m_permissionMessage->setText(message);
+  m_permissionMessage->setToolTip(message);
+  m_permissionMessage->setVisible(false);
   m_openPermissionSettingsButton->setText(m_permissions.openSettingsActionText());
   m_openPermissionSettingsButton->setVisible(m_permissions.canOpenPrimarySettings());
-  m_permissionBanner->setAccessibleName(m_permissions.bannerTitle());
-  m_permissionBanner->setAccessibleDescription(m_permissions.bannerMessage());
+  m_permissionBanner->setAccessibleName(title);
+  m_permissionBanner->setAccessibleDescription(message);
   m_openPermissionSettingsButton->setAccessibleName(m_permissions.openSettingsActionText());
 }
 
