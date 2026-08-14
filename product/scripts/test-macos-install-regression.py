@@ -31,6 +31,8 @@ TEST_ROOT_PREFIX = "relaydesk-test005-macos-"
 PERMISSION_NOT_RUN_REASON = (
     "hosted runners cannot grant or observe the macOS System Settings consent UI"
 )
+REPO_ROOT = Path(__file__).resolve().parents[2]
+TRANSLATION_VERIFIER = REPO_ROOT / "product/scripts/verify-macos-translation-bundle.py"
 
 
 class RegressionError(RuntimeError):
@@ -43,6 +45,8 @@ class ArtifactSet:
     dmg: Path
     package_variant: str
     manifest: dict[str, Any]
+    translation_report_path: Path
+    translation_report: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -167,7 +171,28 @@ def validate_artifacts(artifact_dir: Path, expected_commit: str) -> ArtifactSet:
         raise RegressionError(f"TEST005_APP_ZIP_COUNT: {len(app_zips)}")
     if len(dmgs) != 1:
         raise RegressionError(f"TEST005_DMG_COUNT: {len(dmgs)}")
-    return ArtifactSet(app_zips[0], dmgs[0], package_variant, manifest)
+
+    translation_report_path = artifact_dir / "macos-translation-bundle.json"
+    if not translation_report_path.is_file():
+        raise RegressionError("TEST005_TRANSLATION_REPORT_MISSING")
+    try:
+        translation_report = json.loads(translation_report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RegressionError("TEST005_TRANSLATION_REPORT_INVALID") from error
+    if (
+        translation_report.get("status") != "PASS"
+        or not translation_report.get("supportedLanguages")
+        or not translation_report.get("catalogs")
+    ):
+        raise RegressionError("TEST005_TRANSLATION_REPORT_FAILED")
+    return ArtifactSet(
+        app_zips[0],
+        dmgs[0],
+        package_variant,
+        manifest,
+        translation_report_path,
+        translation_report,
+    )
 
 
 def run_command(
@@ -250,6 +275,42 @@ def read_bundle_info(app: Path) -> BundleInfo:
         executable,
         core_executable,
     )
+
+
+def verify_translation_bundle(app: Path, report: Path, log: IO[str]) -> dict[str, Any]:
+    run_command(
+        [
+            sys.executable,
+            TRANSLATION_VERIFIER,
+            "--repo-root",
+            REPO_ROOT,
+            "--app-bundle",
+            app,
+            "--report",
+            report,
+        ],
+        log,
+    )
+    try:
+        result = json.loads(report.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RegressionError(f"TEST005_TRANSLATION_REPORT_INVALID: {report.name}") from error
+    if result.get("status") != "PASS" or not result.get("catalogs"):
+        raise RegressionError(f"TEST005_TRANSLATION_REPORT_FAILED: {report.name}")
+    return result
+
+
+def assert_same_translation_resources(left: dict[str, Any], right: dict[str, Any]) -> None:
+    if left.get("supportedLanguages") != right.get("supportedLanguages"):
+        raise RegressionError("TEST005_TRANSLATION_LANGUAGE_SET_MISMATCH")
+    left_catalogs = {
+        item.get("name"): item.get("sha256") for item in left.get("catalogs", [])
+    }
+    right_catalogs = {
+        item.get("name"): item.get("sha256") for item in right.get("catalogs", [])
+    }
+    if left_catalogs != right_catalogs:
+        raise RegressionError("TEST005_TRANSLATION_PAYLOAD_MISMATCH")
 
 
 def nested_code_candidates(app: Path) -> list[Path]:
@@ -438,8 +499,13 @@ def run_regression(args: argparse.Namespace) -> int:
                     "sha256": sha256(artifacts.app_zip),
                 },
                 "dmg": {"name": artifacts.dmg.name, "sha256": sha256(artifacts.dmg)},
+                "translationReport": {
+                    "name": artifacts.translation_report_path.name,
+                    "sha256": sha256(artifacts.translation_report_path),
+                },
                 "packageVariant": artifacts.package_variant,
             }
+            result["checks"]["stagedTranslationReport"] = "PASS"
 
             isolated_home = test_root / "home"
             applications = test_root / "Applications"
@@ -466,6 +532,14 @@ def run_regression(args: argparse.Namespace) -> int:
             result["checks"]["appZipStructure"] = "PASS"
             verify_adhoc_bundle(zip_app, log)
             result["checks"]["appZipCodesign"] = "PASS"
+            zip_translations = verify_translation_bundle(
+                zip_app,
+                report_path.parent / "test005-macos-app-zip-translations.json",
+                log,
+            )
+            result["checks"]["appZipTranslationResources"] = "PASS"
+            assert_same_translation_resources(artifacts.translation_report, zip_translations)
+            result["checks"]["stageAndAppZipSameTranslationResources"] = "PASS"
 
             run_command(["/usr/bin/hdiutil", "verify", artifacts.dmg], log, timeout=180)
             result["checks"]["dmgVerify"] = "PASS"
@@ -491,6 +565,15 @@ def run_regression(args: argparse.Namespace) -> int:
             dmg_info = read_bundle_info(dmg_app)
             verify_adhoc_bundle(dmg_app, log)
             result["checks"]["dmgAppCodesign"] = "PASS"
+            dmg_translations = verify_translation_bundle(
+                dmg_app,
+                report_path.parent / "test005-macos-dmg-translations.json",
+                log,
+            )
+            result["checks"]["dmgTranslationResources"] = "PASS"
+            assert_same_translation_resources(zip_translations, dmg_translations)
+            result["checks"]["zipAndDmgSameTranslationResources"] = "PASS"
+            result["translationResources"] = zip_translations
             assert_same_bundle(zip_info, dmg_info)
             result["checks"]["zipAndDmgSameBundle"] = "PASS"
             result["bundle"] = {
