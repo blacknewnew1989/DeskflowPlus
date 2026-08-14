@@ -115,6 +115,7 @@ private Q_SLOTS:
   void rendersEmptyAndPairableDeviceStates();
   void keepsLocalDeviceInFooterOnly();
   void emitsTypedPairingIntent();
+  void activatingCardRunsItsVisiblePrimaryAction();
   void rendersAndDrivesSharedPairingModel();
   void confirmsAndCancelsFromPairingPanel();
   void rendersExpiredPairingState();
@@ -215,6 +216,42 @@ void DevicesDockTests::emitsTypedPairingIntent()
   QVERIFY(storedPeer.has_value());
   QCOMPARE(storedPeer->id, peer.id);
   QCOMPARE(storedPeer->displayName, peer.displayName);
+}
+
+void DevicesDockTests::activatingCardRunsItsVisiblePrimaryAction()
+{
+  qRegisterMetaType<DeviceId>();
+  Fixture fixture;
+  auto peer = peerSnapshot();
+  fixture.devices.upsertRemoteDevice(peer);
+  fixture.dock.resize(420, 520);
+  fixture.dock.show();
+
+  auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  QVERIFY(list != nullptr);
+  auto index = fixture.devices.index(fixture.devices.indexOf(peer.id), 0);
+  QVERIFY(index.isValid());
+  QSignalSpy pairingRequested(&fixture.dock, &DevicesDock::pairingRequested);
+  QVERIFY(QMetaObject::invokeMethod(list, "activated", Qt::DirectConnection, Q_ARG(QModelIndex, index)));
+  QCOMPARE(pairingRequested.count(), 1);
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto filePath = directory.filePath(QStringLiteral("card-action.txt"));
+  QFile file(filePath);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.close();
+  const QList<QUrl> files{QUrl::fromLocalFile(filePath)};
+  fixture.dock.setFileChooser([files](QWidget &) { return files; });
+
+  peer.presence = DevicePresence::Online;
+  peer.trusted = true;
+  fixture.devices.upsertRemoteDevice(peer);
+  index = fixture.devices.index(fixture.devices.indexOf(peer.id), 0);
+  QSignalSpy sendRequested(&fixture.dock, &DevicesDock::sendItemsRequested);
+  QVERIFY(QMetaObject::invokeMethod(list, "activated", Qt::DirectConnection, Q_ARG(QModelIndex, index)));
+  QCOMPARE(sendRequested.count(), 1);
+  QCOMPARE(sendRequested.first().at(1).value<QList<QUrl>>(), files);
 }
 
 void DevicesDockTests::rendersAndDrivesSharedPairingModel()

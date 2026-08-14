@@ -488,7 +488,7 @@ DevicesDock::DevicesDock(
     updateSelection();
   });
   connect(m_deviceList->selectionModel(), &QItemSelectionModel::selectionChanged, this, &DevicesDock::updateSelection);
-  connect(m_deviceList, &QListView::activated, this, &DevicesDock::requestPairing);
+  connect(m_deviceList, &QListView::activated, this, &DevicesDock::activateDevice);
   connect(m_pairButton, &QPushButton::clicked, this, [this]() { requestPairing(m_deviceList->currentIndex()); });
   connect(m_sendFilesButton, &QPushButton::clicked, this, [this]() { chooseAndSend(false); });
   connect(m_sendFolderButton, &QPushButton::clicked, this, [this]() { chooseAndSend(true); });
@@ -879,6 +879,20 @@ void DevicesDock::requestPairing(const QModelIndex &index)
   if (!id.has_value())
     return;
   Q_EMIT pairingRequested(*id);
+}
+
+void DevicesDock::activateDevice(const QModelIndex &index)
+{
+  if (!index.isValid())
+    return;
+
+  m_deviceList->setCurrentIndex(index);
+  if (index.data(model::DeviceHomeModel::CanStartPairingRole).toBool()) {
+    requestPairing(index);
+    return;
+  }
+  if (index.data(model::DeviceHomeModel::CanSendItemsRole).toBool())
+    chooseAndSend(false);
 }
 
 void DevicesDock::updateIncomingOfferPanel()

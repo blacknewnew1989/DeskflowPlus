@@ -78,6 +78,7 @@ private:
   void updateText();
   void updateEmptyState();
   void updateSelection();
+  void activateDevice(const QModelIndex &index);
   void requestPairing(const QModelIndex &index);
   void updatePairingPanel();
   void updatePermissionBanner();
