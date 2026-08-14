@@ -60,11 +60,23 @@
     <message><source>pairing.expires_at</source><translation>만료: %1</translation></message>
     <message><source>permissions.banner.attention_title</source><translation>권한이 필요합니다</translation></message>
     <message><source>permissions.banner.unknown_title</source><translation>권한 상태를 확인하지 않음</translation></message>
+    <message><source>permissions.banner.ready_title</source><translation>권한 준비 완료</translation></message>
+    <message><source>permissions.banner.ready_message</source><translation>필요한 시스템 권한이 모두 준비되었습니다.</translation></message>
+    <message><source>permissions.details.title</source><translation>권한</translation></message>
     <message><source>permissions.kind.windows_firewall</source><translation>Windows 방화벽</translation></message>
     <message><source>permissions.kind.windows_port</source><translation>로컬 네트워크 포트</translation></message>
     <message><source>permissions.kind.macos_local_network</source><translation>로컬 네트워크</translation></message>
     <message><source>permissions.kind.macos_accessibility</source><translation>손쉬운 사용</translation></message>
     <message><source>permissions.kind.macos_input_monitoring</source><translation>입력 모니터링</translation></message>
+    <message><source>permissions.purpose.windows_firewall</source><translation>개인 네트워크의 신뢰할 수 있는 기기가 RelayDesk에 연결할 수 있도록 합니다.</translation></message>
+    <message><source>permissions.purpose.windows_port</source><translation>선택한 로컬 포트에서 RelayDesk 수신 대기를 유지합니다.</translation></message>
+    <message><source>permissions.purpose.macos_local_network</source><translation>로컬 네트워크에서 주변 기기를 찾아 연결합니다.</translation></message>
+    <message><source>permissions.purpose.macos_accessibility</source><translation>이 Mac에서 키보드와 포인터 입력을 제어합니다.</translation></message>
+    <message><source>permissions.purpose.macos_input_monitoring</source><translation>전역 키보드 및 포인터 입력을 읽어 다른 기기와 공유합니다.</translation></message>
+    <message><source>permissions.affected.network</source><translation>기기 검색, 수신 연결 및 파일 전송</translation></message>
+    <message><source>permissions.affected.macos_local_network</source><translation>주변 기기 검색 및 로컬 직접 연결</translation></message>
+    <message><source>permissions.affected.macos_accessibility</source><translation>이 Mac의 입력 제어</translation></message>
+    <message><source>permissions.affected.macos_input_monitoring</source><translation>이 Mac에서 입력 공유</translation></message>
     <message><source>permissions.status.unknown</source><translation>확인하지 않음</translation></message>
     <message><source>permissions.status.not_required</source><translation>필요 없음</translation></message>
     <message><source>permissions.status.granted</source><translation>허용됨</translation></message>
@@ -79,6 +91,7 @@
     <message><source>permissions.message.macos_accessibility</source><translation>RelayDesk가 키보드와 포인터 입력을 제어할 수 있도록 손쉬운 사용을 허용하세요.</translation></message>
     <message><source>permissions.message.macos_input_monitoring</source><translation>공유 입력에 macOS가 요구하는 경우 입력 모니터링을 허용하세요.</translation></message>
     <message><source>permissions.action.open_settings</source><translation>설정 열기</translation></message>
+    <message><source>permissions.action.view_details</source><translation>권한 세부 정보 보기</translation></message>
     <message><source>transfer.title</source><translation>전송</translation></message>
     <message><source>transfer.empty</source><translation>전송 항목이 여기에 표시됩니다</translation></message>
     <message><source>transfer.direction.sending</source><translation>보내는 중</translation></message>

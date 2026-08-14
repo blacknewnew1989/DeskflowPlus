@@ -60,11 +60,23 @@
     <message><source>pairing.expires_at</source><translation>Scadenza: %1</translation></message>
     <message><source>permissions.banner.attention_title</source><translation>Autorizzazione necessaria</translation></message>
     <message><source>permissions.banner.unknown_title</source><translation>Stato autorizzazione non verificato</translation></message>
+    <message><source>permissions.banner.ready_title</source><translation>Autorizzazioni configurate</translation></message>
+    <message><source>permissions.banner.ready_message</source><translation>Tutte le autorizzazioni di sistema necessarie sono configurate.</translation></message>
+    <message><source>permissions.details.title</source><translation>Autorizzazioni</translation></message>
     <message><source>permissions.kind.windows_firewall</source><translation>Windows Firewall</translation></message>
     <message><source>permissions.kind.windows_port</source><translation>Porta di rete locale</translation></message>
     <message><source>permissions.kind.macos_local_network</source><translation>Rete locale</translation></message>
     <message><source>permissions.kind.macos_accessibility</source><translation>Accessibilità</translation></message>
     <message><source>permissions.kind.macos_input_monitoring</source><translation>Monitoraggio input</translation></message>
+    <message><source>permissions.purpose.windows_firewall</source><translation>Consente ai dispositivi attendibili di raggiungere RelayDesk nelle reti private.</translation></message>
+    <message><source>permissions.purpose.windows_port</source><translation>Mantiene disponibile il servizio di ascolto di RelayDesk sulla porta locale selezionata.</translation></message>
+    <message><source>permissions.purpose.macos_local_network</source><translation>Cercare e connettersi ai dispositivi vicini sulla rete locale.</translation></message>
+    <message><source>permissions.purpose.macos_accessibility</source><translation>Controllare l'input da tastiera e puntatore su questo Mac.</translation></message>
+    <message><source>permissions.purpose.macos_input_monitoring</source><translation>Leggere l'input globale da tastiera e puntatore per condividerlo con un altro dispositivo.</translation></message>
+    <message><source>permissions.affected.network</source><translation>Rilevamento dei dispositivi, connessioni in entrata e trasferimento di file</translation></message>
+    <message><source>permissions.affected.macos_local_network</source><translation>Rilevamento dei dispositivi vicini e connessioni locali dirette</translation></message>
+    <message><source>permissions.affected.macos_accessibility</source><translation>Controllo dell'input su questo Mac</translation></message>
+    <message><source>permissions.affected.macos_input_monitoring</source><translation>Condivisione dell'input da questo Mac</translation></message>
     <message><source>permissions.status.unknown</source><translation>Non verificato</translation></message>
     <message><source>permissions.status.not_required</source><translation>Non necessario</translation></message>
     <message><source>permissions.status.granted</source><translation>Consentito</translation></message>
@@ -79,6 +91,7 @@
     <message><source>permissions.message.macos_accessibility</source><translation>Consenti Accessibilità affinché RelayDesk possa controllare tastiera e puntatore.</translation></message>
     <message><source>permissions.message.macos_input_monitoring</source><translation>Consenti Monitoraggio input quando macOS lo richiede per l’input condiviso.</translation></message>
     <message><source>permissions.action.open_settings</source><translation>Apri impostazioni</translation></message>
+    <message><source>permissions.action.view_details</source><translation>Visualizza dettagli autorizzazioni</translation></message>
     <message><source>transfer.title</source><translation>Trasferimenti</translation></message>
     <message><source>transfer.empty</source><translation>I trasferimenti appariranno qui</translation></message>
     <message><source>transfer.direction.sending</source><translation>Invio</translation></message>

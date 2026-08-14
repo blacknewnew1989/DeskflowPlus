@@ -60,11 +60,23 @@
     <message><source>pairing.expires_at</source><translation>Caduca: %1</translation></message>
     <message><source>permissions.banner.attention_title</source><translation>Se necesita permiso</translation></message>
     <message><source>permissions.banner.unknown_title</source><translation>Estado del permiso sin comprobar</translation></message>
+    <message><source>permissions.banner.ready_title</source><translation>Permisos configurados</translation></message>
+    <message><source>permissions.banner.ready_message</source><translation>Todos los permisos del sistema necesarios están configurados.</translation></message>
+    <message><source>permissions.details.title</source><translation>Permisos</translation></message>
     <message><source>permissions.kind.windows_firewall</source><translation>Firewall de Windows</translation></message>
     <message><source>permissions.kind.windows_port</source><translation>Puerto de red local</translation></message>
     <message><source>permissions.kind.macos_local_network</source><translation>Red local</translation></message>
     <message><source>permissions.kind.macos_accessibility</source><translation>Accesibilidad</translation></message>
     <message><source>permissions.kind.macos_input_monitoring</source><translation>Monitorización de entrada</translation></message>
+    <message><source>permissions.purpose.windows_firewall</source><translation>Permite que los dispositivos de confianza accedan a RelayDesk en redes privadas.</translation></message>
+    <message><source>permissions.purpose.windows_port</source><translation>Mantiene disponible el servicio de escucha de RelayDesk en el puerto local seleccionado.</translation></message>
+    <message><source>permissions.purpose.macos_local_network</source><translation>Buscar dispositivos cercanos en la red local y conectarse a ellos.</translation></message>
+    <message><source>permissions.purpose.macos_accessibility</source><translation>Controlar la entrada de teclado y puntero en este Mac.</translation></message>
+    <message><source>permissions.purpose.macos_input_monitoring</source><translation>Leer la entrada global de teclado y puntero para compartirla con otro dispositivo.</translation></message>
+    <message><source>permissions.affected.network</source><translation>Detección de dispositivos, conexiones entrantes y transferencia de archivos</translation></message>
+    <message><source>permissions.affected.macos_local_network</source><translation>Detección de dispositivos cercanos y conexiones locales directas</translation></message>
+    <message><source>permissions.affected.macos_accessibility</source><translation>Control de entrada en este Mac</translation></message>
+    <message><source>permissions.affected.macos_input_monitoring</source><translation>Uso compartido de la entrada de este Mac</translation></message>
     <message><source>permissions.status.unknown</source><translation>Sin comprobar</translation></message>
     <message><source>permissions.status.not_required</source><translation>No necesario</translation></message>
     <message><source>permissions.status.granted</source><translation>Permitido</translation></message>
@@ -79,6 +91,7 @@
     <message><source>permissions.message.macos_accessibility</source><translation>Permite Accesibilidad para que RelayDesk controle el teclado y el puntero.</translation></message>
     <message><source>permissions.message.macos_input_monitoring</source><translation>Permite Monitorización de entrada cuando macOS la requiera para compartir la entrada.</translation></message>
     <message><source>permissions.action.open_settings</source><translation>Abrir ajustes</translation></message>
+    <message><source>permissions.action.view_details</source><translation>Ver detalles de permisos</translation></message>
     <message><source>transfer.title</source><translation>Transferencias</translation></message>
     <message><source>transfer.empty</source><translation>Las transferencias aparecerán aquí</translation></message>
     <message><source>transfer.direction.sending</source><translation>Enviando</translation></message>
