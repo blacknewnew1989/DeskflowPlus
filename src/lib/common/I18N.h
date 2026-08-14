@@ -26,6 +26,24 @@ public:
   static QStringList detectedLanguages();
 
   /**
+   * @brief supportedLanguageCodes
+   * @return Canonical product language codes in display order.
+   */
+  static QStringList supportedLanguageCodes();
+
+  /**
+   * @brief detectedLanguageCodes
+   * @return Supported language codes with complete installed app and product catalogs.
+   */
+  static QStringList detectedLanguageCodes();
+
+  /**
+   * @brief fallbackLanguage
+   * @return The canonical language used for unknown or unavailable values.
+   */
+  static QString fallbackLanguage();
+
+  /**
    * @brief nativeTo639Name Convert a native Language name into a 639 name
    * @param nativeName English, Español etc..
    * @return  639 name for the language e, zh_CN , it, etc..)
@@ -75,6 +93,9 @@ private:
   I18N(const I18N &other) = delete;
   ~I18N() override = default;
   void detectLanguages();
+  void activateLanguage(const QString &langName, bool persist);
+  [[nodiscard]] QString resolveLanguage(const QString &langName) const;
+  [[nodiscard]] static QString canonicalLanguageCode(const QString &langName);
 
   QMap<QString, QStringList> m_translations;
   QMap<QString, QString> m_nameMap;
