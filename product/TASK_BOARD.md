@@ -4,12 +4,21 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 ## Ready
 
-No development or release-engineering tasks remain for Phase 0-4. Physical two-machine acceptance
-is listed in `product/docs/reports/RELAYDESK_V1_INTERNAL_RC.md` and is intentionally user-owned.
+当前没有等待领取的改版任务。既有 Phase 0-4 真机双机验收仍列在
+`product/docs/reports/RELAYDESK_V1_INTERNAL_RC.md`；2026-08-14 新确认的界面改版由下列
+In Progress 任务跟踪。
 
 ## In Progress
 
-No active implementation tasks.
+| ID | 任务 | Owner | 当前范围与完成证据 |
+|---|---|---|---|
+| UI-010 | 按已确认设计图实现共享 Qt 紧凑单栏首页 | A3/A0 | 默认 560×420、最小建议 520×380、52 px 顶栏/传输条、单行权限摘要和两行设备语义；待代码、UI 测试和双平台构建 |
+| BRAND-002 | 实现原创“双设备 + 中继点”临时 Logo | A3/A4/A5 | 以单一 SVG 派生彩色 App/安装包与单色 tray/menu bar 资源；待 16 px/明暗主题检查和打包验证 |
+| TRAY-001 | 完成最小化/关闭到托盘与后台生命周期 | A3/A4/A5 | 默认最小化到托盘、可设置关闭到托盘、一次性提示、显示/暂停共享/退出；待真正退出清理和回归测试 |
+| MAC-037 | 适配紧凑首页、权限能力门控和 macOS menu bar | A5/A3/A0 | 复用共享 Qt/PermissionSnapshot；待三项权限独立复检、template 图标、窗口恢复和 lifecycle 回归 |
+
+以上任务均为 `IN_PROGRESS`。设计图于 2026-08-14 经用户确认，但在代码、测试、构建和
+平台产物证据齐备前不得移入 Done。
 
 ## Blocked
 

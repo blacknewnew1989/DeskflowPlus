@@ -22,7 +22,8 @@ fetch origin -> rebase product/relaydesk-v1 -> 平台开发
 - CMake；
 - Qt 6.7+；
 - OpenSSL/Homebrew 依赖；
-- `.app` 和测试 DMG。
+- `.app` 和测试 DMG；
+- 与 Windows 共用紧凑 Qt 单栏首页，并提供 macOS menu bar 后台入口。
 
 上游 CI 对不同架构/系统版本可能有额外要求，以 v1.26.0 官方构建文档、CMake targets 和实际依赖探测结果为准。该 tag 未发现仓库级 `CMakePresets.json`。
 
@@ -75,11 +76,48 @@ Universal binary 可通过上游支持的 `CMAKE_OSX_ARCHITECTURES` 评估，但
 
 P0 不重写这些输入路径。新增平台代码尽量放独立 Objective-C++ adapter，并向共享 C++ 暴露窄接口。
 
+### 3.1 共享 Qt 界面边界
+
+macOS 必须直接消费 `product/docs/07_UI_UX_SPEC.md` 定义的共享信息架构和状态模型：默认
+`560 × 420 logical px`、最小建议 `520 × 380`、`52 px` 顶栏、单行权限条、两行语义设备
+条目和 `52 px` 迷你传输条。不得为 macOS 复制一套窗口、设备模型、权限模型或传输中心。
+
+平台层只负责：
+
+- `MacPermissionProbe` 与系统设置入口；
+- menu bar template 图标、窗口恢复/激活和真正退出；
+- Dock/Finder 的彩色 App 图标；
+- 系统通知、bundle lifecycle 和原生可访问性属性。
+
+系统字体、标题栏和菜单栏遵循 macOS，但不得改变页面层级、主操作语义或 permission/transfer
+snapshot。设计基线是
+`product/assets/design/relaydesk-compact-ui-approved-20260814.png`；它是实现输入，不是已完成证据。
+
 ## 4. 权限
+
+`MacPermissionProbe`、`IMacPermissionBackend`、冻结的 `PermissionSnapshot` 和
+`PermissionStatusModel` 是唯一权限链路。`MAC-037` 必须复用现有实现，不能创建 macOS 私有
+UI 状态或用原生诊断字符串驱动业务。现有 probe/回前台 refresh 是实现基线；本轮需要把它们
+接入已确认的紧凑首页、明确能力门控并补齐 UI/lifecycle 回归，在完成前不得把 `MAC-037`
+标为 Done。
+
+三项权限分别发布 `PermissionProbeEntry`，状态限定为冻结枚举：`Unknown`、`NotRequired`、
+`Granted`、`Denied`、`NeedsAction`。每项在权限详情中必须有：
+
+- 本地化名称和用途；
+- 当前状态，以及状态不可确定时的保守提示；
+- 受影响的具体能力；
+- `canOpenSettings` 为真时的“打开系统设置”动作；
+- 仅供日志使用的诊断，不直接展示未本地化原生错误。
+
+首页只显示单行权限摘要；点击摘要进入上述三项详情。状态探测不弹系统授权框，系统 prompt
+或设置跳转只能来自用户明确动作。应用收到 `Qt::ApplicationActive` 后对三项异步复检，
+防抖合并连续激活事件，并通过既有 snapshot signal 刷新界面，不要求重启应用。
 
 ### Accessibility
 
-用于输入控制。开发阶段不要求用户操作；最终验收时用户按系统要求在：
+使用 `AXIsProcessTrusted()` 做无提示状态探测，用于依赖辅助功能的输入控制。开发阶段不要求
+用户操作；最终验收时用户按系统要求在：
 
 ```text
 System Settings
@@ -89,18 +127,42 @@ System Settings
 
 授权实际 app 和/或 core executable（以真实上游行为为准）。
 
+未授权时仅禁用实际依赖 Accessibility 的输入方向，并显示“打开辅助功能设置”；不得停止
+文件监听、文件发送/接收、历史或设置页面。
+
 ### Input Monitoring
 
-按当前系统和上游实际需要检测，不要无条件宣称已授权。
+使用 `CGPreflightListenEventAccess()` 做无提示探测，并按当前系统和上游实际需要映射为
+`Granted`、`NeedsAction` 或 `NotRequired`。不得因为 API 返回不确定而无条件宣称已授权。
+
+未授权时只禁用依赖全局事件读取的输入方向；不依赖该权限的文件传输继续运行。只有用户
+点击对应动作时才请求授权或打开“输入监控”设置。
 
 ### Local Network
 
-macOS 新版本可能要求本地网络权限。应用要：
+通过现有异步 Network.framework Bonjour browser 保守探测：browser ready 可映射为
+`Granted`，策略拒绝映射为 `Denied/NeedsAction`，无关网络或探测错误保持 `Unknown`；不得
+把普通离线误报为用户拒绝。应用要：
 
 - 提供正确用途说明；
 - 首次发现/监听时触发系统提示；
 - 检测失败并提供打开系统设置按钮；
 - 不尝试绕过。
+
+Local Network 影响局域网发现和直连，也可能使文件通道不可达；它不应被描述为“输入权限”。
+Local Network 未授权时仍允许查看历史、修改设置和管理已保存设备，连接能力按真实网络结果
+降级。反向要求同样成立：只缺 Accessibility/Input Monitoring 而 Local Network 可用时，
+文件发送与接收不得被禁用。
+
+### 系统设置与回前台复检
+
+`openSystemSettings(PermissionKind)` 只接受上述三种 macOS kind，并打开对应隐私页；深链失效
+时回退到最接近的 Privacy & Security 页面并返回稳定错误。不得在 probe 回调里启动长时间
+扫描、同步等待系统设置或反复触发 prompt。
+
+用户从系统设置回到 RelayDesk 后，`MacPermissionProbe::refresh()` 必须重新读取
+Accessibility、Input Monitoring 并启动/更新 Local Network 异步探测；每一项独立更新，
+不得因为一项先返回就沿用另一项的假状态。
 
 ### 升级
 

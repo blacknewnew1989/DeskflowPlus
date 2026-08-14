@@ -10,8 +10,8 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 0-4 internal release candidate delivered
-- Last updated: 2026-08-13
+- Current phase: Phase 4 后续紧凑界面与后台运行改版（`IN_PROGRESS`；既有内部候选仍是上次验证基线）
+- Last updated: 2026-08-14
 - User action required during development: none
 
 ## Git 状态
@@ -25,6 +25,23 @@
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
 - Current implementation: the v1 internal-release code path is composed: MainWindow owns transfer UI/service/history, incoming single/multi-file/folders, four conflict policies and interrupted resume use bounded workers and platform atomic commits, reconnect dials the selected authenticated TLS candidate, Windows/macOS permission adapters feed the shared model, and trusted input peers are synchronized idempotently into the Deskflow screen layout after pairing or rediscovery.
 - Last verified stage tag: `relaydesk-phase4-20260813-03` (`05f92a1ab721f7fd8b893e47e05643d5988e1719`)
+
+## 2026-08-14 紧凑界面变更
+
+- 用户已确认设计输入：
+  `product/assets/design/relaydesk-compact-ui-approved-20260814.png`；SHA-256：
+  `2f9cf97352ab9819eb5aa2b5d54b9ec9a4fbf171cea56525fb7e2ef149cfbe94`。
+- 已确认范围：小巧单栏首页、原创“双设备 + 中继点”临时 Logo、最小化/关闭到 tray 或
+  menu bar，以及 macOS 权限分项能力门控与平台适配。
+- 设计确认是实现输入，不是完成证据；现有 `relaydesk-phase4-20260813-03` 安装包早于本次
+  改版，不能用于证明下列任务已实现。
+
+| ID | 状态 | Owner | 当前证据 / 下一步 |
+|---|---|---|---|
+| UI-010 | IN_PROGRESS | A3/A0 | PRD 与 UI/UX 规格已更新；待共享 Qt 紧凑首页实现和回归 |
+| BRAND-002 | IN_PROGRESS | A3/A4/A5 | 设计方向已确认；待 SVG 单源、平台派生资源和打包接线 |
+| TRAY-001 | IN_PROGRESS | A3/A4/A5 | 行为契约已定义；待最小化/关闭到托盘、菜单动作和真正退出验证 |
+| MAC-037 | IN_PROGRESS | A5/A3/A0 | macOS owner 规格已同步；待权限能力门控、menu bar 适配和 lifecycle 回归 |
 
 ## 自动执行状态
 
