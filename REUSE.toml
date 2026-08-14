@@ -50,6 +50,8 @@ SPDX-License-Identifier = "GPL-2.0-only"
 [[annotations]]
 path = [
    "deploy/mac/dmg-background.tiff"
+ , "product/assets/design/relaydesk-compact-ui-approved-20260814.png"
+ , "src/apps/res/RelayDesk.ico"
  , "src/apps/res/RelayDesk.icns"
 ]
 SPDX-FileCopyrightText = "2026 RelayDesk Contributors"
