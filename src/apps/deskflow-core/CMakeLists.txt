@@ -15,12 +15,13 @@ add_executable(${target}
 if(WIN32)
   # Generate rc file
   set(EXE_DESCRIPTION "${CMAKE_PROJECT_PROPER_NAME} combined server and client application")
-  set(EXE_ICON "IDI_DESKFLOW ICON DISCARDABLE \"${CMAKE_SOURCE_DIR}/src/apps/res/deskflow.ico\"")
+  set(relaydesk_windows_icon "${CMAKE_SOURCE_DIR}/${RELAYDESK_WINDOWS_ICON_SOURCE}")
+  set(EXE_ICON "IDI_DESKFLOW ICON DISCARDABLE \"${relaydesk_windows_icon}\"")
   configure_file(${CMAKE_SOURCE_DIR}/src/apps/res/windows.rc.in ${target}.rc)
 
   target_sources(${target} PRIVATE
     ${target}.exe.manifest
-    ${CMAKE_SOURCE_DIR}/src/apps/res/deskflow.ico
+    ${relaydesk_windows_icon}
     ${CMAKE_CURRENT_BINARY_DIR}/${target}.rc
   )
 endif()

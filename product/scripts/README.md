@@ -54,6 +54,7 @@ Windows 签名是可选步骤。没有签名身份时脚本继续生成明确标
 - `build-macos.sh`：Apple Silicon Release/Debug 构建与测试；
 - `package-macos.sh`：App/DMG/源包、产物收集和 SHA-256。
 - `generate-macos-brand-assets.py`：从品牌 SVG 单源生成/校验 App `.icns`、menu bar template 图标和 DMG 图稿。
+- `generate-windows-brand-assets.py`：从同一品牌图稿生成/校验包含 16–256 px 的 Windows `.ico`。
 
 本机缺少需要人工授权安装的 Xcode/Homebrew 时，A0 使用同一工作流的 macOS runner，不向用户转交环境准备。
 

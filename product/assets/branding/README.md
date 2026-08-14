@@ -20,6 +20,10 @@
 - macOS menu bar 使用 template 图标，让系统适配浅色、深色和高对比外观；
 - 不复用 Deskflow 图形，也不得让 RelayDesk 看起来像 Deskflow 官方发布。
 
+`product/scripts/generate-windows-brand-assets.py` 从同一 SVG 已生成的最高分辨率应用图稿派生
+Windows 多尺寸 ICO；`product/scripts/generate-macos-brand-assets.py` 生成 ICNS、菜单栏 template
+和 DMG 图稿。两端不得回退到 Deskflow 图标或各自重画几何。
+
 ## 计划输出
 
 | 用途 | 资产/接入点 | 完成条件 |

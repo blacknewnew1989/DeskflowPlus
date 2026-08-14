@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import struct
 import sys
 from pathlib import Path
 
@@ -18,6 +19,7 @@ REQUIRED_VALUES = {
     "RELAYDESK_WINDOWS_WIX_UPGRADE_GUID": "50C1FCAB-2BF8-447C-806D-A53C21C6A237",
     "RELAYDESK_PACKAGE_ID": "relaydesk",
     "RELAYDESK_BRAND_MARK_SOURCE": "product/assets/branding/relaydesk-mark.svg",
+    "RELAYDESK_WINDOWS_ICON_SOURCE": "src/apps/res/RelayDesk.ico",
     "RELAYDESK_MACOS_ICON_FILE": "RelayDesk.icns",
     "RELAYDESK_MACOS_ICON_SOURCE": "src/apps/res/RelayDesk.icns",
     "RELAYDESK_MACOS_MENU_BAR_ICON_NAME": "${RELAYDESK_BUNDLE_IDENTIFIER}-symbolic",
@@ -44,11 +46,14 @@ CONSUMERS = {
     ),
     ROOT / "deploy/mac/generate_ds_store.applescript": ("@CMAKE_PROJECT_PROPER_NAME@.app",),
     ROOT / "src/apps/deskflow-gui/CMakeLists.txt": (
+        "${RELAYDESK_WINDOWS_ICON_SOURCE}",
         "${RELAYDESK_MACOS_ICON_FILE}",
         "${RELAYDESK_MACOS_ICON_SOURCE}",
         "${RELAYDESK_MACOS_LOCAL_NETWORK_USAGE_DESCRIPTION}",
         "relaydesk-brand.qrc.in",
     ),
+    ROOT / "src/apps/deskflow-core/CMakeLists.txt": ("${RELAYDESK_WINDOWS_ICON_SOURCE}",),
+    ROOT / "src/apps/deskflow-daemon/CMakeLists.txt": ("${RELAYDESK_WINDOWS_ICON_SOURCE}",),
     ROOT / "src/apps/res/relaydesk-brand.qrc.in": (
         "@RELAYDESK_BRAND_MARK_SOURCE@",
         "@RELAYDESK_MACOS_MENU_BAR_ICON_NAME@",
@@ -79,6 +84,27 @@ def main() -> int:
         for needle in needles:
             if needle not in text:
                 errors.append(f"{path.relative_to(ROOT)} does not consume {needle}")
+
+    windows_icon = ROOT / REQUIRED_VALUES["RELAYDESK_WINDOWS_ICON_SOURCE"]
+    if not windows_icon.is_file():
+        errors.append("RelayDesk Windows icon is missing")
+    else:
+        data = windows_icon.read_bytes()
+        if len(data) < 6 or data[:4] != b"\x00\x00\x01\x00":
+            errors.append("RelayDesk Windows icon is not a valid ICO container")
+        elif struct.unpack_from("<H", data, 4)[0] < 7:
+            errors.append("RelayDesk Windows icon must contain small through high-DPI sizes")
+        legacy_icon = ROOT / "src/apps/res/deskflow.ico"
+        if legacy_icon.is_file() and data == legacy_icon.read_bytes():
+            errors.append("RelayDesk Windows icon must not reuse the Deskflow icon")
+
+    for path in (
+        ROOT / "src/apps/deskflow-gui/CMakeLists.txt",
+        ROOT / "src/apps/deskflow-core/CMakeLists.txt",
+        ROOT / "src/apps/deskflow-daemon/CMakeLists.txt",
+    ):
+        if "src/apps/res/deskflow.ico" in path.read_text(encoding="utf-8"):
+            errors.append(f"{path.relative_to(ROOT)} still embeds the Deskflow icon")
 
     if errors:
         print("branding validation failed:", file=sys.stderr)
