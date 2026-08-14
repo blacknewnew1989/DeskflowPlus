@@ -35,13 +35,25 @@
   menu bar，以及 macOS 权限分项能力门控与平台适配。
 - 设计确认是实现输入，不是完成证据；现有 `relaydesk-phase4-20260813-03` 安装包早于本次
   改版，不能用于证明下列任务已实现。
+- 当前代理工作树已完成紧凑首页、品牌资源、menu bar/后台 lifecycle、macOS 权限能力门控
+  和受影响本机回归；这些结果尚未合入产品分支或经过本次改版的双平台 CI，不能沿用旧
+  Phase 4 run 作为新改版证据。
+- I18N-002 已在本机实现英语、简体中文、西班牙语、意大利语、日语、韩语、俄语七种可选
+  语言；语言可在运行时立即切换并持久化，构建 App 已核对包含 21 个 `.qm`（7 个
+  Deskflow、7 个 RelayDesk、7 个 Qt）。
 
 | ID | 状态 | Owner | 当前证据 / 下一步 |
 |---|---|---|---|
-| UI-010 | IN_PROGRESS | A3/A0 | PRD 与 UI/UX 规格已更新；待共享 Qt 紧凑首页实现和回归 |
-| BRAND-002 | IN_PROGRESS | A3/A4/A5 | 设计方向已确认；待 SVG 单源、平台派生资源和打包接线 |
-| TRAY-001 | IN_PROGRESS | A3/A4/A5 | 行为契约已定义；待最小化/关闭到托盘、菜单动作和真正退出验证 |
-| MAC-037 | IN_PROGRESS | A5/A3/A0 | macOS owner 规格已同步；待权限能力门控、menu bar 适配和 lifecycle 回归 |
+| UI-010 | IN_PROGRESS | A3/A0 | 共享 Qt 紧凑单栏首页和显式“暂停/继续共享”入口已实现，受影响本机 Qt 测试 PASS；待集成与双平台 CI |
+| BRAND-002 | IN_PROGRESS | A3/A4/A5 | SVG 单源、彩色应用资源和单色 menu bar 资源已接线，本机品牌与打包契约检查 PASS；待集成与双平台 CI |
+| TRAY-001 | IN_PROGRESS | A3/A4/A5 | menu bar 菜单、窗口恢复、最小化/关闭到后台及真正退出 lifecycle 已实现并完成本机回归；待集成与双平台 CI |
+| MAC-037 | IN_PROGRESS | A5/A3/A0 | Accessibility 能力门控、紧凑首页、menu bar 与 lifecycle 代码和受影响本机回归已完成；最终直接 Mach-O 测试包授权后的真实 `deskflow-core`/输入链路及双机键鼠仍为 `NOT_RUN` |
+| I18N-002 | IN_PROGRESS | A5/A3/A0 | 七种语言可选、运行时立即切换与持久化已实现；7+7+7 共 21 个 `.qm` 及翻译/运行时本机测试 PASS；待集成与双平台 CI |
+
+本次改版的自动化本机范围已经完成。尚未运行的真机项仅为：用最终稳定、
+`CFBundleExecutable` 直接指向 Mach-O 的测试包重新完成 macOS 授权后，验证真实
+`deskflow-core` 输入链路，以及 Win↔Mac 双机键鼠。不得把旧 wrapper 测试包的系统开关、
+旧 Phase 4 artifact 或当前本机自动化结果写成上述真机项 PASS。
 
 ## 自动执行状态
 
