@@ -81,9 +81,16 @@
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="cbMinimizeToTray">
+            <property name="text">
+             <string>Hide to the notification area when the window is minimized</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QCheckBox" name="cbCloseToTray">
             <property name="text">
-             <string>Leave app running in notification area when the window is closed</string>
+             <string>Keep running in the notification area when the window is closed</string>
             </property>
            </widget>
           </item>

@@ -74,6 +74,7 @@ public:
     inline static const auto UpdateCheckUrl = QStringLiteral("gui/updateCheckUrl");
     inline static const auto CloseReminder = QStringLiteral("gui/closeReminder");
     inline static const auto CloseToTray = QStringLiteral("gui/closeToTray");
+    inline static const auto MinimizeToTray = QStringLiteral("gui/minimizeToTray");
     inline static const auto LogExpanded = QStringLiteral("gui/logExpanded");
     inline static const auto SymbolicTrayIcon = QStringLiteral("gui/symbolicTrayIcon");
     inline static const auto WindowGeometry = QStringLiteral("gui/windowGeometry");
@@ -225,6 +226,7 @@ private:
     , Settings::Gui::UpdateCheckUrl
     , Settings::Gui::CloseReminder
     , Settings::Gui::CloseToTray
+    , Settings::Gui::MinimizeToTray
     , Settings::Gui::LogExpanded
     , Settings::Gui::SymbolicTrayIcon
     , Settings::Gui::WindowGeometry
@@ -244,6 +246,7 @@ private:
   inline static const QStringList m_defaultFalseValues = {
       Settings::Gui::Autohide
     , Settings::Gui::AutoStartCore
+    , Settings::Gui::LogExpanded
     , Settings::Gui::ShownFirstConnectedMessage
     , Settings::Gui::ShownServerFirstStartMessage
     , Settings::Gui::ShowVersionInTitle
@@ -262,7 +265,7 @@ private:
     , Settings::Client::LanguageSync
     , Settings::Gui::CloseToTray
     , Settings::Gui::CloseReminder
-    , Settings::Gui::LogExpanded
+    , Settings::Gui::MinimizeToTray
     , Settings::Gui::SymbolicTrayIcon
     , Settings::Gui::ShowGenericClientFailureDialog
     , Settings::Security::TlsEnabled

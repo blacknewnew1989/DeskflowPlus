@@ -66,6 +66,7 @@
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QCoreApplication>
+#include <QTimer>
 
 #include <memory>
 #include <utility>
@@ -78,9 +79,19 @@ using namespace deskflow::gui;
 using CoreConnectionState = CoreProcess::ConnectionState;
 using CoreProcessState = CoreProcess::ProcessState;
 
+namespace {
+const QSize kRelayDeskDefaultWindowSize{560, 420};
+const QSize kRelayDeskMinimumWindowSize{520, 380};
+}
+
 MainWindow::MainWindow()
     : ui{std::make_unique<Ui::MainWindow>()},
       m_coreProcess(m_serverConfig),
+      m_backgroundLifecycle({
+          .minimizeToTray = Settings::value(Settings::Gui::MinimizeToTray).toBool(),
+          .closeToTray = Settings::value(Settings::Gui::CloseToTray).toBool(),
+          .closeReminderPending = Settings::value(Settings::Gui::CloseReminder).toBool(),
+      }),
       m_serverConnection(this, m_serverConfig),
       m_clientConnection(this),
       m_trayIcon{new QSystemTrayIcon(this)},
@@ -103,12 +114,14 @@ MainWindow::MainWindow()
       m_actionTrayQuit{new QAction(this)},
       m_actionRestore{new QAction(this)},
       m_actionSettings{new QAction(this)},
+      m_actionPauseSharing{new QAction(this)},
       m_actionStartCore{new QAction(this)},
       m_actionRestartCore{new QAction(this)},
       m_actionStopCore{new QAction(this)},
       m_networkMonitor{new NetworkMonitor(this)}
 {
   ui->setupUi(this);
+  setMinimumSize(kRelayDeskMinimumWindowSize);
 
   setWindowIcon(QIcon::fromTheme(kRevFqdnName));
 
@@ -204,6 +217,9 @@ MainWindow::MainWindow()
   m_actionSettings->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
   m_actionSettings->setMenuRole(QAction::PreferencesRole);
 
+  m_actionPauseSharing->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-pause")));
+  m_actionPauseSharing->setMenuRole(QAction::NoRole);
+
   m_actionStartCore->setIcon(QIcon::fromTheme(QStringLiteral("system-run")));
   m_actionStartCore->setMenuRole(QAction::NoRole);
 
@@ -226,9 +242,15 @@ MainWindow::MainWindow()
   setupControls();
   updateText();
   connectSlots();
+  connect(
+      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::snapshotChanged, this,
+      &MainWindow::applyInputPermissionGate
+  );
   setupTrayIcon();
+  connect(qApp, &QCoreApplication::aboutToQuit, this, &MainWindow::beginShutdown);
   updateScreenName();
   applyConfig();
+  applyInputPermissionGate();
   restoreWindow();
 
   qDebug().noquote() << "active settings path:" << Settings::settingsPath();
@@ -253,20 +275,7 @@ MainWindow::MainWindow()
 }
 MainWindow::~MainWindow()
 {
-  if (m_relayDeskTransfer) {
-    m_relayDeskTransfer->stop();
-  }
-  if (m_relayDeskDiscovery) {
-    m_relayDeskDiscovery->stop();
-  }
-
-  // Stop network monitoring
-  if (m_networkMonitor) {
-    m_networkMonitor->stopMonitoring();
-  }
-
-  m_guiDupeChecker->close();
-  m_coreProcess.cleanup();
+  beginShutdown();
 }
 
 void MainWindow::setupRelayDeskDiscovery()
@@ -488,22 +497,59 @@ deskflow::relaydesk::widgets::TransferCenterDock &MainWindow::relayDeskTransferC
 void MainWindow::restoreWindow()
 {
   auto windowGeometry = Settings::value(Settings::Gui::WindowGeometry).toRect();
-  const auto totalGeometry = QGuiApplication::primaryScreen()->availableGeometry();
   if (!windowGeometry.isValid()) {
-    adjustSize();
+    resize(kRelayDeskDefaultWindowSize);
     windowGeometry = geometry();
   } else {
     setGeometry(windowGeometry);
+    resize(size().expandedTo(kRelayDeskMinimumWindowSize));
+    windowGeometry = geometry();
   }
   m_expandedSize = geometry().size();
 
-  if (!totalGeometry.contains(windowGeometry)) {
-    QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
-    move(screenGeometry.center() - rect().center());
+  QScreen *targetScreen = nullptr;
+  for (auto *screen : QGuiApplication::screens()) {
+    if (screen->availableGeometry().intersects(windowGeometry)) {
+      targetScreen = screen;
+      break;
+    }
   }
 
-  if (!Settings::value(Settings::Gui::LogExpanded).toBool())
-    setFixedSize(size());
+  if (targetScreen == nullptr) {
+    targetScreen = QGuiApplication::primaryScreen();
+    const auto available = targetScreen->availableGeometry();
+    move(available.center() - rect().center());
+  } else {
+    const auto available = targetScreen->availableGeometry();
+    auto bounded = geometry();
+    bounded.setSize(bounded.size().boundedTo(available.size()));
+    if (bounded.left() < available.left())
+      bounded.moveLeft(available.left());
+    if (bounded.top() < available.top())
+      bounded.moveTop(available.top());
+    if (bounded.right() > available.right())
+      bounded.moveRight(available.right());
+    if (bounded.bottom() > available.bottom())
+      bounded.moveBottom(available.bottom());
+    setGeometry(bounded);
+  }
+
+  setMinimumSize(kRelayDeskMinimumWindowSize);
+  rememberWindowGeometry();
+}
+
+QRect MainWindow::restorableWindowGeometry() const
+{
+  const auto current = isMinimized() ? normalGeometry() : geometry();
+  return current.isValid() ? current : m_lastVisibleGeometry;
+}
+
+void MainWindow::rememberWindowGeometry()
+{
+  const auto current = restorableWindowGeometry();
+  if (current.isValid()) {
+    m_lastVisibleGeometry = current;
+  }
 }
 
 void MainWindow::setupControls()
@@ -594,10 +640,11 @@ void MainWindow::connectSlots()
   connect(m_actionReportBug, &QAction::triggered, this, &MainWindow::openHelpUrl);
   connect(m_actionMinimize, &QAction::triggered, this, &MainWindow::hide);
 
-  connect(m_actionQuit, &QAction::triggered, this, &MainWindow::close);
-  connect(m_actionTrayQuit, &QAction::triggered, this, &MainWindow::close);
+  connect(m_actionQuit, &QAction::triggered, this, &MainWindow::requestApplicationQuit);
+  connect(m_actionTrayQuit, &QAction::triggered, this, &MainWindow::requestApplicationQuit);
   connect(m_actionRestore, &QAction::triggered, this, &MainWindow::showAndActivate);
   connect(m_actionSettings, &QAction::triggered, this, &MainWindow::openSettings);
+  connect(m_actionPauseSharing, &QAction::triggered, this, &MainWindow::toggleSharingPaused);
   connect(m_actionStartCore, &QAction::triggered, this, &MainWindow::startCore);
   connect(m_actionRestartCore, &QAction::triggered, this, &MainWindow::resetCore);
   connect(m_actionStopCore, &QAction::triggered, this, &MainWindow::stopCore);
@@ -658,12 +705,11 @@ void MainWindow::toggleLogVisible(bool visible)
     return;
   }
 
-  setFixedSize(16777215, 16777215);
+  setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
   Settings::setValue(Settings::Gui::LogExpanded, visible);
   if (visible) {
     if (m_logDock->isFloating()) {
       adjustSize();
-      setFixedSize(size());
     } else {
       QTimer::singleShot(15, this, [&] { resize(m_expandedSize); });
     }
@@ -675,13 +721,18 @@ void MainWindow::toggleLogVisible(bool visible)
     if (!m_logDock->isFloating()) {
       adjustSize();
     }
-    setFixedSize(size());
+    resize(size().expandedTo(kRelayDeskMinimumWindowSize));
   }
-  Settings::setValue(Settings::Gui::WindowGeometry, geometry());
+  rememberWindowGeometry();
+  Settings::setValue(Settings::Gui::WindowGeometry, m_lastVisibleGeometry);
 }
 
 void MainWindow::settingsChanged(const QString &key)
 {
+  if (key == Settings::Gui::MinimizeToTray || key == Settings::Gui::CloseToTray) {
+    refreshBackgroundLifecycleSettings();
+  }
+
   if (key == Settings::Log::Level) {
     m_coreProcess.applyLogLevel();
     return;
@@ -738,6 +789,14 @@ void MainWindow::coreProcessError(CoreProcess::Error error)
 
 void MainWindow::startCore()
 {
+  if (m_shutdownStarted)
+    return;
+
+  if (!inputSharingAllowed()) {
+    applyInputPermissionGate();
+    return;
+  }
+
   // Save current IP state when server starts
   if (m_coreProcess.mode() == CoreMode::Server && Settings::value(Settings::Core::Interface).toString().isEmpty()) {
     m_serverStartIPs = m_networkMonitor->getAvailableIPv4Addresses();
@@ -811,6 +870,9 @@ void MainWindow::openGetNewVersionUrl() const
 
 void MainWindow::openSettings()
 {
+  if (m_shutdownStarted)
+    return;
+
   auto dialog = SettingsDialog(this, m_serverConfig, m_coreProcess);
 
   if (dialog.exec() == QDialog::Accepted) {
@@ -826,6 +888,8 @@ void MainWindow::openSettings()
 
 void MainWindow::resetCore()
 {
+  if (m_shutdownStarted)
+    return;
   m_coreProcess.restart();
 }
 
@@ -860,6 +924,7 @@ void MainWindow::coreModeToggled(bool checked)
   Settings::save();
 
   updateModeControls();
+  applyInputPermissionGate();
 }
 
 void MainWindow::updateModeControls()
@@ -1028,14 +1093,15 @@ void MainWindow::createMenuBar()
 void MainWindow::setupTrayIcon()
 {
   auto trayMenu = new QMenu(this);
-  trayMenu->addActions(
-      {m_actionStartCore, m_actionRestartCore, m_actionStopCore, m_actionMinimize, m_actionRestore, m_actionTrayQuit}
-  );
-  trayMenu->insertSeparator(m_actionMinimize);
-  trayMenu->insertSeparator(m_actionTrayQuit);
+  trayMenu->addAction(m_actionRestore);
+  trayMenu->addAction(m_actionPauseSharing);
+  trayMenu->addAction(m_actionSettings);
+  trayMenu->addSeparator();
+  trayMenu->addAction(m_actionTrayQuit);
   m_trayIcon->setContextMenu(trayMenu);
 
   setTrayIcon();
+  updateSharingAction();
   m_trayIcon->show();
 }
 
@@ -1052,6 +1118,7 @@ void MainWindow::applyConfig()
 
   updateLocalFingerprint();
   setTrayIcon();
+  refreshBackgroundLifecycleSettings();
 
   if (const auto ip = Settings::value(Settings::Core::Interface).toString(); !ip.isEmpty()) {
     m_serverStartIPs = {ip};
@@ -1078,11 +1145,16 @@ void MainWindow::setTrayIcon()
   static const auto fallbackPath = QStringLiteral(":/icons/%1-%2/apps/64/%3");
 
   QString themeIcon = kRevFqdnName;
+  if (deskflow::platform::isMac()) {
+    themeIcon.append(QStringLiteral("-symbolic"));
+    auto icon = QIcon(fallbackPath.arg(kAppId, QStringLiteral("dark"), themeIcon));
+    icon.setIsMask(true);
+    m_trayIcon->setIcon(icon);
+    return;
+  }
+
   if (!Settings::value(Settings::Gui::SymbolicTrayIcon).toBool()) {
-    if (deskflow::platform::isMac())
-      m_trayIcon->setIcon(QIcon::fromTheme(themeIcon));
-    else
-      m_trayIcon->setIcon(QIcon(fallbackPath.arg(kAppId, QStringLiteral("dark"), themeIcon)));
+    m_trayIcon->setIcon(QIcon(fallbackPath.arg(kAppId, QStringLiteral("dark"), themeIcon)));
     return;
   }
 
@@ -1102,6 +1174,212 @@ void MainWindow::setTrayIcon()
   auto icon = QIcon::fromTheme(themeIcon, QIcon(fallbackPath.arg(kAppId, iconMode(), themeIcon)));
   icon.setIsMask(true);
   m_trayIcon->setIcon(icon);
+}
+
+void MainWindow::refreshBackgroundLifecycleSettings()
+{
+  m_backgroundLifecycle.setMinimizeToTray(Settings::value(Settings::Gui::MinimizeToTray).toBool());
+  m_backgroundLifecycle.setCloseToTray(Settings::value(Settings::Gui::CloseToTray).toBool());
+}
+
+bool MainWindow::inputSharingAllowed() const
+{
+  if (m_relayDeskPermissionModel == nullptr) {
+    return true;
+  }
+
+  switch (m_coreProcess.mode()) {
+  case CoreMode::Server:
+    return m_relayDeskPermissionModel->canCaptureInput();
+  case CoreMode::Client:
+    return m_relayDeskPermissionModel->canControlInput();
+  case CoreMode::None:
+    return true;
+  }
+  return false;
+}
+
+bool MainWindow::coreConfigurationReady() const
+{
+  const auto mode = m_coreProcess.mode();
+  return mode == CoreMode::Server ||
+         (mode == CoreMode::Client && !ui->lineHostname->text().trimmed().isEmpty());
+}
+
+QString MainWindow::inputPermissionReason() const
+{
+  if (m_relayDeskPermissionModel == nullptr) {
+    return {};
+  }
+
+  const auto requiredKind = m_coreProcess.mode() == CoreMode::Server
+                                ? deskflow::relaydesk::PermissionKind::MacInputMonitoring
+                                : deskflow::relaydesk::PermissionKind::MacAccessibility;
+  for (int row = 0; row < m_relayDeskPermissionModel->rowCount(); ++row) {
+    const auto index = m_relayDeskPermissionModel->index(row, 0);
+    if (index.data(deskflow::relaydesk::model::PermissionStatusModel::KindRole).toInt() !=
+        static_cast<int>(requiredKind)) {
+      continue;
+    }
+    return QStringLiteral("%1 — %2")
+        .arg(
+            index.data(deskflow::relaydesk::model::PermissionStatusModel::TitleRole).toString(),
+            index.data(deskflow::relaydesk::model::PermissionStatusModel::AffectedCapabilityTextRole).toString()
+        );
+  }
+  return {};
+}
+
+void MainWindow::applyInputPermissionGate()
+{
+  const bool allowed = inputSharingAllowed();
+  const auto state = m_coreProcess.processState();
+  const bool sharingActive = state == CoreProcessState::Starting || state == CoreProcessState::Started ||
+                             state == CoreProcessState::RetryPending;
+  if (!allowed && sharingActive) {
+    // Input sharing and file transfer have independent runtimes. Revoking an
+    // input permission stops the input core without stopping file transfers.
+    stopCore();
+  }
+
+  toggleCanRunCore(coreConfigurationReady());
+  updateSharingAction();
+  if (!allowed) {
+    const auto reason = inputPermissionReason();
+    m_actionStartCore->setToolTip(reason);
+    m_actionPauseSharing->setToolTip(reason);
+    ui->btnToggleCore->setToolTip(reason);
+  } else {
+    m_actionStartCore->setToolTip({});
+    ui->btnToggleCore->setToolTip({});
+  }
+}
+
+void MainWindow::updateSharingAction()
+{
+  using enum CoreProcessState;
+  const auto state = m_coreProcess.processState();
+  const bool sharingActive = state == Starting || state == Started || state == RetryPending;
+  const bool canResume = coreConfigurationReady() && inputSharingAllowed();
+
+  m_actionPauseSharing->setEnabled(sharingActive || (state == Stopped && canResume));
+  if (sharingActive) {
+    m_actionPauseSharing->setText(tr("&Pause sharing"));
+    m_actionPauseSharing->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-pause")));
+    m_actionPauseSharing->setToolTip(tr("Pause keyboard and clipboard sharing; file transfers keep running"));
+  } else {
+    m_actionPauseSharing->setText(tr("&Continue sharing"));
+    m_actionPauseSharing->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
+    m_actionPauseSharing->setToolTip(tr("Resume keyboard and clipboard sharing"));
+  }
+
+  if (!inputSharingAllowed()) {
+    m_actionPauseSharing->setToolTip(inputPermissionReason());
+  }
+}
+
+void MainWindow::toggleSharingPaused()
+{
+  if (m_shutdownStarted)
+    return;
+
+  using enum CoreProcessState;
+  const auto state = m_coreProcess.processState();
+  if (state == Starting || state == Started || state == RetryPending) {
+    stopCore();
+  } else if (state == Stopped && m_actionPauseSharing->isEnabled()) {
+    startCore();
+  }
+  updateSharingAction();
+}
+
+void MainWindow::showCloseToTrayReminder()
+{
+  auto *message = new QMessageBox(
+      QMessageBox::Information, kAppName,
+      tr("%1 is still running in the menu bar. Keyboard sharing and file transfers continue in the background. "
+         "Pausing sharing stops keyboard and clipboard sharing only; quitting the app stops everything.")
+          .arg(kAppName),
+      QMessageBox::NoButton, nullptr
+  );
+  message->setAttribute(Qt::WA_DeleteOnClose);
+  auto *acknowledge = message->addButton(tr("Got it"), QMessageBox::AcceptRole);
+  auto *settings = message->addButton(tr("Open Preferences"), QMessageBox::ActionRole);
+  message->setDefaultButton(qobject_cast<QPushButton *>(acknowledge));
+  connect(message, &QMessageBox::buttonClicked, this, [this, settings](QAbstractButton *button) {
+    if (button == settings) {
+      showAndActivate();
+      QTimer::singleShot(0, this, &MainWindow::openSettings);
+      return;
+    }
+    hide();
+  });
+  message->open();
+}
+
+void MainWindow::requestApplicationQuit()
+{
+  m_backgroundLifecycle.requestQuit();
+  beginShutdown();
+  QApplication::quit();
+}
+
+void MainWindow::beginShutdown()
+{
+  const auto began = m_backgroundLifecycle.beginShutdown({
+      .stopAcceptingOperations = [this] {
+        m_shutdownStarted = true;
+        m_actionPauseSharing->setEnabled(false);
+        m_actionRestore->setEnabled(false);
+        m_actionMinimize->setEnabled(false);
+        m_actionSettings->setEnabled(false);
+        m_actionStartCore->setEnabled(false);
+        m_actionRestartCore->setEnabled(false);
+        m_actionStopCore->setEnabled(false);
+        m_devicesDock->setEnabled(false);
+        m_transferCenterDock->setEnabled(false);
+        centralWidget()->setEnabled(false);
+        if (m_saveOnExit) {
+          rememberWindowGeometry();
+          Settings::setValue(Settings::Gui::WindowGeometry, m_lastVisibleGeometry);
+          Settings::setValue(Settings::Gui::AutoStartCore, m_coreProcess.isStarted());
+          saveSettings();
+        }
+        if (m_relayDeskReconnect != nullptr) {
+          m_relayDeskReconnect->stop();
+        }
+      },
+      .stopInputSharing = [this] {
+        if (m_coreProcess.processState() != CoreProcessState::Stopped) {
+          m_coreProcess.stop();
+        }
+        m_coreProcess.cleanup();
+      },
+      .persistAndStopTransfers = [this] {
+        if (m_relayDeskTransfer != nullptr) {
+          m_relayDeskTransfer->stop();
+        }
+      },
+      .stopNetworkServices = [this] {
+        if (m_relayDeskDiscovery != nullptr) {
+          m_relayDeskDiscovery->stop();
+        }
+        if (m_networkMonitor != nullptr) {
+          m_networkMonitor->stopMonitoring();
+        }
+        if (m_guiDupeChecker != nullptr) {
+          m_guiDupeChecker->close();
+        }
+      },
+      .removeTrayIcon = [this] {
+        if (m_trayIcon != nullptr) {
+          m_trayIcon->hide();
+        }
+      },
+  });
+  if (!began) {
+    return;
+  }
 }
 
 void MainWindow::handleLogLine(const QString &line)
@@ -1180,28 +1458,33 @@ void MainWindow::checkFingerprint(const QString &line)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-  if (Settings::value(Settings::Gui::CloseToTray).toBool() && event->spontaneous()) {
-    if (Settings::value(Settings::Gui::CloseReminder).toBool()) {
-      messages::showCloseReminder(this);
-      Settings::setValue(Settings::Gui::CloseReminder, false);
-    }
-    Settings::setValue(Settings::Gui::WindowGeometry, geometry());
+  const bool operatingSystemShutdown = qGuiApp != nullptr && qGuiApp->isSavingSession();
+  if (m_backgroundLifecycle.closeDisposition(event->spontaneous(), operatingSystemShutdown) ==
+      deskflow::relaydesk::WindowCloseDisposition::HideToTray) {
+    rememberWindowGeometry();
+    Settings::setValue(Settings::Gui::WindowGeometry, m_lastVisibleGeometry);
     qDebug() << "hiding to tray";
-    hide();
+    if (m_backgroundLifecycle.takeCloseReminder()) {
+      Settings::setValue(Settings::Gui::CloseReminder, false);
+      Settings::save(false);
+      QMainWindow::hide();
+      m_actionRestore->setVisible(true);
+      m_actionMinimize->setVisible(false);
+      showCloseToTrayReminder();
+    } else {
+      hide();
+    }
     event->ignore();
     return;
   }
 
-  if (m_saveOnExit) {
-    Settings::setValue(Settings::Gui::WindowGeometry, geometry());
-    Settings::setValue(Settings::Gui::AutoStartCore, m_coreProcess.isStarted());
-  }
   qDebug() << "quitting application";
 
   // any connected dock view acitons will be triggered
   // disconnect them before accepting the event
   disconnect(m_logDock->toggleViewAction(), &QAction::toggled, nullptr, nullptr);
 
+  beginShutdown();
   event->accept();
   QApplication::quit();
 }
@@ -1324,6 +1607,7 @@ void MainWindow::coreProcessStateChanged(CoreProcessState state)
     m_actionStopCore->setEnabled(false);
   }
   updateModeControlLabels();
+  updateSharingAction();
 }
 
 void MainWindow::coreConnectionStateChanged(CoreConnectionState state)
@@ -1349,6 +1633,7 @@ void MainWindow::updateLocalFingerprint()
 
 void MainWindow::hide()
 {
+  rememberWindowGeometry();
 #ifdef Q_OS_MACOS
   macOSNativeHide();
 #else
@@ -1361,7 +1646,16 @@ void MainWindow::hide()
 void MainWindow::changeEvent(QEvent *e)
 {
   QMainWindow::changeEvent(e);
-  if (e->type() == QEvent::PaletteChange) {
+  if (e->type() == QEvent::WindowStateChange && isMinimized()) {
+    const bool operatingSystemShutdown = qGuiApp != nullptr && qGuiApp->isSavingSession();
+    if (m_backgroundLifecycle.shouldHideAfterMinimize(operatingSystemShutdown)) {
+      QTimer::singleShot(0, this, [this] {
+        if (!m_shutdownStarted && isMinimized()) {
+          hide();
+        }
+      });
+    }
+  } else if (e->type() == QEvent::PaletteChange) {
     updateIconTheme();
     setWindowIcon(QIcon::fromTheme(kRevFqdnName));
     setTrayIcon();
@@ -1390,6 +1684,7 @@ void MainWindow::updateText()
   //: %1 will be the replaced with the appname
   m_actionRestore->setText(tr("&Open %1").arg(kAppName));
   m_actionSettings->setText(tr("&Preferences"));
+  updateSharingAction();
   m_actionStartCore->setText(tr("&Start"));
   m_actionRestartCore->setText(tr("Rest&art"));
   m_actionStopCore->setText(tr("S&top"));
@@ -1447,17 +1742,17 @@ void MainWindow::updateScreenName()
 
 void MainWindow::showAndActivate()
 {
-  const auto wasVisible = isVisible();
 #ifdef Q_OS_MACOS
   forceAppActive();
 #endif
   showNormal();
+  if (m_lastVisibleGeometry.isValid()) {
+    setGeometry(m_lastVisibleGeometry);
+  }
   raise();
   activateWindow();
   m_actionRestore->setVisible(false);
   m_actionMinimize->setVisible(true);
-  if (!wasVisible)
-    restoreWindow();
 }
 
 void MainWindow::showHostNameEditor()
@@ -1563,9 +1858,10 @@ void MainWindow::daemonIpcClientConnectionFailed()
 void MainWindow::toggleCanRunCore(bool enableButtons)
 {
   const bool isStarted = m_coreProcess.isStarted();
-  ui->btnToggleCore->setEnabled(enableButtons);
-  ui->btnRestartCore->setEnabled(enableButtons && isStarted);
-  m_actionStartCore->setEnabled(enableButtons);
+  const bool inputAllowed = inputSharingAllowed();
+  ui->btnToggleCore->setEnabled(enableButtons && (isStarted || inputAllowed));
+  ui->btnRestartCore->setEnabled(enableButtons && isStarted && inputAllowed);
+  m_actionStartCore->setEnabled(enableButtons && inputAllowed);
   m_actionStopCore->setEnabled(enableButtons && isStarted);
 }
 

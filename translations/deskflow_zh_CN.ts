@@ -433,6 +433,34 @@ A bound IP is now invalid, you may need to restart the server.</source>
 绑定的 IP 地址现已失效，您可能需要重启服务器。</translation>
     </message>
     <message>
+        <source>&amp;Pause sharing</source>
+        <translation>暂停共享(&amp;P)</translation>
+    </message>
+    <message>
+        <source>Pause keyboard and clipboard sharing; file transfers keep running</source>
+        <translation>暂停键盘与剪贴板共享；文件传输继续运行</translation>
+    </message>
+    <message>
+        <source>&amp;Continue sharing</source>
+        <translation>继续共享(&amp;C)</translation>
+    </message>
+    <message>
+        <source>Resume keyboard and clipboard sharing</source>
+        <translation>恢复键盘与剪贴板共享</translation>
+    </message>
+    <message>
+        <source>%1 is still running in the menu bar. Keyboard sharing and file transfers continue in the background. Pausing sharing stops keyboard and clipboard sharing only; quitting the app stops everything.</source>
+        <translation>%1 仍在菜单栏中运行。键盘共享与文件传输会在后台继续。暂停共享只会停止键盘与剪贴板共享；退出应用会停止全部功能。</translation>
+    </message>
+    <message>
+        <source>Got it</source>
+        <translation>知道了</translation>
+    </message>
+    <message>
+        <source>Open Preferences</source>
+        <translation>打开偏好设置</translation>
+    </message>
+    <message>
         <source>%1 is starting...</source>
         <translation>%1 正在启动...</translation>
     </message>
@@ -1167,6 +1195,14 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Hide the window when the app starts</source>
         <translation>应用启动时隐藏窗口</translation>
+    </message>
+    <message>
+        <source>Hide to the notification area when the window is minimized</source>
+        <translation>窗口最小化时隐藏到通知区域</translation>
+    </message>
+    <message>
+        <source>Keep running in the notification area when the window is closed</source>
+        <translation>窗口关闭后继续在通知区域运行</translation>
     </message>
     <message>
         <source>Prevent this computer from going to sleep</source>

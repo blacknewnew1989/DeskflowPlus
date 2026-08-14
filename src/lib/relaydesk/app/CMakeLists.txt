@@ -6,6 +6,8 @@ find_package(Qt6 ${REQUIRED_QT_VERSION} REQUIRED COMPONENTS Concurrent)
 add_library(relaydesk_app STATIC
   AutoReconnectRuntime.cpp
   AutoReconnectRuntime.h
+  BackgroundLifecycleController.cpp
+  BackgroundLifecycleController.h
   DeviceDiscoveryRuntime.cpp
   DeviceDiscoveryRuntime.h
   FileTransferRuntime.cpp
