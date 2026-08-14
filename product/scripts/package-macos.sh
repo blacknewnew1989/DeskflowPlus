@@ -80,9 +80,16 @@ fi
 APP_BUNDLE="${APP_BUNDLES[0]}"
 OUT_DIR="$REPO_ROOT/dist/macos/$FULL_SHA"
 TRANSLATION_REPORT="$OUT_DIR/macos-translation-bundle.json"
+[[ -f "$REPO_ROOT/.relaydesk-toolchain-macos.env" ]] && source "$REPO_ROOT/.relaydesk-toolchain-macos.env"
+LCONVERT="$(command -v lconvert || true)"
+if [[ -z "$LCONVERT" ]]; then
+  echo "MACOS_TRANSLATION_LCONVERT_MISSING: A0 must use the GitHub Actions macOS runner." >&2
+  exit 10
+fi
 python3 "$SCRIPT_DIR/verify-macos-translation-bundle.py" \
   --repo-root "$REPO_ROOT" \
   --app-bundle "$APP_BUNDLE" \
+  --lconvert "$LCONVERT" \
   --report "$TRANSLATION_REPORT"
 echo "MACOS_TRANSLATION_BUNDLE_REPORT=$TRANSLATION_REPORT"
 

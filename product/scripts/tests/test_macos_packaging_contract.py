@@ -91,6 +91,8 @@ class MacosPackagingContractTests(unittest.TestCase):
 
         self.assertIn("verify-macos-translation-bundle.py", package)
         self.assertIn("verify-macos-translation-bundle.py", workflow)
+        self.assertIn('--lconvert "$LCONVERT"', package)
+        self.assertIn('--lconvert "$lconvert_path"', workflow)
         self.assertGreaterEqual(lifecycle.count("verify_translation_bundle("), 3)
         self.assertIn('Path("translations/RelayDeskLanguages.cmake")', verifier)
         self.assertIn('LANGUAGE_VARIABLE = "RELAYDESK_SUPPORTED_LANGUAGES"', verifier)
