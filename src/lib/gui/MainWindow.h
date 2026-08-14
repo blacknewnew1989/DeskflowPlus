@@ -12,6 +12,7 @@
 #include <QHostAddress>
 #include <QMainWindow>
 #include <QMutex>
+#include <QPersistentModelIndex>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSettings>
@@ -45,6 +46,9 @@ class QRadioButton;
 class QMessageBox;
 class QAbstractButton;
 class QLocalServer;
+class QFrame;
+class QProgressBar;
+class QStackedWidget;
 
 class DeskflowApplication;
 class LogDock;
@@ -157,6 +161,8 @@ private:
 
   void createMenuBar();
   void setupTrayIcon();
+  void setupRelayDeskShell();
+  void applyRelayDeskStyle();
   void applyConfig();
   void setTrayIcon();
   void setStatus(const QString &status);
@@ -177,6 +183,17 @@ private:
   void showFirstConnectedMessage();
   void updateStatus();
   void showAndActivate();
+  void showRelayDeskHome();
+  void showRelayDeskTransfers();
+  void showAdvancedConnection();
+  void updateCompactStatus();
+  void updateCompactDeviceCount();
+  void updateCompactTransferBar();
+  void triggerCompactTransferAction();
+  void updateTraySharingAction();
+  void toggleSharing();
+  void requestQuit();
+  void shutdownForQuit();
   void showHostNameEditor();
   void setHostName();
   void daemonIpcClientConnectionFailed();
@@ -218,12 +235,13 @@ private:
   bool m_secureSocket = false;
   bool m_saveOnExit = true;
   bool m_clientErrorVisible = false;
+  bool m_quitRequested = false;
+  bool m_shutdownStarted = false;
   deskflow::gui::core::WaylandWarnings m_waylandWarnings;
   ServerConfig m_serverConfig;
   deskflow::gui::CoreProcess m_coreProcess;
   deskflow::gui::ServerConnection m_serverConnection;
   deskflow::gui::ClientConnection m_clientConnection;
-  QSize m_expandedSize = QSize();
   QStringList m_checkedClients;
   QStringList m_checkedServers;
   QSystemTrayIcon *m_trayIcon = nullptr;
@@ -243,6 +261,22 @@ private:
   deskflow::relaydesk::model::TransferCenterModel *m_relayDeskTransferModel = nullptr;
   deskflow::relaydesk::widgets::DevicesDock *m_devicesDock = nullptr;
   deskflow::relaydesk::widgets::TransferCenterDock *m_transferCenterDock = nullptr;
+  QStackedWidget *m_relayDeskPages = nullptr;
+  QWidget *m_relayDeskHomePage = nullptr;
+  QWidget *m_relayDeskTransferPage = nullptr;
+  QWidget *m_legacyConnectionPage = nullptr;
+  QLabel *m_compactLogo = nullptr;
+  QLabel *m_compactStatusDot = nullptr;
+  QLabel *m_compactStatusLabel = nullptr;
+  QLabel *m_compactDeviceCount = nullptr;
+  QLabel *m_compactLocalLabel = nullptr;
+  QLabel *m_transferPageTitle = nullptr;
+  QFrame *m_compactTransferBar = nullptr;
+  QLabel *m_compactTransferName = nullptr;
+  QLabel *m_compactTransferMetrics = nullptr;
+  QProgressBar *m_compactTransferProgress = nullptr;
+  QPushButton *m_compactTransferAction = nullptr;
+  QPersistentModelIndex m_compactTransferIndex;
   QLabel *m_lblSecurityStatus = nullptr;
   QLabel *m_lblStatus = nullptr;
   QPushButton *m_btnFingerprint = nullptr;
@@ -263,9 +297,14 @@ private:
   QAction *m_actionTrayQuit = nullptr;
   QAction *m_actionRestore = nullptr;
   QAction *m_actionSettings = nullptr;
+  QAction *m_actionTraySettings = nullptr;
   QAction *m_actionStartCore = nullptr;
   QAction *m_actionRestartCore = nullptr;
   QAction *m_actionStopCore = nullptr;
+  QAction *m_actionToggleSharing = nullptr;
+  QAction *m_actionShowHome = nullptr;
+  QAction *m_actionShowTransfers = nullptr;
+  QAction *m_actionShowAdvanced = nullptr;
 
   // Network monitoring
   NetworkMonitor *m_networkMonitor = nullptr;

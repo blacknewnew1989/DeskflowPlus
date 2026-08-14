@@ -22,6 +22,7 @@ private Q_SLOTS:
   void tlsTrustedServersDb();
   void tlsTrustedClientsDb();
   void checkValidSettings();
+  void trayWindowBehaviorSettingsAreIndependent();
   void checkCleanScreenName();
   void checkCleanScreenName_LongName();
   void checkLogLevels_Valid();

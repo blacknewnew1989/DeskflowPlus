@@ -45,9 +45,6 @@ SettingsDialog::SettingsDialog(QWidget *parent, const IServerConfig &serverConfi
   ui->comboTlsKeyLength->setItemIcon(1, QIcon::fromTheme(QIcon::ThemeIcon::SecurityHigh));
   ui->lblTlsCertInfo->setFixedSize(28, 28);
 
-  ui->rbIconMono->setIcon(QIcon::fromTheme(QStringLiteral("%1-symbolic").arg(kRevFqdnName)));
-  ui->rbIconColorful->setIcon(QIcon::fromTheme(kRevFqdnName));
-
   // force the first tab, since qt creator sets the active tab as the last one
   // the developer was looking at, and it's easy to accidentally save that.
   ui->tabWidget->setCurrentIndex(0);
@@ -187,8 +184,8 @@ void SettingsDialog::accept()
   Settings::setValue(Settings::Security::Certificate, ui->lineTlsCertPath->text());
   Settings::setValue(Settings::Security::KeySize, ui->comboTlsKeyLength->currentText().toInt());
   Settings::setValue(Settings::Security::TlsEnabled, ui->groupSecurity->isChecked());
+  Settings::setValue(Settings::Gui::MinimizeToTray, ui->cbMinimizeToTray->isChecked());
   Settings::setValue(Settings::Gui::CloseToTray, ui->cbCloseToTray->isChecked());
-  Settings::setValue(Settings::Gui::SymbolicTrayIcon, ui->rbIconMono->isChecked());
   Settings::setValue(Settings::Security::CheckPeers, ui->cbRequireClientCert->isChecked());
   Settings::setValue(Settings::Core::Language, I18N::nativeTo639Name(ui->comboLanguage->currentText()));
   Settings::setValue(Settings::Log::GuiDebug, ui->cbGuiDebug->isChecked());
@@ -213,6 +210,7 @@ void SettingsDialog::loadFromConfig()
   ui->lineLogFilename->setText(Settings::value(Settings::Log::File).toString());
   ui->cbAutoHide->setChecked(Settings::value(Settings::Gui::Autohide).toBool());
   ui->cbPreventSleep->setChecked(Settings::value(Settings::Core::PreventSleep).toBool());
+  ui->cbMinimizeToTray->setChecked(Settings::value(Settings::Gui::MinimizeToTray).toBool());
   ui->cbCloseToTray->setChecked(Settings::value(Settings::Gui::CloseToTray).toBool());
   ui->cbElevateDaemon->setChecked(Settings::value(Settings::Daemon::Elevate).toBool());
   ui->cbAutoUpdate->setChecked(Settings::value(Settings::Gui::AutoUpdateCheck).toBool());
@@ -226,11 +224,6 @@ void SettingsDialog::loadFromConfig()
 
   if (!deskflow::platform::isWindows())
     ui->groupService->setVisible(false);
-
-  if (Settings::value(Settings::Gui::SymbolicTrayIcon).toBool())
-    ui->rbIconMono->setChecked(true);
-  else
-    ui->rbIconColorful->setChecked(true);
 
   ui->lblDebugWarning->setVisible(Settings::value(Settings::Log::Level).toInt() > 4);
 
@@ -254,12 +247,10 @@ void SettingsDialog::loadStartAtLogin()
     m_startAtLoginAvailable = false;
     ui->cbStartAtLogin->setChecked(false);
     ui->cbStartAtLogin->setEnabled(false);
-    ui->cbStartAtLogin->setToolTip(
-        tr("Start-at-login status could not be read (code %1, native %2). %3")
-            .arg(static_cast<int>(snapshot.errorCode))
-            .arg(snapshot.nativeError)
-            .arg(snapshot.diagnostic)
-    );
+    ui->cbStartAtLogin->setToolTip(tr("Start-at-login status could not be read (code %1, native %2). %3")
+                                       .arg(static_cast<int>(snapshot.errorCode))
+                                       .arg(snapshot.nativeError)
+                                       .arg(snapshot.diagnostic));
     return;
   }
 
@@ -379,6 +370,7 @@ void SettingsDialog::updateControls()
   ui->cbPreventSleep->setEnabled(writable);
   ui->lineTlsCertPath->setEnabled(writable);
   ui->comboTlsKeyLength->setEnabled(writable);
+  ui->cbMinimizeToTray->setEnabled(writable);
   ui->cbCloseToTray->setEnabled(writable);
   if (ui->cbStartAtLogin->isVisible()) {
     ui->cbStartAtLogin->setEnabled(m_startAtLoginAvailable && writable);

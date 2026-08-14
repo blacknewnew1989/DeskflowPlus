@@ -57,6 +57,7 @@ int main(int argc, char *argv[])
   QGuiApplication::setDesktopFileName(kRevFqdnName);
 
   QApplication app(argc, argv);
+  app.setQuitOnLastWindowClosed(false);
 
 #if defined(Q_OS_WIN)
   const auto appUserModelId = QString::fromLatin1(kWindowsAppUserModelId);

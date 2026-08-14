@@ -31,10 +31,10 @@
 #include "gui/ipc/DaemonIpcClient.h"
 #include "gui/widgets/LogDock.h"
 #include "net/FingerprintDatabase.h"
-#include "relaydesk/app/DeviceDiscoveryRuntime.h"
 #include "relaydesk/app/AutoReconnectRuntime.h"
-#include "relaydesk/app/PairingTrustRuntime.h"
+#include "relaydesk/app/DeviceDiscoveryRuntime.h"
 #include "relaydesk/app/FileTransferRuntime.h"
+#include "relaydesk/app/PairingTrustRuntime.h"
 #include "relaydesk/app/TransferRuntimeComposition.h"
 #include "relaydesk/device/DeviceIdentity.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
@@ -47,10 +47,15 @@
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 
+#include <QAbstractItemModel>
 #include <QCloseEvent>
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileDialog>
+#include <QFrame>
+#include <QHBoxLayout>
+#include <QListView>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QMenu>
@@ -58,15 +63,22 @@
 #include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkInterface>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QScreen>
 #include <QScrollBar>
+#include <QSizePolicy>
+#include <QStackedWidget>
 #include <QStandardPaths>
 #include <QSysInfo>
-#include <QCoreApplication>
+#include <QToolButton>
+#include <QToolTip>
+#include <QVBoxLayout>
+#include <QWindowStateChangeEvent>
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
@@ -103,9 +115,14 @@ MainWindow::MainWindow()
       m_actionTrayQuit{new QAction(this)},
       m_actionRestore{new QAction(this)},
       m_actionSettings{new QAction(this)},
+      m_actionTraySettings{new QAction(this)},
       m_actionStartCore{new QAction(this)},
       m_actionRestartCore{new QAction(this)},
       m_actionStopCore{new QAction(this)},
+      m_actionToggleSharing{new QAction(this)},
+      m_actionShowHome{new QAction(this)},
+      m_actionShowTransfers{new QAction(this)},
+      m_actionShowAdvanced{new QAction(this)},
       m_networkMonitor{new NetworkMonitor(this)}
 {
   ui->setupUi(this);
@@ -116,28 +133,25 @@ MainWindow::MainWindow()
 
   m_relayDeskDeviceModel = new deskflow::relaydesk::model::DeviceHomeModel(this);
   m_relayDeskPairingModel = new deskflow::relaydesk::model::PairingWizardModel(this);
-  m_relayDeskPermissionModel = new deskflow::relaydesk::model::PermissionStatusModel(
-      deskflow::relaydesk::buildPermissionPlatform(), this
-  );
+  m_relayDeskPermissionModel =
+      new deskflow::relaydesk::model::PermissionStatusModel(deskflow::relaydesk::buildPermissionPlatform(), this);
 #if defined(Q_OS_WIN)
   m_windowsFirewallProbe = new deskflow::relaydesk::WindowsFirewallProbe({}, {}, {}, this);
   m_relayDeskPermissionModel->setSnapshot(m_windowsFirewallProbe->current());
   connect(
-      m_windowsFirewallProbe, &deskflow::relaydesk::WindowsFirewallProbe::snapshotChanged,
-      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
+      m_windowsFirewallProbe, &deskflow::relaydesk::WindowsFirewallProbe::snapshotChanged, m_relayDeskPermissionModel,
+      &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
   );
   connect(
       m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::openSettingsRequested,
-      m_windowsFirewallProbe, [this](deskflow::relaydesk::PermissionKind kind) {
-        (void)m_windowsFirewallProbe->openSystemSettings(kind);
-      }
+      m_windowsFirewallProbe,
+      [this](deskflow::relaydesk::PermissionKind kind) { (void)m_windowsFirewallProbe->openSystemSettings(kind); }
   );
   connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
     if (state == Qt::ApplicationActive && m_windowsFirewallProbe != nullptr && m_relayDeskTransfer != nullptr) {
       const auto inputPort = Settings::value(Settings::Core::Port).toInt();
-      const auto filePort = static_cast<deskflow::relaydesk::FileTransferRuntime &>(
-                                m_relayDeskTransfer->service()
-                            ).listeningPort();
+      const auto filePort =
+          static_cast<deskflow::relaydesk::FileTransferRuntime &>(m_relayDeskTransfer->service()).listeningPort();
       m_windowsFirewallProbe->refresh({
           .executablePath = QCoreApplication::applicationFilePath(),
           .expectedTcpPorts = {static_cast<quint16>(inputPort), filePort},
@@ -150,8 +164,8 @@ MainWindow::MainWindow()
   m_macPermissionProbe = new deskflow::relaydesk::MacPermissionProbe(this);
   m_relayDeskPermissionModel->setSnapshot(m_macPermissionProbe->current());
   connect(
-      m_macPermissionProbe, &deskflow::relaydesk::MacPermissionProbe::snapshotChanged,
-      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
+      m_macPermissionProbe, &deskflow::relaydesk::MacPermissionProbe::snapshotChanged, m_relayDeskPermissionModel,
+      &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
   );
   connect(
       m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::openSettingsRequested,
@@ -167,8 +181,7 @@ MainWindow::MainWindow()
   );
   addDockWidget(Qt::RightDockWidgetArea, m_devicesDock);
   m_relayDeskTransferModel = new deskflow::relaydesk::model::TransferCenterModel(this);
-  m_transferCenterDock =
-      new deskflow::relaydesk::widgets::TransferCenterDock(*m_relayDeskTransferModel, this);
+  m_transferCenterDock = new deskflow::relaydesk::widgets::TransferCenterDock(*m_relayDeskTransferModel, this);
   connect(
       m_relayDeskTransferModel, &deskflow::relaydesk::model::TransferCenterModel::notificationRequested, this,
       [this](const ::relaydesk::transfer::TransferSnapshot &, const QString &title, const QString &message) {
@@ -204,6 +217,9 @@ MainWindow::MainWindow()
   m_actionSettings->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
   m_actionSettings->setMenuRole(QAction::PreferencesRole);
 
+  m_actionTraySettings->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
+  m_actionTraySettings->setMenuRole(QAction::NoRole);
+
   m_actionStartCore->setIcon(QIcon::fromTheme(QStringLiteral("system-run")));
   m_actionStartCore->setMenuRole(QAction::NoRole);
 
@@ -223,6 +239,7 @@ MainWindow::MainWindow()
   m_guiDupeChecker->listen(m_guiSocketName);
 
   createMenuBar();
+  setupRelayDeskShell();
   setupControls();
   updateText();
   connectSlots();
@@ -287,8 +304,7 @@ void MainWindow::setupRelayDeskDiscovery()
   }
 
   const auto inputPortValue = Settings::value(Settings::Core::Port).toInt();
-  const quint16 inputPort =
-      inputPortValue > 0 && inputPortValue <= 65535 ? static_cast<quint16>(inputPortValue) : 0;
+  const quint16 inputPort = inputPortValue > 0 && inputPortValue <= 65535 ? static_cast<quint16>(inputPortValue) : 0;
   deskflow::relaydesk::DeviceInfo localDevice{
       .deviceId = *deviceId,
       .displayName = Settings::value(Settings::Core::ComputerName).toString(),
@@ -296,11 +312,12 @@ void MainWindow::setupRelayDeskDiscovery()
       .architecture = QSysInfo::currentCpuArchitecture(),
       .appVersion = kVersion,
       .inputPort = inputPort,
-      .capabilities = {
-          .input = true,
-          .clipboardText = true,
-          .clipboardImage = true,
-      },
+      .capabilities =
+          {
+              .input = true,
+              .clipboardText = true,
+              .clipboardImage = true,
+          },
       .certificateFingerprintSha256 = m_fingerprint.data,
   };
 
@@ -325,8 +342,7 @@ void MainWindow::setupRelayDeskDiscovery()
   connect(
       m_relayDeskPairing, &deskflow::relaydesk::PairingTrustRuntime::operationFailed, this,
       [](const deskflow::relaydesk::PairingOperationResult &result) {
-        qWarning().noquote() << "RelayDesk pairing error" << static_cast<int>(result.error) << ':'
-                             << result.diagnostic;
+        qWarning().noquote() << "RelayDesk pairing error" << static_cast<int>(result.error) << ':' << result.diagnostic;
       }
   );
   connect(
@@ -382,14 +398,12 @@ void MainWindow::syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &p
       m_coreProcess.restart();
     }
   } else if (result == RelayDeskInputLayoutResult::InvalidScreenName) {
-    qWarning().noquote() << "RelayDesk could not add paired input peer with invalid screen name:"
-                         << peer->displayName;
+    qWarning().noquote() << "RelayDesk could not add paired input peer with invalid screen name:" << peer->displayName;
   } else if (result == RelayDeskInputLayoutResult::ExternalConfigActive) {
     qWarning().noquote() << "RelayDesk did not modify the active external server configuration for:"
                          << peer->displayName;
   } else if (result == RelayDeskInputLayoutResult::LayoutFull) {
-    qWarning().noquote() << "RelayDesk screen layout is full; paired input peer was not added:"
-                         << peer->displayName;
+    qWarning().noquote() << "RelayDesk screen layout is full; paired input peer was not added:" << peer->displayName;
   }
 }
 
@@ -408,17 +422,16 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
   auto *runtimeObserver = runtime.get();
   connect(
       runtimeObserver, &deskflow::relaydesk::FileTransferRuntime::errorOccurred, this,
-      [](deskflow::relaydesk::FileTransferRuntimeError error,
-         deskflow::relaydesk::FileTlsError transportError, const QString &diagnostic) {
+      [](deskflow::relaydesk::FileTransferRuntimeError error, deskflow::relaydesk::FileTlsError transportError,
+         const QString &diagnostic) {
         qWarning().noquote() << "RelayDesk file transfer error" << static_cast<int>(error) << '/'
                              << static_cast<int>(transportError) << ':' << diagnostic;
       }
   );
 
-  const auto receiveRoot = QDir(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation))
-                               .filePath(QStringLiteral("RelayDesk"));
-  const auto historyPath =
-      QDir(Settings::settingsPath()).filePath(QStringLiteral("relaydesk/transfer-history.jsonl"));
+  const auto receiveRoot =
+      QDir(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation)).filePath(QStringLiteral("RelayDesk"));
+  const auto historyPath = QDir(Settings::settingsPath()).filePath(QStringLiteral("relaydesk/transfer-history.jsonl"));
   m_relayDeskTransfer = new deskflow::relaydesk::TransferRuntimeComposition(
       std::move(runtime),
       {
@@ -441,8 +454,8 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
   if (m_windowsFirewallProbe != nullptr) {
     m_windowsFirewallProbe->refresh({
         .executablePath = QCoreApplication::applicationFilePath(),
-        .expectedTcpPorts = {static_cast<quint16>(Settings::value(Settings::Core::Port).toInt()),
-                             runtimeObserver->listeningPort()},
+        .expectedTcpPorts =
+            {static_cast<quint16>(Settings::value(Settings::Core::Port).toInt()), runtimeObserver->listeningPort()},
         .processId = static_cast<quint32>(QCoreApplication::applicationPid()),
     });
   }
@@ -485,25 +498,542 @@ deskflow::relaydesk::widgets::TransferCenterDock &MainWindow::relayDeskTransferC
   return *m_transferCenterDock;
 }
 
+void MainWindow::setupRelayDeskShell()
+{
+  const auto kCompactWindowSize = QSize(560, 420);
+  const auto kCompactMinimumSize = QSize(520, 380);
+
+  auto *legacyPage = takeCentralWidget();
+  m_legacyConnectionPage = legacyPage;
+
+  removeDockWidget(m_devicesDock);
+  removeDockWidget(m_transferCenterDock);
+  const auto prepareEmbeddedDock = [](QDockWidget *dock) {
+    dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    dock->setAllowedAreas(Qt::NoDockWidgetArea);
+    auto *titleBar = new QWidget(dock);
+    titleBar->setFixedHeight(0);
+    dock->setTitleBarWidget(titleBar);
+    dock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  };
+  prepareEmbeddedDock(m_devicesDock);
+  prepareEmbeddedDock(m_transferCenterDock);
+
+  auto *shell = new QWidget(this);
+  shell->setObjectName(QStringLiteral("relaydeskCompactShell"));
+  auto *shellLayout = new QVBoxLayout(shell);
+  shellLayout->setContentsMargins(0, 0, 0, 0);
+  shellLayout->setSpacing(0);
+
+  auto *header = new QFrame(shell);
+  header->setObjectName(QStringLiteral("relaydeskHeader"));
+  header->setFixedHeight(52);
+  auto *headerLayout = new QHBoxLayout(header);
+  headerLayout->setContentsMargins(18, 0, 14, 0);
+  headerLayout->setSpacing(10);
+
+  m_compactLogo = new QLabel(header);
+  m_compactLogo->setObjectName(QStringLiteral("relaydeskLogo"));
+  m_compactLogo->setFixedSize(28, 28);
+  m_compactLogo->setScaledContents(true);
+  m_compactLogo->setPixmap(QIcon::fromTheme(kRevFqdnName).pixmap(28, 28));
+  headerLayout->addWidget(m_compactLogo);
+
+  auto *brandLabel = new QLabel(kAppName, header);
+  brandLabel->setObjectName(QStringLiteral("relaydeskBrand"));
+  headerLayout->addWidget(brandLabel);
+  headerLayout->addSpacing(14);
+
+  m_compactStatusDot = new QLabel(QStringLiteral("●"), header);
+  m_compactStatusDot->setObjectName(QStringLiteral("relaydeskStatusDot"));
+  headerLayout->addWidget(m_compactStatusDot);
+  m_compactStatusLabel = new QLabel(header);
+  m_compactStatusLabel->setObjectName(QStringLiteral("relaydeskStatus"));
+  headerLayout->addWidget(m_compactStatusLabel);
+  headerLayout->addStretch(1);
+
+  auto *historyButton = new QToolButton(header);
+  historyButton->setObjectName(QStringLiteral("relaydeskHeaderButton"));
+  historyButton->setAutoRaise(true);
+  historyButton->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+  historyButton->setIconSize(QSize(22, 22));
+  historyButton->setFixedSize(34, 34);
+  historyButton->setToolTip(tr("Transfer history"));
+  historyButton->setAccessibleName(tr("Transfer history"));
+  connect(historyButton, &QToolButton::clicked, this, &MainWindow::showRelayDeskTransfers);
+  headerLayout->addWidget(historyButton);
+
+  auto *settingsButton = new QToolButton(header);
+  settingsButton->setObjectName(QStringLiteral("relaydeskHeaderButton"));
+  settingsButton->setAutoRaise(true);
+  settingsButton->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
+  settingsButton->setIconSize(QSize(22, 22));
+  settingsButton->setFixedSize(34, 34);
+  settingsButton->setToolTip(tr("Preferences and advanced settings"));
+  settingsButton->setAccessibleName(tr("Preferences and advanced settings"));
+  auto *settingsMenu = new QMenu(settingsButton);
+  settingsMenu->addAction(m_actionShowHome);
+  settingsMenu->addAction(m_actionShowTransfers);
+  settingsMenu->addSeparator();
+  settingsMenu->addAction(m_actionSettings);
+  settingsMenu->addAction(m_actionShowAdvanced);
+  settingsMenu->addSeparator();
+  settingsMenu->addAction(m_actionAbout);
+  settingsButton->setMenu(settingsMenu);
+  settingsButton->setPopupMode(QToolButton::InstantPopup);
+  headerLayout->addWidget(settingsButton);
+
+  shellLayout->addWidget(header);
+
+  m_relayDeskPages = new QStackedWidget(shell);
+  m_relayDeskPages->setObjectName(QStringLiteral("relaydeskPages"));
+
+  m_relayDeskHomePage = new QWidget(m_relayDeskPages);
+  m_relayDeskHomePage->setObjectName(QStringLiteral("relaydeskHomePage"));
+  auto *homeLayout = new QVBoxLayout(m_relayDeskHomePage);
+  homeLayout->setContentsMargins(14, 12, 14, 10);
+  homeLayout->setSpacing(8);
+  if (auto *permissionBanner = m_devicesDock->takePermissionBanner(m_relayDeskHomePage); permissionBanner != nullptr) {
+    homeLayout->addWidget(permissionBanner);
+  }
+  auto *devicesHeader = new QHBoxLayout();
+  devicesHeader->setSpacing(8);
+  auto *devicesTitle = new QLabel(tr("My devices"), m_relayDeskHomePage);
+  devicesTitle->setObjectName(QStringLiteral("relaydeskSectionTitle"));
+  devicesHeader->addWidget(devicesTitle);
+  m_compactDeviceCount = new QLabel(m_relayDeskHomePage);
+  m_compactDeviceCount->setObjectName(QStringLiteral("relaydeskSectionMeta"));
+  devicesHeader->addWidget(m_compactDeviceCount);
+  devicesHeader->addStretch(1);
+  auto *addDeviceButton = new QToolButton(m_relayDeskHomePage);
+  addDeviceButton->setObjectName(QStringLiteral("relaydeskAddDevice"));
+  addDeviceButton->setText(tr("+ Add"));
+  addDeviceButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+  addDeviceButton->setToolTip(tr("Add a device"));
+  addDeviceButton->setAccessibleName(tr("Add a device"));
+  connect(addDeviceButton, &QToolButton::clicked, this, [this, addDeviceButton] {
+    showRelayDeskHome();
+    const auto firstPairable = m_relayDeskDeviceModel->match(
+        m_relayDeskDeviceModel->index(0, 0), deskflow::relaydesk::model::DeviceHomeModel::CanStartPairingRole, true, 1,
+        Qt::MatchExactly | Qt::MatchRecursive
+    );
+    if (!firstPairable.isEmpty()) {
+      if (auto *list = m_devicesDock->findChild<QListView *>(QStringLiteral("relaydeskDevicesView")); list != nullptr) {
+        list->setCurrentIndex(firstPairable.constFirst());
+        list->scrollTo(firstPairable.constFirst());
+      }
+      if (auto *pair = m_devicesDock->findChild<QPushButton *>(QStringLiteral("relaydeskPairSelectedButton"));
+          pair != nullptr && pair->isEnabled()) {
+        pair->click();
+      }
+      return;
+    }
+    QToolTip::showText(
+        addDeviceButton->mapToGlobal(QPoint(0, addDeviceButton->height())),
+        tr("Nearby devices appear here automatically"), addDeviceButton
+    );
+  });
+  devicesHeader->addWidget(addDeviceButton);
+  homeLayout->addLayout(devicesHeader);
+  homeLayout->addWidget(m_devicesDock, 1);
+
+  m_compactTransferBar = new QFrame(m_relayDeskHomePage);
+  m_compactTransferBar->setObjectName(QStringLiteral("relaydeskTransferBar"));
+  m_compactTransferBar->setFixedHeight(52);
+  auto *transferLayout = new QHBoxLayout(m_compactTransferBar);
+  transferLayout->setContentsMargins(12, 7, 10, 7);
+  transferLayout->setSpacing(10);
+  auto *transferLabels = new QWidget(m_compactTransferBar);
+  auto *transferLabelsLayout = new QVBoxLayout(transferLabels);
+  transferLabelsLayout->setContentsMargins(0, 0, 0, 0);
+  transferLabelsLayout->setSpacing(1);
+  m_compactTransferName = new QLabel(transferLabels);
+  m_compactTransferName->setObjectName(QStringLiteral("relaydeskTransferName"));
+  m_compactTransferMetrics = new QLabel(transferLabels);
+  m_compactTransferMetrics->setObjectName(QStringLiteral("relaydeskTransferMetrics"));
+  transferLabelsLayout->addWidget(m_compactTransferName);
+  transferLabelsLayout->addWidget(m_compactTransferMetrics);
+  transferLayout->addWidget(transferLabels, 3);
+  m_compactTransferProgress = new QProgressBar(m_compactTransferBar);
+  m_compactTransferProgress->setObjectName(QStringLiteral("relaydeskTransferProgress"));
+  m_compactTransferProgress->setRange(0, 100);
+  m_compactTransferProgress->setTextVisible(false);
+  m_compactTransferProgress->setFixedHeight(6);
+  transferLayout->addWidget(m_compactTransferProgress, 2);
+  m_compactTransferAction = new QPushButton(m_compactTransferBar);
+  m_compactTransferAction->setObjectName(QStringLiteral("relaydeskTransferAction"));
+  m_compactTransferAction->setFixedSize(34, 34);
+  connect(m_compactTransferAction, &QPushButton::clicked, this, &MainWindow::triggerCompactTransferAction);
+  transferLayout->addWidget(m_compactTransferAction);
+  homeLayout->addWidget(m_compactTransferBar);
+
+  m_compactLocalLabel = new QLabel(m_relayDeskHomePage);
+  m_compactLocalLabel->setObjectName(QStringLiteral("relaydeskLocalDevice"));
+  homeLayout->addWidget(m_compactLocalLabel);
+  m_relayDeskPages->addWidget(m_relayDeskHomePage);
+
+  m_relayDeskTransferPage = new QWidget(m_relayDeskPages);
+  m_relayDeskTransferPage->setObjectName(QStringLiteral("relaydeskTransferPage"));
+  auto *transferPageLayout = new QVBoxLayout(m_relayDeskTransferPage);
+  transferPageLayout->setContentsMargins(14, 10, 14, 12);
+  transferPageLayout->setSpacing(8);
+  auto *transferHeader = new QHBoxLayout();
+  auto *backButton = new QToolButton(m_relayDeskTransferPage);
+  backButton->setObjectName(QStringLiteral("relaydeskBackButton"));
+  backButton->setText(QStringLiteral("‹"));
+  backButton->setToolTip(tr("Back to devices"));
+  backButton->setAccessibleName(tr("Back to devices"));
+  backButton->setFixedSize(32, 32);
+  connect(backButton, &QToolButton::clicked, this, &MainWindow::showRelayDeskHome);
+  transferHeader->addWidget(backButton);
+  m_transferPageTitle = new QLabel(m_relayDeskTransferPage);
+  m_transferPageTitle->setObjectName(QStringLiteral("relaydeskPageTitle"));
+  transferHeader->addWidget(m_transferPageTitle);
+  transferHeader->addStretch(1);
+  transferPageLayout->addLayout(transferHeader);
+  transferPageLayout->addWidget(m_transferCenterDock, 1);
+  m_relayDeskPages->addWidget(m_relayDeskTransferPage);
+
+  if (legacyPage != nullptr) {
+    m_relayDeskPages->addWidget(legacyPage);
+  }
+  shellLayout->addWidget(m_relayDeskPages, 1);
+  setCentralWidget(shell);
+
+  applyRelayDeskStyle();
+
+  const auto updateTransferBar = [this] { updateCompactTransferBar(); };
+  connect(m_relayDeskTransferModel, &QAbstractItemModel::rowsInserted, this, updateTransferBar);
+  connect(m_relayDeskTransferModel, &QAbstractItemModel::rowsRemoved, this, updateTransferBar);
+  connect(m_relayDeskTransferModel, &QAbstractItemModel::modelReset, this, updateTransferBar);
+  connect(m_relayDeskTransferModel, &QAbstractItemModel::layoutChanged, this, updateTransferBar);
+  connect(m_relayDeskTransferModel, &QAbstractItemModel::dataChanged, this, updateTransferBar);
+  connect(m_relayDeskDeviceModel, &QAbstractItemModel::rowsInserted, this, &MainWindow::updateCompactDeviceCount);
+  connect(m_relayDeskDeviceModel, &QAbstractItemModel::rowsRemoved, this, &MainWindow::updateCompactDeviceCount);
+  connect(m_relayDeskDeviceModel, &QAbstractItemModel::modelReset, this, &MainWindow::updateCompactDeviceCount);
+  connect(m_relayDeskDeviceModel, &QAbstractItemModel::dataChanged, this, &MainWindow::updateCompactDeviceCount);
+
+  setMinimumSize(kCompactMinimumSize);
+  resize(kCompactWindowSize);
+  m_devicesDock->show();
+  m_transferCenterDock->show();
+  showRelayDeskHome();
+  updateCompactTransferBar();
+  updateCompactStatus();
+  updateCompactDeviceCount();
+}
+
+void MainWindow::applyRelayDeskStyle()
+{
+  auto *shell = centralWidget();
+  if (shell == nullptr || shell->objectName() != QStringLiteral("relaydeskCompactShell"))
+    return;
+
+  const auto dark = isDarkMode();
+  auto style = QStringLiteral(R"(
+    QWidget#relaydeskCompactShell { background: @background@; color: @text@; }
+    QFrame#relaydeskHeader { background: @header@; border-bottom: 1px solid @divider@; }
+    QLabel#relaydeskBrand { color: @text@; font-size: 18px; font-weight: 650; }
+    QLabel#relaydeskStatusDot { color: #27b96f; font-size: 13px; }
+    QLabel#relaydeskStatus { color: @secondary@; font-size: 13px; }
+    QFrame#relaydeskPermissionBanner {
+      background: @permissionready@; border: 1px solid @permissionreadyborder@; border-radius: 8px;
+    }
+    QFrame#relaydeskPermissionBanner[needsAttention="true"] {
+      background: @permissionattention@; border-color: @permissionattentionborder@;
+    }
+    QLabel#relaydeskPermissionTitle { color: @text@; }
+    QFrame#relaydeskPermissionBanner[needsAttention="true"] QLabel#relaydeskPermissionTitle { color: @attentiontext@; }
+    QPushButton#relaydeskOpenPermissionSettingsButton {
+      border: 0; background: transparent; color: @attentiontext@; font-weight: 600; padding: 3px 5px;
+    }
+    QPushButton#relaydeskOpenPermissionSettingsButton:hover { color: #e86659; }
+    QToolButton#relaydeskOpenPermissionDetailsButton {
+      border: 1px solid transparent; border-radius: 8px; background: transparent; color: @secondary@;
+      font-size: 20px; min-width: 22px;
+    }
+    QToolButton#relaydeskOpenPermissionDetailsButton:hover,
+    QToolButton#relaydeskOpenPermissionDetailsButton:focus { border-color: #1ea99a; color: #1ea99a; }
+    QLabel#relaydeskPermissionDetailMessage { color: @attentiontext@; }
+    QToolButton#relaydeskHeaderButton, QToolButton#relaydeskBackButton {
+      border: 0; border-radius: 8px; background: transparent; color: @text@;
+    }
+    QToolButton#relaydeskHeaderButton:hover, QToolButton#relaydeskBackButton:hover { background: @hover@; }
+    QToolButton#relaydeskHeaderButton::menu-indicator { image: none; }
+    QWidget#relaydeskHomePage, QWidget#relaydeskTransferPage, QStackedWidget#relaydeskPages {
+      background: @background@;
+    }
+    QFrame#relaydeskTransferBar { background: @card@; border: 1px solid @cardborder@; border-radius: 8px; }
+    QLabel#relaydeskTransferName { color: @text@; font-size: 13px; font-weight: 600; }
+    QLabel#relaydeskTransferMetrics, QLabel#relaydeskLocalDevice { color: @muted@; font-size: 11px; }
+    QLabel#relaydeskSectionTitle { color: @text@; font-size: 15px; font-weight: 650; }
+    QLabel#relaydeskSectionMeta { color: @muted@; font-size: 12px; }
+    QToolButton#relaydeskAddDevice { border: 0; background: transparent; color: #1ea99a; font-weight: 600; }
+    QToolButton#relaydeskAddDevice:hover { color: #168d82; }
+    QProgressBar#relaydeskTransferProgress { border: 0; border-radius: 3px; background: @progress@; }
+    QProgressBar#relaydeskTransferProgress::chunk { border-radius: 3px; background: #1ea99a; }
+    QPushButton#relaydeskTransferAction {
+      border: 1px solid @buttonborder@; border-radius: 17px; background: @button@; color: @text@; font-weight: 600;
+    }
+    QPushButton#relaydeskTransferAction:hover { border-color: #1ea99a; color: #1ea99a; }
+    QLabel#relaydeskPageTitle { color: @text@; font-size: 16px; font-weight: 650; }
+  )");
+  const QList<QPair<QString, QString>> colors{
+      {QStringLiteral("@background@"), dark ? QStringLiteral("#172228") : QStringLiteral("#ffffff")},
+      {QStringLiteral("@header@"), dark ? QStringLiteral("#18262d") : QStringLiteral("#ffffff")},
+      {QStringLiteral("@text@"), dark ? QStringLiteral("#edf5f4") : QStringLiteral("#18262d")},
+      {QStringLiteral("@secondary@"), dark ? QStringLiteral("#c1cecf") : QStringLiteral("#33464f")},
+      {QStringLiteral("@muted@"), dark ? QStringLiteral("#9dafb4") : QStringLiteral("#71818a")},
+      {QStringLiteral("@divider@"), dark ? QStringLiteral("#31434a") : QStringLiteral("#e3e8ea")},
+      {QStringLiteral("@hover@"), dark ? QStringLiteral("#24363d") : QStringLiteral("#eef5f4")},
+      {QStringLiteral("@card@"), dark ? QStringLiteral("#1c3335") : QStringLiteral("#f2fbfa")},
+      {QStringLiteral("@cardborder@"), dark ? QStringLiteral("#2b5955") : QStringLiteral("#cfe9e6")},
+      {QStringLiteral("@progress@"), dark ? QStringLiteral("#344e50") : QStringLiteral("#dcebea")},
+      {QStringLiteral("@button@"), dark ? QStringLiteral("#203039") : QStringLiteral("#ffffff")},
+      {QStringLiteral("@buttonborder@"), dark ? QStringLiteral("#456069") : QStringLiteral("#cfdadd")},
+      {QStringLiteral("@permissionready@"), dark ? QStringLiteral("#1d3431") : QStringLiteral("#f1faf8")},
+      {QStringLiteral("@permissionreadyborder@"), dark ? QStringLiteral("#31534e") : QStringLiteral("#d3ebe6")},
+      {QStringLiteral("@permissionattention@"), dark ? QStringLiteral("#402d2a") : QStringLiteral("#fff3f0")},
+      {QStringLiteral("@permissionattentionborder@"), dark ? QStringLiteral("#764943") : QStringLiteral("#f3c9c2")},
+      {QStringLiteral("@attentiontext@"), dark ? QStringLiteral("#ffb2a8") : QStringLiteral("#c9483c")},
+  };
+  for (const auto &[token, color] : colors)
+    style.replace(token, color);
+  shell->setStyleSheet(style);
+}
+
+void MainWindow::showRelayDeskHome()
+{
+  if (m_relayDeskPages == nullptr || m_relayDeskHomePage == nullptr)
+    return;
+  m_logDock->hide();
+  m_relayDeskPages->setCurrentWidget(m_relayDeskHomePage);
+  m_actionShowHome->setChecked(true);
+  m_actionShowTransfers->setChecked(false);
+  m_actionShowAdvanced->setChecked(false);
+}
+
+void MainWindow::showRelayDeskTransfers()
+{
+  if (m_relayDeskPages == nullptr || m_relayDeskTransferPage == nullptr)
+    return;
+  m_logDock->hide();
+  m_relayDeskPages->setCurrentWidget(m_relayDeskTransferPage);
+  m_actionShowHome->setChecked(false);
+  m_actionShowTransfers->setChecked(true);
+  m_actionShowAdvanced->setChecked(false);
+}
+
+void MainWindow::showAdvancedConnection()
+{
+  if (m_relayDeskPages == nullptr || m_legacyConnectionPage == nullptr)
+    return;
+  m_relayDeskPages->setCurrentWidget(m_legacyConnectionPage);
+  m_actionShowHome->setChecked(false);
+  m_actionShowTransfers->setChecked(false);
+  m_actionShowAdvanced->setChecked(true);
+}
+
+void MainWindow::updateCompactStatus()
+{
+  if (m_compactStatusDot == nullptr || m_compactStatusLabel == nullptr)
+    return;
+
+  QString label;
+  QString color;
+  switch (m_coreProcess.processState()) {
+  case CoreProcessState::Started:
+    if (m_coreProcess.connectionState() == CoreConnectionState::Connecting) {
+      label = tr("Connecting");
+      color = QStringLiteral("#1ea99a");
+    } else if (m_coreProcess.connectionState() == CoreConnectionState::Disconnected) {
+      label = tr("Offline");
+      color = QStringLiteral("#8a989f");
+    } else {
+      label = tr("Online");
+      color = QStringLiteral("#27b96f");
+    }
+    break;
+  case CoreProcessState::Starting:
+  case CoreProcessState::RetryPending:
+    label = tr("Connecting");
+    color = QStringLiteral("#1ea99a");
+    break;
+  case CoreProcessState::Stopping:
+  case CoreProcessState::Stopped:
+    label = tr("Paused");
+    color = QStringLiteral("#8a989f");
+    break;
+  }
+  m_compactStatusDot->setStyleSheet(QStringLiteral("color: %1;").arg(color));
+  m_compactStatusLabel->setText(label);
+}
+
+void MainWindow::updateCompactDeviceCount()
+{
+  if (m_compactDeviceCount == nullptr || m_relayDeskDeviceModel == nullptr)
+    return;
+  int online = 0;
+  for (int row = 0; row < m_relayDeskDeviceModel->rowCount(); ++row) {
+    const auto index = m_relayDeskDeviceModel->index(row, 0);
+    if (!index.data(deskflow::relaydesk::model::DeviceHomeModel::IsLocalRole).toBool() &&
+        index.data(deskflow::relaydesk::model::DeviceHomeModel::IsOnlineRole).toBool()) {
+      ++online;
+    }
+  }
+  m_compactDeviceCount->setText(tr("%n online", "", online));
+}
+
+void MainWindow::updateCompactTransferBar()
+{
+  if (m_compactTransferBar == nullptr || m_relayDeskTransferModel == nullptr)
+    return;
+
+  QModelIndex selected;
+  for (int row = 0; row < m_relayDeskTransferModel->rowCount(); ++row) {
+    const auto index = m_relayDeskTransferModel->index(row, 0);
+    const auto historical = index.data(deskflow::relaydesk::model::TransferCenterModel::IsHistoricalRole).toBool();
+    const auto terminal = index.data(deskflow::relaydesk::model::TransferCenterModel::IsTerminalRole).toBool();
+    const auto canRetry = index.data(deskflow::relaydesk::model::TransferCenterModel::CanRetryRole).toBool();
+    if (!historical && (!terminal || canRetry)) {
+      selected = index;
+      break;
+    }
+  }
+
+  if (!selected.isValid()) {
+    m_compactTransferIndex = QPersistentModelIndex();
+    m_compactTransferBar->hide();
+    return;
+  }
+
+  m_compactTransferIndex = QPersistentModelIndex(selected);
+  const auto percent = selected.data(deskflow::relaydesk::model::TransferCenterModel::ProgressPercentRole).toInt();
+  const auto speed = selected.data(deskflow::relaydesk::model::TransferCenterModel::SpeedTextRole).toString();
+  const auto state = selected.data(deskflow::relaydesk::model::TransferCenterModel::StateTextRole).toString();
+  m_compactTransferName->setText(
+      selected.data(deskflow::relaydesk::model::TransferCenterModel::DisplayNameRole).toString()
+  );
+  m_compactTransferMetrics->setText(
+      speed.isEmpty() ? tr("%1% · %2").arg(percent).arg(state) : tr("%1% · %2").arg(percent).arg(speed)
+  );
+  m_compactTransferProgress->setValue(percent);
+
+  const auto canPause = selected.data(deskflow::relaydesk::model::TransferCenterModel::CanPauseRole).toBool();
+  const auto canResume = selected.data(deskflow::relaydesk::model::TransferCenterModel::CanResumeRole).toBool();
+  const auto canRetry = selected.data(deskflow::relaydesk::model::TransferCenterModel::CanRetryRole).toBool();
+  if (canPause) {
+    m_compactTransferAction->setText(QStringLiteral("Ⅱ"));
+    m_compactTransferAction->setToolTip(tr("Pause transfer"));
+    m_compactTransferAction->setAccessibleName(tr("Pause transfer"));
+  } else if (canResume) {
+    m_compactTransferAction->setText(QStringLiteral("▶"));
+    m_compactTransferAction->setToolTip(tr("Resume transfer"));
+    m_compactTransferAction->setAccessibleName(tr("Resume transfer"));
+  } else if (canRetry) {
+    m_compactTransferAction->setText(QStringLiteral("↻"));
+    m_compactTransferAction->setToolTip(tr("Retry transfer"));
+    m_compactTransferAction->setAccessibleName(tr("Retry transfer"));
+  } else {
+    m_compactTransferAction->setText(QStringLiteral("…"));
+    m_compactTransferAction->setToolTip(tr("Open transfer center"));
+    m_compactTransferAction->setAccessibleName(tr("Open transfer center"));
+  }
+  m_compactTransferBar->show();
+}
+
+void MainWindow::triggerCompactTransferAction()
+{
+  if (!m_compactTransferIndex.isValid()) {
+    showRelayDeskTransfers();
+    return;
+  }
+  const auto transferId = ::relaydesk::transfer::TransferId::fromString(
+      m_compactTransferIndex.data(deskflow::relaydesk::model::TransferCenterModel::TransferIdRole).toString()
+  );
+  if (!transferId.has_value()) {
+    showRelayDeskTransfers();
+    return;
+  }
+  if (m_compactTransferIndex.data(deskflow::relaydesk::model::TransferCenterModel::CanPauseRole).toBool()) {
+    m_relayDeskTransferModel->requestPause(*transferId);
+  } else if (m_compactTransferIndex.data(deskflow::relaydesk::model::TransferCenterModel::CanResumeRole).toBool()) {
+    m_relayDeskTransferModel->requestResume(*transferId);
+  } else if (m_compactTransferIndex.data(deskflow::relaydesk::model::TransferCenterModel::CanRetryRole).toBool()) {
+    m_relayDeskTransferModel->requestRetry(*transferId);
+  } else {
+    showRelayDeskTransfers();
+  }
+}
+
+void MainWindow::updateTraySharingAction()
+{
+  if (m_actionToggleSharing == nullptr)
+    return;
+  const auto active = m_coreProcess.processState() == CoreProcessState::Started ||
+                      m_coreProcess.processState() == CoreProcessState::Starting ||
+                      m_coreProcess.processState() == CoreProcessState::RetryPending;
+  m_actionToggleSharing->setText(active ? tr("Pause sharing") : tr("Resume sharing"));
+  m_actionToggleSharing->setIcon(
+      QIcon::fromTheme(active ? QStringLiteral("process-stop") : QStringLiteral("system-run"))
+  );
+  m_actionToggleSharing->setEnabled(m_coreProcess.processState() != CoreProcessState::Stopping);
+}
+
+void MainWindow::toggleSharing()
+{
+  const auto state = m_coreProcess.processState();
+  if (state == CoreProcessState::Stopped) {
+    startCore();
+  } else if (state != CoreProcessState::Stopping) {
+    stopCore();
+  }
+}
+
+void MainWindow::requestQuit()
+{
+  m_quitRequested = true;
+  close();
+}
+
+void MainWindow::shutdownForQuit()
+{
+  if (m_shutdownStarted)
+    return;
+  m_shutdownStarted = true;
+
+  if (m_saveOnExit) {
+    Settings::setValue(Settings::Gui::WindowGeometry, normalGeometry());
+  }
+  if (m_relayDeskReconnect != nullptr)
+    m_relayDeskReconnect->stop();
+  if (m_relayDeskTransfer != nullptr)
+    m_relayDeskTransfer->stop();
+  if (m_relayDeskDiscovery != nullptr)
+    m_relayDeskDiscovery->stop();
+  if (m_coreProcess.processState() != CoreProcessState::Stopped)
+    m_coreProcess.stop();
+  if (m_trayIcon != nullptr)
+    m_trayIcon->hide();
+}
+
 void MainWindow::restoreWindow()
 {
   auto windowGeometry = Settings::value(Settings::Gui::WindowGeometry).toRect();
   const auto totalGeometry = QGuiApplication::primaryScreen()->availableGeometry();
   if (!windowGeometry.isValid()) {
-    adjustSize();
-    windowGeometry = geometry();
-  } else {
-    setGeometry(windowGeometry);
+    windowGeometry.setSize(QSize(560, 420));
+    windowGeometry.moveCenter(totalGeometry.center());
   }
-  m_expandedSize = geometry().size();
+
+  windowGeometry.setSize(
+      QSize(qMax(520, windowGeometry.width()), qMax(380, windowGeometry.height())).boundedTo(totalGeometry.size())
+  );
 
   if (!totalGeometry.contains(windowGeometry)) {
-    QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
-    move(screenGeometry.center() - rect().center());
+    windowGeometry.moveCenter(totalGeometry.center());
   }
-
-  if (!Settings::value(Settings::Gui::LogExpanded).toBool())
-    setFixedSize(size());
+  setGeometry(windowGeometry);
 }
 
 void MainWindow::setupControls()
@@ -515,10 +1045,6 @@ void MainWindow::setupControls()
 
   if (Settings::value(Settings::Core::LastVersion).toString() != kVersion) {
     Settings::setValue(Settings::Core::LastVersion, kVersion);
-  }
-
-  if (!Settings::value(Settings::Gui::LogExpanded).toBool()) {
-    m_logDock->hide();
   }
 
   ui->serverOptions->setVisible(false);
@@ -563,6 +1089,13 @@ void MainWindow::setupControls()
   m_btnUpdate->setFixedHeight(btnHeight);
   m_btnUpdate->setIconSize(iconSize);
   ui->statusBar->insertPermanentWidget(3, m_btnUpdate);
+  ui->statusBar->hide();
+  if (Settings::value(Settings::Gui::LogExpanded).toBool()) {
+    showAdvancedConnection();
+    m_logDock->show();
+  } else {
+    m_logDock->hide();
+  }
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -594,13 +1127,21 @@ void MainWindow::connectSlots()
   connect(m_actionReportBug, &QAction::triggered, this, &MainWindow::openHelpUrl);
   connect(m_actionMinimize, &QAction::triggered, this, &MainWindow::hide);
 
-  connect(m_actionQuit, &QAction::triggered, this, &MainWindow::close);
-  connect(m_actionTrayQuit, &QAction::triggered, this, &MainWindow::close);
+  connect(m_actionQuit, &QAction::triggered, this, &MainWindow::requestQuit);
+  connect(m_actionTrayQuit, &QAction::triggered, this, &MainWindow::requestQuit);
   connect(m_actionRestore, &QAction::triggered, this, &MainWindow::showAndActivate);
   connect(m_actionSettings, &QAction::triggered, this, &MainWindow::openSettings);
+  connect(m_actionTraySettings, &QAction::triggered, this, [this] {
+    showAndActivate();
+    openSettings();
+  });
   connect(m_actionStartCore, &QAction::triggered, this, &MainWindow::startCore);
   connect(m_actionRestartCore, &QAction::triggered, this, &MainWindow::resetCore);
   connect(m_actionStopCore, &QAction::triggered, this, &MainWindow::stopCore);
+  connect(m_actionToggleSharing, &QAction::triggered, this, &MainWindow::toggleSharing);
+  connect(m_actionShowHome, &QAction::triggered, this, &MainWindow::showRelayDeskHome);
+  connect(m_actionShowTransfers, &QAction::triggered, this, &MainWindow::showRelayDeskTransfers);
+  connect(m_actionShowAdvanced, &QAction::triggered, this, &MainWindow::showAdvancedConnection);
 
   connect(&m_versionChecker, &VersionChecker::updateFound, this, &MainWindow::versionCheckerUpdateFound);
 
@@ -658,26 +1199,14 @@ void MainWindow::toggleLogVisible(bool visible)
     return;
   }
 
-  setFixedSize(16777215, 16777215);
   Settings::setValue(Settings::Gui::LogExpanded, visible);
   if (visible) {
-    if (m_logDock->isFloating()) {
-      adjustSize();
-      setFixedSize(size());
-    } else {
-      QTimer::singleShot(15, this, [&] { resize(m_expandedSize); });
-    }
+    showAdvancedConnection();
+    m_logDock->show();
   } else {
-    if (!m_logDock->isFloating()) {
-      m_expandedSize = geometry().size();
-    }
     m_logDock->hide();
-    if (!m_logDock->isFloating()) {
-      adjustSize();
-    }
-    setFixedSize(size());
   }
-  Settings::setValue(Settings::Gui::WindowGeometry, geometry());
+  Settings::setValue(Settings::Gui::WindowGeometry, normalGeometry());
 }
 
 void MainWindow::settingsChanged(const QString &key)
@@ -710,7 +1239,7 @@ void MainWindow::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
 {
   if (reason != QSystemTrayIcon::Trigger)
     return;
-  isVisible() ? hide() : showAndActivate();
+  isVisible() && !isMinimized() ? hide() : showAndActivate();
 }
 
 void MainWindow::versionCheckerUpdateFound(const QString &version)
@@ -738,6 +1267,8 @@ void MainWindow::coreProcessError(CoreProcess::Error error)
 
 void MainWindow::startCore()
 {
+  Settings::setValue(Settings::Gui::AutoStartCore, true);
+
   // Save current IP state when server starts
   if (m_coreProcess.mode() == CoreMode::Server && Settings::value(Settings::Core::Interface).toString().isEmpty()) {
     m_serverStartIPs = m_networkMonitor->getAvailableIPv4Addresses();
@@ -752,6 +1283,7 @@ void MainWindow::startCore()
 void MainWindow::stopCore()
 {
   qDebug() << "stopping core process";
+  Settings::setValue(Settings::Gui::AutoStartCore, false);
   m_coreProcess.stop();
   m_actionStartCore->setVisible(true);
   m_actionRestartCore->setVisible(false);
@@ -811,6 +1343,25 @@ void MainWindow::openGetNewVersionUrl() const
 
 void MainWindow::openSettings()
 {
+  const QStringList restartKeys{
+      Settings::Core::Port,
+      Settings::Core::Interface,
+      Settings::Core::PreventSleep,
+      Settings::Core::ProcessMode,
+      Settings::Core::UseWlClipboard,
+      Settings::Daemon::Elevate,
+      Settings::Log::Level,
+      Settings::Log::ToFile,
+      Settings::Log::File,
+      Settings::Security::Certificate,
+      Settings::Security::KeySize,
+      Settings::Security::TlsEnabled,
+      Settings::Security::CheckPeers,
+  };
+  QHash<QString, QVariant> previousValues;
+  for (const auto &key : restartKeys)
+    previousValues.insert(key, Settings::value(key));
+
   auto dialog = SettingsDialog(this, m_serverConfig, m_coreProcess);
 
   if (dialog.exec() == QDialog::Accepted) {
@@ -818,7 +1369,10 @@ void MainWindow::openSettings()
 
     applyConfig();
 
-    if (m_coreProcess.isStarted()) {
+    const auto coreSettingsChanged = std::any_of(restartKeys.cbegin(), restartKeys.cend(), [&](const QString &key) {
+      return previousValues.value(key) != Settings::value(key);
+    });
+    if (m_coreProcess.isStarted() && coreSettingsChanged) {
       m_coreProcess.restart();
     }
   }
@@ -957,7 +1511,8 @@ void MainWindow::serverConnectionConfigureClient(const QString &clientName)
 
 void MainWindow::open(bool startInTray)
 {
-  if (startInTray || Settings::value(Settings::Gui::Autohide).toBool()) {
+  const auto canUseTray = QSystemTrayIcon::isSystemTrayAvailable() && m_trayIcon != nullptr && m_trayIcon->isVisible();
+  if ((startInTray || Settings::value(Settings::Gui::Autohide).toBool()) && canUseTray) {
     hide();
   } else {
     showAndActivate();
@@ -995,6 +1550,7 @@ void MainWindow::open(bool startInTray)
 void MainWindow::setStatus(const QString &status)
 {
   m_lblStatus->setText(status);
+  updateCompactStatus();
 }
 
 void MainWindow::createMenuBar()
@@ -1003,13 +1559,20 @@ void MainWindow::createMenuBar()
   m_menuFile->addAction(m_actionRestartCore);
   m_menuFile->addAction(m_actionStopCore);
   m_menuFile->addSeparator();
+  m_menuFile->addAction(m_actionMinimize);
+  m_menuFile->addSeparator();
   m_menuFile->addAction(m_actionQuit);
 
   m_menuEdit->addAction(m_actionSettings);
 
+  m_actionShowHome->setCheckable(true);
+  m_actionShowTransfers->setCheckable(true);
+  m_actionShowAdvanced->setCheckable(true);
+  m_menuView->addAction(m_actionShowHome);
+  m_menuView->addAction(m_actionShowTransfers);
+  m_menuView->addAction(m_actionShowAdvanced);
+  m_menuView->addSeparator();
   m_menuView->addAction(m_logDock->toggleViewAction());
-  m_menuView->addAction(m_devicesDock->toggleViewAction());
-  m_menuView->addAction(m_transferCenterDock->toggleViewAction());
 
   m_menuHelp->addAction(m_actionAbout);
   m_menuHelp->addAction(m_actionReportBug);
@@ -1023,19 +1586,23 @@ void MainWindow::createMenuBar()
   menuBar->addMenu(m_menuHelp);
 
   setMenuBar(menuBar);
+  if (!deskflow::platform::isMac())
+    menuBar->hide();
 }
 
 void MainWindow::setupTrayIcon()
 {
   auto trayMenu = new QMenu(this);
-  trayMenu->addActions(
-      {m_actionStartCore, m_actionRestartCore, m_actionStopCore, m_actionMinimize, m_actionRestore, m_actionTrayQuit}
-  );
-  trayMenu->insertSeparator(m_actionMinimize);
-  trayMenu->insertSeparator(m_actionTrayQuit);
+  trayMenu->addAction(m_actionRestore);
+  trayMenu->addAction(m_actionToggleSharing);
+  trayMenu->addSeparator();
+  trayMenu->addAction(m_actionTraySettings);
+  trayMenu->addSeparator();
+  trayMenu->addAction(m_actionTrayQuit);
   m_trayIcon->setContextMenu(trayMenu);
 
   setTrayIcon();
+  updateTraySharingAction();
   m_trayIcon->show();
 }
 
@@ -1077,18 +1644,8 @@ void MainWindow::setTrayIcon()
 {
   static const auto fallbackPath = QStringLiteral(":/icons/%1-%2/apps/64/%3");
 
-  QString themeIcon = kRevFqdnName;
-  if (!Settings::value(Settings::Gui::SymbolicTrayIcon).toBool()) {
-    if (deskflow::platform::isMac())
-      m_trayIcon->setIcon(QIcon::fromTheme(themeIcon));
-    else
-      m_trayIcon->setIcon(QIcon(fallbackPath.arg(kAppId, QStringLiteral("dark"), themeIcon)));
-    return;
-  }
-
-  themeIcon.append(QStringLiteral("-symbolic"));
-
   if (deskflow::platform::isWindows()) {
+    const auto themeIcon = QString::fromLatin1(kRevFqdnName);
     QSettings settings(
         QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
         QSettings::NativeFormat
@@ -1099,6 +1656,7 @@ void MainWindow::setTrayIcon()
     return;
   }
 
+  const auto themeIcon = QStringLiteral("%1-symbolic").arg(kRevFqdnName);
   auto icon = QIcon::fromTheme(themeIcon, QIcon(fallbackPath.arg(kAppId, iconMode(), themeIcon)));
   icon.setIsMask(true);
   m_trayIcon->setIcon(icon);
@@ -1180,23 +1738,45 @@ void MainWindow::checkFingerprint(const QString &line)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-  if (Settings::value(Settings::Gui::CloseToTray).toBool() && event->spontaneous()) {
-    if (Settings::value(Settings::Gui::CloseReminder).toBool()) {
-      messages::showCloseReminder(this);
-      Settings::setValue(Settings::Gui::CloseReminder, false);
+  if (!m_quitRequested && !qGuiApp->isSavingSession() && event->spontaneous()) {
+    if (auto *reminder = findChild<QMessageBox *>(QStringLiteral("relaydeskCloseReminder"));
+        reminder != nullptr && reminder->isVisible()) {
+      showAndActivate();
+      reminder->raise();
+      reminder->activateWindow();
+      event->ignore();
+      return;
     }
-    Settings::setValue(Settings::Gui::WindowGeometry, geometry());
+  }
+  const auto canUseTray = QSystemTrayIcon::isSystemTrayAvailable() && m_trayIcon != nullptr && m_trayIcon->isVisible();
+  if (!m_quitRequested && !qGuiApp->isSavingSession() && Settings::value(Settings::Gui::CloseToTray).toBool() &&
+      event->spontaneous() && canUseTray) {
+    if (Settings::value(Settings::Gui::CloseReminder).toBool()) {
+      Settings::setValue(Settings::Gui::CloseReminder, false);
+      Settings::setValue(Settings::Gui::WindowGeometry, normalGeometry());
+      messages::showCloseReminder(
+          this,
+          [this] {
+            qDebug() << "hiding to tray after close reminder";
+            hide();
+          },
+          [this] {
+            showAndActivate();
+            openSettings();
+          }
+      );
+      event->ignore();
+      return;
+    }
+    Settings::setValue(Settings::Gui::WindowGeometry, normalGeometry());
     qDebug() << "hiding to tray";
     hide();
     event->ignore();
     return;
   }
 
-  if (m_saveOnExit) {
-    Settings::setValue(Settings::Gui::WindowGeometry, geometry());
-    Settings::setValue(Settings::Gui::AutoStartCore, m_coreProcess.isStarted());
-  }
   qDebug() << "quitting application";
+  shutdownForQuit();
 
   // any connected dock view acitons will be triggered
   // disconnect them before accepting the event
@@ -1285,10 +1865,9 @@ void MainWindow::updateStatus()
 void MainWindow::coreProcessStateChanged(CoreProcessState state)
 {
   updateStatus();
+  updateTraySharingAction();
 
   if (state == CoreProcessState::Started) {
-    qDebug() << "recording that core has started";
-    Settings::setValue(Settings::Gui::AutoStartCore, true);
     if (m_coreProcess.mode() == CoreMode::Server &&
         !Settings::value(Settings::Gui::ShownServerFirstStartMessage).toBool()) {
       qDebug() << "starting core server for first time";
@@ -1349,26 +1928,45 @@ void MainWindow::updateLocalFingerprint()
 
 void MainWindow::hide()
 {
+  if (isVisible() && !isMinimized())
+    Settings::setValue(Settings::Gui::WindowGeometry, normalGeometry());
 #ifdef Q_OS_MACOS
   macOSNativeHide();
 #else
   QMainWindow::hide();
 #endif
   m_actionRestore->setVisible(true);
+  m_actionRestore->setEnabled(true);
   m_actionMinimize->setVisible(false);
 }
 
 void MainWindow::changeEvent(QEvent *e)
 {
   QMainWindow::changeEvent(e);
-  if (e->type() == QEvent::PaletteChange) {
+  if (e->type() == QEvent::WindowStateChange) {
+    const auto *stateEvent = static_cast<QWindowStateChangeEvent *>(e);
+    const auto newlyMinimized = !(stateEvent->oldState() & Qt::WindowMinimized) && isMinimized();
+    const auto canUseTray =
+        QSystemTrayIcon::isSystemTrayAvailable() && m_trayIcon != nullptr && m_trayIcon->isVisible();
+    if (newlyMinimized && Settings::value(Settings::Gui::MinimizeToTray).toBool() && canUseTray) {
+      Settings::setValue(Settings::Gui::WindowGeometry, normalGeometry());
+      QTimer::singleShot(0, this, [this] {
+        if (isMinimized())
+          hide();
+      });
+    }
+  } else if (e->type() == QEvent::PaletteChange) {
     updateIconTheme();
     setWindowIcon(QIcon::fromTheme(kRevFqdnName));
+    if (m_compactLogo != nullptr)
+      m_compactLogo->setPixmap(QIcon::fromTheme(kRevFqdnName).pixmap(28, 28));
+    applyRelayDeskStyle();
     setTrayIcon();
   } else if (e->type() == QEvent::LanguageChange) {
     ui->retranslateUi(this);
     updateModeControlLabels();
     updateNetworkInfo();
+    updateScreenName();
     updateStatus();
     serverClientsChanged(m_serverConnection.connectedClients());
     updateText();
@@ -1388,11 +1986,15 @@ void MainWindow::updateText()
   m_actionQuit->setText(tr("&Quit"));
   m_actionTrayQuit->setText(tr("&Quit"));
   //: %1 will be the replaced with the appname
-  m_actionRestore->setText(tr("&Open %1").arg(kAppName));
+  m_actionRestore->setText(tr("&Show %1").arg(kAppName));
   m_actionSettings->setText(tr("&Preferences"));
+  m_actionTraySettings->setText(tr("&Preferences"));
   m_actionStartCore->setText(tr("&Start"));
   m_actionRestartCore->setText(tr("Rest&art"));
   m_actionStopCore->setText(tr("S&top"));
+  m_actionShowHome->setText(tr("Devices"));
+  m_actionShowTransfers->setText(tr("Transfer center"));
+  m_actionShowAdvanced->setText(tr("Advanced connection settings"));
   //: %1 will be the replaced with the appname
   m_actionAbout->setText(tr("About %1...").arg(kAppName));
 
@@ -1412,6 +2014,19 @@ void MainWindow::updateText()
   // General controls
   m_btnFingerprint->setToolTip(tr("View local fingerprint"));
   m_btnUpdate->setText(tr("Update available"));
+  if (auto *devicesTitle = findChild<QLabel *>(QStringLiteral("relaydeskSectionTitle")); devicesTitle != nullptr)
+    devicesTitle->setText(tr("My devices"));
+  if (auto *addDevice = findChild<QToolButton *>(QStringLiteral("relaydeskAddDevice")); addDevice != nullptr) {
+    addDevice->setText(tr("+ Add"));
+    addDevice->setToolTip(tr("Add a device"));
+    addDevice->setAccessibleName(tr("Add a device"));
+  }
+  if (m_transferPageTitle != nullptr)
+    m_transferPageTitle->setText(tr("Transfer center"));
+  updateCompactDeviceCount();
+  updateTraySharingAction();
+  updateCompactTransferBar();
+  updateCompactStatus();
 }
 
 void MainWindow::showConfigureServer(const QString &message)
@@ -1442,6 +2057,8 @@ void MainWindow::updateScreenName()
   const auto screenName = Settings::value(Settings::Core::ComputerName).toString();
   ui->lblComputerName->setText(screenName);
   ui->lineEditName->setText(screenName);
+  if (m_compactLocalLabel != nullptr)
+    m_compactLocalLabel->setText(tr("This device: %1").arg(screenName));
   m_serverConfig.updateServerName();
 }
 
@@ -1454,7 +2071,8 @@ void MainWindow::showAndActivate()
   showNormal();
   raise();
   activateWindow();
-  m_actionRestore->setVisible(false);
+  m_actionRestore->setVisible(true);
+  m_actionRestore->setEnabled(true);
   m_actionMinimize->setVisible(true);
   if (!wasVisible)
     restoreWindow();
