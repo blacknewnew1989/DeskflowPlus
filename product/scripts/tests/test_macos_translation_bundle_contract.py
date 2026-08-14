@@ -55,6 +55,21 @@ class MacosTranslationBundleContractTests(unittest.TestCase):
             )
             self.assertTrue(all(item["qtQmHeader"] == "PASS" for item in result["catalogs"]))
 
+    def test_pairs_languages_and_catalogs_one_to_one_with_strict_lengths(self) -> None:
+        languages = ("en", "fr")
+        catalogs = ("relaydesk_en.qm", "relaydesk_fr.qm")
+
+        self.assertEqual(
+            MODULE.language_catalog_pairs(languages, catalogs),
+            (("en", "relaydesk_en.qm"), ("fr", "relaydesk_fr.qm")),
+        )
+        for mismatched_catalogs in (catalogs[:-1], catalogs + ("relaydesk_zh_CN.qm",)):
+            with self.subTest(catalogs=mismatched_catalogs):
+                with self.assertRaisesRegex(
+                    MODULE.TranslationBundleError, "LANGUAGE_CATALOG_COUNT_MISMATCH"
+                ):
+                    MODULE.language_catalog_pairs(languages, mismatched_catalogs)
+
     def test_rejects_missing_catalog_from_shared_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

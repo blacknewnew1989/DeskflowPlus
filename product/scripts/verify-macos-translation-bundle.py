@@ -71,6 +71,19 @@ def supported_languages(manifest: Path) -> tuple[str, ...]:
     return tokens
 
 
+def language_catalog_pairs(
+    languages: tuple[str, ...], catalog_names: tuple[str, ...]
+) -> tuple[tuple[str, str], ...]:
+    if len(languages) != len(catalog_names):
+        raise TranslationBundleError(
+            "LANGUAGE_CATALOG_COUNT_MISMATCH: "
+            f"languages={len(languages)},catalogs={len(catalog_names)}"
+        )
+    return tuple(
+        (languages[index], catalog_names[index]) for index in range(len(languages))
+    )
+
+
 def verify_bundle(
     repo_root: Path, app_bundle: Path, lconvert: Path | None = None
 ) -> dict[str, Any]:
@@ -102,7 +115,7 @@ def verify_bundle(
     catalogs: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="relaydesk-qm-load-") as temporary:
         temporary_path = Path(temporary)
-        for language, name in zip(languages, expected, strict=True):
+        for language, name in language_catalog_pairs(languages, expected):
             catalog = translation_dir / name
             if catalog.is_symlink() or not catalog.is_file():
                 raise TranslationBundleError(f"CATALOG_NOT_REGULAR_FILE: {name}")
