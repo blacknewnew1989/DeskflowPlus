@@ -35,8 +35,10 @@ if (OSX_BUNDLE)
     set(RELAYDESK_MACDEPLOYQT_CODESIGN "-")
     set(RELAYDESK_MACDEPLOYQT_HARDENED "")
   endif()
-  set(CPACK_PACKAGE_ICON "${MY_DIR}/dmg-volume.icns")
-  set(CPACK_DMG_BACKGROUND_IMAGE "${MY_DIR}/dmg-background.tiff")
+  # Finder/Dock and the mounted DMG volume deliberately consume the same
+  # generated RelayDesk ICNS. The background is generated from the same SVG.
+  set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/${RELAYDESK_MACOS_ICON_SOURCE}")
+  set(CPACK_DMG_BACKGROUND_IMAGE "${CMAKE_SOURCE_DIR}/${RELAYDESK_MACOS_DMG_BACKGROUND_SOURCE}")
   set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/generate_ds_store.applescript")
   set(CPACK_DMG_VOLUME_NAME "${CMAKE_PROJECT_PROPER_NAME}")
   set(CPACK_DMG_SLA_USE_RESOURCE_FILE_LICENSE ON)

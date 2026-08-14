@@ -31,6 +31,11 @@ elseif(BUILD_OSX_BUNDLE)
     ${CMAKE_CURRENT_BINARY_DIR}/deskflow.plist
     @ONLY
   )
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../res/relaydesk-brand.qrc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/relaydesk-brand.qrc
+    @ONLY
+  )
 
   set(platform_extra "${CMAKE_SOURCE_DIR}/${RELAYDESK_MACOS_ICON_SOURCE}")
   set_source_files_properties(${platform_extra} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
@@ -39,6 +44,7 @@ endif()
 add_executable(${target} WIN32 MACOSX_BUNDLE
   ${platform_extra}
   ../res/deskflow.qrc
+  $<$<BOOL:${BUILD_OSX_BUNDLE}>:${CMAKE_CURRENT_BINARY_DIR}/relaydesk-brand.qrc>
   deskflow-gui.cpp
 )
 
