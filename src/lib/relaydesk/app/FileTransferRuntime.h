@@ -159,6 +159,7 @@ private:
   void handleFileResult(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
   void updateOutgoingProgress(OutgoingSession &session);
   void completeOutgoing(OutgoingSession &session);
+  void markOutgoingConnectionLost(OutgoingSession &session);
   void failOutgoing(
       OutgoingSession &session, ::relaydesk::transfer::TransferErrorCode errorCode, QString diagnostic = {}
   );

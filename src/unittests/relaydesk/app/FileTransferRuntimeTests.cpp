@@ -23,6 +23,7 @@
 #include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 
 #include <limits>
 
@@ -60,6 +61,9 @@ class FileTransferRuntimeTests final : public QObject
 
 private Q_SLOTS:
   void listenerLifecycleIsOwnedAndRestartable();
+  void stoppingWhilePreparingPublishesRetryableFailure();
+  void stoppingBeforeStreamingPublishesRetryableFailure_data();
+  void stoppingBeforeStreamingPublishesRetryableFailure();
   void trustedPeersNegotiateIndependentFileChannel();
   void outgoingSingleFileStreamsThroughWorkerPump();
   void incomingSingleFileCommitsThroughPlatformReceiver();
@@ -127,6 +131,194 @@ void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
   QVERIFY(discovery.service().localDevice().capabilities.resumeV1);
   QCOMPARE(started.count(), 2);
   QCOMPARE(errors.count(), 0);
+}
+
+void FileTransferRuntimeTests::stoppingWhilePreparingPublishesRetryableFailure()
+{
+  using namespace ::relaydesk::transfer;
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+
+  const auto sourcePath = directory.filePath(QStringLiteral("preparing.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write("RelayDesk preparing state\n"), qint64{26});
+  source.close();
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore trust(directory.filePath(QStringLiteral("trusted-devices.json")));
+  QVERIFY(trust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  model::DeviceHomeModel deviceModel;
+  DeviceDiscoveryRuntime discovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender")), deviceModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  FileTransferRuntime runtime(senderId, trust, discovery, identityPath, options);
+  QString diagnostic;
+  QVERIFY2(runtime.start(&diagnostic), qPrintable(diagnostic));
+
+  auto receiver = localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver"));
+  receiver.filePort = 24801;
+  receiver.capabilities.fileV1 = true;
+  QVERIFY(discovery.registry().observeAdvertisement(receiver, QHostAddress::LocalHost));
+
+  std::optional<TransferSnapshot> latest;
+  connect(&runtime, &IFileTransferService::transferAdded, this, [&](const TransferSnapshot &snapshot) {
+    latest = snapshot;
+  });
+  connect(&runtime, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    latest = snapshot;
+  });
+
+  const auto started = runtime.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+  QVERIFY(latest.has_value());
+  QCOMPARE(latest->state, TransferState::Preparing);
+
+  runtime.stop();
+  QVERIFY(latest.has_value());
+  QCOMPARE(latest->state, TransferState::Failed);
+  QCOMPARE(latest->errorCode, TransferErrorCode::ConnectionLost);
+  QVERIFY(latest->canRetry);
+  QVERIFY(!latest->canCancel);
+
+  QCoreApplication::processEvents();
+  QCOMPARE(latest->state, TransferState::Failed);
+}
+
+void FileTransferRuntimeTests::stoppingBeforeStreamingPublishesRetryableFailure_data()
+{
+  QTest::addColumn<bool>("acceptOffer");
+  QTest::addColumn<int>("targetState");
+
+  QTest::newRow("waiting-for-acceptance") << false
+                                          << static_cast<int>(::relaydesk::transfer::TransferState::WaitingForAcceptance);
+  QTest::newRow("queued-after-acceptance") << true
+                                            << static_cast<int>(::relaydesk::transfer::TransferState::Queued);
+}
+
+void FileTransferRuntimeTests::stoppingBeforeStreamingPublishesRetryableFailure()
+{
+  using namespace ::relaydesk::transfer;
+
+  QFETCH(bool, acceptOffer);
+  QFETCH(int, targetState);
+  const auto expectedState = static_cast<TransferState>(targetState);
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+
+  const auto sourcePath = directory.filePath(QStringLiteral("pre-stream.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(QByteArray(64, '\x42')), qint64{64});
+  source.close();
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("sender-trust.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+
+  FileTlsListener receiver(receiverId, &receiverTrust, identityPath);
+  QString diagnostic;
+  QCOMPARE(receiver.listen(QHostAddress::LocalHost, 0, &diagnostic), FileTlsError::None);
+
+  model::DeviceHomeModel deviceModel;
+  DeviceDiscoveryRuntime discovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender")), deviceModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  FileTransferRuntime runtime(senderId, senderTrust, discovery, identityPath, options);
+  QVERIFY2(runtime.start(&diagnostic), qPrintable(diagnostic));
+  auto receiverInfo = localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver"));
+  receiverInfo.filePort = receiver.serverPort();
+  receiverInfo.capabilities.fileV1 = true;
+  QVERIFY(discovery.registry().observeAdvertisement(receiverInfo, QHostAddress::LocalHost));
+
+  QStringList errors;
+  bool offerSeen = false;
+  connect(&receiver, &FileTlsListener::connectionCreated, this, [&](FileTlsConnection *connection) {
+    connect(connection, &FileTlsConnection::failed, this, [&](FileTlsError, const QString &message) {
+      errors.append(message);
+    });
+    connect(connection, &FileTlsConnection::frameReceived, this, [&, connection](const Frame &frame) {
+      QString responseDiagnostic;
+      if (frame.type == MessageType::Capabilities) {
+        auto capabilities = options.localCapabilities;
+        capabilities.features.append(QStringLiteral("file.receive.v1"));
+        const Frame response{
+            .type = MessageType::Capabilities,
+            .metadata = CapabilityCodec::encode(capabilities, &responseDiagnostic),
+        };
+        if (connection->sendFrame(response, &responseDiagnostic) != FileTlsError::None)
+          errors.append(responseDiagnostic);
+        return;
+      }
+      if (frame.type != MessageType::TransferOffer)
+        return;
+      const auto decoded = ControlMessageCodec::decode(frame.version, frame.type, frame.metadata);
+      if (!decoded.ok()) {
+        errors.append(decoded.diagnostic);
+        return;
+      }
+      const auto *offer = std::get_if<TransferOffer>(&*decoded.message);
+      if (offer == nullptr) {
+        errors.append(QStringLiteral("offer frame decoded to the wrong variant"));
+        return;
+      }
+      offerSeen = true;
+      if (!acceptOffer)
+        return;
+      const TransferAccept acceptance{
+          .transferId = offer->transferId,
+          .effectiveConflictPolicy = ConflictPolicy::AutoRename,
+          .logicalDestination = QStringLiteral("RelayDesk"),
+          .freeBytes = static_cast<quint64>(std::numeric_limits<qint64>::max()),
+      };
+      const Frame response{
+          .type = MessageType::TransferAccept,
+          .flags = Response,
+          .metadata = ControlMessageCodec::encode(
+              kProtocolMajorVersion, ControlMessage{acceptance}, &responseDiagnostic
+          ),
+      };
+      if (response.metadata.isEmpty() ||
+          connection->sendFrame(response, &responseDiagnostic) != FileTlsError::None) {
+        errors.append(responseDiagnostic);
+      }
+    });
+  });
+
+  std::optional<TransferSnapshot> latest;
+  connect(&runtime, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    latest = snapshot;
+    if (acceptOffer && snapshot.state == expectedState)
+      QTimer::singleShot(0, &runtime, [&runtime] { runtime.stop(); });
+  });
+  const auto started = runtime.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+
+  if (!acceptOffer) {
+    QTRY_VERIFY_WITH_TIMEOUT(offerSeen && latest.has_value() && latest->state == expectedState, 5'000);
+    runtime.stop();
+  }
+  QTRY_VERIFY_WITH_TIMEOUT(latest.has_value() && latest->state == TransferState::Failed, 5'000);
+  QCOMPARE(latest->errorCode, TransferErrorCode::ConnectionLost);
+  QVERIFY(latest->canRetry);
+  QVERIFY(!latest->canCancel);
+  QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
 }
 
 void FileTransferRuntimeTests::trustedPeersNegotiateIndependentFileChannel()

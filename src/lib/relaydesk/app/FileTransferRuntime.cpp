@@ -444,7 +444,17 @@ bool FileTransferRuntime::start(QString *diagnostic)
 
 void FileTransferRuntime::stop()
 {
-  if (QThread::currentThread() != thread() || m_listener == nullptr) {
+  if (QThread::currentThread() != thread()) {
+    return;
+  }
+
+  for (auto *session : std::as_const(m_outgoing)) {
+    if (session != nullptr) {
+      markOutgoingConnectionLost(*session);
+    }
+  }
+
+  if (m_listener == nullptr) {
     return;
   }
 
@@ -1712,6 +1722,33 @@ void FileTransferRuntime::completeOutgoing(OutgoingSession &session)
   Q_EMIT transferChanged(session.snapshot);
 }
 
+void FileTransferRuntime::markOutgoingConnectionLost(OutgoingSession &session)
+{
+  using ::relaydesk::transfer::TransferControlStateMachine;
+  using ::relaydesk::transfer::TransferErrorCode;
+
+  if (session.cancelled || TransferControlStateMachine::isTerminal(session.snapshot.state)) {
+    return;
+  }
+
+  session.paused = false;
+  session.resumeQueryPending = false;
+  session.resumeQuery.reset();
+  session.awaitingFileResult = false;
+  ++session.senderGeneration;
+  session.sender.reset();
+
+  if (session.control != nullptr && session.control->interrupt().ok()) {
+    session.interrupted = true;
+    session.snapshot = session.control->snapshot();
+    Q_EMIT transferChanged(session.snapshot);
+    return;
+  }
+
+  session.interrupted = false;
+  failOutgoing(session, TransferErrorCode::ConnectionLost);
+}
+
 void FileTransferRuntime::failOutgoing(
     OutgoingSession &session, TransferErrorCode errorCode, QString diagnostic
 )
@@ -1776,23 +1813,10 @@ void FileTransferRuntime::removeConnection(FileTlsConnection &connection)
     if (wasReady) {
       for (auto *session : std::as_const(m_outgoing)) {
         if (session == nullptr || session->peer != *peer || session->cancelled ||
-            session->control == nullptr ||
             ::relaydesk::transfer::TransferControlStateMachine::isTerminal(session->snapshot.state)) {
           continue;
         }
-        const auto interrupted = session->control->interrupt();
-        if (!interrupted.ok()) {
-          continue;
-        }
-        session->interrupted = true;
-        session->paused = false;
-        session->resumeQueryPending = false;
-        session->resumeQuery.reset();
-        session->awaitingFileResult = false;
-        ++session->senderGeneration;
-        session->sender.reset();
-        session->snapshot = session->control->snapshot();
-        Q_EMIT transferChanged(session->snapshot);
+        markOutgoingConnectionLost(*session);
       }
       if (auto *incoming = m_incoming.get(); incoming != nullptr) {
         incoming->peerDisconnected(*peer);
