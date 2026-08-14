@@ -17,6 +17,8 @@
 AboutDialog::AboutDialog(QWidget *parent) : QDialog(parent), ui{std::make_unique<Ui::AboutDialog>()}
 {
   ui->setupUi(this);
+  setWindowTitle(tr("About %1").arg(kAppName));
+  ui->lblName->setText(kAppName);
 
   const int px = (fontMetrics().height() * 6);
   const QSize pixmapSize(px, px);

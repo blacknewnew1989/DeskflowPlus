@@ -13,10 +13,15 @@ set(RELAYDESK_WINDOWS_RUN_VALUE_NAME "RelayDesk")
 set(RELAYDESK_WINDOWS_SERVICE_NAME "RelayDesk")
 set(RELAYDESK_PACKAGE_ID "relaydesk")
 
-# macOS bundle identity and resources. The current icon is an explicitly
-# centralized internal-build fallback until final trademarked artwork lands.
-set(RELAYDESK_MACOS_ICON_FILE "Deskflow.icns")
-set(RELAYDESK_MACOS_ICON_SOURCE "src/apps/res/Deskflow.icns")
+# Original vector artwork. The SVG is the geometric source of truth for
+# in-app and packaged icon variants; theme assets use the bundle identifier.
+set(RELAYDESK_ICON_SOURCE "product/assets/branding/relaydesk-mark.svg")
+
+# Platform bundle resources rendered from RELAYDESK_ICON_SOURCE. Keep all build
+# consumers on these variables instead of embedding resource paths downstream.
+set(RELAYDESK_WINDOWS_ICON_SOURCE "src/apps/res/relaydesk.ico")
+set(RELAYDESK_MACOS_ICON_FILE "RelayDesk.icns")
+set(RELAYDESK_MACOS_ICON_SOURCE "src/apps/res/RelayDesk.icns")
 set(RELAYDESK_MACOS_LOCAL_NETWORK_USAGE_DESCRIPTION
     "RelayDesk uses the local network to discover trusted computers and transfer input, clipboard, and files.")
 

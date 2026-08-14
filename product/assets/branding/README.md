@@ -7,9 +7,9 @@
 作为紧凑界面与临时 Logo 的视觉基线。参考图 SHA-256：
 `2f9cf97352ab9819eb5aa2b5d54b9ec9a4fbf171cea56525fb7e2ef149cfbe94`。
 
-该确认只冻结设计方向，不代表生产图标、平台资源或打包接线已经完成。生产资产由
-`BRAND-002` 跟踪，当前状态为 `IN_PROGRESS`。RelayDesk 仍是临时代号，正式产品名和商标
-决策留到对外发布前完成。
+该确认冻结设计方向。生产 SVG、平台图标与打包接线已经进入工作树，最终状态仍由
+`BRAND-002` 跟踪，并以本次双平台打包结果为完成证据。RelayDesk 仍是临时代号，正式产品名
+和商标决策留到对外发布前完成。
 
 ## Logo 设计契约
 
@@ -20,6 +20,10 @@
 - `16 px` 下仍须看出两个设备和中继点，不依赖小字、细线或渐变传递核心语义；
 - macOS menu bar 使用 template 图标，让系统适配浅色、深色和高对比外观；
 - 不复用 Deskflow 图形，也不得让 RelayDesk 看起来像 Deskflow 官方发布。
+
+`relaydesk-generated.json` 固定 canonical SVG、Windows ICO 与 macOS ICNS 的路径、大小和
+SHA-256。任何几何或平台容器更新必须同时刷新该 provenance；`validate-branding.py` 会拒绝
+来源摘要过期、暗色图标与 Ink 顶栏无对比或 symbolic 图标没有使用 `currentColor` 的改动。
 
 ## 计划输出
 

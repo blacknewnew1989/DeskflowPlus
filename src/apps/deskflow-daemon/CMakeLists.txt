@@ -9,7 +9,8 @@ if(WIN32)
 
   # Generate rc file
   set(EXE_DESCRIPTION "${CMAKE_PROJECT_PROPER_NAME} Daemon for handling secure desktops (UAC prompts, login screen, etc)")
-  set(EXE_ICON "IDI_DESKFLOW ICON DISCARDABLE \"${CMAKE_SOURCE_DIR}/src/apps/res/deskflow.ico\"")
+  set(relaydesk_windows_icon "${CMAKE_SOURCE_DIR}/${RELAYDESK_WINDOWS_ICON_SOURCE}")
+  set(EXE_ICON "IDI_DESKFLOW ICON DISCARDABLE \"${relaydesk_windows_icon}\"")
   configure_file(${CMAKE_SOURCE_DIR}/src/apps/res/windows.rc.in ${target}.rc)
 
   add_executable(
@@ -17,6 +18,7 @@ if(WIN32)
     ${target}.cpp
     DaemonApp.cpp
     DaemonApp.h
+    ${relaydesk_windows_icon}
     ${CMAKE_CURRENT_BINARY_DIR}/${target}.rc)
 
   target_link_libraries(

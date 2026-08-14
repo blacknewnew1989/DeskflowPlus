@@ -12,9 +12,10 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 if(WIN32)
   set(EXE_DESCRIPTION "${CMAKE_PROJECT_PROPER_NAME} GUI configuration tool")
-  set(EXE_ICON "IDI_ICON1 ICON DISCARDABLE \"${CMAKE_SOURCE_DIR}/src/apps/res/deskflow.ico\" ")
+  set(relaydesk_windows_icon "${CMAKE_SOURCE_DIR}/${RELAYDESK_WINDOWS_ICON_SOURCE}")
+  set(EXE_ICON "IDI_ICON1 ICON DISCARDABLE \"${relaydesk_windows_icon}\" ")
   configure_file(${CMAKE_SOURCE_DIR}/src/apps/res/windows.rc.in deskflow.rc)
-  set(platform_extra deskflow.rc)
+  set(platform_extra deskflow.rc "${relaydesk_windows_icon}")
 elseif(BUILD_OSX_BUNDLE)
   #setup our bundle plist file
   set(BUNDLE_EXECUTABLE_NAME "${target}")
@@ -32,7 +33,8 @@ elseif(BUILD_OSX_BUNDLE)
     @ONLY
   )
 
-  set(platform_extra "${CMAKE_SOURCE_DIR}/${RELAYDESK_MACOS_ICON_SOURCE}")
+  set(relaydesk_macos_icon "${CMAKE_SOURCE_DIR}/${RELAYDESK_MACOS_ICON_SOURCE}")
+  set(platform_extra "${relaydesk_macos_icon}")
   set_source_files_properties(${platform_extra} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 endif()
 
