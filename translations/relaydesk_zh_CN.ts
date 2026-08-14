@@ -60,6 +60,8 @@
     <message><source>pairing.expires_at</source><translation>到期时间：%1</translation></message>
     <message><source>permissions.banner.attention_title</source><translation>需要系统权限</translation></message>
     <message><source>permissions.banner.unknown_title</source><translation>尚未检查系统权限</translation></message>
+    <message><source>permissions.banner.ready_title</source><translation>权限已就绪</translation></message>
+    <message><source>permissions.details.title</source><translation>系统权限</translation></message>
     <message><source>permissions.kind.windows_firewall</source><translation>Windows 防火墙</translation></message>
     <message><source>permissions.kind.windows_port</source><translation>本地网络端口</translation></message>
     <message><source>permissions.kind.macos_local_network</source><translation>本地网络</translation></message>
@@ -78,7 +80,17 @@
     <message><source>permissions.message.macos_local_network</source><translation>请允许本地网络访问，以便 RelayDesk 发现附近设备。</translation></message>
     <message><source>permissions.message.macos_accessibility</source><translation>请允许辅助功能，以便 RelayDesk 控制键盘和指针输入。</translation></message>
     <message><source>permissions.message.macos_input_monitoring</source><translation>当 macOS 要求时，请允许输入监控以共享输入。</translation></message>
+    <message><source>permissions.purpose.windows_firewall</source><translation>允许可信设备通过专用网络连接 RelayDesk。</translation></message>
+    <message><source>permissions.purpose.windows_port</source><translation>保持 RelayDesk 在所选本地端口上的监听可用。</translation></message>
+    <message><source>permissions.purpose.macos_local_network</source><translation>发现并连接附近的 RelayDesk 设备。</translation></message>
+    <message><source>permissions.purpose.macos_accessibility</source><translation>允许 RelayDesk 在本机控制键盘、指针和滚动。</translation></message>
+    <message><source>permissions.purpose.macos_input_monitoring</source><translation>允许 RelayDesk 读取用于共享的键盘和指针输入。</translation></message>
+    <message><source>permissions.affected.network</source><translation>设备发现、入站连接与文件传输</translation></message>
+    <message><source>permissions.affected.macos_local_network</source><translation>设备发现、设备连接与文件传输</translation></message>
+    <message><source>permissions.affected.macos_accessibility</source><translation>传入的键盘与指针控制</translation></message>
+    <message><source>permissions.affected.macos_input_monitoring</source><translation>传出的键盘与指针共享</translation></message>
     <message><source>permissions.action.open_settings</source><translation>打开系统设置</translation></message>
+    <message><source>permissions.action.view_details</source><translation>查看权限详情</translation></message>
     <message><source>transfer.title</source><translation>传输</translation></message>
     <message><source>transfer.empty</source><translation>传输任务会显示在这里</translation></message>
     <message><source>transfer.direction.sending</source><translation>正在发送</translation></message>

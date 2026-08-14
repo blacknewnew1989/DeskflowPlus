@@ -13,8 +13,10 @@
 
 #include "../FakePairingService.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDialog>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFile>
@@ -30,6 +32,7 @@
 #include <QTest>
 #include <QToolButton>
 
+#include <algorithm>
 #include <chrono>
 
 using namespace deskflow::relaydesk;
@@ -117,6 +120,8 @@ private Q_SLOTS:
   void confirmsAndCancelsFromPairingPanel();
   void rendersExpiredPairingState();
   void rendersPermissionGuidanceAndKeyboardAction();
+  void keepsUnsupportedPermissionBannerHiddenAfterEmbedding();
+  void rendersDistinctMacPermissionActions();
   void choosesFilesAndFolderAndPublishesImmutableIntent();
   void rejectsInvalidOrIneligibleSendItems();
   void acceptsLocalUrlDropOnlyForEligiblePeer();
@@ -315,15 +320,20 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
   auto *title = dock.findChild<QLabel *>(QStringLiteral("relaydeskPermissionTitle"));
   auto *message = dock.findChild<QLabel *>(QStringLiteral("relaydeskPermissionMessage"));
   auto *openSettings = dock.findChild<QPushButton *>(QStringLiteral("relaydeskOpenPermissionSettingsButton"));
+  auto *openDetails = dock.findChild<QToolButton *>(QStringLiteral("relaydeskOpenPermissionDetailsButton"));
   QVERIFY(banner != nullptr);
   QVERIFY(title != nullptr);
   QVERIFY(message != nullptr);
   QVERIFY(openSettings != nullptr);
+  QVERIFY(openDetails != nullptr);
   QVERIFY(banner->isVisible());
-  QVERIFY(title->text().startsWith(QStringLiteral("Permission status not checked · ")));
+  QVERIFY(title->accessibleName().startsWith(QStringLiteral("Permission status not checked · ")));
   QVERIFY(qobject_cast<QHBoxLayout *>(banner->layout()) != nullptr);
   QVERIFY(!message->isVisible());
   QVERIFY(!openSettings->isVisible());
+  QCOMPARE(banner->focusPolicy(), Qt::NoFocus);
+  QCOMPARE(openDetails->accessibleName(), QStringLiteral("View permission details"));
+  QVERIFY(openDetails->focusPolicy() != Qt::NoFocus);
 
   QVERIFY(permissions.setSnapshot({
       .platform = PermissionPlatform::Windows,
@@ -337,13 +347,15 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
           },
           {
               .kind = PermissionKind::WindowsListeningPort,
-              .state = PermissionState::Granted,
+              .state = PermissionState::NeedsAction,
+              .errorCode = PermissionErrorCode::WindowsPortUnavailable,
           },
       },
   }));
   QTRY_VERIFY(openSettings->isVisible());
   QCOMPARE(
-      title->text(), QStringLiteral("Permission needed · Allow RelayDesk through Windows Firewall on private networks.")
+      title->accessibleName(),
+      QStringLiteral("Permission needed · Allow RelayDesk through Windows Firewall on private networks.")
   );
   QCOMPARE(message->text(), QStringLiteral("Allow RelayDesk through Windows Firewall on private networks."));
   QVERIFY(!message->isVisible());
@@ -351,12 +363,60 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
   QCOMPARE(openSettings->text(), QStringLiteral("Open settings"));
   QCOMPARE(openSettings->accessibleName(), QStringLiteral("Open settings"));
   QVERIFY(openSettings->focusPolicy() != Qt::NoFocus);
+  QCOMPARE(banner->property("needsAttention").toBool(), true);
 
   QSignalSpy requested(&permissions, &PermissionStatusModel::openSettingsRequested);
   openSettings->setFocus();
   QTest::keyClick(openSettings, Qt::Key_Space);
   QCOMPARE(requested.count(), 1);
   QCOMPARE(requested.takeFirst().constFirst().value<PermissionKind>(), PermissionKind::WindowsFirewall);
+
+  QTest::mouseClick(banner, Qt::LeftButton);
+  auto *details = dock.findChild<QDialog *>(QStringLiteral("relaydeskPermissionDetailsDialog"));
+  QTRY_VERIFY(details != nullptr);
+  QTRY_VERIFY(details->isVisible());
+  auto *detailSettings = details->findChild<QPushButton *>(QStringLiteral("relaydeskPermissionSettingsButton-0"));
+  QVERIFY(detailSettings != nullptr);
+  QCOMPARE(detailSettings->text(), QStringLiteral("Open settings"));
+  QCOMPARE(detailSettings->accessibleName(), QStringLiteral("Windows Firewall — Open settings"));
+  QVERIFY(details->findChild<QPushButton *>(QStringLiteral("relaydeskPermissionSettingsButton-1")) == nullptr);
+  const auto detailLabels = details->findChildren<QLabel *>();
+  QVERIFY(std::any_of(detailLabels.cbegin(), detailLabels.cend(), [](const QLabel *label) {
+    return label->text() == QStringLiteral("Allows trusted devices to reach RelayDesk on private networks.");
+  }));
+  QVERIFY(std::any_of(detailLabels.cbegin(), detailLabels.cend(), [](const QLabel *label) {
+    return label->text().contains(QStringLiteral("Device discovery, incoming connections, and file transfer"));
+  }));
+  QVERIFY(std::any_of(detailLabels.cbegin(), detailLabels.cend(), [](const QLabel *label) {
+    return label->text().contains(QStringLiteral("RelayDesk cannot listen on its local network port"));
+  }));
+
+  details->activateWindow();
+  detailSettings->setFocus(Qt::TabFocusReason);
+  QTRY_COMPARE(QApplication::focusWidget(), detailSettings);
+  QVERIFY(permissions.setSnapshot({
+      .platform = PermissionPlatform::Windows,
+      .entries = {
+          {
+              .kind = PermissionKind::WindowsFirewall,
+              .state = PermissionState::NeedsAction,
+              .errorCode = PermissionErrorCode::WindowsFirewallBlocked,
+              .canOpenSettings = true,
+          },
+          {
+              .kind = PermissionKind::WindowsListeningPort,
+              .state = PermissionState::NeedsAction,
+              .errorCode = PermissionErrorCode::WindowsPortUnavailable,
+          },
+      },
+  }));
+  detailSettings = details->findChild<QPushButton *>(QStringLiteral("relaydeskPermissionSettingsButton-0"));
+  QVERIFY(detailSettings != nullptr);
+  QCOMPARE(QApplication::focusWidget(), detailSettings);
+  QTest::mouseClick(detailSettings, Qt::LeftButton);
+  QCOMPARE(requested.count(), 1);
+  QCOMPARE(requested.takeFirst().constFirst().value<PermissionKind>(), PermissionKind::WindowsFirewall);
+  details->close();
 
   QVERIFY(permissions.setSnapshot({
       .platform = PermissionPlatform::Windows,
@@ -365,7 +425,80 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
           {.kind = PermissionKind::WindowsListeningPort, .state = PermissionState::Granted},
       },
   }));
+  QVERIFY(banner->isVisible());
+  QCOMPARE(title->text(), QStringLiteral("Permissions ready"));
+  QVERIFY(!openSettings->isVisible());
+  QCOMPARE(banner->property("needsAttention").toBool(), false);
+
+  openDetails->setFocus();
+  QTest::keyClick(openDetails, Qt::Key_Space);
+  details = dock.findChild<QDialog *>(QStringLiteral("relaydeskPermissionDetailsDialog"));
+  QTRY_VERIFY(details != nullptr);
+  QTRY_VERIFY(details->isVisible());
+  dock.hide();
+  QTRY_VERIFY(!details->isVisible());
+  details->close();
+}
+
+void DevicesDockTests::keepsUnsupportedPermissionBannerHiddenAfterEmbedding()
+{
+  FakePairingService pairingService;
+  DeviceHomeModel devices;
+  PairingWizardModel pairing(pairingService);
+  PermissionStatusModel permissions(PermissionPlatform::Other);
+  DevicesDock dock(devices, pairing, permissions);
+  QWidget host;
+  host.show();
+
+  auto *banner = dock.takePermissionBanner(&host);
+  QVERIFY(banner != nullptr);
   QVERIFY(!banner->isVisible());
+}
+
+void DevicesDockTests::rendersDistinctMacPermissionActions()
+{
+  FakePairingService pairingService;
+  DeviceHomeModel devices;
+  PairingWizardModel pairing(pairingService);
+  PermissionStatusModel permissions(PermissionPlatform::MacOS);
+  DevicesDock dock(devices, pairing, permissions);
+  dock.resize(532, 300);
+  dock.show();
+  QVERIFY(permissions.setSnapshot({
+      .platform = PermissionPlatform::MacOS,
+      .entries = {
+          {.kind = PermissionKind::MacLocalNetwork,
+           .state = PermissionState::Denied,
+           .errorCode = PermissionErrorCode::MacLocalNetworkDenied,
+           .canOpenSettings = true},
+          {.kind = PermissionKind::MacAccessibility,
+           .state = PermissionState::Denied,
+           .errorCode = PermissionErrorCode::MacAccessibilityDenied,
+           .canOpenSettings = true},
+          {.kind = PermissionKind::MacInputMonitoring,
+           .state = PermissionState::Denied,
+           .errorCode = PermissionErrorCode::MacInputMonitoringDenied,
+           .canOpenSettings = true},
+      },
+  }));
+
+  auto *openDetails = dock.findChild<QToolButton *>(QStringLiteral("relaydeskOpenPermissionDetailsButton"));
+  QVERIFY(openDetails != nullptr);
+  QTest::mouseClick(openDetails, Qt::LeftButton);
+  auto *details = dock.findChild<QDialog *>(QStringLiteral("relaydeskPermissionDetailsDialog"));
+  QTRY_VERIFY(details != nullptr);
+  QTRY_VERIFY(details->isVisible());
+  const QStringList permissionNames{
+      QStringLiteral("Local Network"), QStringLiteral("Accessibility"), QStringLiteral("Input Monitoring")
+  };
+  for (int row = 0; row < permissionNames.size(); ++row) {
+    auto *action = details->findChild<QPushButton *>(QStringLiteral("relaydeskPermissionSettingsButton-%1").arg(row));
+    QVERIFY(action != nullptr);
+    QVERIFY(action->accessibleName().contains(permissionNames.at(row)));
+    QVERIFY(!action->accessibleDescription().isEmpty());
+  }
+  QCOMPARE(details->findChildren<QLabel *>(QStringLiteral("relaydeskPermissionDetailMessage")).size(), 3);
+  details->close();
 }
 
 void DevicesDockTests::choosesFilesAndFolderAndPublishesImmutableIntent()

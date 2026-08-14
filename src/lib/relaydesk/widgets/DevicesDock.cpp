@@ -14,6 +14,8 @@
 
 #include <QAbstractItemModel>
 #include <QApplication>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QDragMoveEvent>
@@ -23,17 +25,21 @@
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
 #include <QLocale>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QScrollArea>
 #include <QSizePolicy>
 #include <QStyle>
 #include <QStyledItemDelegate>
@@ -136,6 +142,133 @@ public:
   }
 };
 
+class PermissionDetailsDialog final : public QDialog
+{
+public:
+  explicit PermissionDetailsDialog(model::PermissionStatusModel &permissions, QWidget *parent)
+      : QDialog(parent),
+        m_permissions(permissions)
+  {
+    setObjectName(QStringLiteral("relaydeskPermissionDetailsDialog"));
+    setWindowModality(Qt::NonModal);
+    setMinimumSize(400, 260);
+    resize(480, 360);
+
+    auto *outer = new QVBoxLayout(this);
+    outer->setContentsMargins(12, 12, 12, 10);
+    outer->setSpacing(8);
+    auto *scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    m_rows = new QWidget(scroll);
+    m_rowsLayout = new QVBoxLayout(m_rows);
+    m_rowsLayout->setContentsMargins(0, 0, 0, 0);
+    m_rowsLayout->setSpacing(8);
+    scroll->setWidget(m_rows);
+    outer->addWidget(scroll, 1);
+
+    m_buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    connect(m_buttons, &QDialogButtonBox::rejected, this, &QDialog::close);
+    outer->addWidget(m_buttons);
+    connect(&m_permissions, &model::PermissionStatusModel::snapshotChanged, this, [this] { rebuild(); });
+    rebuild();
+  }
+
+protected:
+  void changeEvent(QEvent *event) override
+  {
+    QDialog::changeEvent(event);
+    if (event->type() == QEvent::LanguageChange)
+      rebuild();
+  }
+
+private:
+  void rebuild()
+  {
+    int focusedKind = -1;
+    if (auto *focused = QApplication::focusWidget(); focused != nullptr && isAncestorOf(focused)) {
+      const auto kind = focused->property("permissionKind");
+      if (kind.isValid())
+        focusedKind = kind.toInt();
+    }
+
+    setWindowTitle(i18n::translate(Text::PermissionsDetailsTitle));
+    while (auto *item = m_rowsLayout->takeAt(0)) {
+      delete item->widget();
+      delete item;
+    }
+
+    for (int row = 0; row < m_permissions.rowCount(); ++row) {
+      const auto index = m_permissions.index(row, 0);
+      auto *card = new QFrame(m_rows);
+      card->setObjectName(QStringLiteral("relaydeskPermissionDetailRow"));
+      card->setFrameShape(QFrame::StyledPanel);
+      auto *layout = new QGridLayout(card);
+      layout->setContentsMargins(10, 8, 10, 8);
+      layout->setHorizontalSpacing(12);
+      layout->setVerticalSpacing(3);
+
+      auto *title = new QLabel(index.data(model::PermissionStatusModel::TitleRole).toString(), card);
+      QFont titleFont(title->font());
+      titleFont.setWeight(QFont::DemiBold);
+      title->setFont(titleFont);
+      layout->addWidget(title, 0, 0);
+      auto *status = new QLabel(index.data(model::PermissionStatusModel::StatusTextRole).toString(), card);
+      status->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+      layout->addWidget(status, 0, 1);
+
+      auto *purpose = new QLabel(index.data(model::PermissionStatusModel::PurposeTextRole).toString(), card);
+      purpose->setWordWrap(true);
+      layout->addWidget(purpose, 1, 0, 1, 2);
+      auto nextRow = 2;
+      const auto guidance = index.data(model::PermissionStatusModel::MessageTextRole).toString();
+      if (!guidance.isEmpty()) {
+        auto *message = new QLabel(guidance, card);
+        message->setObjectName(QStringLiteral("relaydeskPermissionDetailMessage"));
+        message->setWordWrap(true);
+        layout->addWidget(message, nextRow++, 0, 1, 2);
+      }
+      auto *affected = new QLabel(
+          QStringLiteral("• ") + index.data(model::PermissionStatusModel::AffectedCapabilityTextRole).toString(), card
+      );
+      affected->setWordWrap(true);
+      layout->addWidget(affected, nextRow, 0);
+
+      const auto canOpen = index.data(model::PermissionStatusModel::CanOpenSettingsRole).toBool();
+      if (canOpen) {
+        auto *action = new QPushButton(index.data(model::PermissionStatusModel::ActionTextRole).toString(), card);
+        action->setObjectName(QStringLiteral("relaydeskPermissionSettingsButton-%1").arg(row));
+        action->setProperty("permissionKind", index.data(model::PermissionStatusModel::KindRole));
+        action->setAccessibleName(QStringLiteral("%1 — %2").arg(title->text(), action->text()));
+        action->setAccessibleDescription(purpose->text());
+        connect(action, &QPushButton::clicked, &m_permissions, [this, row] {
+          (void)m_permissions.requestOpenSettings(row);
+        });
+        layout->addWidget(action, nextRow, 1, Qt::AlignRight | Qt::AlignVCenter);
+        if (focusedKind == index.data(model::PermissionStatusModel::KindRole).toInt())
+          action->setFocus(Qt::OtherFocusReason);
+      }
+      card->setAccessibleName(title->text() + QStringLiteral(", ") + status->text());
+      card->setAccessibleDescription(
+          guidance.isEmpty()
+              ? purpose->text() + QStringLiteral(". ") + affected->text()
+              : purpose->text() + QStringLiteral(". ") + guidance + QStringLiteral(". ") + affected->text()
+      );
+      m_rowsLayout->addWidget(card);
+    }
+    m_rowsLayout->addStretch(1);
+    if (focusedKind >= 0 && (QApplication::focusWidget() == nullptr || !isAncestorOf(QApplication::focusWidget()))) {
+      if (auto *closeButton = m_buttons->button(QDialogButtonBox::Close); closeButton != nullptr)
+        closeButton->setFocus(Qt::OtherFocusReason);
+    }
+  }
+
+  model::PermissionStatusModel &m_permissions;
+  QWidget *m_rows = nullptr;
+  QVBoxLayout *m_rowsLayout = nullptr;
+  QDialogButtonBox *m_buttons = nullptr;
+};
+
 QString groupedSas(const QString &sas)
 {
   return sas.size() == 6 ? sas.left(3) + QStringLiteral(" ") + sas.mid(3) : sas;
@@ -184,12 +317,17 @@ DevicesDock::DevicesDock(
   m_permissionBanner = new QFrame(body);
   m_permissionBanner->setObjectName(QStringLiteral("relaydeskPermissionBanner"));
   m_permissionBanner->setFrameShape(QFrame::StyledPanel);
+  m_permissionBanner->setFocusPolicy(Qt::NoFocus);
+  m_permissionBanner->setCursor(Qt::PointingHandCursor);
+  m_permissionBanner->installEventFilter(this);
   auto *permissionLayout = new QHBoxLayout(m_permissionBanner);
   permissionLayout->setContentsMargins(8, 5, 8, 5);
   permissionLayout->setSpacing(6);
   m_permissionTitle = new QLabel(m_permissionBanner);
   m_permissionTitle->setObjectName(QStringLiteral("relaydeskPermissionTitle"));
   m_permissionTitle->setTextFormat(Qt::PlainText);
+  m_permissionTitle->setCursor(Qt::PointingHandCursor);
+  m_permissionTitle->installEventFilter(this);
   m_permissionTitle->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   QFont permissionTitleFont(m_permissionTitle->font());
   permissionTitleFont.setWeight(QFont::DemiBold);
@@ -198,10 +336,16 @@ DevicesDock::DevicesDock(
   m_permissionMessage = new QLabel(m_permissionBanner);
   m_permissionMessage->setObjectName(QStringLiteral("relaydeskPermissionMessage"));
   m_permissionMessage->setTextFormat(Qt::PlainText);
+  m_permissionMessage->installEventFilter(this);
   m_permissionMessage->hide();
   m_openPermissionSettingsButton = new QPushButton(m_permissionBanner);
   m_openPermissionSettingsButton->setObjectName(QStringLiteral("relaydeskOpenPermissionSettingsButton"));
   permissionLayout->addWidget(m_openPermissionSettingsButton, 0, Qt::AlignVCenter);
+  m_openPermissionDetailsButton = new QToolButton(m_permissionBanner);
+  m_openPermissionDetailsButton->setObjectName(QStringLiteral("relaydeskOpenPermissionDetailsButton"));
+  m_openPermissionDetailsButton->setText(QStringLiteral("›"));
+  m_openPermissionDetailsButton->setAutoRaise(true);
+  permissionLayout->addWidget(m_openPermissionDetailsButton, 0, Qt::AlignVCenter);
   layout->addWidget(m_permissionBanner);
 
   m_emptyLabel = new QLabel(body);
@@ -442,6 +586,7 @@ DevicesDock::DevicesDock(
   connect(m_openPermissionSettingsButton, &QPushButton::clicked, this, [this]() {
     (void)m_permissions.requestPrimarySettings();
   });
+  connect(m_openPermissionDetailsButton, &QToolButton::clicked, this, &DevicesDock::showPermissionDetails);
   connect(m_confirmCodeButton, &QPushButton::clicked, &m_pairing, &model::PairingWizardModel::confirmMatchingSas);
   connect(m_submitCodeButton, &QPushButton::clicked, this, &DevicesDock::submitPairingCode);
   connect(m_pairingCodeEntry, &QLineEdit::returnPressed, this, &DevicesDock::submitPairingCode);
@@ -474,6 +619,17 @@ model::PairingWizardModel &DevicesDock::pairingModel() const
 model::PermissionStatusModel &DevicesDock::permissionModel() const
 {
   return m_permissions;
+}
+
+QWidget *DevicesDock::takePermissionBanner(QWidget *newParent)
+{
+  if (newParent == nullptr)
+    return nullptr;
+  if (auto *oldParent = m_permissionBanner->parentWidget(); oldParent != nullptr && oldParent->layout() != nullptr)
+    oldParent->layout()->removeWidget(m_permissionBanner);
+  m_permissionBanner->setParent(newParent);
+  m_permissionBanner->setVisible(m_permissions.bannerVisible());
+  return m_permissionBanner;
 }
 
 void DevicesDock::setFileChooser(ItemChooser chooser)
@@ -516,9 +672,33 @@ void DevicesDock::changeEvent(QEvent *event)
   }
 }
 
+void DevicesDock::hideEvent(QHideEvent *event)
+{
+  if (auto *details =
+          findChild<QDialog *>(QStringLiteral("relaydeskPermissionDetailsDialog"), Qt::FindDirectChildrenOnly);
+      details != nullptr) {
+    details->hide();
+  }
+  QDockWidget::hideEvent(event);
+}
+
 bool DevicesDock::eventFilter(QObject *watched, QEvent *event)
 {
-  if (watched != m_deviceList->viewport())
+  const auto permissionTarget =
+      watched == m_permissionBanner || watched == m_permissionTitle || watched == m_permissionMessage;
+  if (watched == m_permissionTitle && event->type() == QEvent::Resize)
+    updatePermissionSummaryText();
+  if (permissionTarget && event->type() == QEvent::MouseButtonRelease) {
+    const auto *mouse = static_cast<QMouseEvent *>(event);
+    if (mouse->button() == Qt::LeftButton) {
+      showPermissionDetails();
+      return true;
+    }
+  }
+  if (permissionTarget)
+    return QDockWidget::eventFilter(watched, event);
+
+  if (m_deviceList == nullptr || watched != m_deviceList->viewport())
     return QDockWidget::eventFilter(watched, event);
 
   switch (event->type()) {
@@ -624,6 +804,9 @@ void DevicesDock::updateText()
   m_cancelPairingButton->setText(m_pairing.cancelActionText());
   m_fingerprintToggle->setText(m_pairing.fingerprintLabel());
   m_openPermissionSettingsButton->setText(m_permissions.openSettingsActionText());
+  const auto permissionDetailsAction = i18n::translate(Text::PermissionsActionViewDetails);
+  m_openPermissionDetailsButton->setToolTip(permissionDetailsAction);
+  m_openPermissionDetailsButton->setAccessibleName(permissionDetailsAction);
   m_sendFilesButton->setText(i18n::translate(Text::DevicesActionSendFile));
   m_sendFilesButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFile));
   m_sendFolderButton->setText(i18n::translate(Text::DevicesActionSendFolder));
@@ -870,6 +1053,21 @@ void DevicesDock::submitPairingCode()
     m_pairingCodeEntry->clear();
 }
 
+void DevicesDock::showPermissionDetails()
+{
+  if (auto *existing =
+          findChild<QDialog *>(QStringLiteral("relaydeskPermissionDetailsDialog"), Qt::FindDirectChildrenOnly);
+      existing != nullptr) {
+    if (!existing->isVisible())
+      existing->open();
+    existing->raise();
+    existing->activateWindow();
+    return;
+  }
+  auto *dialog = new PermissionDetailsDialog(m_permissions, this);
+  dialog->open();
+}
+
 void DevicesDock::updatePermissionBanner()
 {
   const auto visible = m_permissions.bannerVisible();
@@ -879,10 +1077,13 @@ void DevicesDock::updatePermissionBanner()
 
   const auto title = m_permissions.bannerTitle();
   const auto message = m_permissions.bannerMessage();
-  const auto summary = message.isEmpty() ? title : title + QStringLiteral(" · ") + message;
-  m_permissionTitle->setText(summary);
-  m_permissionTitle->setToolTip(summary);
-  m_permissionTitle->setAccessibleName(summary);
+  m_permissionBanner->setProperty("needsAttention", m_permissions.canOpenPrimarySettings() || !message.isEmpty());
+  m_permissionBanner->style()->unpolish(m_permissionBanner);
+  m_permissionBanner->style()->polish(m_permissionBanner);
+  m_permissionSummary = message.isEmpty() ? title : title + QStringLiteral(" · ") + message;
+  updatePermissionSummaryText();
+  m_permissionTitle->setToolTip(m_permissionSummary);
+  m_permissionTitle->setAccessibleName(m_permissionSummary);
   m_permissionMessage->setText(message);
   m_permissionMessage->setToolTip(message);
   m_permissionMessage->setVisible(false);
@@ -891,6 +1092,16 @@ void DevicesDock::updatePermissionBanner()
   m_permissionBanner->setAccessibleName(title);
   m_permissionBanner->setAccessibleDescription(message);
   m_openPermissionSettingsButton->setAccessibleName(m_permissions.openSettingsActionText());
+}
+
+void DevicesDock::updatePermissionSummaryText()
+{
+  if (m_permissionTitle == nullptr || m_permissionSummary.isEmpty())
+    return;
+  const auto availableWidth = qMax(0, m_permissionTitle->width());
+  const auto elided = m_permissionTitle->fontMetrics().elidedText(m_permissionSummary, Qt::ElideRight, availableWidth);
+  if (m_permissionTitle->text() != elided)
+    m_permissionTitle->setText(elided);
 }
 
 } // namespace deskflow::relaydesk::widgets

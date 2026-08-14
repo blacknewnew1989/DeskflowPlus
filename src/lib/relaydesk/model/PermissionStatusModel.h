@@ -37,6 +37,8 @@ public:
     NeedsAttentionRole,
     CanOpenSettingsRole,
     ActionTextRole,
+    PurposeTextRole,
+    AffectedCapabilityTextRole,
   };
   Q_ENUM(Role)
 
@@ -72,6 +74,8 @@ private:
   [[nodiscard]] static QString titleText(PermissionKind kind);
   [[nodiscard]] static QString statusText(PermissionState state);
   [[nodiscard]] static QString messageText(const PermissionProbeEntry &entry);
+  [[nodiscard]] static QString purposeText(PermissionKind kind);
+  [[nodiscard]] static QString affectedCapabilityText(PermissionKind kind);
   [[nodiscard]] static PermissionErrorCode expectedErrorCode(PermissionKind kind);
   [[nodiscard]] int primaryAttentionRow() const;
 

@@ -65,8 +65,15 @@ void PermissionStatusModelTests::unknownIsNeverReportedAsGranted()
     const auto index = model.index(row, 0);
     QCOMPARE(index.data(PermissionStatusModel::StateRole).toInt(), static_cast<int>(PermissionState::Unknown));
     QCOMPARE(index.data(PermissionStatusModel::StatusTextRole).toString(), QStringLiteral("Not checked"));
+    QVERIFY(!index.data(PermissionStatusModel::PurposeTextRole).toString().isEmpty());
+    QVERIFY(!index.data(PermissionStatusModel::AffectedCapabilityTextRole).toString().isEmpty());
     QVERIFY(index.data(PermissionStatusModel::NeedsAttentionRole).toBool());
   }
+  QCOMPARE(model.roleNames().value(PermissionStatusModel::PurposeTextRole), QByteArrayLiteral("purposeText"));
+  QCOMPARE(
+      model.roleNames().value(PermissionStatusModel::AffectedCapabilityTextRole),
+      QByteArrayLiteral("affectedCapabilityText")
+  );
 }
 
 void PermissionStatusModelTests::appliesDeniedAndGrantedUpdatesWithSignals()
@@ -103,7 +110,9 @@ void PermissionStatusModelTests::appliesDeniedAndGrantedUpdatesWithSignals()
   };
   QVERIFY(model.setSnapshot(clear));
   QCOMPARE(changed.count(), 2);
-  QVERIFY(!model.bannerVisible());
+  QVERIFY(model.bannerVisible());
+  QCOMPARE(model.bannerTitle(), QStringLiteral("Permissions ready"));
+  QCOMPARE(model.bannerMessage(), QString());
   const auto firewall = model.index(rowFor(model, PermissionKind::WindowsFirewall), 0);
   const auto port = model.index(rowFor(model, PermissionKind::WindowsListeningPort), 0);
   QCOMPARE(firewall.data(PermissionStatusModel::StatusTextRole).toString(), QStringLiteral("Allowed"));
@@ -139,7 +148,8 @@ void PermissionStatusModelTests::filtersEntriesForConfiguredPlatform()
   }));
   QCOMPARE(mac.rowCount(), 3);
   QCOMPARE(rowFor(mac, PermissionKind::WindowsFirewall), -1);
-  QVERIFY(!mac.bannerVisible());
+  QVERIFY(mac.bannerVisible());
+  QCOMPARE(mac.bannerTitle(), QStringLiteral("Permissions ready"));
 
   PermissionStatusModel unsupported(PermissionPlatform::Other);
   QCOMPARE(unsupported.rowCount(), 0);
@@ -221,6 +231,24 @@ void PermissionStatusModelTests::requestsOnlyAvailableSettingsEntry()
   QCOMPARE(requested.count(), 1);
   QCOMPARE(requested.takeFirst().constFirst().value<PermissionKind>(), PermissionKind::WindowsFirewall);
   QVERIFY(!model.requestOpenSettings(rowFor(model, PermissionKind::WindowsListeningPort)));
+
+  const PermissionSnapshot prioritizesActionable{
+      .platform = PermissionPlatform::Windows,
+      .entries = {
+          permission(
+              PermissionKind::WindowsFirewall, PermissionState::Denied, PermissionErrorCode::WindowsFirewallBlocked,
+              false
+          ),
+          permission(
+              PermissionKind::WindowsListeningPort, PermissionState::NeedsAction,
+              PermissionErrorCode::WindowsPortUnavailable, true
+          ),
+      },
+  };
+  QVERIFY(model.setSnapshot(prioritizesActionable));
+  QVERIFY(model.requestPrimarySettings());
+  QCOMPARE(requested.count(), 1);
+  QCOMPARE(requested.takeFirst().constFirst().value<PermissionKind>(), PermissionKind::WindowsListeningPort);
 }
 
 QTEST_GUILESS_MAIN(PermissionStatusModelTests)

@@ -23,6 +23,7 @@ class QDragMoveEvent;
 class QDropEvent;
 class QEvent;
 class QFrame;
+class QHideEvent;
 class QLabel;
 class QLineEdit;
 class QListView;
@@ -55,6 +56,7 @@ public:
   [[nodiscard]] model::DeviceHomeModel &deviceModel() const;
   [[nodiscard]] model::PairingWizardModel &pairingModel() const;
   [[nodiscard]] model::PermissionStatusModel &permissionModel() const;
+  [[nodiscard]] QWidget *takePermissionBanner(QWidget *newParent);
   void setFileChooser(ItemChooser chooser);
   void setFolderChooser(ItemChooser chooser);
   void setIncomingOfferModel(model::IncomingOfferModel *incomingOffers);
@@ -67,6 +69,7 @@ Q_SIGNALS:
 
 protected:
   void changeEvent(QEvent *event) override;
+  void hideEvent(QHideEvent *event) override;
   bool eventFilter(QObject *watched, QEvent *event) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
@@ -80,6 +83,8 @@ private:
   void requestPairing(const QModelIndex &index);
   void updatePairingPanel();
   void updatePermissionBanner();
+  void updatePermissionSummaryText();
+  void showPermissionDetails();
   void updateIncomingOfferPanel();
   void updateActivityPanel();
   void submitPairingCode();
@@ -99,6 +104,8 @@ private:
   QLabel *m_permissionTitle = nullptr;
   QLabel *m_permissionMessage = nullptr;
   QPushButton *m_openPermissionSettingsButton = nullptr;
+  QToolButton *m_openPermissionDetailsButton = nullptr;
+  QString m_permissionSummary;
   QListView *m_deviceList = nullptr;
   QLabel *m_emptyLabel = nullptr;
   QPushButton *m_pairButton = nullptr;
