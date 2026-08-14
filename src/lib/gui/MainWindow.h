@@ -74,7 +74,9 @@ class TransferCenterModel;
 } // namespace model
 namespace widgets {
 class DevicesDock;
+class RelayDeskHomeWidget;
 class TransferCenterDock;
+class TransferMiniBar;
 } // namespace widgets
 } // namespace deskflow::relaydesk
 
@@ -188,6 +190,7 @@ private:
   void handleNewClientPromptRequest(const QString &clientName, bool usePeerAuth);
   void updateIpLabel(const QStringList &addresses);
   void setupRelayDeskDiscovery();
+  void setupRelayDeskHome();
   void setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &localDeviceId);
   void syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &peerDeviceId);
   void refreshBackgroundLifecycleSettings();
@@ -257,7 +260,10 @@ private:
   deskflow::relaydesk::model::PermissionStatusModel *m_relayDeskPermissionModel = nullptr;
   deskflow::relaydesk::model::TransferCenterModel *m_relayDeskTransferModel = nullptr;
   deskflow::relaydesk::widgets::DevicesDock *m_devicesDock = nullptr;
+  deskflow::relaydesk::widgets::RelayDeskHomeWidget *m_relayDeskHome = nullptr;
   deskflow::relaydesk::widgets::TransferCenterDock *m_transferCenterDock = nullptr;
+  deskflow::relaydesk::widgets::TransferMiniBar *m_transferMiniBar = nullptr;
+  QWidget *m_legacyControls = nullptr;
   QLabel *m_lblSecurityStatus = nullptr;
   QLabel *m_lblStatus = nullptr;
   QPushButton *m_btnFingerprint = nullptr;

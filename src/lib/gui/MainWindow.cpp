@@ -45,7 +45,9 @@
 #include "relaydesk/platform/MacPermissionProbe.h"
 #include "relaydesk/platform/WindowsFirewallProbe.h"
 #include "relaydesk/widgets/DevicesDock.h"
+#include "relaydesk/widgets/RelayDeskHomeWidget.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
+#include "relaydesk/widgets/TransferMiniBar.h"
 
 #include <QCloseEvent>
 #include <QDesktopServices>
@@ -178,10 +180,10 @@ MainWindow::MainWindow()
   m_devicesDock = new deskflow::relaydesk::widgets::DevicesDock(
       *m_relayDeskDeviceModel, *m_relayDeskPairingModel, *m_relayDeskPermissionModel, this
   );
-  addDockWidget(Qt::RightDockWidgetArea, m_devicesDock);
   m_relayDeskTransferModel = new deskflow::relaydesk::model::TransferCenterModel(this);
   m_transferCenterDock =
       new deskflow::relaydesk::widgets::TransferCenterDock(*m_relayDeskTransferModel, this);
+  m_transferMiniBar = new deskflow::relaydesk::widgets::TransferMiniBar(*m_relayDeskTransferModel, this);
   connect(
       m_relayDeskTransferModel, &deskflow::relaydesk::model::TransferCenterModel::notificationRequested, this,
       [this](const ::relaydesk::transfer::TransferSnapshot &, const QString &title, const QString &message) {
@@ -192,6 +194,7 @@ MainWindow::MainWindow()
   addDockWidget(Qt::BottomDockWidgetArea, m_transferCenterDock);
   tabifyDockWidget(m_logDock, m_transferCenterDock);
   m_transferCenterDock->hide();
+  setupRelayDeskHome();
 
   // Setup Actions
   m_actionAbout->setMenuRole(QAction::AboutRole);
@@ -492,6 +495,47 @@ deskflow::relaydesk::widgets::DevicesDock &MainWindow::relayDeskDevicesDock()
 deskflow::relaydesk::widgets::TransferCenterDock &MainWindow::relayDeskTransferCenterDock()
 {
   return *m_transferCenterDock;
+}
+
+void MainWindow::setupRelayDeskHome()
+{
+  m_legacyControls = takeCentralWidget();
+  if (m_legacyControls != nullptr) {
+    m_legacyControls->setObjectName(QStringLiteral("relaydeskLegacyControls"));
+    m_legacyControls->setParent(this);
+    m_legacyControls->hide();
+  }
+
+  m_devicesDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+  m_devicesDock->setAllowedAreas(Qt::NoDockWidgetArea);
+  auto *hiddenTitleBar = new QWidget(m_devicesDock);
+  hiddenTitleBar->setFixedHeight(0);
+  m_devicesDock->setTitleBarWidget(hiddenTitleBar);
+
+  m_relayDeskHome =
+      new deskflow::relaydesk::widgets::RelayDeskHomeWidget(m_devicesDock, m_transferMiniBar, this);
+  m_relayDeskHome->setProductName(kAppName);
+  m_relayDeskHome->setProductIcon(QIcon::fromTheme(kRevFqdnName));
+  m_relayDeskHome->setStatusText(tr("%1 is not running").arg(kAppName));
+  connect(
+      m_relayDeskHome, &deskflow::relaydesk::widgets::RelayDeskHomeWidget::settingsRequested, m_actionSettings,
+      &QAction::trigger
+  );
+  connect(
+      m_relayDeskHome, &deskflow::relaydesk::widgets::RelayDeskHomeWidget::transferHistoryRequested, this,
+      [this] {
+        m_transferCenterDock->show();
+        m_transferCenterDock->raise();
+      }
+  );
+  connect(
+      m_transferMiniBar, &deskflow::relaydesk::widgets::TransferMiniBar::detailsRequested, this, [this] {
+        m_transferCenterDock->show();
+        m_transferCenterDock->raise();
+      }
+  );
+  setCentralWidget(m_relayDeskHome);
+  ui->statusBar->hide();
 }
 
 void MainWindow::restoreWindow()
@@ -1060,6 +1104,9 @@ void MainWindow::open(bool startInTray)
 void MainWindow::setStatus(const QString &status)
 {
   m_lblStatus->setText(status);
+  if (m_relayDeskHome != nullptr) {
+    m_relayDeskHome->setStatusText(status);
+  }
 }
 
 void MainWindow::createMenuBar()
@@ -1073,7 +1120,6 @@ void MainWindow::createMenuBar()
   m_menuEdit->addAction(m_actionSettings);
 
   m_menuView->addAction(m_logDock->toggleViewAction());
-  m_menuView->addAction(m_devicesDock->toggleViewAction());
   m_menuView->addAction(m_transferCenterDock->toggleViewAction());
 
   m_menuHelp->addAction(m_actionAbout);
@@ -1658,6 +1704,9 @@ void MainWindow::changeEvent(QEvent *e)
   } else if (e->type() == QEvent::PaletteChange) {
     updateIconTheme();
     setWindowIcon(QIcon::fromTheme(kRevFqdnName));
+    if (m_relayDeskHome != nullptr) {
+      m_relayDeskHome->setProductIcon(QIcon::fromTheme(kRevFqdnName));
+    }
     setTrayIcon();
   } else if (e->type() == QEvent::LanguageChange) {
     ui->retranslateUi(this);
@@ -1737,6 +1786,9 @@ void MainWindow::updateScreenName()
   const auto screenName = Settings::value(Settings::Core::ComputerName).toString();
   ui->lblComputerName->setText(screenName);
   ui->lineEditName->setText(screenName);
+  if (m_relayDeskHome != nullptr) {
+    m_relayDeskHome->setLocalDeviceName(screenName);
+  }
   m_serverConfig.updateServerName();
 }
 

@@ -973,10 +973,10 @@ void DevicesDock::updatePermissionBanner()
 
   const auto title = m_permissions.bannerTitle();
   const auto message = m_permissions.bannerMessage();
-  const auto summary = message.isEmpty() ? title : title + QStringLiteral(" · ") + message;
-  m_permissionTitle->setText(summary);
-  m_permissionTitle->setToolTip(summary);
-  m_permissionTitle->setAccessibleName(summary);
+  const auto description = message.isEmpty() ? title : title + QStringLiteral(" · ") + message;
+  m_permissionTitle->setText(title);
+  m_permissionTitle->setToolTip(description);
+  m_permissionTitle->setAccessibleName(description);
   m_permissionMessage->setText(message);
   m_permissionMessage->setToolTip(message);
   m_permissionMessage->setVisible(false);

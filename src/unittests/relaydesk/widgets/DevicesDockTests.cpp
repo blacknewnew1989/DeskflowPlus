@@ -325,7 +325,7 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
   QVERIFY(message != nullptr);
   QVERIFY(openSettings != nullptr);
   QVERIFY(banner->isVisible());
-  QVERIFY(title->text().startsWith(QStringLiteral("Permission status not checked · ")));
+  QCOMPARE(title->text(), QStringLiteral("Permission status not checked"));
   QVERIFY(!title->wordWrap());
   QVERIFY(!message->wordWrap());
   QVERIFY(qobject_cast<QHBoxLayout *>(banner->layout()) != nullptr);
@@ -349,9 +349,7 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
       },
   }));
   QTRY_VERIFY(openSettings->isVisible());
-  QCOMPARE(
-      title->text(), QStringLiteral("Permission needed · Allow RelayDesk through Windows Firewall on private networks.")
-  );
+  QCOMPARE(title->text(), QStringLiteral("Permission needed"));
   QCOMPARE(message->text(), QStringLiteral("Allow RelayDesk through Windows Firewall on private networks."));
   QVERIFY(!message->isVisible());
   QVERIFY(!message->text().contains(QStringLiteral("remote detail")));
@@ -373,7 +371,7 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
       },
   }));
   QVERIFY(banner->isVisible());
-  QCOMPARE(title->text(), QStringLiteral("Permissions ready · All required system permissions are ready."));
+  QCOMPARE(title->text(), QStringLiteral("Permissions ready"));
   QCOMPARE(message->text(), QStringLiteral("All required system permissions are ready."));
   QVERIFY(!message->isVisible());
   QVERIFY(!openSettings->isVisible());
