@@ -4,15 +4,15 @@ set_directory_properties(PROPERTIES CLEAN_NO_CUSTOM 1)
 option(CLEAN_TRS "Clean obsolete translations from tr files" OFF)
 find_package(Qt6 ${REQUIRED_QT_VERSION} REQUIRED NO_MODULE COMPONENTS LinguistTools)
 
-# To add a new language Add 639 shortname
-set (${CMAKE_PROJECT_NAME}_TRS
-  ${CMAKE_PROJECT_NAME}_es.ts
-  ${CMAKE_PROJECT_NAME}_it.ts
-  ${CMAKE_PROJECT_NAME}_ja.ts
-  ${CMAKE_PROJECT_NAME}_zh_CN.ts
-  ${CMAKE_PROJECT_NAME}_ru.ts
-  ${CMAKE_PROJECT_NAME}_ko.ts
-)
+# All translation targets consume the canonical RelayDesk language list.
+set(${CMAKE_PROJECT_NAME}_TRS)
+set(RELAYDESK_TS)
+foreach(LANG IN LISTS RELAYDESK_SUPPORTED_LANGUAGES)
+  list(APPEND RELAYDESK_TS ${RELAYDESK_TRANSLATION_CATALOG}_${LANG}.ts)
+  if(NOT LANG STREQUAL RELAYDESK_FALLBACK_LANGUAGE)
+    list(APPEND ${CMAKE_PROJECT_NAME}_TRS ${CMAKE_PROJECT_NAME}_${LANG}.ts)
+  endif()
+endforeach()
 
 set(TR_OPTIONS -no-ui-lines -locations none -silent)
 if(CLEAN_TRS)
@@ -27,10 +27,6 @@ qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${${CMAKE_PROJECT_NAME}_TRS} O
 
 # RelayDesk UI uses semantic keys, so keep its source-language catalog complete
 # instead of applying Deskflow's plurals-only English catalog rule.
-set(RELAYDESK_TS
-  ${RELAYDESK_TRANSLATION_CATALOG}_en.ts
-  ${RELAYDESK_TRANSLATION_CATALOG}_zh_CN.ts
-)
 qt_create_translation(
   RELAYDESK_TRS
   ${CMAKE_SOURCE_DIR}/src/lib/relaydesk/i18n
