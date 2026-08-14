@@ -8,8 +8,7 @@
 `2f9cf97352ab9819eb5aa2b5d54b9ec9a4fbf171cea56525fb7e2ef149cfbe94`。
 
 该确认只冻结设计方向，不代表生产图标、平台资源或打包接线已经完成。生产资产由
-`BRAND-002` 跟踪，当前状态为 `IN_PROGRESS`。RelayDesk 仍是临时代号，正式产品名和商标
-决策留到对外发布前完成。
+`BRAND-002` 跟踪。RelayDesk 仍是临时代号，正式产品名和商标决策留到对外发布前完成。
 
 ## Logo 设计契约
 
@@ -31,6 +30,21 @@
 | macOS App/DMG | `.icns` 与安装图稿 | Finder、Dock、About、DMG 显示一致 |
 | macOS menu bar | template 单色派生资源 | 系统明暗外观和 Retina 检查通过 |
 | 集中配置 | `product/branding/RelayDeskBrand.cmake` | App、core、daemon 与打包入口不再使用旧图标回退 |
+
+## 生成与验证
+
+`relaydesk-mark.svg` 是唯一手工维护的图形。macOS 的 `RelayDesk.icns`、DMG 背景和菜单栏
+单色 template SVG 均由以下命令生成，不得直接编辑派生文件：
+
+```bash
+python3 product/scripts/generate-macos-brand-assets.py
+python3 product/scripts/generate-macos-brand-assets.py --check
+```
+
+生成命令使用 macOS 自带的 `sips` 与 `iconutil`；`--check` 可在其他平台执行静态校验，
+并在 macOS 上额外解包检查 `.icns` 的 16–1024 px 全部槽位。Qt 的彩色 App/About 图标
+直接消费几何单源，菜单栏消费生成的单色资源并通过 `QIcon::setIsMask(true)` 启用 template
+渲染；Finder、Dock 和 DMG volume 均消费同一个 `RelayDesk.icns`。
 
 在 SVG 单源、派生资源、集中配置、16 px 视觉检查和双平台打包验证全部完成前，不得把
 `BRAND-002` 标为 Done。

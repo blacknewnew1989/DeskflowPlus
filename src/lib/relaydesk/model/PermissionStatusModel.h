@@ -24,6 +24,10 @@ class PermissionStatusModel final : public QAbstractListModel
   Q_PROPERTY(QString bannerMessage READ bannerMessage NOTIFY snapshotChanged)
   Q_PROPERTY(bool canOpenPrimarySettings READ canOpenPrimarySettings NOTIFY snapshotChanged)
   Q_PROPERTY(QString openSettingsActionText READ openSettingsActionText CONSTANT)
+  Q_PROPERTY(bool canCaptureInput READ canCaptureInput NOTIFY snapshotChanged)
+  Q_PROPERTY(bool canControlInput READ canControlInput NOTIFY snapshotChanged)
+  Q_PROPERTY(bool canDiscoverDevices READ canDiscoverDevices NOTIFY snapshotChanged)
+  Q_PROPERTY(bool canConnectDevices READ canConnectDevices NOTIFY snapshotChanged)
 
 public:
   enum Role
@@ -37,8 +41,22 @@ public:
     NeedsAttentionRole,
     CanOpenSettingsRole,
     ActionTextRole,
+    PurposeTextRole,
+    AffectedCapabilityTextRole,
   };
   Q_ENUM(Role)
+
+  enum Capability
+  {
+    CaptureInputCapability,
+    ControlInputCapability,
+    LocalDiscoveryCapability,
+    DirectConnectionCapability,
+    FileTransferCapability,
+    TransferHistoryCapability,
+    SettingsCapability,
+  };
+  Q_ENUM(Capability)
 
   explicit PermissionStatusModel(PermissionPlatform platform, QObject *parent = nullptr);
 
@@ -52,6 +70,11 @@ public:
   [[nodiscard]] QString bannerMessage() const;
   [[nodiscard]] bool canOpenPrimarySettings() const;
   [[nodiscard]] QString openSettingsActionText() const;
+  [[nodiscard]] bool canCaptureInput() const;
+  [[nodiscard]] bool canControlInput() const;
+  [[nodiscard]] bool canDiscoverDevices() const;
+  [[nodiscard]] bool canConnectDevices() const;
+  [[nodiscard]] Q_INVOKABLE bool allowsCapability(Capability capability) const;
 
   // Returns false for a snapshot from another platform. No platform APIs are
   // called here; A4/A5 probes inject immutable values through this method.
@@ -71,8 +94,11 @@ private:
   [[nodiscard]] static bool needsAttention(PermissionState state);
   [[nodiscard]] static QString titleText(PermissionKind kind);
   [[nodiscard]] static QString statusText(PermissionState state);
+  [[nodiscard]] static QString purposeText(PermissionKind kind);
+  [[nodiscard]] static QString affectedCapabilityText(PermissionKind kind);
   [[nodiscard]] static QString messageText(const PermissionProbeEntry &entry);
   [[nodiscard]] static PermissionErrorCode expectedErrorCode(PermissionKind kind);
+  [[nodiscard]] bool permissionAllows(PermissionKind kind) const;
   [[nodiscard]] int primaryAttentionRow() const;
 
   PermissionSnapshot m_snapshot;

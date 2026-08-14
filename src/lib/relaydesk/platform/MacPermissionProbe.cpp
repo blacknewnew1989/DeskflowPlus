@@ -8,6 +8,7 @@
 
 #include <QDateTime>
 
+#include <algorithm>
 #include <utility>
 
 namespace deskflow::relaydesk {
@@ -23,13 +24,17 @@ MacPermissionProbe::MacPermissionProbe(
     : QObject(parent),
       m_backend(std::move(backend)),
       m_nowProvider(std::move(nowProvider)),
-      m_snapshot({.platform = PermissionPlatform::MacOS})
+      m_snapshot({.platform = PermissionPlatform::MacOS}),
+      m_refreshTimer(this)
 {
   Q_ASSERT(m_backend);
+  m_refreshTimer.setInterval(kMacPermissionRefreshDebounceMs);
+  m_refreshTimer.setSingleShot(true);
+  connect(&m_refreshTimer, &QTimer::timeout, this, &MacPermissionProbe::refreshNow);
   connect(
       m_backend.get(), &IMacPermissionBackend::localNetworkChanged, this, &MacPermissionProbe::updateLocalNetwork
   );
-  refresh();
+  refreshNow();
 }
 
 PermissionSnapshot MacPermissionProbe::current() const
@@ -39,13 +44,27 @@ PermissionSnapshot MacPermissionProbe::current() const
 
 void MacPermissionProbe::refresh()
 {
+  // Application activation can be delivered repeatedly while macOS is
+  // switching away from System Settings. Restarting this single-shot timer
+  // coalesces those events while keeping the actual probes off the event
+  // handler's call stack.
+  m_refreshTimer.start();
+}
+
+void MacPermissionProbe::refreshNow()
+{
+  m_refreshInProgress = true;
+  // Reset/restart the asynchronous Local Network probe before reading its
+  // value. This prevents a grant from an earlier browser generation from
+  // surviving a foreground refresh while the new result is still pending.
+  m_backend->refreshLocalNetwork();
   m_snapshot = {
       .platform = PermissionPlatform::MacOS,
       .entries = {m_backend->localNetwork(), m_backend->accessibility(), m_backend->inputMonitoring()},
       .checkedAtUtc = nowUtc(),
   };
+  m_refreshInProgress = false;
   Q_EMIT snapshotChanged(m_snapshot);
-  m_backend->refreshLocalNetwork();
 }
 
 PermissionOpenResult MacPermissionProbe::openSystemSettings(PermissionKind kind)
@@ -70,9 +89,14 @@ PermissionOpenResult MacPermissionProbe::openSystemSettings(PermissionKind kind)
 
 void MacPermissionProbe::updateLocalNetwork(PermissionProbeEntry entry)
 {
-  if (entry.kind != PermissionKind::MacLocalNetwork)
+  if (entry.kind != PermissionKind::MacLocalNetwork || m_refreshInProgress)
     return;
-  m_snapshot.entries[0] = std::move(entry);
+  const auto found = std::find_if(m_snapshot.entries.begin(), m_snapshot.entries.end(), [](const auto &candidate) {
+    return candidate.kind == PermissionKind::MacLocalNetwork;
+  });
+  if (found == m_snapshot.entries.end())
+    return;
+  *found = std::move(entry);
   m_snapshot.checkedAtUtc = nowUtc();
   Q_EMIT snapshotChanged(m_snapshot);
 }

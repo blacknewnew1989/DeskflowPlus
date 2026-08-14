@@ -53,6 +53,7 @@ Windows 签名是可选步骤。没有签名身份时脚本继续生成明确标
 - `setup-macos.sh`：自动检测 Xcode/Homebrew 并安装可非交互安装的依赖；
 - `build-macos.sh`：Apple Silicon Release/Debug 构建与测试；
 - `package-macos.sh`：App/DMG/源包、产物收集和 SHA-256。
+- `generate-macos-brand-assets.py`：从品牌 SVG 单源生成/校验 App `.icns`、menu bar template 图标和 DMG 图稿。
 
 本机缺少需要人工授权安装的 Xcode/Homebrew 时，A0 使用同一工作流的 macOS runner，不向用户转交环境准备。
 

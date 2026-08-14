@@ -49,6 +49,7 @@ if [[ "$PLAN_ONLY" == "true" ]]; then
   exit 0
 fi
 
+python3 "$SCRIPT_DIR/generate-macos-brand-assets.py" --check
 "$SCRIPT_DIR/setup-macos.sh" --repo "$REPO_ROOT"
 BUILD_ARGS=(
   --repo "$REPO_ROOT"

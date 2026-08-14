@@ -1,0 +1,185 @@
+/*
+ * Deskflow -- mouse and keyboard sharing utility
+ * SPDX-FileCopyrightText: (C) 2026 RelayDesk Developers
+ * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+ */
+
+#include "gui/MainWindow.h"
+
+#include "common/Constants.h"
+#include "common/Settings.h"
+#include "gui/widgets/LogDock.h"
+#include "relaydesk/discovery/DiscoverySettings.h"
+#include "relaydesk/widgets/DevicesDock.h"
+#include "relaydesk/widgets/RelayDeskHomeWidget.h"
+#include "relaydesk/widgets/TransferCenterDock.h"
+#include "relaydesk/widgets/TransferMiniBar.h"
+
+#include <QApplication>
+#include <QDialog>
+#include <QDir>
+#include <QDockWidget>
+#include <QFile>
+#include <QSettings>
+#include <QTemporaryDir>
+#include <QTest>
+
+#include <memory>
+
+class MainWindowLayoutTests final : public QObject
+{
+  Q_OBJECT
+
+private Q_SLOTS:
+  void initTestCase();
+  void init();
+  void cleanupTestCase();
+
+  void freshLaunchUsesCompactSingleHomeSurface();
+  void hiddenWindowKeepsCurrentSessionGeometry();
+  void restoredSmallGeometryIsClampedToMinimumSize();
+
+private:
+  std::unique_ptr<QTemporaryDir> m_directory;
+  QString m_corePath;
+  bool m_createdCorePlaceholder = false;
+};
+
+void MainWindowLayoutTests::initTestCase()
+{
+  m_directory = std::make_unique<QTemporaryDir>();
+  QVERIFY(m_directory->isValid());
+
+  Settings::setSettingsFile(m_directory->filePath(QStringLiteral("RelayDesk.conf")));
+  Settings::setStateFile(m_directory->filePath(QStringLiteral("RelayDesk.state")));
+
+  Settings::setValue(Settings::Security::TlsEnabled, false);
+  Settings::setValue(Settings::Gui::AutoStartCore, false);
+  Settings::setValue(Settings::Gui::AutoUpdateCheck, false);
+  Settings::setValue(Settings::Gui::Autohide, false);
+  Settings::setValue(Settings::Gui::CloseToTray, false);
+  Settings::setValue(Settings::Gui::MinimizeToTray, false);
+  Settings::setValue(Settings::Gui::LogExpanded, false);
+  Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::Client);
+  Settings::setValue(Settings::Client::RemoteHost, QStringLiteral("127.0.0.1"));
+
+  QSettings relayDeskSettings(Settings::settingsFile(), QSettings::IniFormat);
+  deskflow::relaydesk::DiscoverySettingsStore discoveryStore(relayDeskSettings);
+  QString diagnostic;
+  QVERIFY2(discoveryStore.save({.enabled = false}, &diagnostic), qPrintable(diagnostic));
+
+  m_corePath = QDir(QCoreApplication::applicationDirPath()).filePath(kCoreBinName);
+  if (!QFile::exists(m_corePath)) {
+    QFile placeholder(m_corePath);
+    QVERIFY2(placeholder.open(QIODevice::WriteOnly), qPrintable(placeholder.errorString()));
+    QVERIFY(placeholder.write("RelayDesk MainWindow layout test placeholder\n") > 0);
+    placeholder.close();
+    m_createdCorePlaceholder = true;
+  }
+}
+
+void MainWindowLayoutTests::init()
+{
+  Settings::setValue(Settings::Gui::WindowGeometry, {});
+}
+
+void MainWindowLayoutTests::cleanupTestCase()
+{
+  if (m_createdCorePlaceholder) {
+    QVERIFY(QFile::remove(m_corePath));
+  }
+}
+
+void MainWindowLayoutTests::freshLaunchUsesCompactSingleHomeSurface()
+{
+  MainWindow window;
+
+  QCOMPARE(window.minimumSize(), QSize(520, 380));
+  QCOMPARE(window.size(), QSize(560, 420));
+
+  window.open(false);
+  QTRY_VERIFY(window.isVisible());
+  QCOMPARE(window.size(), QSize(560, 420));
+
+  auto &devices = window.relayDeskDevicesDock();
+  auto &transfers = window.relayDeskTransferCenterDock();
+  auto *log = window.findChild<LogDock *>();
+  auto *home =
+      window.findChild<deskflow::relaydesk::widgets::RelayDeskHomeWidget *>(QStringLiteral("relaydeskCompactHome"));
+  auto *header = window.findChild<QWidget *>(QStringLiteral("relaydeskHomeHeader"));
+  auto *legacy = window.findChild<QWidget *>(QStringLiteral("relaydeskLegacyControls"));
+  auto *miniBar =
+      window.findChild<deskflow::relaydesk::widgets::TransferMiniBar *>(QStringLiteral("relaydeskTransferMiniBar"));
+
+  QVERIFY(home != nullptr);
+  QCOMPARE(window.centralWidget(), home);
+  QVERIFY(home->isVisible());
+  QVERIFY(header != nullptr);
+  QCOMPARE(header->height(), 52);
+  QVERIFY(legacy != nullptr);
+  QVERIFY(!legacy->isVisible());
+  QVERIFY(devices.isVisible());
+  QVERIFY(!devices.isFloating());
+  QCOMPARE(window.dockWidgetArea(&devices), Qt::NoDockWidgetArea);
+  QVERIFY(miniBar != nullptr);
+  QCOMPARE(miniBar->minimumHeight(), 52);
+  QCOMPARE(miniBar->maximumHeight(), 52);
+  QVERIFY(!miniBar->isVisible());
+  QVERIFY(!transfers.isVisible());
+  QVERIFY(log != nullptr);
+  QVERIFY(!log->isVisible());
+
+  int visibleDockSurfaces = 0;
+  for (auto *dock : window.findChildren<QDockWidget *>()) {
+    if (dock->isVisible()) {
+      ++visibleDockSurfaces;
+    }
+  }
+  QCOMPARE(visibleDockSurfaces, 1);
+
+  int visibleTopLevelSurfaces = 0;
+  for (auto *widget : QApplication::topLevelWidgets()) {
+    if (widget->isVisible() &&
+        (qobject_cast<MainWindow *>(widget) != nullptr || qobject_cast<QDialog *>(widget) != nullptr)) {
+      ++visibleTopLevelSurfaces;
+    }
+  }
+  QCOMPARE(visibleTopLevelSurfaces, 1);
+}
+
+void MainWindowLayoutTests::restoredSmallGeometryIsClampedToMinimumSize()
+{
+  Settings::setValue(Settings::Gui::WindowGeometry, QRect(80, 80, 320, 240));
+
+  MainWindow window;
+
+  QCOMPARE(window.minimumSize(), QSize(520, 380));
+  QVERIFY(window.width() >= 520);
+  QVERIFY(window.height() >= 380);
+}
+
+void MainWindowLayoutTests::hiddenWindowKeepsCurrentSessionGeometry()
+{
+  Settings::setValue(Settings::Gui::WindowGeometry, QRect(40, 40, 560, 420));
+  MainWindow window;
+  window.open(false);
+  QTRY_VERIFY(window.isVisible());
+
+  window.setGeometry(QRect(120, 100, 620, 460));
+  QCoreApplication::processEvents();
+  const auto currentSessionGeometry = window.geometry();
+  window.hide();
+
+  // macOS hides the application natively, so QWidget::isVisible() remains true.
+  // Change the persisted value to prove that the foreground restore uses the
+  // geometry remembered by the running window instead of reloading settings.
+  Settings::setValue(Settings::Gui::WindowGeometry, QRect(10, 10, 540, 400));
+
+  window.open(false);
+  QTRY_VERIFY(window.isVisible());
+  QCOMPARE(window.geometry(), currentSessionGeometry);
+}
+
+QTEST_MAIN(MainWindowLayoutTests)
+
+#include "MainWindowLayoutTests.moc"

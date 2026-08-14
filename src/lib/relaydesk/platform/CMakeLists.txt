@@ -40,6 +40,8 @@ add_library(relaydesk_macos_permissions STATIC
   MacPermissionBackend.h
   MacPermissionProbe.cpp
   MacPermissionProbe.h
+  MacPermissionSettings.cpp
+  MacPermissionSettings.h
 )
 
 if(APPLE)

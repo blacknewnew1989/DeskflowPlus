@@ -4,10 +4,14 @@
 add_library(relaydesk_widgets STATIC
   DevicesDock.cpp
   DevicesDock.h
+  RelayDeskHomeWidget.cpp
+  RelayDeskHomeWidget.h
   TransferCenterDock.cpp
   TransferCenterDock.h
   TransferHistoryDetailsDialog.cpp
   TransferHistoryDetailsDialog.h
+  TransferMiniBar.cpp
+  TransferMiniBar.h
 )
 
 target_include_directories(

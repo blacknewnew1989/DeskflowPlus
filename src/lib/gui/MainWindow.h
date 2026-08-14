@@ -26,6 +26,7 @@
 #include "gui/core/ServerConnection.h"
 #include "gui/core/WaylandWarnings.h"
 #include "net/Fingerprint.h"
+#include "relaydesk/app/BackgroundLifecycleController.h"
 
 #ifdef Q_OS_MACOS
 #include "gui/OSXHelpers.h"
@@ -73,7 +74,9 @@ class TransferCenterModel;
 } // namespace model
 namespace widgets {
 class DevicesDock;
+class RelayDeskHomeWidget;
 class TransferCenterDock;
+class TransferMiniBar;
 } // namespace widgets
 } // namespace deskflow::relaydesk
 
@@ -173,6 +176,8 @@ private:
   void showConfigureServer(const QString &message);
   void showConfigureClient();
   void restoreWindow();
+  [[nodiscard]] QRect restorableWindowGeometry() const;
+  void rememberWindowGeometry();
   void setupControls();
   void showFirstConnectedMessage();
   void updateStatus();
@@ -185,8 +190,19 @@ private:
   void handleNewClientPromptRequest(const QString &clientName, bool usePeerAuth);
   void updateIpLabel(const QStringList &addresses);
   void setupRelayDeskDiscovery();
+  void setupRelayDeskHome();
   void setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &localDeviceId);
   void syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &peerDeviceId);
+  void refreshBackgroundLifecycleSettings();
+  [[nodiscard]] bool inputSharingAllowed() const;
+  [[nodiscard]] bool coreConfigurationReady() const;
+  [[nodiscard]] QString inputPermissionReason() const;
+  void applyInputPermissionGate();
+  void updateSharingAction();
+  void toggleSharingPaused();
+  void showCloseToTrayReminder();
+  void requestApplicationQuit();
+  void beginShutdown();
 
   /**
    * @brief showClientError
@@ -221,9 +237,11 @@ private:
   deskflow::gui::core::WaylandWarnings m_waylandWarnings;
   ServerConfig m_serverConfig;
   deskflow::gui::CoreProcess m_coreProcess;
+  deskflow::relaydesk::BackgroundLifecycleController m_backgroundLifecycle;
   deskflow::gui::ServerConnection m_serverConnection;
   deskflow::gui::ClientConnection m_clientConnection;
   QSize m_expandedSize = QSize();
+  QRect m_lastVisibleGeometry;
   QStringList m_checkedClients;
   QStringList m_checkedServers;
   QSystemTrayIcon *m_trayIcon = nullptr;
@@ -242,7 +260,10 @@ private:
   deskflow::relaydesk::model::PermissionStatusModel *m_relayDeskPermissionModel = nullptr;
   deskflow::relaydesk::model::TransferCenterModel *m_relayDeskTransferModel = nullptr;
   deskflow::relaydesk::widgets::DevicesDock *m_devicesDock = nullptr;
+  deskflow::relaydesk::widgets::RelayDeskHomeWidget *m_relayDeskHome = nullptr;
   deskflow::relaydesk::widgets::TransferCenterDock *m_transferCenterDock = nullptr;
+  deskflow::relaydesk::widgets::TransferMiniBar *m_transferMiniBar = nullptr;
+  QWidget *m_legacyControls = nullptr;
   QLabel *m_lblSecurityStatus = nullptr;
   QLabel *m_lblStatus = nullptr;
   QPushButton *m_btnFingerprint = nullptr;
@@ -263,6 +284,7 @@ private:
   QAction *m_actionTrayQuit = nullptr;
   QAction *m_actionRestore = nullptr;
   QAction *m_actionSettings = nullptr;
+  QAction *m_actionPauseSharing = nullptr;
   QAction *m_actionStartCore = nullptr;
   QAction *m_actionRestartCore = nullptr;
   QAction *m_actionStopCore = nullptr;
@@ -274,4 +296,5 @@ private:
   // Server IP strategy optimization
   QStringList m_serverStartIPs;
   QString m_serverStartSuggestedIP;
+  bool m_shutdownStarted = false;
 };

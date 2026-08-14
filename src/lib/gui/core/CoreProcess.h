@@ -22,6 +22,8 @@ namespace ipc {
 class DaemonIpcClient;
 }
 
+class CoreProcessTests;
+
 class CoreProcess : public QObject
 {
   using ProcessMode = Settings::ProcessMode;
@@ -110,6 +112,8 @@ private Q_SLOTS:
   void daemonIpcClientConnected();
 
 private:
+  friend class CoreProcessTests;
+
   void startForegroundProcess(const QStringList &args);
   void startProcessFromDaemon(const QStringList &args);
   void stopForegroundProcess() const;

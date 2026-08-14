@@ -7,6 +7,7 @@
 #include "relaydesk/platform/MacPermissionProbe.h"
 
 #include "relaydesk/platform/MacLocalNetworkStatus.h"
+#include "relaydesk/platform/MacPermissionSettings.h"
 
 #include <QSignalSpy>
 #include <QTest>
@@ -40,6 +41,7 @@ public:
       PermissionKind::MacInputMonitoring, PermissionState::Granted, PermissionErrorCode::None
   );
   int refreshCount = 0;
+  bool resetLocalWhenRefreshed = false;
   QList<PermissionKind> opened;
   PermissionOpenResult openResult;
 
@@ -61,6 +63,10 @@ public:
   void refreshLocalNetwork() override
   {
     ++refreshCount;
+    if (resetLocalWhenRefreshed) {
+      local = entry(PermissionKind::MacLocalNetwork, PermissionState::Unknown, PermissionErrorCode::ProbeUnavailable);
+      local.canOpenSettings = true;
+    }
   }
 
   [[nodiscard]] PermissionOpenResult openSystemSettings(PermissionKind kind) override
@@ -84,7 +90,9 @@ class MacPermissionProbeTests final : public QObject
 private Q_SLOTS:
   void publishesTypedSnapshotWithoutInventingGrants();
   void appliesAsynchronousLocalNetworkResult();
+  void coalescesForegroundRefreshAndRechecksEveryPermission();
   void onlyRoutesMacSettingsKinds();
+  void fallsBackToPrivacySettingsWhenSpecificDeepLinkFails();
   void mapsLocalNetworkNativeStatesConservatively();
 };
 
@@ -124,6 +132,35 @@ void MacPermissionProbeTests::appliesAsynchronousLocalNetworkResult()
   QCOMPARE(snapshot.entries.at(1).kind, PermissionKind::MacAccessibility);
 }
 
+void MacPermissionProbeTests::coalescesForegroundRefreshAndRechecksEveryPermission()
+{
+  QCOMPARE(kMacPermissionRefreshDebounceMs, 150);
+  auto backend = std::make_unique<FakeBackend>();
+  auto *fake = backend.get();
+  MacPermissionProbe probe(std::move(backend));
+  QSignalSpy changed(&probe, &MacPermissionProbe::snapshotChanged);
+
+  fake->local = entry(PermissionKind::MacLocalNetwork, PermissionState::Granted, PermissionErrorCode::None);
+  fake->accessibilityValue =
+      entry(PermissionKind::MacAccessibility, PermissionState::Granted, PermissionErrorCode::None);
+  fake->inputValue = entry(
+      PermissionKind::MacInputMonitoring, PermissionState::NeedsAction, PermissionErrorCode::MacInputMonitoringDenied
+  );
+  fake->resetLocalWhenRefreshed = true;
+
+  probe.refresh();
+  probe.refresh();
+  probe.refresh();
+
+  QCOMPARE(fake->refreshCount, 1);
+  QTRY_COMPARE_WITH_TIMEOUT(fake->refreshCount, 2, 1000);
+  QCOMPARE(changed.count(), 1);
+  const auto snapshot = probe.current();
+  QCOMPARE(snapshot.entries.at(0).state, PermissionState::Unknown);
+  QCOMPARE(snapshot.entries.at(1).state, PermissionState::Granted);
+  QCOMPARE(snapshot.entries.at(2).state, PermissionState::NeedsAction);
+}
+
 void MacPermissionProbeTests::onlyRoutesMacSettingsKinds()
 {
   auto backend = std::make_unique<FakeBackend>();
@@ -146,6 +183,32 @@ void MacPermissionProbeTests::onlyRoutesMacSettingsKinds()
   QCOMPARE(failed.diagnostic, fake->openResult.diagnostic);
 }
 
+void MacPermissionProbeTests::fallsBackToPrivacySettingsWhenSpecificDeepLinkFails()
+{
+  QStringList openedUrls;
+  const auto result = openMacPermissionSettings(PermissionKind::MacInputMonitoring, [&openedUrls](const QString &url) {
+    openedUrls.append(url);
+    return openedUrls.size() == 2;
+  });
+  QVERIFY(result.ok());
+  QCOMPARE(openedUrls.size(), 2);
+  QVERIFY(openedUrls.at(0).endsWith(QStringLiteral("Privacy_ListenEvent")));
+  QCOMPARE(openedUrls.at(1), QStringLiteral("x-apple.systempreferences:com.apple.preference.security"));
+
+  const auto failed = openMacPermissionSettings(PermissionKind::MacLocalNetwork, [](const QString &) { return false; });
+  QCOMPARE(failed.error, PermissionOpenError::OpenFailed);
+  QVERIFY(failed.diagnostic.contains(QStringLiteral("fallback")));
+
+  int unsupportedOpenAttempts = 0;
+  const auto unsupported =
+      openMacPermissionSettings(PermissionKind::WindowsFirewall, [&unsupportedOpenAttempts](const QString &) {
+        ++unsupportedOpenAttempts;
+        return true;
+      });
+  QCOMPARE(unsupported.error, PermissionOpenError::Unsupported);
+  QCOMPARE(unsupportedOpenAttempts, 0);
+}
+
 void MacPermissionProbeTests::mapsLocalNetworkNativeStatesConservatively()
 {
   const auto ready = macLocalNetworkEntry(MacLocalNetworkProbeState::Ready, false);
@@ -161,11 +224,12 @@ void MacPermissionProbeTests::mapsLocalNetworkNativeStatesConservatively()
   const auto offline = macLocalNetworkEntry(MacLocalNetworkProbeState::Waiting, false, 1, 50);
   QCOMPARE(offline.state, PermissionState::Unknown);
   QCOMPARE(offline.errorCode, PermissionErrorCode::ProbeUnavailable);
-  QVERIFY(!offline.canOpenSettings);
+  QVERIFY(offline.canOpenSettings);
 
   const auto failed = macLocalNetworkEntry(MacLocalNetworkProbeState::Failed, false, 1, 22);
   QCOMPARE(failed.state, PermissionState::Unknown);
   QCOMPARE(failed.errorCode, PermissionErrorCode::ProbeUnavailable);
+  QVERIFY(failed.canOpenSettings);
 }
 
 QTEST_GUILESS_MAIN(MacPermissionProbeTests)

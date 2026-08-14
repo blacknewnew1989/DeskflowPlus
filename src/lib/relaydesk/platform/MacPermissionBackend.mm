@@ -7,6 +7,7 @@
 #include "relaydesk/platform/MacPermissionBackend.h"
 
 #include "relaydesk/platform/MacLocalNetworkStatus.h"
+#include "relaydesk/platform/MacPermissionSettings.h"
 
 #import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
@@ -34,22 +35,6 @@ PermissionProbeEntry permissionEntry(
       .canOpenSettings = !granted,
       .diagnostic = granted ? QString() : deniedDiagnostic,
   };
-}
-
-const char *settingsUrl(PermissionKind kind)
-{
-  switch (kind) {
-  case PermissionKind::MacLocalNetwork:
-    return "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork";
-  case PermissionKind::MacAccessibility:
-    return "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
-  case PermissionKind::MacInputMonitoring:
-    return "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent";
-  case PermissionKind::WindowsFirewall:
-  case PermissionKind::WindowsListeningPort:
-    return nullptr;
-  }
-  return nullptr;
 }
 
 class NativeMacPermissionBackend final : public IMacPermissionBackend
@@ -120,8 +105,8 @@ public:
 
   [[nodiscard]] PermissionOpenResult openSystemSettings(PermissionKind kind) override
   {
-    const auto *urlText = settingsUrl(kind);
-    if (urlText == nullptr) {
+    if (kind != PermissionKind::MacLocalNetwork && kind != PermissionKind::MacAccessibility &&
+        kind != PermissionKind::MacInputMonitoring) {
       return {
           .error = PermissionOpenError::Unsupported,
           .diagnostic = QStringLiteral("permission kind is not supported by the macOS backend"),
@@ -141,14 +126,10 @@ public:
         CGRequestListenEventAccess();
     }
 
-    auto url = [NSURL URLWithString:[NSString stringWithUTF8String:urlText]];
-    if (url == nil || ![[NSWorkspace sharedWorkspace] openURL:url]) {
-      return {
-          .error = PermissionOpenError::OpenFailed,
-          .diagnostic = QStringLiteral("macOS system settings could not be opened"),
-      };
-    }
-    return {};
+    return openMacPermissionSettings(kind, [](const QString &urlText) {
+      auto url = [NSURL URLWithString:urlText.toNSString()];
+      return url != nil && [[NSWorkspace sharedWorkspace] openURL:url];
+    });
   }
 
 private:

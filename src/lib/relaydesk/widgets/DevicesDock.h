@@ -20,6 +20,7 @@
 class QDragEnterEvent;
 class QDragLeaveEvent;
 class QDragMoveEvent;
+class QDialog;
 class QDropEvent;
 class QEvent;
 class QFrame;
@@ -80,6 +81,7 @@ private:
   void requestPairing(const QModelIndex &index);
   void updatePairingPanel();
   void updatePermissionBanner();
+  void updatePermissionDetails();
   void updateIncomingOfferPanel();
   void updateActivityPanel();
   void submitPairingCode();
@@ -99,6 +101,13 @@ private:
   QLabel *m_permissionTitle = nullptr;
   QLabel *m_permissionMessage = nullptr;
   QPushButton *m_openPermissionSettingsButton = nullptr;
+  QToolButton *m_permissionDetailsToggle = nullptr;
+  QDialog *m_permissionDetailsPanel = nullptr;
+  QList<QLabel *> m_permissionDetailTitles;
+  QList<QLabel *> m_permissionDetailPurposes;
+  QList<QLabel *> m_permissionDetailStatuses;
+  QList<QLabel *> m_permissionDetailCapabilities;
+  QList<QPushButton *> m_permissionDetailSettingsButtons;
   QListView *m_deviceList = nullptr;
   QLabel *m_emptyLabel = nullptr;
   QPushButton *m_pairButton = nullptr;

@@ -1,0 +1,10 @@
+<!-- SPDX-FileCopyrightText: 2026 RelayDesk Contributors -->
+<!-- SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception -->
+<RCC>
+  <qresource prefix="/">
+    <file alias="icons/deskflow-dark/apps/64/@CMAKE_PROJECT_REV_FQDN@.svg">@CMAKE_SOURCE_DIR@/@RELAYDESK_BRAND_MARK_SOURCE@</file>
+    <file alias="icons/deskflow-light/apps/64/@CMAKE_PROJECT_REV_FQDN@.svg">@CMAKE_SOURCE_DIR@/@RELAYDESK_BRAND_MARK_SOURCE@</file>
+    <file alias="icons/deskflow-dark/apps/64/@RELAYDESK_MACOS_MENU_BAR_ICON_NAME@.svg">@CMAKE_SOURCE_DIR@/@RELAYDESK_MACOS_MENU_BAR_TEMPLATE_SOURCE@</file>
+    <file alias="icons/deskflow-light/apps/64/@RELAYDESK_MACOS_MENU_BAR_ICON_NAME@.svg">@CMAKE_SOURCE_DIR@/@RELAYDESK_MACOS_MENU_BAR_TEMPLATE_SOURCE@</file>
+  </qresource>
+</RCC>

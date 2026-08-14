@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 RelayDesk Contributors -->
+<!-- SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64" role="img" aria-labelledby="title description">
+  <title id="title">RelayDesk mark</title>
+  <desc id="description">Two devices connected through a central relay point</desc>
+  <defs>
+    <mask id="relay-gap">
+      <rect width="64" height="64" fill="#ffffff"/>
+      <circle cx="32" cy="32" r="8" fill="#000000"/>
+    </mask>
+  </defs>
+  <g mask="url(#relay-gap)">
+    <rect x="7" y="8" width="20" height="48" rx="7" fill="#112A3A"/>
+    <rect x="24" y="29" width="8" height="6" fill="#112A3A"/>
+    <rect x="32" y="29" width="8" height="6" fill="#0BAE9C"/>
+    <rect x="37" y="8" width="20" height="48" rx="7" fill="#0BAE9C"/>
+  </g>
+  <circle cx="32" cy="32" r="4" fill="#112A3A"/>
+</svg>

@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,6 +14,13 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class MacosPackagingContractTests(unittest.TestCase):
+    def test_build_script_resolves_an_explicit_macos_sdk(self) -> None:
+        script = (ROOT / "product/scripts/build-macos.sh").read_text(encoding="utf-8")
+
+        self.assertIn("xcrun --sdk macosx --show-sdk-path", script)
+        self.assertIn('"-DCMAKE_OSX_SYSROOT=$MACOS_SDKROOT"', script)
+        self.assertIn("RELAYDESK_MACOS_SDKROOT", script)
+
     def test_package_script_has_optional_signing_and_notarization_verification(self) -> None:
         script = (ROOT / "product/scripts/package-macos.sh").read_text(encoding="utf-8")
 
@@ -24,6 +34,7 @@ class MacosPackagingContractTests(unittest.TestCase):
             "MACOS_NOTARIZATION_STATUS=not-requested",
             "--app-bundle",
             "--plan-only",
+            'generate-macos-brand-assets.py" --check',
         ):
             self.assertIn(required, script)
 
@@ -39,6 +50,63 @@ class MacosPackagingContractTests(unittest.TestCase):
         self.assertIn("RELAYDESK_MACOS_SIGNING_IDENTITY", deploy)
         self.assertIn("${RELAYDESK_MACOS_ICON_SOURCE}", gui)
         self.assertIn("@BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION@", plist)
+        self.assertIn("${RELAYDESK_MACOS_ICON_SOURCE}", deploy)
+        self.assertIn("${RELAYDESK_MACOS_DMG_BACKGROUND_SOURCE}", deploy)
+        self.assertNotIn('set(CPACK_PACKAGE_ICON "${MY_DIR}/dmg-volume.icns")', deploy)
+
+    def test_relaydesk_brand_assets_are_current_and_consumed_by_qt(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "product/scripts/generate-macos-brand-assets.py"), "--check"],
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+
+        brand = (ROOT / "product/branding/RelayDeskBrand.cmake").read_text(encoding="utf-8")
+        qrc = (ROOT / "src/apps/res/relaydesk-brand.qrc.in").read_text(encoding="utf-8")
+        main_window = (ROOT / "src/lib/gui/MainWindow.cpp").read_text(encoding="utf-8")
+        about = (ROOT / "src/lib/gui/dialogs/AboutDialog.cpp").read_text(encoding="utf-8")
+
+        self.assertIn('set(RELAYDESK_MACOS_ICON_FILE "RelayDesk.icns")', brand)
+        self.assertIn("@RELAYDESK_BRAND_MARK_SOURCE@", qrc)
+        self.assertIn("@RELAYDESK_MACOS_MENU_BAR_TEMPLATE_SOURCE@", qrc)
+        self.assertEqual(qrc.count("@CMAKE_PROJECT_REV_FQDN@.svg"), 2)
+        self.assertEqual(qrc.count("@RELAYDESK_MACOS_MENU_BAR_ICON_NAME@.svg"), 2)
+        self.assertIn("icon.setIsMask(true)", main_window)
+        self.assertIn("QIcon::fromTheme(kRevFqdnName)", about)
+        tray_function = main_window.split("void MainWindow::setTrayIcon()", 1)[1].split(
+            "void MainWindow::refreshBackgroundLifecycleSettings()", 1
+        )[0]
+        mac_tray_branch = tray_function.split("if (deskflow::platform::isMac()) {", 1)[1].split("}", 1)[0]
+        self.assertIn('themeIcon.append(QStringLiteral("-symbolic"))', mac_tray_branch)
+        self.assertIn("icon.setIsMask(true)", mac_tray_branch)
+        self.assertNotIn("SymbolicTrayIcon", mac_tray_branch)
+
+    def test_configured_bundle_and_dmg_share_relaydesk_artwork(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="relaydesk-brand-cmake-") as temp_name:
+            script = Path(temp_name) / "check.cmake"
+            script.write_text(
+                f'''set(CMAKE_SOURCE_DIR "{ROOT.as_posix()}")
+set(CMAKE_CURRENT_SOURCE_DIR "{ROOT.as_posix()}/src/apps/deskflow-gui")
+set(CMAKE_CURRENT_BINARY_DIR "{Path(temp_name).as_posix()}")
+set(CMAKE_PROJECT_REV_FQDN "local.relaydesk.desktop")
+include("{ROOT.as_posix()}/product/branding/RelayDeskBrand.cmake")
+configure_file(
+  "{ROOT.as_posix()}/src/apps/res/relaydesk-brand.qrc.in"
+  "{Path(temp_name).as_posix()}/relaydesk-brand.qrc"
+  @ONLY
+)
+''',
+                encoding="utf-8",
+            )
+            result = subprocess.run(["cmake", "-P", str(script)], text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+            qrc = (Path(temp_name) / "relaydesk-brand.qrc").read_text(encoding="utf-8")
+
+        self.assertIn("local.relaydesk.desktop.svg", qrc)
+        self.assertIn("local.relaydesk.desktop-symbolic.svg", qrc)
+        self.assertIn("product/assets/branding/relaydesk-mark.svg", qrc)
+        self.assertIn("product/assets/branding/generated/relaydesk-menu-bar-template.svg", qrc)
 
     def test_package_readme_documents_retained_user_data(self) -> None:
         readme = (ROOT / "deploy/mac/README-macOS.txt.in").read_text(encoding="utf-8")

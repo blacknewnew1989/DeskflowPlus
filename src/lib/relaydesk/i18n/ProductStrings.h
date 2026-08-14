@@ -70,6 +70,8 @@ enum class Text
   PairingExpiresAt,
   PermissionsBannerAttentionTitle,
   PermissionsBannerUnknownTitle,
+  PermissionsBannerReadyTitle,
+  PermissionsBannerReadyMessage,
   PermissionsKindWindowsFirewall,
   PermissionsKindWindowsPort,
   PermissionsKindMacLocalNetwork,
@@ -178,6 +180,12 @@ enum class Text
   SettingsAdvanced,
   AboutTitle,
   AboutDiagnostics,
+  PermissionsPurposeMacLocalNetwork,
+  PermissionsPurposeMacAccessibility,
+  PermissionsPurposeMacInputMonitoring,
+  PermissionsAffectedMacLocalNetwork,
+  PermissionsAffectedMacAccessibility,
+  PermissionsAffectedMacInputMonitoring,
   Count
 };
 

@@ -9,8 +9,22 @@ create_test(
 )
 
 create_test(
+  NAME RelayDeskHomeWidgetTests
+  DEPENDS relaydesk_widgets
+  SOURCE RelayDeskHomeWidgetTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/widgets"
+)
+
+create_test(
   NAME RelayDeskTransferCenterDockTests
   DEPENDS relaydesk_widgets
   SOURCE TransferCenterDockTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/widgets"
+)
+
+create_test(
+  NAME RelayDeskTransferMiniBarTests
+  DEPENDS relaydesk_widgets
+  SOURCE TransferMiniBarTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/widgets"
 )
