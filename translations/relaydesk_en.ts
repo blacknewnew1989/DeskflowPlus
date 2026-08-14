@@ -62,14 +62,18 @@
     <message><source>permissions.banner.unknown_title</source><translation>Permission status not checked</translation></message>
     <message><source>permissions.banner.ready_title</source><translation>Permissions ready</translation></message>
     <message><source>permissions.banner.ready_message</source><translation>All required system permissions are ready.</translation></message>
+    <message><source>permissions.details.title</source><translation>Permissions</translation></message>
     <message><source>permissions.kind.windows_firewall</source><translation>Windows Firewall</translation></message>
     <message><source>permissions.kind.windows_port</source><translation>Local network port</translation></message>
     <message><source>permissions.kind.macos_local_network</source><translation>Local Network</translation></message>
     <message><source>permissions.kind.macos_accessibility</source><translation>Accessibility</translation></message>
     <message><source>permissions.kind.macos_input_monitoring</source><translation>Input Monitoring</translation></message>
+    <message><source>permissions.purpose.windows_firewall</source><translation>Allows trusted devices to reach RelayDesk on private networks.</translation></message>
+    <message><source>permissions.purpose.windows_port</source><translation>Keeps the RelayDesk listener available on the selected local port.</translation></message>
     <message><source>permissions.purpose.macos_local_network</source><translation>Find and connect to nearby devices on your local network.</translation></message>
     <message><source>permissions.purpose.macos_accessibility</source><translation>Control keyboard and pointer input on this Mac.</translation></message>
     <message><source>permissions.purpose.macos_input_monitoring</source><translation>Read global keyboard and pointer input to share with another device.</translation></message>
+    <message><source>permissions.affected.network</source><translation>Device discovery, incoming connections, and file transfer</translation></message>
     <message><source>permissions.affected.macos_local_network</source><translation>Nearby discovery and direct local connections</translation></message>
     <message><source>permissions.affected.macos_accessibility</source><translation>Input control on this Mac</translation></message>
     <message><source>permissions.affected.macos_input_monitoring</source><translation>Sharing input from this Mac</translation></message>
@@ -87,6 +91,7 @@
     <message><source>permissions.message.macos_accessibility</source><translation>Allow Accessibility so RelayDesk can control keyboard and pointer input.</translation></message>
     <message><source>permissions.message.macos_input_monitoring</source><translation>Allow Input Monitoring when macOS requires it for shared input.</translation></message>
     <message><source>permissions.action.open_settings</source><translation>Open settings</translation></message>
+    <message><source>permissions.action.view_details</source><translation>View permission details</translation></message>
     <message><source>transfer.title</source><translation>Transfers</translation></message>
     <message><source>transfer.empty</source><translation>Transfers will appear here</translation></message>
     <message><source>transfer.direction.sending</source><translation>Sending</translation></message>

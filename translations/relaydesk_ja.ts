@@ -60,11 +60,23 @@
     <message><source>pairing.expires_at</source><translation>有効期限: %1</translation></message>
     <message><source>permissions.banner.attention_title</source><translation>権限が必要です</translation></message>
     <message><source>permissions.banner.unknown_title</source><translation>権限の状態が未確認です</translation></message>
+    <message><source>permissions.banner.ready_title</source><translation>権限の準備完了</translation></message>
+    <message><source>permissions.banner.ready_message</source><translation>必要なシステム権限がすべて整っています。</translation></message>
+    <message><source>permissions.details.title</source><translation>権限</translation></message>
     <message><source>permissions.kind.windows_firewall</source><translation>Windows ファイアウォール</translation></message>
     <message><source>permissions.kind.windows_port</source><translation>ローカルネットワークポート</translation></message>
     <message><source>permissions.kind.macos_local_network</source><translation>ローカルネットワーク</translation></message>
     <message><source>permissions.kind.macos_accessibility</source><translation>アクセシビリティ</translation></message>
     <message><source>permissions.kind.macos_input_monitoring</source><translation>入力監視</translation></message>
+    <message><source>permissions.purpose.windows_firewall</source><translation>プライベートネットワーク上の信頼済みデバイスから RelayDesk に接続できるようにします。</translation></message>
+    <message><source>permissions.purpose.windows_port</source><translation>選択したローカルポートで RelayDesk の待ち受けを維持します。</translation></message>
+    <message><source>permissions.purpose.macos_local_network</source><translation>ローカルネットワーク上の近くのデバイスを検出して接続します。</translation></message>
+    <message><source>permissions.purpose.macos_accessibility</source><translation>この Mac でキーボードとポインタの入力を制御します。</translation></message>
+    <message><source>permissions.purpose.macos_input_monitoring</source><translation>グローバルなキーボードとポインタの入力を読み取り、別のデバイスと共有します。</translation></message>
+    <message><source>permissions.affected.network</source><translation>デバイスの検出、着信接続、ファイル転送</translation></message>
+    <message><source>permissions.affected.macos_local_network</source><translation>近くのデバイスの検出とローカルでの直接接続</translation></message>
+    <message><source>permissions.affected.macos_accessibility</source><translation>この Mac での入力制御</translation></message>
+    <message><source>permissions.affected.macos_input_monitoring</source><translation>この Mac からの入力共有</translation></message>
     <message><source>permissions.status.unknown</source><translation>未確認</translation></message>
     <message><source>permissions.status.not_required</source><translation>不要</translation></message>
     <message><source>permissions.status.granted</source><translation>許可済み</translation></message>
@@ -79,6 +91,7 @@
     <message><source>permissions.message.macos_accessibility</source><translation>RelayDesk がキーボードとポインターを操作できるよう、アクセシビリティを許可してください。</translation></message>
     <message><source>permissions.message.macos_input_monitoring</source><translation>共有入力のために macOS が求める場合は、入力監視を許可してください。</translation></message>
     <message><source>permissions.action.open_settings</source><translation>設定を開く</translation></message>
+    <message><source>permissions.action.view_details</source><translation>権限の詳細を表示</translation></message>
     <message><source>transfer.title</source><translation>転送</translation></message>
     <message><source>transfer.empty</source><translation>転送はここに表示されます</translation></message>
     <message><source>transfer.direction.sending</source><translation>送信中</translation></message>

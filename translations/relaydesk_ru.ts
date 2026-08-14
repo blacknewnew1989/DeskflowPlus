@@ -60,11 +60,23 @@
     <message><source>pairing.expires_at</source><translation>Истекает: %1</translation></message>
     <message><source>permissions.banner.attention_title</source><translation>Требуется разрешение</translation></message>
     <message><source>permissions.banner.unknown_title</source><translation>Состояние разрешения не проверено</translation></message>
+    <message><source>permissions.banner.ready_title</source><translation>Разрешения готовы</translation></message>
+    <message><source>permissions.banner.ready_message</source><translation>Все необходимые системные разрешения предоставлены.</translation></message>
+    <message><source>permissions.details.title</source><translation>Разрешения</translation></message>
     <message><source>permissions.kind.windows_firewall</source><translation>Брандмауэр Windows</translation></message>
     <message><source>permissions.kind.windows_port</source><translation>Порт локальной сети</translation></message>
     <message><source>permissions.kind.macos_local_network</source><translation>Локальная сеть</translation></message>
     <message><source>permissions.kind.macos_accessibility</source><translation>Универсальный доступ</translation></message>
     <message><source>permissions.kind.macos_input_monitoring</source><translation>Мониторинг ввода</translation></message>
+    <message><source>permissions.purpose.windows_firewall</source><translation>Позволяет доверенным устройствам подключаться к RelayDesk в частных сетях.</translation></message>
+    <message><source>permissions.purpose.windows_port</source><translation>Поддерживает доступность RelayDesk на выбранном локальном порте.</translation></message>
+    <message><source>permissions.purpose.macos_local_network</source><translation>Поиск ближайших устройств в локальной сети и подключение к ним.</translation></message>
+    <message><source>permissions.purpose.macos_accessibility</source><translation>Управление вводом с клавиатуры и указателя на этом Mac.</translation></message>
+    <message><source>permissions.purpose.macos_input_monitoring</source><translation>Чтение глобального ввода с клавиатуры и указателя для передачи на другое устройство.</translation></message>
+    <message><source>permissions.affected.network</source><translation>Обнаружение устройств, входящие подключения и передача файлов</translation></message>
+    <message><source>permissions.affected.macos_local_network</source><translation>Обнаружение ближайших устройств и прямые подключения в локальной сети</translation></message>
+    <message><source>permissions.affected.macos_accessibility</source><translation>Управление вводом на этом Mac</translation></message>
+    <message><source>permissions.affected.macos_input_monitoring</source><translation>Передача ввода с этого Mac</translation></message>
     <message><source>permissions.status.unknown</source><translation>Не проверено</translation></message>
     <message><source>permissions.status.not_required</source><translation>Не требуется</translation></message>
     <message><source>permissions.status.granted</source><translation>Разрешено</translation></message>
@@ -79,6 +91,7 @@
     <message><source>permissions.message.macos_accessibility</source><translation>Разрешите универсальный доступ, чтобы RelayDesk мог управлять клавиатурой и указателем.</translation></message>
     <message><source>permissions.message.macos_input_monitoring</source><translation>Разрешите мониторинг ввода, если macOS требует его для общего ввода.</translation></message>
     <message><source>permissions.action.open_settings</source><translation>Открыть настройки</translation></message>
+    <message><source>permissions.action.view_details</source><translation>Просмотреть сведения о разрешениях</translation></message>
     <message><source>transfer.title</source><translation>Передачи</translation></message>
     <message><source>transfer.empty</source><translation>Здесь появятся передачи</translation></message>
     <message><source>transfer.direction.sending</source><translation>Отправка</translation></message>
