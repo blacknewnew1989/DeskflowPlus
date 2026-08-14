@@ -517,6 +517,7 @@ void MainWindow::setupRelayDeskHome()
   m_relayDeskHome->setProductName(kAppName);
   m_relayDeskHome->setProductIcon(QIcon::fromTheme(kRevFqdnName));
   m_relayDeskHome->setStatusText(tr("%1 is not running").arg(kAppName));
+  m_relayDeskHome->setSharingAction(m_actionPauseSharing);
   connect(
       m_relayDeskHome, &deskflow::relaydesk::widgets::RelayDeskHomeWidget::settingsRequested, m_actionSettings,
       &QAction::trigger
@@ -1258,9 +1259,10 @@ QString MainWindow::inputPermissionReason() const
     return {};
   }
 
-  const auto requiredKind = m_coreProcess.mode() == CoreMode::Server
-                                ? deskflow::relaydesk::PermissionKind::MacInputMonitoring
-                                : deskflow::relaydesk::PermissionKind::MacAccessibility;
+  // The macOS core uses an active event tap in both modes and the server also
+  // checks AXIsProcessTrusted() directly.  Accessibility therefore gates both
+  // input directions; Input Monitoring is only the narrower listen-only grant.
+  const auto requiredKind = deskflow::relaydesk::PermissionKind::MacAccessibility;
   for (int row = 0; row < m_relayDeskPermissionModel->rowCount(); ++row) {
     const auto index = m_relayDeskPermissionModel->index(row, 0);
     if (index.data(deskflow::relaydesk::model::PermissionStatusModel::KindRole).toInt() !=

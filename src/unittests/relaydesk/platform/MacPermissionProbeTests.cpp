@@ -91,6 +91,7 @@ private Q_SLOTS:
   void publishesTypedSnapshotWithoutInventingGrants();
   void appliesAsynchronousLocalNetworkResult();
   void coalescesForegroundRefreshAndRechecksEveryPermission();
+  void treatsInputMonitoringAsNotRequiredWhenAccessibilityIsGranted();
   void onlyRoutesMacSettingsKinds();
   void fallsBackToPrivacySettingsWhenSpecificDeepLinkFails();
   void mapsLocalNetworkNativeStatesConservatively();
@@ -158,7 +159,27 @@ void MacPermissionProbeTests::coalescesForegroundRefreshAndRechecksEveryPermissi
   const auto snapshot = probe.current();
   QCOMPARE(snapshot.entries.at(0).state, PermissionState::Unknown);
   QCOMPARE(snapshot.entries.at(1).state, PermissionState::Granted);
-  QCOMPARE(snapshot.entries.at(2).state, PermissionState::NeedsAction);
+  QCOMPARE(snapshot.entries.at(2).state, PermissionState::NotRequired);
+}
+
+void MacPermissionProbeTests::treatsInputMonitoringAsNotRequiredWhenAccessibilityIsGranted()
+{
+  auto backend = std::make_unique<FakeBackend>();
+  auto *fake = backend.get();
+  fake->accessibilityValue =
+      entry(PermissionKind::MacAccessibility, PermissionState::Granted, PermissionErrorCode::None);
+  fake->inputValue = entry(
+      PermissionKind::MacInputMonitoring, PermissionState::Denied, PermissionErrorCode::MacInputMonitoringDenied
+  );
+
+  MacPermissionProbe probe(std::move(backend));
+
+  const auto snapshot = probe.current();
+  QCOMPARE(snapshot.entries.at(1).state, PermissionState::Granted);
+  QCOMPARE(snapshot.entries.at(2).kind, PermissionKind::MacInputMonitoring);
+  QCOMPARE(snapshot.entries.at(2).state, PermissionState::NotRequired);
+  QCOMPARE(snapshot.entries.at(2).errorCode, PermissionErrorCode::None);
+  QVERIFY(!snapshot.entries.at(2).canOpenSettings);
 }
 
 void MacPermissionProbeTests::onlyRoutesMacSettingsKinds()

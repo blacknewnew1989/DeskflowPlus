@@ -58,9 +58,23 @@ void MacPermissionProbe::refreshNow()
   // value. This prevents a grant from an earlier browser generation from
   // surviving a foreground refresh while the new result is still pending.
   m_backend->refreshLocalNetwork();
+  auto accessibility = m_backend->accessibility();
+  auto inputMonitoring = m_backend->inputMonitoring();
+  const auto accessibilityAllowsInput = accessibility.state == PermissionState::Granted ||
+                                        accessibility.state == PermissionState::NotRequired;
+  if (accessibilityAllowsInput) {
+    // Accessibility already grants both event posting and listening on macOS.
+    // The Deskflow server also checks AXIsProcessTrusted() directly, so asking
+    // for Input Monitoring as a second mandatory grant would block an otherwise
+    // usable core process.
+    inputMonitoring = {
+        .kind = PermissionKind::MacInputMonitoring,
+        .state = PermissionState::NotRequired,
+    };
+  }
   m_snapshot = {
       .platform = PermissionPlatform::MacOS,
-      .entries = {m_backend->localNetwork(), m_backend->accessibility(), m_backend->inputMonitoring()},
+      .entries = {m_backend->localNetwork(), std::move(accessibility), std::move(inputMonitoring)},
       .checkedAtUtc = nowUtc(),
   };
   m_refreshInProgress = false;

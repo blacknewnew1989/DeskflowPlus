@@ -8,6 +8,7 @@
 
 #include "relaydesk/i18n/ProductStrings.h"
 
+#include <QAction>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -65,6 +66,13 @@ RelayDeskHomeWidget::RelayDeskHomeWidget(QWidget *devices, QWidget *transferBar,
   m_status->setObjectName(QStringLiteral("relaydeskHomeStatus"));
   m_status->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   headerLayout->addWidget(m_status, 1);
+
+  m_sharingButton = new QToolButton(header);
+  m_sharingButton->setObjectName(QStringLiteral("relaydeskHomeSharingButton"));
+  m_sharingButton->setAutoRaise(true);
+  m_sharingButton->setIconSize(QSize(22, 22));
+  m_sharingButton->hide();
+  headerLayout->addWidget(m_sharingButton);
 
   m_historyButton = new QToolButton(header);
   m_historyButton->setObjectName(QStringLiteral("relaydeskHomeHistoryButton"));
@@ -134,6 +142,21 @@ void RelayDeskHomeWidget::setLocalDeviceName(const QString &name)
   m_localDevice->setText(text);
   m_localDevice->setToolTip(text);
   m_localDevice->setAccessibleName(text);
+}
+
+void RelayDeskHomeWidget::setSharingAction(QAction *action)
+{
+  Q_ASSERT(action != nullptr);
+  QObject::disconnect(m_sharingActionChangedConnection);
+  m_sharingButton->setDefaultAction(action);
+  const auto updateAccessibleName = [this, action] {
+    auto name = action->text();
+    name.remove(QLatin1Char('&'));
+    m_sharingButton->setAccessibleName(name);
+  };
+  m_sharingActionChangedConnection = connect(action, &QAction::changed, m_sharingButton, updateAccessibleName);
+  updateAccessibleName();
+  m_sharingButton->show();
 }
 
 void RelayDeskHomeWidget::changeEvent(QEvent *event)

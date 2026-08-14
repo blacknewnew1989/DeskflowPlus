@@ -51,6 +51,7 @@ private Q_SLOTS:
   void filtersEntriesForConfiguredPlatform();
   void mapsCodesWithoutExposingDiagnostic();
   void mapsAllFrozenStatesForCapabilityGates();
+  void usesAccessibilityForMacCoreInputCapabilities();
   void exposesMacDetailsAndGatesOnlyDependentCapabilities();
   void requestsOnlyAvailableSettingsEntry();
 };
@@ -225,6 +226,38 @@ void PermissionStatusModelTests::mapsAllFrozenStatesForCapabilityGates()
   }
 }
 
+void PermissionStatusModelTests::usesAccessibilityForMacCoreInputCapabilities()
+{
+  PermissionStatusModel model(PermissionPlatform::MacOS);
+  QVERIFY(model.setSnapshot({
+      .platform = PermissionPlatform::MacOS,
+      .entries = {
+          permission(PermissionKind::MacLocalNetwork, PermissionState::Granted),
+          permission(PermissionKind::MacAccessibility, PermissionState::Granted),
+          permission(
+              PermissionKind::MacInputMonitoring, PermissionState::Denied,
+              PermissionErrorCode::MacInputMonitoringDenied, true
+          ),
+      },
+  }));
+  QVERIFY(model.canCaptureInput());
+  QVERIFY(model.canControlInput());
+
+  QVERIFY(model.setSnapshot({
+      .platform = PermissionPlatform::MacOS,
+      .entries = {
+          permission(PermissionKind::MacLocalNetwork, PermissionState::Granted),
+          permission(
+              PermissionKind::MacAccessibility, PermissionState::Denied,
+              PermissionErrorCode::MacAccessibilityDenied, true
+          ),
+          permission(PermissionKind::MacInputMonitoring, PermissionState::Granted),
+      },
+  }));
+  QVERIFY(!model.canCaptureInput());
+  QVERIFY(!model.canControlInput());
+}
+
 void PermissionStatusModelTests::exposesMacDetailsAndGatesOnlyDependentCapabilities()
 {
   qRegisterMetaType<PermissionKind>();
@@ -268,7 +301,7 @@ void PermissionStatusModelTests::exposesMacDetailsAndGatesOnlyDependentCapabilit
   QVERIFY(!inputMonitoring.data(PermissionStatusModel::PurposeTextRole).toString().isEmpty());
   QVERIFY(!inputMonitoring.data(PermissionStatusModel::AffectedCapabilityTextRole).toString().isEmpty());
 
-  QVERIFY(model.canCaptureInput());
+  QVERIFY(!model.canCaptureInput());
   QVERIFY(!model.canControlInput());
   QVERIFY(model.canDiscoverDevices());
   QVERIFY(model.canConnectDevices());
@@ -310,7 +343,7 @@ void PermissionStatusModelTests::exposesMacDetailsAndGatesOnlyDependentCapabilit
           ),
       },
   }));
-  QVERIFY(!model.canCaptureInput());
+  QVERIFY(model.canCaptureInput());
   QVERIFY(model.canControlInput());
   QVERIFY(model.canDiscoverDevices());
   QVERIFY(model.canConnectDevices());

@@ -161,8 +161,11 @@ bool PermissionStatusModel::allowsCapability(Capability capability) const
 {
   switch (capability) {
   case CaptureInputCapability:
-    return m_snapshot.platform != PermissionPlatform::MacOS || permissionAllows(PermissionKind::MacInputMonitoring);
   case ControlInputCapability:
+    // The macOS core requires Accessibility for its active event tap and input
+    // posting. Accessibility also subsumes listen-only Input Monitoring, so a
+    // separate Input Monitoring grant must not keep either input direction
+    // disabled after Accessibility has been granted.
     return m_snapshot.platform != PermissionPlatform::MacOS || permissionAllows(PermissionKind::MacAccessibility);
   case LocalDiscoveryCapability:
   case DirectConnectionCapability:

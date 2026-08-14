@@ -6,10 +6,12 @@
 
 #pragma once
 
+#include <QMetaObject>
 #include <QWidget>
 
 class QIcon;
 class QEvent;
+class QAction;
 class QLabel;
 class QToolButton;
 
@@ -26,6 +28,7 @@ public:
   void setProductIcon(const QIcon &icon);
   void setStatusText(const QString &status);
   void setLocalDeviceName(const QString &name);
+  void setSharingAction(QAction *action);
 
 Q_SIGNALS:
   void settingsRequested();
@@ -39,6 +42,8 @@ private:
   QLabel *m_productName = nullptr;
   QLabel *m_status = nullptr;
   QLabel *m_localDevice = nullptr;
+  QToolButton *m_sharingButton = nullptr;
+  QMetaObject::Connection m_sharingActionChangedConnection;
   QToolButton *m_historyButton = nullptr;
   QToolButton *m_settingsButton = nullptr;
   QString m_localDeviceName;
