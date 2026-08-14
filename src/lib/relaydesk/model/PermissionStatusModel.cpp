@@ -62,6 +62,10 @@ QVariant PermissionStatusModel::data(const QModelIndex &index, int role) const
     return static_cast<int>(entry.state);
   case StatusTextRole:
     return statusText(entry.state);
+  case PurposeTextRole:
+    return purposeText(entry.kind);
+  case AffectedCapabilityTextRole:
+    return affectedCapabilityText(entry.kind);
   case MessageTextRole:
     return messageText(entry);
   case ErrorCodeRole:
@@ -84,6 +88,8 @@ QHash<int, QByteArray> PermissionStatusModel::roleNames() const
       {StateRole, "state"},
       {TitleRole, "title"},
       {StatusTextRole, "statusText"},
+      {PurposeTextRole, "purposeText"},
+      {AffectedCapabilityTextRole, "affectedCapabilityText"},
       {MessageTextRole, "messageText"},
       {ErrorCodeRole, "errorCode"},
       {NeedsAttentionRole, "needsAttention"},
@@ -99,14 +105,14 @@ PermissionPlatform PermissionStatusModel::platform() const noexcept
 
 bool PermissionStatusModel::bannerVisible() const
 {
-  return primaryAttentionRow() >= 0;
+  return !m_snapshot.entries.isEmpty();
 }
 
 QString PermissionStatusModel::bannerTitle() const
 {
   const auto row = primaryAttentionRow();
   if (row < 0)
-    return {};
+    return i18n::translate(Text::PermissionsBannerReadyTitle);
   return i18n::translate(
       m_snapshot.entries.at(row).state == PermissionState::Unknown ? Text::PermissionsBannerUnknownTitle
                                                                    : Text::PermissionsBannerAttentionTitle
@@ -116,7 +122,8 @@ QString PermissionStatusModel::bannerTitle() const
 QString PermissionStatusModel::bannerMessage() const
 {
   const auto row = primaryAttentionRow();
-  return row < 0 ? QString() : messageText(m_snapshot.entries.at(row));
+  return row < 0 ? i18n::translate(Text::PermissionsBannerReadyMessage)
+                 : messageText(m_snapshot.entries.at(row));
 }
 
 bool PermissionStatusModel::canOpenPrimarySettings() const
@@ -128,6 +135,53 @@ bool PermissionStatusModel::canOpenPrimarySettings() const
 QString PermissionStatusModel::openSettingsActionText() const
 {
   return i18n::translate(Text::PermissionsActionOpenSettings);
+}
+
+bool PermissionStatusModel::canCaptureInput() const
+{
+  return allowsCapability(CaptureInputCapability);
+}
+
+bool PermissionStatusModel::canControlInput() const
+{
+  return allowsCapability(ControlInputCapability);
+}
+
+bool PermissionStatusModel::canDiscoverDevices() const
+{
+  return allowsCapability(LocalDiscoveryCapability);
+}
+
+bool PermissionStatusModel::canConnectDevices() const
+{
+  return allowsCapability(DirectConnectionCapability);
+}
+
+bool PermissionStatusModel::allowsCapability(Capability capability) const
+{
+  switch (capability) {
+  case CaptureInputCapability:
+    return m_snapshot.platform != PermissionPlatform::MacOS || permissionAllows(PermissionKind::MacInputMonitoring);
+  case ControlInputCapability:
+    return m_snapshot.platform != PermissionPlatform::MacOS || permissionAllows(PermissionKind::MacAccessibility);
+  case LocalDiscoveryCapability:
+  case DirectConnectionCapability:
+    if (m_snapshot.platform == PermissionPlatform::MacOS)
+      return permissionAllows(PermissionKind::MacLocalNetwork);
+    if (m_snapshot.platform == PermissionPlatform::Windows) {
+      return permissionAllows(PermissionKind::WindowsFirewall) &&
+             permissionAllows(PermissionKind::WindowsListeningPort);
+    }
+    return true;
+  case FileTransferCapability:
+  case TransferHistoryCapability:
+  case SettingsCapability:
+    // Permission gates do not globally disable these features. A new file
+    // connection still observes the direct-connection gate and the actual
+    // network result, while input permissions never block transfer/history.
+    return true;
+  }
+  return false;
 }
 
 bool PermissionStatusModel::setSnapshot(const PermissionSnapshot &snapshot)
@@ -232,6 +286,40 @@ QString PermissionStatusModel::statusText(PermissionState state)
   return i18n::translate(Text::PermissionsStatusUnknown);
 }
 
+QString PermissionStatusModel::purposeText(PermissionKind kind)
+{
+  switch (kind) {
+  case PermissionKind::WindowsFirewall:
+    return i18n::translate(Text::PermissionsMessageWindowsFirewall);
+  case PermissionKind::WindowsListeningPort:
+    return i18n::translate(Text::PermissionsMessageWindowsPort);
+  case PermissionKind::MacLocalNetwork:
+    return i18n::translate(Text::PermissionsPurposeMacLocalNetwork);
+  case PermissionKind::MacAccessibility:
+    return i18n::translate(Text::PermissionsPurposeMacAccessibility);
+  case PermissionKind::MacInputMonitoring:
+    return i18n::translate(Text::PermissionsPurposeMacInputMonitoring);
+  }
+  return {};
+}
+
+QString PermissionStatusModel::affectedCapabilityText(PermissionKind kind)
+{
+  switch (kind) {
+  case PermissionKind::WindowsFirewall:
+    return i18n::translate(Text::PermissionsMessageWindowsFirewall);
+  case PermissionKind::WindowsListeningPort:
+    return i18n::translate(Text::PermissionsMessageWindowsPort);
+  case PermissionKind::MacLocalNetwork:
+    return i18n::translate(Text::PermissionsAffectedMacLocalNetwork);
+  case PermissionKind::MacAccessibility:
+    return i18n::translate(Text::PermissionsAffectedMacAccessibility);
+  case PermissionKind::MacInputMonitoring:
+    return i18n::translate(Text::PermissionsAffectedMacInputMonitoring);
+  }
+  return {};
+}
+
 QString PermissionStatusModel::messageText(const PermissionProbeEntry &entry)
 {
   if (entry.state == PermissionState::Granted || entry.state == PermissionState::NotRequired)
@@ -274,6 +362,16 @@ PermissionErrorCode PermissionStatusModel::expectedErrorCode(PermissionKind kind
     return PermissionErrorCode::MacInputMonitoringDenied;
   }
   return PermissionErrorCode::None;
+}
+
+bool PermissionStatusModel::permissionAllows(PermissionKind kind) const
+{
+  const auto found = std::find_if(m_snapshot.entries.cbegin(), m_snapshot.entries.cend(), [kind](const auto &entry) {
+    return entry.kind == kind;
+  });
+  if (found == m_snapshot.entries.cend())
+    return false;
+  return found->state == PermissionState::Granted || found->state == PermissionState::NotRequired;
 }
 
 int PermissionStatusModel::primaryAttentionRow() const

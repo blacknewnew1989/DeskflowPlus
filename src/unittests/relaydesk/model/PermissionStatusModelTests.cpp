@@ -50,6 +50,8 @@ private Q_SLOTS:
   void appliesDeniedAndGrantedUpdatesWithSignals();
   void filtersEntriesForConfiguredPlatform();
   void mapsCodesWithoutExposingDiagnostic();
+  void mapsAllFrozenStatesForCapabilityGates();
+  void exposesMacDetailsAndGatesOnlyDependentCapabilities();
   void requestsOnlyAvailableSettingsEntry();
 };
 
@@ -103,7 +105,10 @@ void PermissionStatusModelTests::appliesDeniedAndGrantedUpdatesWithSignals()
   };
   QVERIFY(model.setSnapshot(clear));
   QCOMPARE(changed.count(), 2);
-  QVERIFY(!model.bannerVisible());
+  QVERIFY(model.bannerVisible());
+  QCOMPARE(model.bannerTitle(), QStringLiteral("Permissions ready"));
+  QCOMPARE(model.bannerMessage(), QStringLiteral("All required system permissions are ready."));
+  QVERIFY(!model.canOpenPrimarySettings());
   const auto firewall = model.index(rowFor(model, PermissionKind::WindowsFirewall), 0);
   const auto port = model.index(rowFor(model, PermissionKind::WindowsListeningPort), 0);
   QCOMPARE(firewall.data(PermissionStatusModel::StatusTextRole).toString(), QStringLiteral("Allowed"));
@@ -139,7 +144,8 @@ void PermissionStatusModelTests::filtersEntriesForConfiguredPlatform()
   }));
   QCOMPARE(mac.rowCount(), 3);
   QCOMPARE(rowFor(mac, PermissionKind::WindowsFirewall), -1);
-  QVERIFY(!mac.bannerVisible());
+  QVERIFY(mac.bannerVisible());
+  QCOMPARE(mac.bannerTitle(), QStringLiteral("Permissions ready"));
 
   PermissionStatusModel unsupported(PermissionPlatform::Other);
   QCOMPARE(unsupported.rowCount(), 0);
@@ -187,6 +193,130 @@ void PermissionStatusModelTests::mapsCodesWithoutExposingDiagnostic()
       model.bannerMessage(), QStringLiteral("Review this system setting to keep local device connections working.")
   );
   QVERIFY(!model.bannerMessage().contains(QStringLiteral("socket")));
+}
+
+void PermissionStatusModelTests::mapsAllFrozenStatesForCapabilityGates()
+{
+  const QList<PermissionState> states = {
+      PermissionState::Unknown,
+      PermissionState::NotRequired,
+      PermissionState::Granted,
+      PermissionState::Denied,
+      PermissionState::NeedsAction,
+  };
+  PermissionStatusModel model(PermissionPlatform::MacOS);
+  for (const auto state : states) {
+    QVERIFY(model.setSnapshot({
+        .platform = PermissionPlatform::MacOS,
+        .entries = {
+            permission(PermissionKind::MacLocalNetwork, state),
+            permission(PermissionKind::MacAccessibility, state),
+            permission(PermissionKind::MacInputMonitoring, state),
+        },
+    }));
+    const auto allowed = state == PermissionState::Granted || state == PermissionState::NotRequired;
+    QCOMPARE(model.canCaptureInput(), allowed);
+    QCOMPARE(model.canControlInput(), allowed);
+    QCOMPARE(model.canDiscoverDevices(), allowed);
+    QCOMPARE(model.canConnectDevices(), allowed);
+    QVERIFY(model.allowsCapability(PermissionStatusModel::FileTransferCapability));
+    QVERIFY(model.allowsCapability(PermissionStatusModel::TransferHistoryCapability));
+    QVERIFY(model.allowsCapability(PermissionStatusModel::SettingsCapability));
+  }
+}
+
+void PermissionStatusModelTests::exposesMacDetailsAndGatesOnlyDependentCapabilities()
+{
+  qRegisterMetaType<PermissionKind>();
+  PermissionStatusModel model(PermissionPlatform::MacOS);
+  QSignalSpy settingsRequested(&model, &PermissionStatusModel::openSettingsRequested);
+  QVERIFY(!model.canCaptureInput());
+  QVERIFY(!model.canControlInput());
+  QVERIFY(!model.canDiscoverDevices());
+  QVERIFY(!model.canConnectDevices());
+  QVERIFY(model.allowsCapability(PermissionStatusModel::FileTransferCapability));
+
+  QVERIFY(model.setSnapshot({
+      .platform = PermissionPlatform::MacOS,
+      .entries = {
+          permission(PermissionKind::MacLocalNetwork, PermissionState::Granted),
+          permission(
+              PermissionKind::MacAccessibility, PermissionState::Denied, PermissionErrorCode::MacAccessibilityDenied,
+              true
+          ),
+          permission(PermissionKind::MacInputMonitoring, PermissionState::Granted),
+      },
+  }));
+
+  const auto localNetwork = model.index(rowFor(model, PermissionKind::MacLocalNetwork), 0);
+  const auto accessibility = model.index(rowFor(model, PermissionKind::MacAccessibility), 0);
+  const auto inputMonitoring = model.index(rowFor(model, PermissionKind::MacInputMonitoring), 0);
+  QCOMPARE(model.roleNames().value(PermissionStatusModel::PurposeTextRole), QByteArray("purposeText"));
+  QCOMPARE(
+      model.roleNames().value(PermissionStatusModel::AffectedCapabilityTextRole), QByteArray("affectedCapabilityText")
+  );
+  QCOMPARE(
+      localNetwork.data(PermissionStatusModel::PurposeTextRole).toString(),
+      QStringLiteral("Find and connect to nearby devices on your local network.")
+  );
+  QCOMPARE(
+      localNetwork.data(PermissionStatusModel::AffectedCapabilityTextRole).toString(),
+      QStringLiteral("Nearby discovery and direct local connections")
+  );
+  QVERIFY(!accessibility.data(PermissionStatusModel::PurposeTextRole).toString().isEmpty());
+  QVERIFY(!accessibility.data(PermissionStatusModel::AffectedCapabilityTextRole).toString().isEmpty());
+  QVERIFY(!inputMonitoring.data(PermissionStatusModel::PurposeTextRole).toString().isEmpty());
+  QVERIFY(!inputMonitoring.data(PermissionStatusModel::AffectedCapabilityTextRole).toString().isEmpty());
+
+  QVERIFY(model.canCaptureInput());
+  QVERIFY(!model.canControlInput());
+  QVERIFY(model.canDiscoverDevices());
+  QVERIFY(model.canConnectDevices());
+  QVERIFY(model.allowsCapability(PermissionStatusModel::FileTransferCapability));
+  QVERIFY(model.allowsCapability(PermissionStatusModel::TransferHistoryCapability));
+  QVERIFY(model.allowsCapability(PermissionStatusModel::SettingsCapability));
+  QVERIFY(model.requestOpenSettings(rowFor(model, PermissionKind::MacAccessibility)));
+  QCOMPARE(settingsRequested.takeFirst().constFirst().value<PermissionKind>(), PermissionKind::MacAccessibility);
+
+  QVERIFY(model.setSnapshot({
+      .platform = PermissionPlatform::MacOS,
+      .entries = {
+          permission(
+              PermissionKind::MacLocalNetwork, PermissionState::Denied, PermissionErrorCode::MacLocalNetworkDenied, true
+          ),
+          permission(PermissionKind::MacAccessibility, PermissionState::Granted),
+          permission(PermissionKind::MacInputMonitoring, PermissionState::Granted),
+      },
+  }));
+
+  QVERIFY(model.canCaptureInput());
+  QVERIFY(model.canControlInput());
+  QVERIFY(!model.canDiscoverDevices());
+  QVERIFY(!model.canConnectDevices());
+  QVERIFY(model.allowsCapability(PermissionStatusModel::FileTransferCapability));
+  QVERIFY(model.allowsCapability(PermissionStatusModel::TransferHistoryCapability));
+  QVERIFY(model.allowsCapability(PermissionStatusModel::SettingsCapability));
+  QVERIFY(model.requestOpenSettings(rowFor(model, PermissionKind::MacLocalNetwork)));
+  QCOMPARE(settingsRequested.takeFirst().constFirst().value<PermissionKind>(), PermissionKind::MacLocalNetwork);
+
+  QVERIFY(model.setSnapshot({
+      .platform = PermissionPlatform::MacOS,
+      .entries = {
+          permission(PermissionKind::MacLocalNetwork, PermissionState::Granted),
+          permission(PermissionKind::MacAccessibility, PermissionState::NotRequired),
+          permission(
+              PermissionKind::MacInputMonitoring, PermissionState::NeedsAction,
+              PermissionErrorCode::MacInputMonitoringDenied, true
+          ),
+      },
+  }));
+  QVERIFY(!model.canCaptureInput());
+  QVERIFY(model.canControlInput());
+  QVERIFY(model.canDiscoverDevices());
+  QVERIFY(model.canConnectDevices());
+  QVERIFY(model.allowsCapability(PermissionStatusModel::FileTransferCapability));
+  QVERIFY(model.requestOpenSettings(rowFor(model, PermissionKind::MacInputMonitoring)));
+  QCOMPARE(settingsRequested.takeFirst().constFirst().value<PermissionKind>(), PermissionKind::MacInputMonitoring);
 }
 
 void PermissionStatusModelTests::requestsOnlyAvailableSettingsEntry()

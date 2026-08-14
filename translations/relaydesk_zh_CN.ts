@@ -60,11 +60,19 @@
     <message><source>pairing.expires_at</source><translation>到期时间：%1</translation></message>
     <message><source>permissions.banner.attention_title</source><translation>需要系统权限</translation></message>
     <message><source>permissions.banner.unknown_title</source><translation>尚未检查系统权限</translation></message>
+    <message><source>permissions.banner.ready_title</source><translation>权限就绪</translation></message>
+    <message><source>permissions.banner.ready_message</source><translation>所需系统权限均已就绪。</translation></message>
     <message><source>permissions.kind.windows_firewall</source><translation>Windows 防火墙</translation></message>
     <message><source>permissions.kind.windows_port</source><translation>本地网络端口</translation></message>
     <message><source>permissions.kind.macos_local_network</source><translation>本地网络</translation></message>
     <message><source>permissions.kind.macos_accessibility</source><translation>辅助功能</translation></message>
     <message><source>permissions.kind.macos_input_monitoring</source><translation>输入监控</translation></message>
+    <message><source>permissions.purpose.macos_local_network</source><translation>发现并连接本地网络中的附近设备。</translation></message>
+    <message><source>permissions.purpose.macos_accessibility</source><translation>在这台 Mac 上控制键盘和指针输入。</translation></message>
+    <message><source>permissions.purpose.macos_input_monitoring</source><translation>读取全局键盘和指针输入并共享给其他设备。</translation></message>
+    <message><source>permissions.affected.macos_local_network</source><translation>附近设备发现和本地直连</translation></message>
+    <message><source>permissions.affected.macos_accessibility</source><translation>控制这台 Mac 的输入</translation></message>
+    <message><source>permissions.affected.macos_input_monitoring</source><translation>从这台 Mac 共享输入</translation></message>
     <message><source>permissions.status.unknown</source><translation>尚未检查</translation></message>
     <message><source>permissions.status.not_required</source><translation>无需授权</translation></message>
     <message><source>permissions.status.granted</source><translation>已允许</translation></message>

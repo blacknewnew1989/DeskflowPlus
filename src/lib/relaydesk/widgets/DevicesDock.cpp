@@ -14,6 +14,7 @@
 
 #include <QAbstractItemModel>
 #include <QApplication>
+#include <QDialog>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QDragMoveEvent>
@@ -23,6 +24,7 @@
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
 #include <QLabel>
@@ -30,6 +32,7 @@
 #include <QListView>
 #include <QLocale>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -85,46 +88,48 @@ public:
     const QRect content = option.rect.adjusted(16, 9, -12, -9);
     const auto foregroundRole =
         option.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
+    const auto pairable = index.data(model::DeviceHomeModel::CanStartPairingRole).toBool();
+    const auto sendable = index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
+    const auto actionText = pairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
+                                     : sendable ? i18n::translate(Text::DevicesActionSendFile) : QString();
+    const QFontMetrics detailMetrics(option.font);
+    const auto actionWidth = actionText.isEmpty() ? 0 : detailMetrics.horizontalAdvance(actionText) + 12;
+
     QFont nameFont(option.font);
     nameFont.setWeight(QFont::DemiBold);
     painter->setFont(nameFont);
     painter->setPen(option.palette.color(foregroundRole));
     const QFontMetrics nameMetrics(nameFont);
+    const QRect nameRect(content.left(), content.top(), content.width() - actionWidth, nameMetrics.height());
     painter->drawText(
-        content.left(), content.top(), content.width(), nameMetrics.height(), Qt::AlignLeft | Qt::AlignVCenter,
+        nameRect, Qt::AlignLeft | Qt::AlignVCenter,
         nameMetrics.elidedText(
-            index.data(model::DeviceHomeModel::DisplayNameRole).toString(), Qt::ElideRight, content.width()
+            index.data(model::DeviceHomeModel::DisplayNameRole).toString(), Qt::ElideRight, nameRect.width()
         )
     );
 
+    if (!actionText.isEmpty()) {
+      painter->setPen(option.palette.color(
+          option.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Link
+      ));
+      const QRect actionRect(content.right() - actionWidth, content.top(), actionWidth, nameMetrics.height());
+      painter->drawText(actionRect, Qt::AlignRight | Qt::AlignVCenter, actionText);
+    }
+
     painter->setFont(option.font);
-    const QFontMetrics detailMetrics(option.font);
     QString status = index.data(model::DeviceHomeModel::StatusTextRole).toString();
     const auto latency = index.data(model::DeviceHomeModel::LatencyMsRole).toInt();
     if (latency >= 0) {
       status += QStringLiteral("  ·  ") + i18n::translate(Text::DevicesLatency).arg(QLocale().toString(latency));
     }
-
-    const auto pairable = index.data(model::DeviceHomeModel::CanStartPairingRole).toBool();
-    const auto sendable = index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
-    const auto actionText = pairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
-                                     : sendable ? i18n::translate(Text::DevicesActionSendFile) : QString();
-    const auto actionWidth = actionText.isEmpty() ? 0 : detailMetrics.horizontalAdvance(actionText) + 12;
     const QRect detailRect(
-        content.left(), content.bottom() - detailMetrics.height(), content.width() - actionWidth, detailMetrics.height()
+        content.left(), content.bottom() - detailMetrics.height(), content.width(), detailMetrics.height()
     );
     painter->setPen(option.palette.color(foregroundRole));
     painter->drawText(
         detailRect, Qt::AlignLeft | Qt::AlignVCenter,
         detailMetrics.elidedText(status, Qt::ElideRight, detailRect.width())
     );
-    if (!actionText.isEmpty()) {
-      painter->setPen(option.palette.color(
-          option.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Link
-      ));
-      const QRect actionRect(content.right() - actionWidth, detailRect.top(), actionWidth, detailRect.height());
-      painter->drawText(actionRect, Qt::AlignRight | Qt::AlignVCenter, actionText);
-    }
     painter->restore();
   }
 
@@ -187,22 +192,96 @@ DevicesDock::DevicesDock(
   m_permissionBanner->setObjectName(QStringLiteral("relaydeskPermissionBanner"));
   m_permissionBanner->setFrameShape(QFrame::StyledPanel);
   auto *permissionLayout = new QVBoxLayout(m_permissionBanner);
-  permissionLayout->setContentsMargins(10, 9, 10, 9);
-  permissionLayout->setSpacing(5);
+  permissionLayout->setContentsMargins(8, 4, 8, 4);
+  permissionLayout->setSpacing(4);
+  auto *permissionSummaryLayout = new QHBoxLayout();
+  permissionSummaryLayout->setContentsMargins(0, 0, 0, 0);
+  permissionSummaryLayout->setSpacing(6);
+  m_permissionDetailsToggle = new QToolButton(m_permissionBanner);
+  m_permissionDetailsToggle->setObjectName(QStringLiteral("relaydeskPermissionDetailsButton"));
+  m_permissionDetailsToggle->setAutoRaise(true);
+  m_permissionDetailsToggle->setArrowType(Qt::RightArrow);
+  permissionSummaryLayout->addWidget(m_permissionDetailsToggle);
   m_permissionTitle = new QLabel(m_permissionBanner);
   m_permissionTitle->setObjectName(QStringLiteral("relaydeskPermissionTitle"));
+  m_permissionTitle->setTextFormat(Qt::PlainText);
+  m_permissionTitle->setWordWrap(false);
   QFont permissionTitleFont(m_permissionTitle->font());
   permissionTitleFont.setWeight(QFont::DemiBold);
   m_permissionTitle->setFont(permissionTitleFont);
-  permissionLayout->addWidget(m_permissionTitle);
+  permissionSummaryLayout->addWidget(m_permissionTitle);
   m_permissionMessage = new QLabel(m_permissionBanner);
   m_permissionMessage->setObjectName(QStringLiteral("relaydeskPermissionMessage"));
-  m_permissionMessage->setWordWrap(true);
-  permissionLayout->addWidget(m_permissionMessage);
+  m_permissionMessage->setTextFormat(Qt::PlainText);
+  m_permissionMessage->setWordWrap(false);
+  m_permissionMessage->setMinimumWidth(0);
+  m_permissionMessage->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  permissionSummaryLayout->addWidget(m_permissionMessage, 1);
   m_openPermissionSettingsButton = new QPushButton(m_permissionBanner);
   m_openPermissionSettingsButton->setObjectName(QStringLiteral("relaydeskOpenPermissionSettingsButton"));
-  permissionLayout->addWidget(m_openPermissionSettingsButton, 0, Qt::AlignLeft);
+  m_openPermissionSettingsButton->setFlat(true);
+  permissionSummaryLayout->addWidget(m_openPermissionSettingsButton);
+  permissionLayout->addLayout(permissionSummaryLayout);
+
+  m_permissionDetailsPanel = new QDialog(this);
+  m_permissionDetailsPanel->setObjectName(QStringLiteral("relaydeskPermissionDetailsPanel"));
+  m_permissionDetailsPanel->setModal(false);
+  auto *permissionDetailsLayout = new QVBoxLayout(m_permissionDetailsPanel);
+  permissionDetailsLayout->setContentsMargins(12, 12, 12, 12);
+  permissionDetailsLayout->setSpacing(6);
+  for (int row = 0; row < m_permissions.rowCount(); ++row) {
+    auto *detailRow = new QFrame(m_permissionDetailsPanel);
+    detailRow->setObjectName(QStringLiteral("relaydeskPermissionDetailRow%1").arg(row));
+    detailRow->setFrameShape(QFrame::StyledPanel);
+    auto *detailLayout = new QGridLayout(detailRow);
+    detailLayout->setContentsMargins(8, 6, 8, 6);
+    detailLayout->setHorizontalSpacing(8);
+    detailLayout->setVerticalSpacing(2);
+
+    auto *title = new QLabel(detailRow);
+    title->setObjectName(QStringLiteral("relaydeskPermissionDetailTitle%1").arg(row));
+    title->setTextFormat(Qt::PlainText);
+    QFont titleFont(title->font());
+    titleFont.setWeight(QFont::DemiBold);
+    title->setFont(titleFont);
+    auto *status = new QLabel(detailRow);
+    status->setObjectName(QStringLiteral("relaydeskPermissionDetailStatus%1").arg(row));
+    status->setTextFormat(Qt::PlainText);
+    status->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    auto *settings = new QPushButton(detailRow);
+    settings->setObjectName(QStringLiteral("relaydeskPermissionSettingsButton%1").arg(row));
+    settings->setFlat(true);
+    auto *purpose = new QLabel(detailRow);
+    purpose->setObjectName(QStringLiteral("relaydeskPermissionDetailPurpose%1").arg(row));
+    purpose->setTextFormat(Qt::PlainText);
+    purpose->setWordWrap(true);
+    auto *capability = new QLabel(detailRow);
+    capability->setObjectName(QStringLiteral("relaydeskPermissionDetailCapability%1").arg(row));
+    capability->setTextFormat(Qt::PlainText);
+    capability->setWordWrap(true);
+
+    detailLayout->addWidget(title, 0, 0);
+    detailLayout->addWidget(status, 0, 1);
+    detailLayout->addWidget(settings, 0, 2);
+    detailLayout->addWidget(purpose, 1, 0, 1, 3);
+    detailLayout->addWidget(capability, 2, 0, 1, 3);
+    permissionDetailsLayout->addWidget(detailRow);
+
+    m_permissionDetailTitles.append(title);
+    m_permissionDetailPurposes.append(purpose);
+    m_permissionDetailStatuses.append(status);
+    m_permissionDetailCapabilities.append(capability);
+    m_permissionDetailSettingsButtons.append(settings);
+    connect(settings, &QPushButton::clicked, this, [this, row]() { (void)m_permissions.requestOpenSettings(row); });
+  }
+  m_permissionDetailsPanel->setVisible(false);
   layout->addWidget(m_permissionBanner);
+
+  m_permissionBanner->installEventFilter(this);
+  m_permissionTitle->installEventFilter(this);
+  m_permissionMessage->installEventFilter(this);
+  m_permissionTitle->setCursor(Qt::PointingHandCursor);
+  m_permissionMessage->setCursor(Qt::PointingHandCursor);
 
   m_emptyLabel = new QLabel(body);
   m_emptyLabel->setObjectName(QStringLiteral("relaydeskDevicesEmptyLabel"));
@@ -405,8 +484,15 @@ DevicesDock::DevicesDock(
 
   connect(&m_pairing, &model::PairingWizardModel::changed, this, &DevicesDock::updatePairingPanel);
   connect(&m_permissions, &model::PermissionStatusModel::snapshotChanged, this, &DevicesDock::updatePermissionBanner);
+  connect(&m_permissions, &model::PermissionStatusModel::snapshotChanged, this, &DevicesDock::updateSelection);
   connect(m_openPermissionSettingsButton, &QPushButton::clicked, this, [this]() {
     (void)m_permissions.requestPrimarySettings();
+  });
+  connect(m_permissionDetailsToggle, &QToolButton::clicked, this, [this]() {
+    updatePermissionDetails();
+    m_permissionDetailsPanel->show();
+    m_permissionDetailsPanel->raise();
+    m_permissionDetailsPanel->activateWindow();
   });
   connect(m_confirmCodeButton, &QPushButton::clicked, &m_pairing, &model::PairingWizardModel::confirmMatchingSas);
   connect(m_submitCodeButton, &QPushButton::clicked, this, &DevicesDock::submitPairingCode);
@@ -484,6 +570,15 @@ void DevicesDock::changeEvent(QEvent *event)
 
 bool DevicesDock::eventFilter(QObject *watched, QEvent *event)
 {
+  if (watched == m_permissionBanner || watched == m_permissionTitle || watched == m_permissionMessage) {
+    if (event->type() == QEvent::MouseButtonRelease &&
+        static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
+      m_permissionDetailsToggle->click();
+      return true;
+    }
+    return QDockWidget::eventFilter(watched, event);
+  }
+
   if (watched != m_deviceList->viewport())
     return QDockWidget::eventFilter(watched, event);
 
@@ -589,6 +684,10 @@ void DevicesDock::updateText()
   m_submitCodeButton->setText(m_pairing.submitActionText());
   m_cancelPairingButton->setText(m_pairing.cancelActionText());
   m_fingerprintToggle->setText(m_pairing.fingerprintLabel());
+  const auto detailsText = i18n::translate(Text::TransferActionDetails);
+  m_permissionDetailsToggle->setToolTip(detailsText);
+  m_permissionDetailsToggle->setAccessibleName(detailsText);
+  m_permissionDetailsPanel->setWindowTitle(detailsText);
   m_openPermissionSettingsButton->setText(m_permissions.openSettingsActionText());
   m_sendFilesButton->setText(i18n::translate(Text::DevicesActionSendFile));
   m_sendFilesButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFile));
@@ -618,12 +717,13 @@ void DevicesDock::updateEmptyState()
 void DevicesDock::updateSelection()
 {
   const auto index = m_deviceList->currentIndex();
-  const auto pairable = index.isValid() && index.data(model::DeviceHomeModel::CanStartPairingRole).toBool();
+  const auto devicePairable = index.isValid() && index.data(model::DeviceHomeModel::CanStartPairingRole).toBool();
+  const auto pairable = devicePairable && m_permissions.canConnectDevices();
   m_pairButton->setEnabled(pairable);
   m_pairButton->setVisible(m_devices.rowCount() != 0);
   m_pairButton->setText(
-      pairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
-               : i18n::translate(Text::PairingActionStart)
+      devicePairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
+                     : i18n::translate(Text::PairingActionStart)
   );
   const auto sendable = index.isValid() && index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
   m_sendFilesButton->setVisible(m_devices.rowCount() != 0);
@@ -740,7 +840,8 @@ bool DevicesDock::publishSendIntent(const QModelIndex &index, const QList<QUrl> 
 
 void DevicesDock::requestPairing(const QModelIndex &index)
 {
-  if (!index.isValid() || !index.data(model::DeviceHomeModel::CanStartPairingRole).toBool())
+  if (!m_permissions.canConnectDevices() || !index.isValid() ||
+      !index.data(model::DeviceHomeModel::CanStartPairingRole).toBool())
     return;
   const auto id = DeviceId::fromString(index.data(model::DeviceHomeModel::DeviceIdRole).toString());
   if (!id.has_value())
@@ -818,6 +919,7 @@ void DevicesDock::submitPairingCode()
 
 void DevicesDock::updatePermissionBanner()
 {
+  updatePermissionDetails();
   const auto visible = m_permissions.bannerVisible();
   m_permissionBanner->setVisible(visible);
   if (!visible)
@@ -825,11 +927,41 @@ void DevicesDock::updatePermissionBanner()
 
   m_permissionTitle->setText(m_permissions.bannerTitle());
   m_permissionMessage->setText(m_permissions.bannerMessage());
+  m_permissionMessage->setToolTip(m_permissions.bannerMessage());
   m_openPermissionSettingsButton->setText(m_permissions.openSettingsActionText());
   m_openPermissionSettingsButton->setVisible(m_permissions.canOpenPrimarySettings());
   m_permissionBanner->setAccessibleName(m_permissions.bannerTitle());
   m_permissionBanner->setAccessibleDescription(m_permissions.bannerMessage());
   m_openPermissionSettingsButton->setAccessibleName(m_permissions.openSettingsActionText());
+}
+
+void DevicesDock::updatePermissionDetails()
+{
+  const auto rowCount = qMin(m_permissions.rowCount(), m_permissionDetailTitles.size());
+  for (int row = 0; row < rowCount; ++row) {
+    const auto index = m_permissions.index(row, 0);
+    const auto title = index.data(model::PermissionStatusModel::TitleRole).toString();
+    const auto purpose = index.data(model::PermissionStatusModel::PurposeTextRole).toString();
+    const auto status = index.data(model::PermissionStatusModel::StatusTextRole).toString();
+    const auto capability = index.data(model::PermissionStatusModel::AffectedCapabilityTextRole).toString();
+    const auto action = index.data(model::PermissionStatusModel::ActionTextRole).toString();
+    const auto canOpenSettings = index.data(model::PermissionStatusModel::CanOpenSettingsRole).toBool();
+
+    m_permissionDetailTitles.at(row)->setText(title);
+    m_permissionDetailPurposes.at(row)->setText(purpose);
+    m_permissionDetailStatuses.at(row)->setText(status);
+    m_permissionDetailCapabilities.at(row)->setText(capability);
+    auto *settings = m_permissionDetailSettingsButtons.at(row);
+    settings->setText(action);
+    settings->setVisible(canOpenSettings);
+    settings->setAccessibleName(title + QStringLiteral(" — ") + action);
+
+    auto *detailRow = m_permissionDetailTitles.at(row)->parentWidget();
+    detailRow->setAccessibleName(title);
+    detailRow->setAccessibleDescription(
+        QStringList{purpose, status, capability}.join(QStringLiteral(" · "))
+    );
+  }
 }
 
 } // namespace deskflow::relaydesk::widgets

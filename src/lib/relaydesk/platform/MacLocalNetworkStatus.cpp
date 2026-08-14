@@ -37,6 +37,7 @@ PermissionProbeEntry macLocalNetworkEntry(
       .kind = PermissionKind::MacLocalNetwork,
       .state = PermissionState::Unknown,
       .errorCode = PermissionErrorCode::ProbeUnavailable,
+      .canOpenSettings = true,
       .diagnostic = diagnostic,
   };
 }
