@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "approvedDesignSha256": "2f9cf97352ab9819eb5aa2b5d54b9ec9a4fbf171cea56525fb7e2ef149cfbe94",
+  "renderPolicy": "Canonical 64x64 SVG; ICO contains 16-256 px variants; ICNS contains Retina variants through 1024 px.",
+  "source": {
+    "path": "product/assets/branding/relaydesk-mark.svg",
+    "sha256": "6f04f0686d6849ea9db722d0dc1238f8ab000c92e5cd03b7ec341904a76fb679"
+  },
+  "windows": {
+    "path": "src/apps/res/RelayDesk.ico",
+    "size": 27645,
+    "sha256": "0dca7886af39aead9f09f592e575707a1cf732c68194cc558559b10ad4f84de3"
+  },
+  "macos": {
+    "path": "src/apps/res/RelayDesk.icns",
+    "size": 87419,
+    "sha256": "110c44bdf9ecf3e2c9760a5b966a015518c8e19de1f392a76c3a9ff1dde58ad1"
+  }
+}

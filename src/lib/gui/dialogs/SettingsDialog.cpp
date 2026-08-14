@@ -49,9 +49,6 @@ SettingsDialog::SettingsDialog(QWidget *parent, const IServerConfig &serverConfi
   ui->comboTlsKeyLength->setItemIcon(1, QIcon::fromTheme(QIcon::ThemeIcon::SecurityHigh));
   ui->lblTlsCertInfo->setFixedSize(28, 28);
 
-  ui->rbIconMono->setIcon(QIcon::fromTheme(QStringLiteral("%1-symbolic").arg(kRevFqdnName)));
-  ui->rbIconColorful->setIcon(QIcon::fromTheme(kRevFqdnName));
-
   // force the first tab, since qt creator sets the active tab as the last one
   // the developer was looking at, and it's easy to accidentally save that.
   ui->tabWidget->setCurrentIndex(0);
@@ -192,7 +189,6 @@ void SettingsDialog::accept()
   Settings::setValue(Settings::Security::TlsEnabled, ui->groupSecurity->isChecked());
   Settings::setValue(Settings::Gui::MinimizeToTray, ui->cbMinimizeToTray->isChecked());
   Settings::setValue(Settings::Gui::CloseToTray, ui->cbCloseToTray->isChecked());
-  Settings::setValue(Settings::Gui::SymbolicTrayIcon, ui->rbIconMono->isChecked());
   Settings::setValue(Settings::Security::CheckPeers, ui->cbRequireClientCert->isChecked());
   Settings::setValue(Settings::Core::Language, ui->comboLanguage->currentData().toString());
   Settings::setValue(Settings::Log::GuiDebug, ui->cbGuiDebug->isChecked());
@@ -232,11 +228,6 @@ void SettingsDialog::loadFromConfig()
   if (!deskflow::platform::isWindows())
     ui->groupService->setVisible(false);
 
-  if (Settings::value(Settings::Gui::SymbolicTrayIcon).toBool())
-    ui->rbIconMono->setChecked(true);
-  else
-    ui->rbIconColorful->setChecked(true);
-
   ui->lblDebugWarning->setVisible(Settings::value(Settings::Log::Level).toInt() > 4);
 
   ui->comboInterface->setCurrentText(Settings::value(Settings::Core::Interface).toString());
@@ -259,12 +250,10 @@ void SettingsDialog::loadStartAtLogin()
     m_startAtLoginAvailable = false;
     ui->cbStartAtLogin->setChecked(false);
     ui->cbStartAtLogin->setEnabled(false);
-    ui->cbStartAtLogin->setToolTip(
-        tr("Start-at-login status could not be read (code %1, native %2). %3")
-            .arg(static_cast<int>(snapshot.errorCode))
-            .arg(snapshot.nativeError)
-            .arg(snapshot.diagnostic)
-    );
+    ui->cbStartAtLogin->setToolTip(tr("Start-at-login status could not be read (code %1, native %2). %3")
+                                       .arg(static_cast<int>(snapshot.errorCode))
+                                       .arg(snapshot.nativeError)
+                                       .arg(snapshot.diagnostic));
     return;
   }
 

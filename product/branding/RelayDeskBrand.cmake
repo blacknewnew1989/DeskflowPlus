@@ -16,9 +16,14 @@ set(RELAYDESK_WINDOWS_RUN_VALUE_NAME "RelayDesk")
 set(RELAYDESK_WINDOWS_SERVICE_NAME "RelayDesk")
 set(RELAYDESK_PACKAGE_ID "relaydesk")
 
-# Original RelayDesk artwork and its generated macOS resources. Platform assets
-# must be regenerated from the canonical SVG instead of being hand-drawn.
+# Original vector artwork. The SVG is the geometric source of truth for
+# in-app and packaged icon variants. Derived platform assets must not be
+# hand-drawn independently.
+set(RELAYDESK_ICON_SOURCE "product/assets/branding/relaydesk-mark.svg")
 set(RELAYDESK_BRAND_MARK_SOURCE "product/assets/branding/relaydesk-mark.svg")
+
+# Platform bundle resources rendered from RELAYDESK_ICON_SOURCE. Keep all build
+# consumers on these variables instead of embedding resource paths downstream.
 set(RELAYDESK_WINDOWS_ICON_SOURCE "src/apps/res/RelayDesk.ico")
 set(RELAYDESK_MACOS_ICON_FILE "RelayDesk.icns")
 set(RELAYDESK_MACOS_ICON_SOURCE "src/apps/res/RelayDesk.icns")

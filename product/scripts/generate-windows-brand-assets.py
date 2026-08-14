@@ -28,7 +28,7 @@ class AssetError(RuntimeError):
 def validate_source() -> None:
     source = MARK.read_text(encoding="utf-8")
     ET.fromstring(source)
-    for required in ("#112A3A", "#0BAE9C", 'mask id="relay-gap"'):
+    for required in ("#18262D", "#1EA99A", 'id="device-left"', 'id="device-right"', 'id="relay-point"'):
         if required not in source:
             raise AssetError(f"canonical mark is missing {required}")
     if not APP_ICON.is_file() or APP_ICON.read_bytes()[:4] != b"icns":

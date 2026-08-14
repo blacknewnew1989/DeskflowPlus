@@ -23,8 +23,8 @@ TEMPLATE = GENERATED_DIR / "relaydesk-menu-bar-template.svg"
 APP_ICON = ROOT / "src/apps/res/RelayDesk.icns"
 DMG_BACKGROUND = ROOT / "deploy/mac/dmg-background.tiff"
 
-APP_COLOR_DARK = "#112A3A"
-APP_COLOR_TEAL = "#0BAE9C"
+APP_COLOR_DARK = "#18262D"
+APP_COLOR_TEAL = "#1EA99A"
 TEMPLATE_COLOR = "#000000"
 ICONSET_SLOTS = {
     "icon_16x16.png": 16,
@@ -47,7 +47,7 @@ class AssetError(RuntimeError):
 def canonical_mark() -> str:
     source = MARK.read_text(encoding="utf-8")
     ET.fromstring(source)
-    for required in (APP_COLOR_DARK, APP_COLOR_TEAL, 'mask id="relay-gap"'):
+    for required in (APP_COLOR_DARK, APP_COLOR_TEAL, 'id="device-left"', 'id="device-right"', 'id="relay-point"'):
         if required not in source:
             raise AssetError(f"canonical mark is missing {required}")
     return source
@@ -56,9 +56,9 @@ def canonical_mark() -> str:
 def template_svg(source: str) -> str:
     generated = source.replace(APP_COLOR_DARK, TEMPLATE_COLOR).replace(APP_COLOR_TEAL, TEMPLATE_COLOR)
     generated = generated.replace(
-        "<!-- SPDX-FileCopyrightText: 2026 RelayDesk Contributors -->",
+        "<!-- SPDX-FileCopyrightText: (C) 2026 RelayDesk Contributors -->",
         "<!-- Generated from product/assets/branding/relaydesk-mark.svg; do not hand edit. -->\n"
-        "<!-- SPDX-FileCopyrightText: 2026 RelayDesk Contributors -->",
+        "<!-- SPDX-FileCopyrightText: (C) 2026 RelayDesk Contributors -->",
     )
     return generated
 
@@ -74,14 +74,14 @@ def dmg_background_svg(source: str) -> str:
     geometry = mark_contents(source)
     return f'''<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
-  <rect width="300" height="400" fill="#112A3A"/>
+  <rect width="300" height="400" fill="#18262D"/>
   <rect x="300" width="300" height="400" fill="#F8FAFC"/>
   <rect x="67" y="116" width="160" height="160" rx="12" fill="#FFFFFF" fill-opacity="0.10" stroke="#FFFFFF" stroke-opacity="0.32"/>
   <rect x="373" y="116" width="160" height="160" rx="12" fill="#FFFFFF" stroke="#CBD5E1"/>
   <rect x="18" y="16" width="52" height="54" rx="11" fill="#FFFFFF"/>
   <svg x="24" y="22" width="40" height="42" viewBox="0 0 64 64">{geometry}</svg>
   <text x="82" y="52" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="25" font-weight="600">RelayDesk</text>
-  <path d="M262 196h69m-14-14 14 14-14 14" fill="none" stroke="#0BAE9C" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M262 196h69m-14-14 14 14-14 14" fill="none" stroke="#1EA99A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="147" y="326" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="15" text-anchor="middle">Drag RelayDesk</text>
   <text x="453" y="326" fill="#334155" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="15" text-anchor="middle">to Applications</text>
 </svg>

@@ -77,6 +77,29 @@ void SettingsTests::checkValidSettings()
   }
 }
 
+void SettingsTests::trayWindowBehaviorSettingsAreIndependent()
+{
+  Settings::setValue(Settings::Gui::MinimizeToTray);
+  Settings::setValue(Settings::Gui::CloseToTray);
+
+  QVERIFY(Settings::validKeys().contains(Settings::Gui::MinimizeToTray));
+  QCOMPARE(Settings::defaultValue(Settings::Gui::MinimizeToTray).toBool(), true);
+  QCOMPARE(Settings::value(Settings::Gui::MinimizeToTray).toBool(), true);
+  QCOMPARE(Settings::value(Settings::Gui::CloseToTray).toBool(), true);
+
+  Settings::setValue(Settings::Gui::MinimizeToTray, false);
+  QCOMPARE(Settings::value(Settings::Gui::MinimizeToTray).toBool(), false);
+  QCOMPARE(Settings::value(Settings::Gui::CloseToTray).toBool(), true);
+
+  Settings::setValue(Settings::Gui::CloseToTray, false);
+  Settings::setValue(Settings::Gui::MinimizeToTray, true);
+  QCOMPARE(Settings::value(Settings::Gui::MinimizeToTray).toBool(), true);
+  QCOMPARE(Settings::value(Settings::Gui::CloseToTray).toBool(), false);
+
+  Settings::setValue(Settings::Gui::MinimizeToTray);
+  Settings::setValue(Settings::Gui::CloseToTray);
+}
+
 void SettingsTests::checkCleanScreenName()
 {
   const auto input = QStringLiteral("--!_ _-S@c#r$e%e^&*(n)= +Name\n[1]2|3?4--5>6<,7`~/8*90\\.lan--..    ..");

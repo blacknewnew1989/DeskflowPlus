@@ -286,40 +286,6 @@ QString PermissionStatusModel::statusText(PermissionState state)
   return i18n::translate(Text::PermissionsStatusUnknown);
 }
 
-QString PermissionStatusModel::purposeText(PermissionKind kind)
-{
-  switch (kind) {
-  case PermissionKind::WindowsFirewall:
-    return i18n::translate(Text::PermissionsMessageWindowsFirewall);
-  case PermissionKind::WindowsListeningPort:
-    return i18n::translate(Text::PermissionsMessageWindowsPort);
-  case PermissionKind::MacLocalNetwork:
-    return i18n::translate(Text::PermissionsPurposeMacLocalNetwork);
-  case PermissionKind::MacAccessibility:
-    return i18n::translate(Text::PermissionsPurposeMacAccessibility);
-  case PermissionKind::MacInputMonitoring:
-    return i18n::translate(Text::PermissionsPurposeMacInputMonitoring);
-  }
-  return {};
-}
-
-QString PermissionStatusModel::affectedCapabilityText(PermissionKind kind)
-{
-  switch (kind) {
-  case PermissionKind::WindowsFirewall:
-    return i18n::translate(Text::PermissionsMessageWindowsFirewall);
-  case PermissionKind::WindowsListeningPort:
-    return i18n::translate(Text::PermissionsMessageWindowsPort);
-  case PermissionKind::MacLocalNetwork:
-    return i18n::translate(Text::PermissionsAffectedMacLocalNetwork);
-  case PermissionKind::MacAccessibility:
-    return i18n::translate(Text::PermissionsAffectedMacAccessibility);
-  case PermissionKind::MacInputMonitoring:
-    return i18n::translate(Text::PermissionsAffectedMacInputMonitoring);
-  }
-  return {};
-}
-
 QString PermissionStatusModel::messageText(const PermissionProbeEntry &entry)
 {
   if (entry.state == PermissionState::Granted || entry.state == PermissionState::NotRequired)
@@ -345,6 +311,39 @@ QString PermissionStatusModel::messageText(const PermissionProbeEntry &entry)
     return i18n::translate(Text::PermissionsMessageMacInputMonitoring);
   }
   return i18n::translate(Text::PermissionsMessageReview);
+}
+
+QString PermissionStatusModel::purposeText(PermissionKind kind)
+{
+  switch (kind) {
+  case PermissionKind::WindowsFirewall:
+    return i18n::translate(Text::PermissionsPurposeWindowsFirewall);
+  case PermissionKind::WindowsListeningPort:
+    return i18n::translate(Text::PermissionsPurposeWindowsPort);
+  case PermissionKind::MacLocalNetwork:
+    return i18n::translate(Text::PermissionsPurposeMacLocalNetwork);
+  case PermissionKind::MacAccessibility:
+    return i18n::translate(Text::PermissionsPurposeMacAccessibility);
+  case PermissionKind::MacInputMonitoring:
+    return i18n::translate(Text::PermissionsPurposeMacInputMonitoring);
+  }
+  return {};
+}
+
+QString PermissionStatusModel::affectedCapabilityText(PermissionKind kind)
+{
+  switch (kind) {
+  case PermissionKind::WindowsFirewall:
+  case PermissionKind::WindowsListeningPort:
+    return i18n::translate(Text::PermissionsAffectedNetwork);
+  case PermissionKind::MacLocalNetwork:
+    return i18n::translate(Text::PermissionsAffectedMacLocalNetwork);
+  case PermissionKind::MacAccessibility:
+    return i18n::translate(Text::PermissionsAffectedMacAccessibility);
+  case PermissionKind::MacInputMonitoring:
+    return i18n::translate(Text::PermissionsAffectedMacInputMonitoring);
+  }
+  return {};
 }
 
 PermissionErrorCode PermissionStatusModel::expectedErrorCode(PermissionKind kind)
@@ -379,7 +378,11 @@ int PermissionStatusModel::primaryAttentionRow() const
   int primaryRow = -1;
   int primaryRank = std::numeric_limits<int>::max();
   for (int row = 0; row < m_snapshot.entries.size(); ++row) {
-    const auto rank = attentionRank(m_snapshot.entries.at(row).state);
+    const auto &entry = m_snapshot.entries.at(row);
+    if (!needsAttention(entry.state))
+      continue;
+    const auto actionPenalty = entry.canOpenSettings ? 0 : 10;
+    const auto rank = actionPenalty + attentionRank(entry.state);
     if (rank < primaryRank) {
       primaryRank = rank;
       primaryRow = row;

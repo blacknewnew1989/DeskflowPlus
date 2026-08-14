@@ -22,7 +22,7 @@
     "defaultReceiveFolderName": "RelayDesk"
   },
   "assets": {
-    "iconSource": "assets/branding/icon.svg",
-    "license": "REPLACE_WITH_ASSET_LICENSE"
+    "iconSource": "assets/branding/relaydesk-mark.svg",
+    "license": "GPL-2.0-only WITH LicenseRef-OpenSSL-Exception"
   }
 }

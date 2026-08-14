@@ -266,6 +266,7 @@ private:
     , Settings::Gui::CloseToTray
     , Settings::Gui::CloseReminder
     , Settings::Gui::MinimizeToTray
+    , Settings::Gui::LogExpanded
     , Settings::Gui::SymbolicTrayIcon
     , Settings::Gui::ShowGenericClientFailureDialog
     , Settings::Security::TlsEnabled

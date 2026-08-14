@@ -10,7 +10,7 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 4 后续紧凑界面与后台运行改版（`IN_PROGRESS`；既有内部候选仍是上次验证基线）
+- Current phase: Phase 4 后续紧凑界面与后台运行改版（共享实现与本地回归 `PASS`；精确标签双平台构建待执行）
 - Last updated: 2026-08-14
 - User action required during development: none
 
@@ -21,9 +21,9 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last product implementation commit: `05f92a1ab721f7fd8b893e47e05643d5988e1719`
+- Last product implementation commit: `d419b56f262a5d09d9440704ee09788b4e806f82`
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
-- Current implementation: the v1 internal-release code path is composed: MainWindow owns transfer UI/service/history, incoming single/multi-file/folders, four conflict policies and interrupted resume use bounded workers and platform atomic commits, reconnect dials the selected authenticated TLS candidate, Windows/macOS permission adapters feed the shared model, and trusted input peers are synchronized idempotently into the Deskflow screen layout after pairing or rediscovery.
+- Current implementation: the v1 internal-release code path is composed. The shared Qt shell now uses the approved compact home, stable permission strip/details, compact device/transfer panels, original RelayDesk icon resources, independent minimize/close-to-tray settings and explicit background pause/resume/quit lifecycle. File-transfer shutdown persists resumable interruption state, and core shutdown handles retry and start-in-progress states. macOS per-capability permission gating and physical menu-bar verification remain owned by MAC-037.
 - Last verified stage tag: `relaydesk-phase4-20260813-03` (`05f92a1ab721f7fd8b893e47e05643d5988e1719`)
 
 ## 2026-08-14 紧凑界面变更
@@ -38,10 +38,10 @@
 
 | ID | 状态 | Owner | 当前证据 / 下一步 |
 |---|---|---|---|
-| UI-010 | IN_PROGRESS | A3/A0 | PRD 与 UI/UX 规格已更新；待共享 Qt 紧凑首页实现和回归 |
-| BRAND-002 | IN_PROGRESS | A3/A4/A5 | 设计方向已确认；待 SVG 单源、平台派生资源和打包接线 |
-| TRAY-001 | IN_PROGRESS | A3/A4/A5 | 行为契约已定义；待最小化/关闭到托盘、菜单动作和真正退出验证 |
-| MAC-037 | IN_PROGRESS | A5/A3/A0 | macOS owner 规格已同步；待权限能力门控、menu bar 适配和 lifecycle 回归 |
+| UI-010 | IN_PROGRESS | A3/A0 | 共享 Qt 紧凑首页与权限详情已实现；本地 Qt/UI 回归 PASS，待精确标签 Windows/macOS 构建 |
+| BRAND-002 | IN_PROGRESS | A3/A4/A5 | SVG 单源、主题资源、ICO/ICNS 与 CMake 接线已完成；branding 15/15 Python 回归 PASS，待平台包核验 |
+| TRAY-001 | IN_PROGRESS | A3/A4/A5 | 最小化/关闭到 tray 独立设置、显示/暂停/继续/退出及安全停机已实现；待双平台编译与 macOS 真机交互 |
+| MAC-037 | IN_PROGRESS | A5/A3/A0 | 首次同步已发送；待 A5 基于同一 PermissionSnapshot 完成分项能力门控、激活复检和 menu bar 真机回归 |
 
 ## 自动执行状态
 

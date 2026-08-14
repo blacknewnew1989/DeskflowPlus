@@ -11,6 +11,8 @@
 
 #include <common/Enums.h>
 
+#include <functional>
+
 class QWidget;
 
 namespace deskflow::gui::messages {
@@ -23,7 +25,7 @@ void showFirstServerStartMessage(QWidget *parent);
 
 void showFirstConnectedMessage(QWidget *parent, bool closeToTray, bool enableService, bool isServer);
 
-void showCloseReminder(QWidget *parent);
+void showCloseReminder(QWidget *parent, std::function<void()> dismissToTray, std::function<void()> openSettings);
 
 void showClientConnectError(QWidget *parent, deskflow::client::ErrorType error, const QString &address);
 

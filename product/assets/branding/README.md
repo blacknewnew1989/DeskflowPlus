@@ -7,8 +7,9 @@
 作为紧凑界面与临时 Logo 的视觉基线。参考图 SHA-256：
 `2f9cf97352ab9819eb5aa2b5d54b9ec9a4fbf171cea56525fb7e2ef149cfbe94`。
 
-该确认只冻结设计方向，不代表生产图标、平台资源或打包接线已经完成。生产资产由
-`BRAND-002` 跟踪。RelayDesk 仍是临时代号，正式产品名和商标决策留到对外发布前完成。
+该确认冻结设计方向。生产 SVG、平台图标与打包接线已经进入工作树，最终状态仍由
+`BRAND-002` 跟踪，并以本次双平台打包结果为完成证据。RelayDesk 仍是临时代号，正式产品名
+和商标决策留到对外发布前完成。
 
 ## Logo 设计契约
 
@@ -23,6 +24,10 @@
 `product/scripts/generate-windows-brand-assets.py` 从同一 SVG 已生成的最高分辨率应用图稿派生
 Windows 多尺寸 ICO；`product/scripts/generate-macos-brand-assets.py` 生成 ICNS、菜单栏 template
 和 DMG 图稿。两端不得回退到 Deskflow 图标或各自重画几何。
+
+`relaydesk-generated.json` 固定 canonical SVG、Windows ICO 与 macOS ICNS 的路径、大小和
+SHA-256。任何几何或平台容器更新必须同时刷新该 provenance；`validate-branding.py` 会拒绝
+来源摘要过期、暗色图标与 Ink 顶栏无对比或 symbolic 图标没有使用 `currentColor` 的改动。
 
 ## 计划输出
 

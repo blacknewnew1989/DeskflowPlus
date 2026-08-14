@@ -16,6 +16,7 @@
 #include <QCheckBox>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QTimer>
 #include <memory>
 
 namespace deskflow::gui::messages {
@@ -109,7 +110,7 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
   }
 }
 
-void showCloseReminder(QWidget *parent)
+void showCloseReminder(QWidget *parent, std::function<void()> dismissToTray, std::function<void()> openSettings)
 {
   auto message = QObject::tr(
                      "<p>%1 will continue to run in the background and can be accessed via the %1 icon in your "
@@ -127,7 +128,29 @@ void showCloseReminder(QWidget *parent)
   );
 #endif
 
-  QMessageBox::information(parent, kAppName, message);
+  auto *dialog = new QMessageBox(QMessageBox::Information, kAppName, message, QMessageBox::NoButton, parent);
+  dialog->setObjectName(QStringLiteral("relaydeskCloseReminder"));
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->setWindowModality(Qt::NonModal);
+  auto *dismissButton = dialog->addButton(QObject::tr("Got it"), QMessageBox::AcceptRole);
+  auto *settingsButton = dialog->addButton(QObject::tr("Open settings"), QMessageBox::ActionRole);
+  auto handled = std::make_shared<bool>(false);
+  QObject::connect(
+      dialog, &QMessageBox::buttonClicked, dialog,
+      [handled, dismissButton, settingsButton, dismissToTray, openSettings, parent](QAbstractButton *clicked) {
+        *handled = true;
+        if (clicked == settingsButton) {
+          QTimer::singleShot(0, parent, openSettings);
+        } else if (clicked == dismissButton) {
+          dismissToTray();
+        }
+      }
+  );
+  QObject::connect(dialog, &QMessageBox::finished, dialog, [handled, dismissToTray](int) {
+    if (!*handled)
+      dismissToTray();
+  });
+  dialog->open();
 }
 
 void showFirstServerStartMessage(QWidget *parent)

@@ -525,9 +525,9 @@ A bound IP is now invalid, you may need to restart the server.</source>
         <translation>退出(&amp;Q)</translation>
     </message>
     <message>
-        <source>&amp;Open %1</source>
+        <source>&amp;Show %1</source>
         <extracomment>%1 will be the replaced with the appname</extracomment>
-        <translation>打开 %1(&amp;O)</translation>
+        <translation>显示 %1(&amp;S)</translation>
     </message>
     <message>
         <source>&amp;Preferences</source>
@@ -624,6 +624,100 @@ Valid names:
         <source>&lt;html&gt;Hostname or IP address of the server computer.&lt;br/&gt;May contain a comma seperated list.&lt;/html&gt;</source>
         <translation>&lt;html&gt;服务器计算机的主机名或 IP 地址。&lt;br/&gt;可以填写以逗号分隔的多个地址。&lt;/html&gt;</translation>
     </message>
+    <message>
+        <source>Transfer history</source>
+        <translation>传输历史</translation>
+    </message>
+    <message>
+        <source>Preferences and advanced settings</source>
+        <translation>偏好设置与高级设置</translation>
+    </message>
+    <message>
+        <source>Back to devices</source>
+        <translation>返回设备</translation>
+    </message>
+    <message>
+        <source>Connecting</source>
+        <translation>正在连接</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>离线</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>在线</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>已暂停</translation>
+    </message>
+    <message>
+        <source>%1% · %2</source>
+        <translation>%1% · %2</translation>
+    </message>
+    <message>
+        <source>Pause transfer</source>
+        <translation>暂停传输</translation>
+    </message>
+    <message>
+        <source>Resume transfer</source>
+        <translation>继续传输</translation>
+    </message>
+    <message>
+        <source>Retry transfer</source>
+        <translation>重试传输</translation>
+    </message>
+    <message>
+        <source>Open transfer center</source>
+        <translation>打开传输中心</translation>
+    </message>
+    <message>
+        <source>Pause sharing</source>
+        <translation>暂停共享</translation>
+    </message>
+    <message>
+        <source>Resume sharing</source>
+        <translation>继续共享</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>设备</translation>
+    </message>
+    <message>
+        <source>Transfer center</source>
+        <translation>传输中心</translation>
+    </message>
+    <message>
+        <source>Advanced connection settings</source>
+        <translation>高级连接设置</translation>
+    </message>
+    <message>
+        <source>This device: %1</source>
+        <translation>本机：%1</translation>
+    </message>
+    <message>
+        <source>My devices</source>
+        <translation>我的设备</translation>
+    </message>
+    <message>
+        <source>+ Add</source>
+        <translation>+ 添加</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>添加设备</translation>
+    </message>
+    <message>
+        <source>Nearby devices appear here automatically</source>
+        <translation>附近设备会自动显示在这里</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n online</source>
+        <translation>
+            <numerusform>%n 台在线</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>NewScreenWidget</name>
@@ -660,6 +754,14 @@ Valid names:
     <message>
         <source>&lt;p&gt;%1 will continue to run in the background and can be accessed via the %1 icon in your system notifications area. This setting can be disabled.&lt;/p&gt;</source>
         <translation>&lt;p&gt;%1 将在后台继续运行，可通过系统通知区域的 %1 图标访问。此设置可以禁用。&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Got it</source>
+        <translation>知道了</translation>
+    </message>
+    <message>
+        <source>Open settings</source>
+        <translation>打开设置</translation>
     </message>
     <message>
         <source>&lt;p&gt;Please &lt;a href=&quot;%1&quot;&gt;report a bug&lt;/a&gt; and copy/paste the following error:&lt;/p&gt;&lt;pre&gt;v%2
@@ -1207,6 +1309,10 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Prevent this computer from going to sleep</source>
         <translation>防止此计算机进入睡眠状态</translation>
+    </message>
+    <message>
+        <source>Hide app in notification area when the window is minimized</source>
+        <translation>最小化后隐藏到托盘</translation>
     </message>
     <message>
         <source>Leave app running in notification area when the window is closed</source>
