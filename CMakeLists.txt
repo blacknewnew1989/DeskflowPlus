@@ -30,6 +30,7 @@ set(DESKFLOW_VERSION_TWEAK 0)
 # Product-facing identity is intentionally separate from the upstream project,
 # target, and namespace names used for Deskflow compatibility.
 include(product/branding/RelayDeskBrand.cmake)
+include(translations/RelayDeskLanguages.cmake)
 
 # Get the version from git if it's a git repository
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/.git)
