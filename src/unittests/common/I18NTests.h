@@ -12,6 +12,7 @@ class I18NTests : public QObject
 private Q_SLOTS:
   void initTestCase();
   void creationTest();
+  void supportedLanguagesUseCanonicalOrder();
   void detectedLangTest();
   void check639NameTest_validMapValues();
   void check639NameTest_invalidName();
@@ -20,6 +21,7 @@ private Q_SLOTS:
   void setLangTest_validLangs();
   void setLangTest_invalidLang();
   void setLangTest_currentLang();
+  void selectedLanguageIsPersisted();
   void productCatalogTest();
   void reDetectTest();
 
@@ -28,10 +30,8 @@ private:
   inline static const QString m_settingsPathTemp = QStringLiteral("tmp/test");
   inline static const QString m_settingsFile = QStringLiteral("%1/Deskflow.conf").arg(m_settingsPathTemp);
   inline static const QString m_stateFile = QStringLiteral("%1/Deskflow.state").arg(m_settingsPathTemp);
-  inline static const QMap<QString, QString> m_langMap = {
-      {QStringLiteral("English"), QStringLiteral("en")},    {QStringLiteral("Español"), QStringLiteral("es")},
-      {QStringLiteral("한국어"), QStringLiteral("ko")},     {QStringLiteral("Italiano"), QStringLiteral("it")},
-      {QStringLiteral("日本語"), QStringLiteral("ja")},     {QStringLiteral("Русский"), QStringLiteral("ru")},
-      {QStringLiteral("简体中文"), QStringLiteral("zh_CN")}
+  inline static const QStringList m_nativeLanguageNames = {
+      QStringLiteral("English"), QStringLiteral("Español"), QStringLiteral("Italiano"),
+      QStringLiteral("日本語"), QStringLiteral("한국어"), QStringLiteral("Русский"), QStringLiteral("简体中文")
   };
 };

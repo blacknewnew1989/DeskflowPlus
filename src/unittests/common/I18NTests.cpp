@@ -10,7 +10,9 @@
 #include "common/Settings.h"
 #include <QDir>
 #include <QFile>
+#include <QSettings>
 #include <QSignalSpy>
+#include <QSet>
 
 void I18NTests::initTestCase()
 {
@@ -42,16 +44,27 @@ void I18NTests::creationTest()
   QVERIFY(I18N::instance());
 }
 
+void I18NTests::supportedLanguagesUseCanonicalOrder()
+{
+  const auto supported = I18N::supportedLanguageCodes();
+  QCOMPARE(supported.size(), 7);
+  QCOMPARE(QSet<QString>(supported.cbegin(), supported.cend()).size(), supported.size());
+  QCOMPARE(supported.first(), I18N::fallbackLanguage());
+  QCOMPARE(I18N::fallbackLanguage(), QStringLiteral("en"));
+  QVERIFY(supported.contains(QStringLiteral("zh_CN")));
+}
+
 void I18NTests::detectedLangTest()
 {
-  for (const auto &lang : I18N::detectedLanguages())
-    QVERIFY(m_langMap.contains(lang));
+  QCOMPARE(I18N::detectedLanguageCodes(), I18N::supportedLanguageCodes());
+  QCOMPARE(I18N::detectedLanguages(), m_nativeLanguageNames);
 }
 
 void I18NTests::check639NameTest_validMapValues()
 {
-  for (const auto &lang : m_langMap.keys())
-    QCOMPARE(I18N::nativeTo639Name(lang), m_langMap.value(lang));
+  const auto supported = I18N::supportedLanguageCodes();
+  for (qsizetype index = 0; index < supported.size(); ++index)
+    QCOMPARE(I18N::nativeTo639Name(m_nativeLanguageNames.at(index)), supported.at(index));
 }
 
 void I18NTests::check639NameTest_invalidName()
@@ -61,8 +74,9 @@ void I18NTests::check639NameTest_invalidName()
 
 void I18NTests::toNativeNameTest_validMapValues()
 {
-  for (const auto &lang : m_langMap.values())
-    QCOMPARE(I18N::toNativeName(lang), m_langMap.key(lang));
+  const auto supported = I18N::supportedLanguageCodes();
+  for (qsizetype index = 0; index < supported.size(); ++index)
+    QCOMPARE(I18N::toNativeName(supported.at(index)), m_nativeLanguageNames.at(index));
 }
 
 void I18NTests::toNativeNameTest_invalidName()
@@ -74,20 +88,27 @@ void I18NTests::setLangTest_validLangs()
 {
   // make sure we are not staring with our language set to the maps last value
   // ensures a languageChanged signal will be emited for each itteration of the testing loop
-  I18N::setLanguage(m_langMap.value(m_langMap.lastKey()));
+  const auto supported = I18N::supportedLanguageCodes();
+  I18N::setLanguage(supported.constLast());
   QSignalSpy spy(I18N::instance(), &I18N::languageChanged);
-  for (const auto &lang : m_langMap.values()) {
+  for (const auto &lang : supported) {
     I18N::setLanguage(lang);
     QCOMPARE(I18N::currentLanguage(), lang);
   }
-  QCOMPARE(spy.count(), m_langMap.count());
+  QCOMPARE(spy.count(), supported.count());
 }
 
 void I18NTests::setLangTest_invalidLang()
 {
+  I18N::setLanguage(QStringLiteral("zh_CN"));
   QSignalSpy spy(I18N::instance(), &I18N::languageChanged);
   I18N::setLanguage("INVALID-LANGUAGE");
-  QCOMPARE(spy.count(), 0);
+  QCOMPARE(I18N::currentLanguage(), I18N::fallbackLanguage());
+  QCOMPARE(Settings::value(Settings::Core::Language).toString(), I18N::fallbackLanguage());
+  QCOMPARE(spy.count(), 1);
+
+  I18N::setLanguage(QStringLiteral("es-damaged"));
+  QCOMPARE(I18N::currentLanguage(), I18N::fallbackLanguage());
 }
 
 void I18NTests::setLangTest_currentLang()
@@ -97,17 +118,34 @@ void I18NTests::setLangTest_currentLang()
   QCOMPARE(spy.count(), 0);
 }
 
+void I18NTests::selectedLanguageIsPersisted()
+{
+  I18N::setLanguage(QStringLiteral("ja"));
+  QCOMPARE(Settings::value(Settings::Core::Language).toString(), QStringLiteral("ja"));
+
+  QSettings persisted(m_settingsFile, QSettings::IniFormat);
+  persisted.sync();
+  QCOMPARE(persisted.value(Settings::Core::Language).toString(), QStringLiteral("ja"));
+
+  Settings::setValue(Settings::Core::Language, QStringLiteral("damaged-value"));
+  I18N::setLanguage(Settings::value(Settings::Core::Language).toString());
+  QCOMPARE(I18N::currentLanguage(), I18N::fallbackLanguage());
+  QCOMPARE(Settings::value(Settings::Core::Language).toString(), I18N::fallbackLanguage());
+}
+
 void I18NTests::productCatalogTest()
 {
+  for (const auto &language : I18N::supportedLanguageCodes()) {
+    I18N::setLanguage(language);
+    QCOMPARE(I18N::currentLanguage(), language);
+    const auto translated = QCoreApplication::translate("RelayDesk", "devices.status.online");
+    QVERIFY2(!translated.isEmpty(), qPrintable(language));
+    QVERIFY2(translated != QStringLiteral("devices.status.online"), qPrintable(language));
+  }
+
   I18N::setLanguage(QStringLiteral("zh_CN"));
   QCOMPARE(QCoreApplication::translate("RelayDesk", "devices.status.online"), QStringLiteral("在线"));
   QCOMPARE(QCoreApplication::translate("RelayDesk", "transfer.action.open_folder"), QStringLiteral("打开目录"));
-  QCOMPARE(
-      QCoreApplication::translate("RelayDesk", "devices.drop.items", nullptr, 3), QStringLiteral("3 个项目")
-  );
-
-  I18N::setLanguage(QStringLiteral("en"));
-  QCOMPARE(QCoreApplication::translate("RelayDesk", "devices.status.online"), QStringLiteral("Online"));
 }
 
 void I18NTests::reDetectTest()
@@ -117,10 +155,11 @@ void I18NTests::reDetectTest()
   I18N::reDetectLanguages();
   QCOMPARE(spy.count(), 0);
 
-  QFile::remove(QStringLiteral("%1/deskflow_en.qm").arg(m_myTDir));
+  QFile::remove(QStringLiteral("%1/relaydesk_en.qm").arg(m_myTDir));
 
   I18N::reDetectLanguages();
   QCOMPARE(spy.count(), 1);
+  QVERIFY(!I18N::detectedLanguageCodes().contains(QStringLiteral("en")));
 }
 
 QTEST_MAIN(I18NTests)
