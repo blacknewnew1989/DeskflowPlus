@@ -360,6 +360,14 @@ void CoreProcess::stop(std::optional<ProcessMode> processModeOption)
 {
   QMutexLocker locker(&m_processMutex);
 
+  if (m_processState == ProcessState::RetryPending) {
+    qInfo("cancelling pending core process retry");
+    m_retryTimer.stop();
+    setProcessState(ProcessState::Stopped);
+    setConnectionState(ConnectionState::Disconnected);
+    return;
+  }
+
   const auto currentMode = Settings::value(Settings::Core::ProcessMode).value<ProcessMode>();
   const auto processMode = processModeOption.value_or(currentMode);
 
