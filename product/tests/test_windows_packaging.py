@@ -12,6 +12,10 @@ PORTABLE = (ROOT / "deploy/windows/pre-cpack.cmake.in").read_text(encoding="utf-
 WIX = (ROOT / "deploy/windows/wix-patch.xml.in").read_text(encoding="utf-8")
 WIX_CUSTOM = (ROOT / "deploy/windows/wix-custom.cpp").read_text(encoding="utf-8")
 ROOT_CPACK = (ROOT / "deploy/CMakeLists.txt").read_text(encoding="utf-8")
+WORKFLOW = (ROOT / ".github/workflows/relaydesk-build.yml").read_text(encoding="utf-8")
+WINDOWS_TRANSLATION_VERIFIER = (
+    ROOT / "product/scripts/verify-windows-translation-bundle.py"
+).read_text(encoding="utf-8")
 
 
 class WindowsPackagingTests(unittest.TestCase):
@@ -51,6 +55,17 @@ class WindowsPackagingTests(unittest.TestCase):
         normalized = " ".join(readme.split())
         self.assertIn('does not delete that user data', normalized)
         self.assertIn('portable folder is deleted', normalized)
+
+    def test_actions_stage_enforces_the_shared_windows_translation_manifest(self) -> None:
+        stage = WORKFLOW.split("- name: Stage and verify Windows translation bundle", 1)[1].split(
+            "- name: Stage deployed macOS app bundle", 1
+        )[0]
+
+        self.assertLess(stage.index("cmake --install"), stage.index("verify-windows-translation-bundle.py"))
+        self.assertIn('Join-Path $stage "translations"', stage)
+        self.assertIn("windows-translation-bundle.json", stage)
+        self.assertIn('Path("translations/RelayDeskLanguages.cmake")', WINDOWS_TRANSLATION_VERIFIER)
+        self.assertIn('glob("relaydesk_*.qm")', WINDOWS_TRANSLATION_VERIFIER)
 
 
 if __name__ == "__main__":
