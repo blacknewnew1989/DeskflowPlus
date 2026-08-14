@@ -225,6 +225,9 @@ void CoreProcess::startProcessFromDaemon(const QStringList &args)
 
   if (!m_daemonIpcClient->sendStartProcess(commandQuoted, Settings::value(Settings::Daemon::Elevate).toBool())) {
     qWarning("cannot start process, ipc command failed");
+    setProcessState(ProcessState::Stopped);
+    setConnectionState(ConnectionState::Disconnected);
+    Q_EMIT error(Error::StartFailed);
     return;
   }
 
@@ -243,8 +246,8 @@ void CoreProcess::stopForegroundProcess() const
 
   qInfo("stopping core desktop process");
 
-  if (m_process->state() == QProcess::ProcessState::Running) {
-    qDebug("process is running, closing");
+  if (m_process->state() != QProcess::ProcessState::NotRunning) {
+    qDebug("process is running or starting, closing");
     m_process->close();
   } else {
     qDebug("process is not running, skipping terminate");
@@ -369,9 +372,6 @@ void CoreProcess::stop(std::optional<ProcessMode> processModeOption)
     qDebug("core process retry is pending, cancelling");
     m_retryTimer.stop();
     setProcessState(ProcessState::Stopped);
-  } else if (m_processState == ProcessState::Starting) {
-    qDebug("core process is starting, cancelling");
-    setProcessState(ProcessState::Stopped);
   } else if (m_processState != ProcessState::Stopped) {
     setProcessState(ProcessState::Stopping);
 
@@ -379,6 +379,8 @@ void CoreProcess::stop(std::optional<ProcessMode> processModeOption)
       stopProcessFromDaemon();
     } else if (processMode == ProcessMode::Desktop) {
       stopForegroundProcess();
+      if (m_process == nullptr || m_process->state() == QProcess::ProcessState::NotRunning)
+        setProcessState(ProcessState::Stopped);
     }
 
   } else {
@@ -415,8 +417,8 @@ void CoreProcess::cleanup()
   qInfo("cleaning up core process");
 
   const auto isDesktop = Settings::value(Settings::Core::ProcessMode).value<ProcessMode>() == ProcessMode::Desktop;
-  const auto isRunning = m_processState == ProcessState::Started;
-  if (isDesktop && isRunning) {
+  const auto isActive = m_processState != ProcessState::Stopped;
+  if (isDesktop && isActive) {
     stop();
   }
 }
