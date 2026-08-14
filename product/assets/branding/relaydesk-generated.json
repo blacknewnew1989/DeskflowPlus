@@ -8,12 +8,12 @@
   },
   "windows": {
     "path": "src/apps/res/RelayDesk.ico",
-    "size": 27645,
-    "sha256": "0dca7886af39aead9f09f592e575707a1cf732c68194cc558559b10ad4f84de3"
+    "size": 26154,
+    "sha256": "2826b2f2e4e49208109819668eb5faecf07f5883dd80f19a16891f954368ae19"
   },
   "macos": {
     "path": "src/apps/res/RelayDesk.icns",
-    "size": 87419,
-    "sha256": "110c44bdf9ecf3e2c9760a5b966a015518c8e19de1f392a76c3a9ff1dde58ad1"
+    "size": 107265,
+    "sha256": "eaa77c7fe6d7773c32c79cdb8bfdd50c645188460f2489832c1a405270da5218"
   }
 }

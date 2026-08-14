@@ -152,20 +152,24 @@ def check(source: str) -> None:
             expected_iconset = temp / "Expected.iconset"
             expected_iconset.mkdir()
             run(["/usr/bin/iconutil", "-c", "iconset", str(APP_ICON), "-o", str(iconset)])
-            missing = set(ICONSET_SLOTS) - {path.name for path in iconset.iterdir()}
+            extracted_slots = {path.name for path in iconset.iterdir()}
+            # iconutil omits the legacy 1x 16 px and 32 px filenames when their
+            # representations are canonicalized into the equivalent Retina
+            # payloads. The remaining eight files are independent ICNS payloads
+            # and must always survive a round trip through iconutil.
+            canonical_slots = set(ICONSET_SLOTS) - {"icon_16x16.png", "icon_32x32.png"}
+            missing = canonical_slots - extracted_slots
             if missing:
                 raise AssetError(f"RelayDesk.icns is missing slots: {sorted(missing)}")
-            # iconutil canonicalizes the legacy 16 px and 32 px representations
-            # from their Retina counterparts. Compare the six independent ICNS
-            # payloads byte-for-byte with fresh SVG renders.
-            canonical_slots = set(ICONSET_SLOTS) - {"icon_16x16.png", "icon_32x32.png"}
             for filename, size in ICONSET_SLOTS.items():
+                if filename not in extracted_slots:
+                    continue
                 if png_dimensions(iconset / filename) != (size, size):
                     raise AssetError(f"RelayDesk.icns slot has wrong dimensions: {filename}")
+                if filename not in canonical_slots:
+                    continue
                 render_svg(MARK, expected_iconset / filename, size, size)
-                if filename in canonical_slots and (iconset / filename).read_bytes() != (
-                    expected_iconset / filename
-                ).read_bytes():
+                if (iconset / filename).read_bytes() != (expected_iconset / filename).read_bytes():
                     raise AssetError(f"RelayDesk.icns is stale relative to the SVG source: {filename}")
 
             background_svg = temp / "relaydesk-dmg-background.svg"
