@@ -10,7 +10,7 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 4 后续紧凑界面与后台运行改版（共享实现与本地回归 `PASS`；精确标签双平台构建待执行）
+- Current phase: Phase 4 后续紧凑界面与后台运行改版（UI-011 收口树与本地回归 `PASS`；精确标签双平台构建待执行）
 - Last updated: 2026-08-14
 - User action required during development: none
 
@@ -21,7 +21,7 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last product implementation commit: `d419b56f262a5d09d9440704ee09788b4e806f82`
+- UI-011 closeout implementation tip: `8aba552b89a6a8a4600df3c5d4270e711de07416`（代理分支已推送，待产品分支快进）
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
 - Current implementation: the v1 internal-release code path is composed. The shared Qt shell now uses the approved compact home, stable permission strip/details, compact device/transfer panels, original RelayDesk icon resources, independent minimize/close-to-tray settings and explicit background pause/resume/quit lifecycle. File-transfer shutdown persists resumable interruption state, and core shutdown handles retry and start-in-progress states. macOS per-capability permission gating and physical menu-bar verification remain owned by MAC-037.
 - Last verified stage tag: `relaydesk-phase4-20260813-03` (`05f92a1ab721f7fd8b893e47e05643d5988e1719`)
@@ -38,10 +38,10 @@
 
 | ID | 状态 | Owner | 当前证据 / 下一步 |
 |---|---|---|---|
-| UI-010 | IN_PROGRESS | A3/A0 | 共享 Qt 紧凑首页与权限详情已实现；本地 Qt/UI 回归 PASS，待精确标签 Windows/macOS 构建 |
-| BRAND-002 | IN_PROGRESS | A3/A4/A5 | SVG 单源、主题资源、ICO/ICNS 与 CMake 接线已完成；branding 15/15 Python 回归 PASS，待平台包核验 |
-| TRAY-001 | IN_PROGRESS | A3/A4/A5 | 最小化/关闭到 tray 独立设置、显示/暂停/继续/退出及安全停机已实现；待双平台编译与 macOS 真机交互 |
-| MAC-037 | IN_PROGRESS | A5/A3/A0 | 首次同步已发送；待 A5 基于同一 PermissionSnapshot 完成分项能力门控、激活复检和 menu bar 真机回归 |
+| UI-010 | IN_PROGRESS | A3/A0 | UI-011 收口树已补齐七语言 178/178；Qt/UI 与脚本回归 PASS，待精确标签 Windows/macOS 构建 |
+| BRAND-002 | IN_PROGRESS | A3/A4/A5 | SVG 单源、主题资源、ICO/ICNS/DMG 与 CMake 接线已完成；macOS/Windows 品牌校验 PASS，待平台包核验 |
+| TRAY-001 | IN_PROGRESS | A3/A4/A5 | 最小化/关闭到 tray 独立设置及安全停机已实现；菜单/托盘独立进程真实退出回归 2/2 PASS，待平台包与真机交互 |
+| MAC-037 | IN_PROGRESS | A5/A3/A0 | 三项权限能力门控、ApplicationActive 自动复检与 150 ms 合并回归 PASS；待最终 App 的系统设置往返前台实测 |
 
 ## 自动执行状态
 
@@ -67,6 +67,8 @@
 | Product GUI/reconnect/permission composition | PASS | `479a0f78f`, `b251933dd`, `cc923dacc`, `0341c9b86`, `f79cc64dd`; targeted composition/reconnect/firewall tests PASS |
 | Pairing input-layout composition | PASS | `05f92a1ab`; trusted input peer add/persist/idempotency/rejection tests PASS on Windows and macOS |
 | Phase 4 exact-tag release | PASS | tag `relaydesk-phase4-20260813-03`; run `31706167585`; Windows 89/89, macOS 90/90, Windows installer and macOS lifecycle PASS; unsigned draft Release published |
+| UI-011 local closeout | PASS | branch `agent/a0/ui011-final-closeout` at `8aba552b8`; 7 Qt regressions, 29 Python contracts, seven catalogs 178/178, Windows staged-QM loader and brand checks PASS |
+| UI-011 exact-SHA dual-platform Actions | NOT_RUN | closeout implementation is ready; run only after the product branch is fast-forwarded to the single final SHA |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 

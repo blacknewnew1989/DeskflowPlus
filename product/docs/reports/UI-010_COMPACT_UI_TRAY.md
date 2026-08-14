@@ -2,9 +2,11 @@
 
 ## 结论
 
-2026-08-14 用户确认的界面稿已经落实到共享 Qt 界面。当前本地实现与针对性回归为
-`PASS`，精确标签的 Windows x64 与 Apple Silicon macOS 构建、安装包核验仍为
-`IN_PROGRESS`。旧标签 `relaydesk-phase4-20260813-03` 早于本次改版，不能作为本次交付证据。
+2026-08-14 用户确认的界面稿已经落实到共享 Qt 界面。UI-011 收口实现已推送到
+`agent/a0/ui011-final-closeout` 的 `8aba552b89a6a8a4600df3c5d4270e711de07416`，本地针对性
+回归为 `PASS`；精确产品 SHA 的 Windows x64 与 Apple Silicon macOS 构建、安装包核验
+仍为 `IN_PROGRESS`。旧标签 `relaydesk-phase4-20260813-03` 早于本次改版，不能作为本次
+交付证据。
 
 ## 已确认设计输入
 
@@ -39,21 +41,25 @@
 | `8e0819174` | 可操作、可访问的权限详情 |
 | `d0d449edc` | 启动中的核心安全停止 |
 | `d419b56f2` | 紧凑首页与最小化托盘生命周期 |
+| `5c2092203` | 修复 macOS `iconutil` 往返校验并同步 ICNS、ICO 与 DMG 品牌资源 |
+| `4ee4576ea` | 使翻译包校验兼容 macOS 系统 Python 3.9 |
+| `9ac7f0d79` | 恢复 macOS 配置、构建和打包入口的可执行权限 |
+| `75b61df99` | 在 Windows 安装树中校验七语言 QM 闭包与可加载性 |
+| `56568584f` | 以独立进程验证菜单和托盘退出确实终止应用 |
+| `8aba552b8` | 补齐七语言权限语义并统一为 178/178 个完整键 |
 
 ## 本地自动验证
 
 | 范围 | 结果 |
 |---|---|
-| `PermissionStatusModelTests` | 7/7 PASS |
-| `DevicesDockTests` | 16/16 PASS，包括 520×380 级别紧凑布局、权限详情与 reparent |
-| `TransferCenterDockTests` | 4/4 PASS |
-| `SettingsTests` | 15/15 PASS，包括最小化/关闭到托盘设置互不联动 |
-| `ProductStringsTests` | 5/5 PASS |
-| `FileTransferRuntimeTests` | 18/18 PASS，包括停机中断与检查点保留 |
-| 产品 Python tests | 15/15 PASS |
-| 品牌校验 | PASS：14 个品牌值、13 个消费者、5 份 SVG |
-| Qt 对象编译 | MainWindow、Messages、SettingsDialog、AboutDialog、CoreProcess PASS |
-| Qt 翻译 | zh_CN 350 条、RelayDesk en/zh_CN 各 177 条完成 |
+| UI-011 定向 Qt 回归 | 7/7 PASS：布局、菜单/托盘 true-quit、七语言、权限探针、权限状态与后台生命周期 |
+| 菜单/托盘 true-quit | 2/2 PASS；保留 close/minimize-to-tray 设置时，两个独立进程均在 3 秒 watchdog 前退出 |
+| Qt 翻译 | 七个 `relaydesk_*.ts` 均为 178/178 个唯一、完整键；七个 QM 实际加载 PASS |
+| Windows 安装树翻译闭包 | 七个 QM 文件集合、magic、大小、摘要及 `lconvert` 实际加载 PASS |
+| 产品 Python contracts | 29/29 PASS：macOS/Windows 翻译与打包契约 |
+| 品牌校验 | macOS 生成往返、Windows 生成、集中品牌配置均 PASS |
+| macOS 权限前台刷新 | `ApplicationActive` 自动复检与 150 ms 合并回归 PASS；最终 App 系统设置往返待实测 |
+| 工作流定义 | YAML 解析、Windows staged install 与翻译报告路径契约 PASS |
 | XML / `git diff --check` | PASS |
 
 Windows 本地针对性编译使用 MinGW/Qt；权威平台编译仍以精确标签 Actions 的
@@ -64,13 +70,14 @@ MSVC 2022 + Qt 与 macOS Clang/arm64 + Qt 结果为准。
 | 资源 | 字节 | SHA-256 |
 |---|---:|---|
 | `product/assets/branding/relaydesk-mark.svg` | 813 | `6f04f0686d6849ea9db722d0dc1238f8ab000c92e5cd03b7ec341904a76fb679` |
-| `src/apps/res/relaydesk.ico` | 27,645 | `0dca7886af39aead9f09f592e575707a1cf732c68194cc558559b10ad4f84de3` |
-| `src/apps/res/RelayDesk.icns` | 87,419 | `110c44bdf9ecf3e2c9760a5b966a015518c8e19de1f392a76c3a9ff1dde58ad1` |
+| `src/apps/res/RelayDesk.ico` | 26,154 | `2826b2f2e4e49208109819668eb5faecf07f5883dd80f19a16891f954368ae19` |
+| `src/apps/res/RelayDesk.icns` | 107,265 | `eaa77c7fe6d7773c32c79cdb8bfdd50c645188460f2489832c1a405270da5218` |
+| `deploy/mac/dmg-background.tiff` | 963,472 | `77b1dd2a0ff9dea1a15a14d81387b624c57fcef836249fed4c68613fa1f2e5de` |
 
 ## 双平台构建（待回填）
 
 - 计划标签：`relaydesk-phase4-20260814-01`
-- 精确标签提交、tag object、Actions run/jobs：`IN_PROGRESS`
+- 精确产品提交、tag object、Actions run/jobs：`IN_PROGRESS`
 - Windows MSI/portable 与 macOS App/DMG 摘要：`IN_PROGRESS`
 - Windows 安装生命周期与 macOS App/DMG 生命周期：`IN_PROGRESS`
 
@@ -79,9 +86,11 @@ MSVC 2022 + Qt 与 macOS Clang/arm64 + Qt 结果为准。
 以下事项需要真实操作系统授权或两台物理设备，不能由共享代码编译冒充 `PASS`：
 
 1. macOS Local Network、Accessibility、Input Monitoring 三项真实授权、撤销和升级复检；
-2. macOS 按能力门控及真实 menu bar 最小化、恢复、设置、暂停/继续和退出交互；
+2. macOS 最终 App 的按能力门控、系统设置往返，以及真实 menu bar 最小化、恢复、设置、
+   暂停/继续和退出交互；
 3. Windows 与 macOS 物理双机的键鼠、滚轮、剪贴板和文件传输联调；
 4. Developer ID、Apple notarization 与 Windows Authenticode（无真实签名凭据）。
 
-`MAC-037` 保持 `IN_PROGRESS`，macOS owner 必须复用共享 Qt 界面与同一
-`PermissionSnapshot`，不得另造平台专用首页或把任一权限缺失升级为全局阻断。
+`MAC-037` 保持 `IN_PROGRESS`。当前实现已经复用共享 Qt 界面和同一
+`PermissionSnapshot`，并按三项能力分别门控；只有最终 App 的真实系统权限与前台交互
+证据尚未完成，不得用单元测试冒充该项 `PASS`。
