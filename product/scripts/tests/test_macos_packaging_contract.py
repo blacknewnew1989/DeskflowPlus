@@ -78,7 +78,9 @@ class MacosPackagingContractTests(unittest.TestCase):
             "void MainWindow::refreshBackgroundLifecycleSettings()", 1
         )[0]
         mac_tray_branch = tray_function.split("if (deskflow::platform::isMac()) {", 1)[1].split("}", 1)[0]
-        self.assertIn('themeIcon.append(QStringLiteral("-symbolic"))', mac_tray_branch)
+        self.assertIn("deskflow::platform::isMac() || deskflow::platform::isWindows()", tray_function)
+        self.assertIn('themeIcon.append(QStringLiteral("-symbolic"))', tray_function)
+        self.assertIn("themeIcon", mac_tray_branch)
         self.assertIn("icon.setIsMask(true)", mac_tray_branch)
         self.assertNotIn("SymbolicTrayIcon", mac_tray_branch)
 
