@@ -120,6 +120,31 @@ jobs:
           cmake --build build --config Release --target package --parallel 8
           cmake --build build --config Release --target package_source --parallel 8
 
+      - name: Stage and verify Windows translation bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:GITHUB_WORKSPACE "build/relaydesk-package-stage/$env:GITHUB_SHA"
+          if (Test-Path -LiteralPath $stage) {
+            Remove-Item -LiteralPath $stage -Recurse -Force
+          }
+          & cmake --install build --config Release --prefix $stage
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows staged install failed."
+          }
+
+          $report = Join-Path $env:GITHUB_WORKSPACE "dist/windows-x64/windows-translation-bundle.json"
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $report) | Out-Null
+          $lconvert = (Get-Command lconvert.exe -ErrorAction Stop).Source
+          & python product/scripts/verify-windows-translation-bundle.py `
+            --repo-root $env:GITHUB_WORKSPACE `
+            --translation-dir (Join-Path $stage "translations") `
+            --lconvert $lconvert `
+            --report $report
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows translation bundle verification failed."
+          }
+
       - name: Stage deployed macOS app bundle
         if: runner.os == 'macOS'
         shell: bash
