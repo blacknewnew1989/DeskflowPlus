@@ -133,6 +133,11 @@ jobs:
             exit 1
           fi
           /usr/bin/codesign --verify --deep --strict --verbose=4 "${apps[0]}"
+          mkdir -p dist/macos-arm64
+          python3 product/scripts/verify-macos-translation-bundle.py \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --app-bundle "${apps[0]}" \
+            --report dist/macos-arm64/macos-translation-bundle.json
           echo "RELAYDESK_EXPLICIT_APP=${apps[0]}" >> "$GITHUB_ENV"
 
       - name: Run tests and keep diagnostics
@@ -259,6 +264,12 @@ jobs:
 
           result = json.load(open(sys.argv[1], encoding="utf-8"))
           print(f"- Automated lifecycle: `{result['status']}`")
+          translation = result.get("translationResources", {})
+          if translation:
+              print(
+                  "- RelayDesk bundle translations: `PASS` "
+                  f"({', '.join(translation['supportedLanguages'])})"
+              )
           for permission, outcome in result["permissions"].items():
               print(f"- {permission}: `{outcome['status']}`")
           PY

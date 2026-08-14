@@ -53,6 +53,18 @@ class MacosInstallRegressionTests(unittest.TestCase):
         (artifact_dir / "SHA256SUMS.txt").write_text(
             "\n".join(checksums) + "\n", encoding="ascii"
         )
+        (artifact_dir / "macos-translation-bundle.json").write_text(
+            json.dumps(
+                {
+                    "status": "PASS",
+                    "supportedLanguages": ["en"],
+                    "catalogs": [
+                        {"name": "relaydesk_en.qm", "sha256": "d" * 64}
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
         return artifact_dir
 
     def test_validates_exact_adhoc_app_zip_and_dmg_checksums(self) -> None:
@@ -65,6 +77,7 @@ class MacosInstallRegressionTests(unittest.TestCase):
             self.assertEqual(result.package_variant, "adhoc")
             self.assertTrue(result.app_zip.name.endswith(".app.zip"))
             self.assertTrue(result.dmg.name.endswith(".dmg"))
+            self.assertEqual(result.translation_report["status"], "PASS")
 
     def test_rejects_tampered_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -86,6 +99,15 @@ class MacosInstallRegressionTests(unittest.TestCase):
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
             with self.assertRaisesRegex(MODULE.RegressionError, "PACKAGE_VARIANT"):
+                MODULE.validate_artifacts(artifacts, commit)
+
+    def test_rejects_missing_staged_translation_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            commit = "d" * 40
+            artifacts = self._write_artifacts(Path(directory), commit)
+            (artifacts / "macos-translation-bundle.json").unlink()
+
+            with self.assertRaisesRegex(MODULE.RegressionError, "TRANSLATION_REPORT_MISSING"):
                 MODULE.validate_artifacts(artifacts, commit)
 
     def test_test_root_must_be_unique_and_beneath_runner_temp(self) -> None:
@@ -116,6 +138,9 @@ class MacosInstallRegressionTests(unittest.TestCase):
             '"accessibility": {"status": "NOT_RUN"',
             '"inputMonitoring": {"status": "NOT_RUN"',
             '"localNetwork": {"status": "NOT_RUN"',
+            'report_path.parent / "test005-macos-app-zip-translations.json"',
+            'report_path.parent / "test005-macos-dmg-translations.json"',
+            '"zipAndDmgSameTranslationResources"] = "PASS"',
         ):
             self.assertIn(required, script)
         self.assertNotIn('Path("/Applications")', script)

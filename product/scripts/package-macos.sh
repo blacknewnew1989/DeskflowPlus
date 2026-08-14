@@ -79,6 +79,13 @@ if [[ "${#APP_BUNDLES[@]}" -ne 1 ]]; then
   exit 1
 fi
 APP_BUNDLE="${APP_BUNDLES[0]}"
+OUT_DIR="$REPO_ROOT/dist/macos/$FULL_SHA"
+TRANSLATION_REPORT="$OUT_DIR/macos-translation-bundle.json"
+python3 "$SCRIPT_DIR/verify-macos-translation-bundle.py" \
+  --repo-root "$REPO_ROOT" \
+  --app-bundle "$APP_BUNDLE" \
+  --report "$TRANSLATION_REPORT"
+echo "MACOS_TRANSLATION_BUNDLE_REPORT=$TRANSLATION_REPORT"
 
 codesign --verify --deep --strict "$APP_BUNDLE"
 if [[ "$PACKAGE_VARIANT" == "adhoc" ]]; then
@@ -126,7 +133,6 @@ else
   echo "MACOS_NOTARIZATION_STATUS=not-requested"
 fi
 
-OUT_DIR="$REPO_ROOT/dist/macos/$FULL_SHA"
 COLLECT_ARGS=(
   "$REPO_ROOT/product/scripts/collect-ci-artifacts.py"
   --build-dir "$BUILD_DIR"

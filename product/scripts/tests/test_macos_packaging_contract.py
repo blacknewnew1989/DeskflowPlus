@@ -145,6 +145,25 @@ configure_file(
         self.assertLess(stage.index("cmake --install"), stage.index("codesign --verify"))
         self.assertIn("--deep --strict --verbose=4", stage)
 
+    def test_real_app_and_dmg_bundles_enforce_the_shared_translation_manifest(self) -> None:
+        package = (ROOT / "product/scripts/package-macos.sh").read_text(encoding="utf-8")
+        lifecycle = (ROOT / "product/scripts/test-macos-install-regression.py").read_text(
+            encoding="utf-8"
+        )
+        verifier = (
+            ROOT / "product/scripts/verify-macos-translation-bundle.py"
+        ).read_text(encoding="utf-8")
+        workflow = (ROOT / ".github/workflows/relaydesk-build.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("verify-macos-translation-bundle.py", package)
+        self.assertIn("verify-macos-translation-bundle.py", workflow)
+        self.assertGreaterEqual(lifecycle.count("verify_translation_bundle("), 3)
+        self.assertIn('Path("translations/RelayDeskLanguages.cmake")', verifier)
+        self.assertIn('LANGUAGE_VARIABLE = "RELAYDESK_SUPPORTED_LANGUAGES"', verifier)
+        self.assertIn('bundleResourcePath": "Contents/Resources/translations"', verifier)
+
 
 if __name__ == "__main__":
     unittest.main()
