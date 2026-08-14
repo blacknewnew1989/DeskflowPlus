@@ -183,6 +183,10 @@ def validate_artifacts(artifact_dir: Path, expected_commit: str) -> ArtifactSet:
         translation_report.get("status") != "PASS"
         or not translation_report.get("supportedLanguages")
         or not translation_report.get("catalogs")
+        or any(
+            catalog.get("qtLoad") != "PASS"
+            for catalog in translation_report.get("catalogs", [])
+        )
     ):
         raise RegressionError("TEST005_TRANSLATION_REPORT_FAILED")
     return ArtifactSet(
@@ -573,7 +577,7 @@ def run_regression(args: argparse.Namespace) -> int:
             result["checks"]["dmgTranslationResources"] = "PASS"
             assert_same_translation_resources(zip_translations, dmg_translations)
             result["checks"]["zipAndDmgSameTranslationResources"] = "PASS"
-            result["translationResources"] = zip_translations
+            result["translationResources"] = artifacts.translation_report
             assert_same_bundle(zip_info, dmg_info)
             result["checks"]["zipAndDmgSameBundle"] = "PASS"
             result["bundle"] = {

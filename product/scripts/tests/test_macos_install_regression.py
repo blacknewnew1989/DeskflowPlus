@@ -59,7 +59,11 @@ class MacosInstallRegressionTests(unittest.TestCase):
                     "status": "PASS",
                     "supportedLanguages": ["en"],
                     "catalogs": [
-                        {"name": "relaydesk_en.qm", "sha256": "d" * 64}
+                        {
+                            "name": "relaydesk_en.qm",
+                            "sha256": "d" * 64,
+                            "qtLoad": "PASS",
+                        }
                     ],
                 }
             ),

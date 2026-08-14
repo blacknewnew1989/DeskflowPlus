@@ -14,7 +14,9 @@ import hashlib
 import json
 import re
 import shlex
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -69,7 +71,9 @@ def supported_languages(manifest: Path) -> tuple[str, ...]:
     return tokens
 
 
-def verify_bundle(repo_root: Path, app_bundle: Path) -> dict[str, Any]:
+def verify_bundle(
+    repo_root: Path, app_bundle: Path, lconvert: Path | None = None
+) -> dict[str, Any]:
     repo_root = repo_root.resolve(strict=True)
     app_bundle = app_bundle.resolve(strict=True)
     if not app_bundle.is_dir() or app_bundle.suffix != ".app":
@@ -89,23 +93,52 @@ def verify_bundle(repo_root: Path, app_bundle: Path) -> dict[str, Any]:
     if unexpected:
         raise TranslationBundleError(f"CATALOG_UNEXPECTED: {','.join(unexpected)}")
 
+    lconvert_path: Path | None = None
+    if lconvert is not None:
+        lconvert_path = lconvert.resolve(strict=True)
+        if not lconvert_path.is_file():
+            raise TranslationBundleError(f"LCONVERT_INVALID: {lconvert_path}")
+
     catalogs: list[dict[str, Any]] = []
-    for language, name in zip(languages, expected, strict=True):
-        catalog = translation_dir / name
-        if catalog.is_symlink() or not catalog.is_file():
-            raise TranslationBundleError(f"CATALOG_NOT_REGULAR_FILE: {name}")
-        size = catalog.stat().st_size
-        if size <= len(QM_MAGIC) or catalog.read_bytes()[: len(QM_MAGIC)] != QM_MAGIC:
-            raise TranslationBundleError(f"CATALOG_QM_INVALID: {name}")
-        catalogs.append(
-            {
-                "language": language,
-                "name": name,
-                "size": size,
-                "sha256": sha256(catalog),
-                "qtQmHeader": "PASS",
-            }
-        )
+    with tempfile.TemporaryDirectory(prefix="relaydesk-qm-load-") as temporary:
+        temporary_path = Path(temporary)
+        for language, name in zip(languages, expected, strict=True):
+            catalog = translation_dir / name
+            if catalog.is_symlink() or not catalog.is_file():
+                raise TranslationBundleError(f"CATALOG_NOT_REGULAR_FILE: {name}")
+            size = catalog.stat().st_size
+            with catalog.open("rb") as stream:
+                magic = stream.read(len(QM_MAGIC))
+            if size <= len(QM_MAGIC) or magic != QM_MAGIC:
+                raise TranslationBundleError(f"CATALOG_QM_INVALID: {name}")
+
+            qt_load = "NOT_RUN"
+            if lconvert_path is not None:
+                converted = temporary_path / f"{language}.ts"
+                result = subprocess.run(
+                    [lconvert_path, "-i", catalog, "-o", converted],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=30,
+                )
+                if result.returncode != 0 or not converted.is_file():
+                    diagnostic = (result.stderr or result.stdout).strip()
+                    raise TranslationBundleError(
+                        f"CATALOG_QT_LOAD_FAILED: {name}: {diagnostic}"
+                    )
+                qt_load = "PASS"
+
+            catalogs.append(
+                {
+                    "language": language,
+                    "name": name,
+                    "size": size,
+                    "sha256": sha256(catalog),
+                    "qtQmHeader": "PASS",
+                    "qtLoad": qt_load,
+                }
+            )
 
     return {
         "schemaVersion": 1,
@@ -124,10 +157,11 @@ def main() -> int:
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--app-bundle", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--lconvert", type=Path)
     args = parser.parse_args()
 
     try:
-        result = verify_bundle(args.repo_root, args.app_bundle)
+        result = verify_bundle(args.repo_root, args.app_bundle, args.lconvert)
         report = args.report.resolve()
         report.parent.mkdir(parents=True, exist_ok=True)
         report.write_text(
