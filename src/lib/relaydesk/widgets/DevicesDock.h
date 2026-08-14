@@ -30,6 +30,7 @@ class QListView;
 class QModelIndex;
 class QPushButton;
 class QToolButton;
+class QWidget;
 
 namespace deskflow::relaydesk::model {
 class DeviceHomeModel;
@@ -61,9 +62,7 @@ public:
 
 Q_SIGNALS:
   void pairingRequested(DeviceId peerDeviceId);
-  void sendItemsRequested(
-      DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options
-  );
+  void sendItemsRequested(DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options);
   void sendItemsRejected(QString message);
   void incomingOfferSettingsRequested();
 
@@ -84,6 +83,7 @@ private:
   void updatePermissionBanner();
   void updatePermissionDetails();
   void updateIncomingOfferPanel();
+  void updateActivityPanel();
   void submitPairingCode();
   void chooseAndSend(bool folder);
   [[nodiscard]] QModelIndex targetIndexAt(const QPoint &position) const;
@@ -114,6 +114,7 @@ private:
   QPushButton *m_sendFilesButton = nullptr;
   QPushButton *m_sendFolderButton = nullptr;
   QLabel *m_sendFeedback = nullptr;
+  QWidget *m_activityRegion = nullptr;
   QFrame *m_incomingOfferPanel = nullptr;
   QLabel *m_incomingOfferHeading = nullptr;
   QLabel *m_incomingOfferName = nullptr;

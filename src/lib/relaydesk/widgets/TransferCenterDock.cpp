@@ -11,18 +11,21 @@
 #include "relaydesk/widgets/TransferHistoryDetailsDialog.h"
 
 #include <QAbstractItemModel>
+#include <QAction>
 #include <QApplication>
 #include <QEvent>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
 #include <QLabel>
 #include <QListView>
+#include <QMenu>
 #include <QPainter>
-#include <QProgressBar>
 #include <QPushButton>
+#include <QStringList>
 #include <QStyle>
 #include <QStyledItemDelegate>
-#include <QStringList>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <optional>
@@ -37,9 +40,8 @@ std::optional<::relaydesk::transfer::TransferId> transferIdForIndex(const QModel
   if (!index.isValid()) {
     return std::nullopt;
   }
-  return ::relaydesk::transfer::TransferId::fromString(
-      index.data(model::TransferCenterModel::TransferIdRole).toString()
-  );
+  const auto transferId = index.data(model::TransferCenterModel::TransferIdRole).toString();
+  return ::relaydesk::transfer::TransferId::fromString(transferId);
 }
 
 class TransferRowDelegate final : public QStyledItemDelegate
@@ -57,43 +59,30 @@ public:
 
     painter->save();
     const auto foreground = option.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
-    const auto muted = option.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::PlaceholderText;
-    const QRect content = option.rect.adjusted(12, 9, -12, -9);
+    const auto muted =
+        option.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::PlaceholderText;
+    const QRect content = option.rect.adjusted(10, 5, -10, -7);
     const int lineHeight = option.fontMetrics.height();
 
     QFont titleFont(option.font);
     titleFont.setWeight(QFont::DemiBold);
     painter->setFont(titleFont);
     painter->setPen(option.palette.color(foreground));
+    const auto stateText = index.data(model::TransferCenterModel::StateTextRole).toString();
+    const auto stateWidth = qMin(content.width() / 3, option.fontMetrics.horizontalAdvance(stateText) + 12);
     painter->drawText(
-        QRect(content.left(), content.top(), content.width() * 2 / 3, lineHeight), Qt::AlignLeft | Qt::AlignVCenter,
-        QFontMetrics(titleFont).elidedText(index.data(model::TransferCenterModel::DisplayNameRole).toString(), Qt::ElideRight,
-                                           content.width() * 2 / 3)
+        QRect(content.left(), content.top(), content.width() - stateWidth - 6, lineHeight),
+        Qt::AlignLeft | Qt::AlignVCenter,
+        QFontMetrics(titleFont).elidedText(
+            index.data(model::TransferCenterModel::DisplayNameRole).toString(), Qt::ElideRight,
+            content.width() - stateWidth - 6
+        )
     );
     painter->setFont(option.font);
     painter->drawText(
-        QRect(content.left() + content.width() * 2 / 3, content.top(), content.width() / 3, lineHeight),
-        Qt::AlignRight | Qt::AlignVCenter, index.data(model::TransferCenterModel::StateTextRole).toString()
+        QRect(content.right() - stateWidth + 1, content.top(), stateWidth, lineHeight),
+        Qt::AlignRight | Qt::AlignVCenter, stateText
     );
-
-    painter->setPen(option.palette.color(muted));
-    const auto peer = index.data(model::TransferCenterModel::DirectionTextRole).toString() + QStringLiteral(" · ")
-                      + index.data(model::TransferCenterModel::PeerDisplayNameRole).toString();
-    painter->drawText(
-        QRect(content.left(), content.top() + lineHeight + 3, content.width(), lineHeight),
-        Qt::AlignLeft | Qt::AlignVCenter, option.fontMetrics.elidedText(peer, Qt::ElideRight, content.width())
-    );
-
-    QStyleOptionProgressBar progress;
-    progress.rect = QRect(content.left(), content.top() + (lineHeight + 3) * 2, content.width(), 18);
-    progress.minimum = 0;
-    progress.maximum = 100;
-    progress.progress = index.data(model::TransferCenterModel::ProgressPercentRole).toInt();
-    progress.text = QStringLiteral("%1%").arg(progress.progress);
-    progress.textVisible = true;
-    progress.state = option.state;
-    progress.palette = option.palette;
-    style->drawControl(QStyle::CE_ProgressBar, &progress, painter, panel.widget);
 
     QStringList metrics{index.data(model::TransferCenterModel::ProgressTextRole).toString()};
     const auto speed = index.data(model::TransferCenterModel::SpeedTextRole).toString();
@@ -103,41 +92,59 @@ public:
     if (!eta.isEmpty())
       metrics.append(eta);
     const auto detail = metrics.join(QStringLiteral(" · "));
-    const auto path = index.data(model::TransferCenterModel::CurrentPathRole).toString();
+    const auto peer = index.data(model::TransferCenterModel::DirectionTextRole).toString() + QStringLiteral(" · ") +
+                      index.data(model::TransferCenterModel::PeerDisplayNameRole).toString();
+    const auto peerWidth = qMin(content.width() / 3, option.fontMetrics.horizontalAdvance(peer) + 8);
+    const auto detailTop = content.top() + lineHeight + 3;
     painter->setPen(option.palette.color(muted));
     painter->drawText(
-        QRect(content.left(), progress.rect.bottom() + 5, content.width(), lineHeight), Qt::AlignLeft | Qt::AlignVCenter,
-        option.fontMetrics.elidedText(detail, Qt::ElideRight, content.width())
+        QRect(content.left(), detailTop, content.width() - peerWidth - 6, lineHeight), Qt::AlignLeft | Qt::AlignVCenter,
+        option.fontMetrics.elidedText(detail, Qt::ElideRight, content.width() - peerWidth - 6)
     );
-    if (!path.isEmpty()) {
-      painter->drawText(
-          QRect(content.left(), progress.rect.bottom() + 5 + lineHeight + 2, content.width(), lineHeight),
-          Qt::AlignLeft | Qt::AlignVCenter, option.fontMetrics.elidedText(path, Qt::ElideMiddle, content.width())
-      );
-    }
+    painter->drawText(
+        QRect(content.right() - peerWidth + 1, detailTop, peerWidth, lineHeight), Qt::AlignRight | Qt::AlignVCenter,
+        option.fontMetrics.elidedText(peer, Qt::ElideLeft, peerWidth)
+    );
+
+    const auto progressPercent = qBound(0, index.data(model::TransferCenterModel::ProgressPercentRole).toInt(), 100);
+    const QRect progressTrack(content.left(), option.rect.bottom() - 4, content.width(), 3);
+    auto trackColor = option.palette.color(muted);
+    trackColor.setAlpha(70);
+    painter->fillRect(progressTrack, trackColor);
+    const auto progressColor = option.state.testFlag(QStyle::State_Selected)
+                                   ? option.palette.color(QPalette::HighlightedText)
+                                   : option.palette.color(QPalette::Highlight);
+    painter->fillRect(
+        QRect(
+            progressTrack.left(), progressTrack.top(), progressTrack.width() * progressPercent / 100,
+            progressTrack.height()
+        ),
+        progressColor
+    );
     painter->restore();
   }
 
   QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &) const override
   {
-    return {380, option.fontMetrics.height() * 4 + 60};
+    return {360, qBound(56, option.fontMetrics.height() * 2 + 26, 64)};
   }
 };
 
 } // namespace
 
 TransferCenterDock::TransferCenterDock(model::TransferCenterModel &transfers, QWidget *parent)
-    : QDockWidget(parent), m_transfers(transfers)
+    : QDockWidget(parent),
+      m_transfers(transfers)
 {
   setObjectName(QStringLiteral("relaydeskTransferCenterDock"));
   setAllowedAreas(Qt::BottomDockWidgetArea | Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
   setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-  setMinimumWidth(360);
+  setMinimumWidth(320);
 
   auto *body = new QWidget(this);
   auto *layout = new QVBoxLayout(body);
-  layout->setContentsMargins(10, 10, 10, 10);
-  layout->setSpacing(6);
+  layout->setContentsMargins(8, 6, 8, 8);
+  layout->setSpacing(4);
   m_emptyLabel = new QLabel(body);
   m_emptyLabel->setObjectName(QStringLiteral("relaydeskTransfersEmptyLabel"));
   m_emptyLabel->setAlignment(Qt::AlignCenter);
@@ -150,9 +157,14 @@ TransferCenterDock::TransferCenterDock(model::TransferCenterModel &transfers, QW
   m_list->setItemDelegate(new TransferRowDelegate(m_list));
   m_list->setSelectionMode(QAbstractItemView::SingleSelection);
   m_list->setUniformItemSizes(true);
+  m_list->setSpacing(2);
   m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  m_list->setFrameShape(QFrame::NoFrame);
   layout->addWidget(m_list, 1);
-  auto *historyActions = new QHBoxLayout();
+
+  auto *actions = new QHBoxLayout();
+  actions->setSpacing(5);
+  actions->addStretch();
   m_detailsButton = new QPushButton(body);
   m_detailsButton->setObjectName(QStringLiteral("relaydeskTransferDetailsButton"));
   m_openFolderButton = new QPushButton(body);
@@ -161,23 +173,42 @@ TransferCenterDock::TransferCenterDock(model::TransferCenterModel &transfers, QW
   m_openFileButton->setObjectName(QStringLiteral("relaydeskTransferOpenFileButton"));
   m_retryButton = new QPushButton(body);
   m_retryButton->setObjectName(QStringLiteral("relaydeskTransferRetryButton"));
-  historyActions->addWidget(m_detailsButton);
-  historyActions->addWidget(m_openFolderButton);
-  historyActions->addWidget(m_openFileButton);
-  historyActions->addStretch();
-  historyActions->addWidget(m_retryButton);
-  layout->addLayout(historyActions);
-  auto *actions = new QHBoxLayout();
   m_pauseButton = new QPushButton(body);
   m_pauseButton->setObjectName(QStringLiteral("relaydeskTransferPauseButton"));
   m_resumeButton = new QPushButton(body);
   m_resumeButton->setObjectName(QStringLiteral("relaydeskTransferResumeButton"));
   m_cancelButton = new QPushButton(body);
   m_cancelButton->setObjectName(QStringLiteral("relaydeskTransferCancelButton"));
+  actions->addWidget(m_detailsButton);
+  actions->addWidget(m_openFolderButton);
+  actions->addWidget(m_openFileButton);
+  actions->addWidget(m_retryButton);
   actions->addWidget(m_pauseButton);
   actions->addWidget(m_resumeButton);
-  actions->addStretch();
   actions->addWidget(m_cancelButton);
+
+  m_moreButton = new QToolButton(body);
+  m_moreButton->setObjectName(QStringLiteral("relaydeskTransferMoreButton"));
+  m_moreButton->setText(QStringLiteral("\u2026"));
+  m_moreButton->setPopupMode(QToolButton::InstantPopup);
+  m_moreMenu = new QMenu(m_moreButton);
+  m_moreMenu->setObjectName(QStringLiteral("relaydeskTransferMoreMenu"));
+  m_moreButton->setMenu(m_moreMenu);
+  m_detailsMenuAction = m_moreMenu->addAction(QString{});
+  m_detailsMenuAction->setObjectName(QStringLiteral("relaydeskTransferDetailsMenuAction"));
+  m_openFolderMenuAction = m_moreMenu->addAction(QString{});
+  m_openFolderMenuAction->setObjectName(QStringLiteral("relaydeskTransferOpenFolderMenuAction"));
+  m_openFileMenuAction = m_moreMenu->addAction(QString{});
+  m_openFileMenuAction->setObjectName(QStringLiteral("relaydeskTransferOpenFileMenuAction"));
+  m_retryMenuAction = m_moreMenu->addAction(QString{});
+  m_retryMenuAction->setObjectName(QStringLiteral("relaydeskTransferRetryMenuAction"));
+  m_pauseMenuAction = m_moreMenu->addAction(QString{});
+  m_pauseMenuAction->setObjectName(QStringLiteral("relaydeskTransferPauseMenuAction"));
+  m_resumeMenuAction = m_moreMenu->addAction(QString{});
+  m_resumeMenuAction->setObjectName(QStringLiteral("relaydeskTransferResumeMenuAction"));
+  m_cancelMenuAction = m_moreMenu->addAction(QString{});
+  m_cancelMenuAction->setObjectName(QStringLiteral("relaydeskTransferCancelMenuAction"));
+  actions->addWidget(m_moreButton);
   layout->addLayout(actions);
   setWidget(body);
 
@@ -215,6 +246,13 @@ TransferCenterDock::TransferCenterDock(model::TransferCenterModel &transfers, QW
     if (const auto id = transferIdForIndex(m_list->currentIndex()); id.has_value())
       (void)m_transfers.requestCancel(*id);
   });
+  connect(m_detailsMenuAction, &QAction::triggered, m_detailsButton, &QPushButton::click);
+  connect(m_openFolderMenuAction, &QAction::triggered, m_openFolderButton, &QPushButton::click);
+  connect(m_openFileMenuAction, &QAction::triggered, m_openFileButton, &QPushButton::click);
+  connect(m_retryMenuAction, &QAction::triggered, m_retryButton, &QPushButton::click);
+  connect(m_pauseMenuAction, &QAction::triggered, m_pauseButton, &QPushButton::click);
+  connect(m_resumeMenuAction, &QAction::triggered, m_resumeButton, &QPushButton::click);
+  connect(m_cancelMenuAction, &QAction::triggered, m_cancelButton, &QPushButton::click);
   updateText();
   updateEmptyState();
   updateSelection();
@@ -230,6 +268,7 @@ void TransferCenterDock::changeEvent(QEvent *event)
   QDockWidget::changeEvent(event);
   if (event->type() == QEvent::LanguageChange) {
     updateText();
+    updateSelection();
     m_list->viewport()->update();
   }
 }
@@ -253,6 +292,13 @@ void TransferCenterDock::updateText()
   m_resumeButton->setAccessibleName(i18n::translate(Text::TransferActionResume));
   m_cancelButton->setText(i18n::translate(Text::TransferActionCancel));
   m_cancelButton->setAccessibleName(i18n::translate(Text::TransferActionCancel));
+  m_detailsMenuAction->setText(m_detailsButton->text());
+  m_openFolderMenuAction->setText(m_openFolderButton->text());
+  m_openFileMenuAction->setText(m_openFileButton->text());
+  m_retryMenuAction->setText(m_retryButton->text());
+  m_pauseMenuAction->setText(m_pauseButton->text());
+  m_resumeMenuAction->setText(m_resumeButton->text());
+  m_cancelMenuAction->setText(m_cancelButton->text());
 }
 
 void TransferCenterDock::updateEmptyState()
@@ -268,27 +314,63 @@ void TransferCenterDock::updateEmptyState()
 void TransferCenterDock::updateSelection()
 {
   const auto index = m_list->currentIndex();
-  const auto hasTransfers = m_transfers.rowCount() > 0;
-  const auto historical = index.isValid() && index.data(model::TransferCenterModel::IsHistoricalRole).toBool();
   const auto hasDetails = index.isValid() && index.data(model::TransferCenterModel::HasHistoryDetailsRole).toBool();
   const auto canOpenFolder = index.isValid() && index.data(model::TransferCenterModel::CanOpenFolderRole).toBool();
   const auto canOpenFile = index.isValid() && index.data(model::TransferCenterModel::CanOpenFileRole).toBool();
   const auto canRetry = index.isValid() && index.data(model::TransferCenterModel::CanRetryRole).toBool();
+  const auto canPause = index.isValid() && index.data(model::TransferCenterModel::CanPauseRole).toBool();
+  const auto canResume = index.isValid() && index.data(model::TransferCenterModel::CanResumeRole).toBool();
+  const auto canCancel = index.isValid() && index.data(model::TransferCenterModel::CanCancelRole).toBool();
 
-  m_detailsButton->setVisible(hasDetails);
-  m_detailsButton->setEnabled(hasDetails);
-  m_openFolderButton->setVisible(canOpenFolder);
-  m_openFolderButton->setEnabled(canOpenFolder);
-  m_openFileButton->setVisible(canOpenFile);
-  m_openFileButton->setEnabled(canOpenFile);
-  m_retryButton->setVisible(canRetry);
-  m_retryButton->setEnabled(canRetry);
-  m_pauseButton->setVisible(hasTransfers && !historical);
-  m_resumeButton->setVisible(hasTransfers && !historical);
-  m_cancelButton->setVisible(hasTransfers && !historical);
-  m_pauseButton->setEnabled(index.isValid() && index.data(model::TransferCenterModel::CanPauseRole).toBool());
-  m_resumeButton->setEnabled(index.isValid() && index.data(model::TransferCenterModel::CanResumeRole).toBool());
-  m_cancelButton->setEnabled(index.isValid() && index.data(model::TransferCenterModel::CanCancelRole).toBool());
+  struct ActionState
+  {
+    QPushButton *button;
+    QAction *menuAction;
+    bool available;
+  };
+  const QList<ActionState> actions{
+      {m_detailsButton, m_detailsMenuAction, hasDetails},
+      {m_openFolderButton, m_openFolderMenuAction, canOpenFolder},
+      {m_openFileButton, m_openFileMenuAction, canOpenFile},
+      {m_retryButton, m_retryMenuAction, canRetry},
+      {m_pauseButton, m_pauseMenuAction, canPause},
+      {m_resumeButton, m_resumeMenuAction, canResume},
+      {m_cancelButton, m_cancelMenuAction, canCancel},
+  };
+
+  QPushButton *primary = nullptr;
+  if (canRetry)
+    primary = m_retryButton;
+  else if (canResume)
+    primary = m_resumeButton;
+  else if (canPause)
+    primary = m_pauseButton;
+  else if (canOpenFile)
+    primary = m_openFileButton;
+  else if (canOpenFolder)
+    primary = m_openFolderButton;
+  else if (hasDetails)
+    primary = m_detailsButton;
+  else if (canCancel)
+    primary = m_cancelButton;
+
+  QStringList secondaryNames;
+  for (const auto &action : actions) {
+    const auto primaryAction = action.available && action.button == primary;
+    action.button->setVisible(primaryAction);
+    action.button->setEnabled(action.available);
+    action.menuAction->setVisible(action.available && !primaryAction);
+    action.menuAction->setEnabled(action.available);
+    if (action.available && !primaryAction)
+      secondaryNames.append(action.menuAction->text());
+  }
+
+  const auto hasSecondaryActions = !secondaryNames.isEmpty();
+  m_moreButton->setVisible(hasSecondaryActions);
+  m_moreButton->setEnabled(hasSecondaryActions);
+  const auto accessibleActions = secondaryNames.join(QStringLiteral(" · "));
+  m_moreButton->setAccessibleName(accessibleActions);
+  m_moreButton->setToolTip(accessibleActions);
 }
 
 void TransferCenterDock::showHistoryDetails()

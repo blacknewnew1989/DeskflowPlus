@@ -8,11 +8,14 @@
 
 #include <QDockWidget>
 
+class QAction;
 class QEvent;
 class QLabel;
 class QListView;
+class QMenu;
 class QModelIndex;
 class QPushButton;
+class QToolButton;
 
 namespace deskflow::relaydesk::model {
 class TransferCenterModel;
@@ -48,6 +51,15 @@ private:
   QPushButton *m_pauseButton = nullptr;
   QPushButton *m_resumeButton = nullptr;
   QPushButton *m_cancelButton = nullptr;
+  QToolButton *m_moreButton = nullptr;
+  QMenu *m_moreMenu = nullptr;
+  QAction *m_detailsMenuAction = nullptr;
+  QAction *m_openFolderMenuAction = nullptr;
+  QAction *m_openFileMenuAction = nullptr;
+  QAction *m_retryMenuAction = nullptr;
+  QAction *m_pauseMenuAction = nullptr;
+  QAction *m_resumeMenuAction = nullptr;
+  QAction *m_cancelMenuAction = nullptr;
 };
 
 } // namespace deskflow::relaydesk::widgets

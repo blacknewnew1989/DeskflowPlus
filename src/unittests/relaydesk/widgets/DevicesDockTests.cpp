@@ -20,6 +20,7 @@
 #include <QDropEvent>
 #include <QFile>
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
@@ -78,16 +79,17 @@ PairingSnapshot pairingSnapshot(
   return {
       .peerDeviceId = DeviceId::generate(),
       .peerDisplayName = QStringLiteral("<b>Studio Mac</b>"),
-      .offer = {
-          .transferId = TransferId::generate(),
-          .displayName = QStringLiteral("<img src=x> Project"),
-          .totalBytes = 4096,
-          .fileCount = 2,
-          .directoryCount = 1,
-          .manifestSha256 = QByteArray(kSha256Bytes, '\x2a'),
-          .manifestPageCount = 1,
-          .requestedConflictPolicy = ConflictPolicy::AutoRename,
-      },
+      .offer =
+          {
+              .transferId = TransferId::generate(),
+              .displayName = QStringLiteral("<img src=x> Project"),
+              .totalBytes = 4096,
+              .fileCount = 2,
+              .directoryCount = 1,
+              .manifestSha256 = QByteArray(kSha256Bytes, '\x2a'),
+              .manifestPageCount = 1,
+              .requestedConflictPolicy = ConflictPolicy::AutoRename,
+          },
       .peerTrusted = trusted,
       .mayAutoAccept = false,
   };
@@ -111,6 +113,7 @@ class DevicesDockTests final : public QObject
 
 private Q_SLOTS:
   void rendersEmptyAndPairableDeviceStates();
+  void keepsLocalDeviceInFooterOnly();
   void emitsTypedPairingIntent();
   void rendersAndDrivesSharedPairingModel();
   void confirmsAndCancelsFromPairingPanel();
@@ -129,6 +132,7 @@ private Q_SLOTS:
 void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
 {
   Fixture fixture;
+  fixture.dock.resize(532, 300);
   fixture.dock.show();
   QCoreApplication::processEvents();
 
@@ -138,6 +142,7 @@ void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
   QVERIFY(empty != nullptr);
   QVERIFY(list != nullptr);
   QVERIFY(pair != nullptr);
+  QVERIFY(fixture.dock.minimumWidth() <= 532);
   QVERIFY(empty->isVisible());
   QVERIFY(!list->isVisible());
   QVERIFY(!pair->isVisible());
@@ -150,6 +155,8 @@ void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
   list->setCurrentIndex(fixture.devices.index(0, 0));
   QTRY_VERIFY(pair->isEnabled());
   QCOMPARE(pair->text(), QStringLiteral("Pair"));
+  const auto rowHeight = list->sizeHintForRow(0);
+  QVERIFY2(rowHeight >= 64 && rowHeight <= 72, qPrintable(QStringLiteral("device row height: %1").arg(rowHeight)));
 
   auto changedPeer = peer;
   changedPeer.presence = DevicePresence::TrustViolation;
@@ -158,6 +165,30 @@ void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
   list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
   QTRY_VERIFY(pair->isEnabled());
   QCOMPARE(pair->text(), QStringLiteral("Pair again"));
+}
+
+void DevicesDockTests::keepsLocalDeviceInFooterOnly()
+{
+  Fixture fixture;
+  auto local = peerSnapshot(DevicePresence::Online, true);
+  local.displayName = QStringLiteral("This PC");
+  fixture.devices.setLocalDevice(local);
+  fixture.dock.show();
+  QCoreApplication::processEvents();
+
+  auto *empty = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskDevicesEmptyLabel"));
+  auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  QVERIFY(empty != nullptr);
+  QVERIFY(list != nullptr);
+  QVERIFY(empty->isVisible());
+  QVERIFY(!list->isVisible());
+  QVERIFY(list->isRowHidden(fixture.devices.indexOf(local.id)));
+
+  const auto peer = peerSnapshot(DevicePresence::Online, true);
+  fixture.devices.upsertRemoteDevice(peer);
+  QTRY_VERIFY(list->isVisible());
+  QVERIFY(list->isRowHidden(fixture.devices.indexOf(local.id)));
+  QVERIFY(!list->isRowHidden(fixture.devices.indexOf(peer.id)));
 }
 
 void DevicesDockTests::emitsTypedPairingIntent()
@@ -231,9 +262,7 @@ void DevicesDockTests::confirmsAndCancelsFromPairingPanel()
 {
   Fixture fixture;
   fixture.dock.show();
-  const auto pairing = pairingSnapshot(
-      peerSnapshot(), PairingState::AwaitingUserComparison, QStringLiteral("123456")
-  );
+  const auto pairing = pairingSnapshot(peerSnapshot(), PairingState::AwaitingUserComparison, QStringLiteral("123456"));
   fixture.pairingService.publish(pairing, fixture.fingerprint);
 
   auto *confirm = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskConfirmMatchingSasButton"));
@@ -261,9 +290,7 @@ void DevicesDockTests::rendersExpiredPairingState()
   const auto fingerprint = QByteArray::fromHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
 
   dock.show();
-  auto snapshot = pairingSnapshot(
-      peerSnapshot(), PairingState::AwaitingUserComparison, QStringLiteral("123456")
-  );
+  auto snapshot = pairingSnapshot(peerSnapshot(), PairingState::AwaitingUserComparison, QStringLiteral("123456"));
   pairingService.publish(snapshot, fingerprint);
   auto *state = dock.findChild<QLabel *>(QStringLiteral("relaydeskPairingStateLabel"));
   auto *error = dock.findChild<QLabel *>(QStringLiteral("relaydeskPairingErrorLabel"));
@@ -285,6 +312,7 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
   PairingWizardModel pairing(pairingService);
   PermissionStatusModel permissions(PermissionPlatform::Windows);
   DevicesDock dock(devices, pairing, permissions);
+  dock.resize(532, 300);
   dock.show();
   QCoreApplication::processEvents();
 
@@ -297,9 +325,11 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
   QVERIFY(message != nullptr);
   QVERIFY(openSettings != nullptr);
   QVERIFY(banner->isVisible());
-  QCOMPARE(title->text(), QStringLiteral("Permission status not checked"));
+  QVERIFY(title->text().startsWith(QStringLiteral("Permission status not checked · ")));
   QVERIFY(!title->wordWrap());
   QVERIFY(!message->wordWrap());
+  QVERIFY(qobject_cast<QHBoxLayout *>(banner->layout()) != nullptr);
+  QVERIFY(!message->isVisible());
   QVERIFY(!openSettings->isVisible());
 
   QVERIFY(permissions.setSnapshot({
@@ -319,8 +349,11 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
       },
   }));
   QTRY_VERIFY(openSettings->isVisible());
-  QCOMPARE(title->text(), QStringLiteral("Permission needed"));
+  QCOMPARE(
+      title->text(), QStringLiteral("Permission needed · Allow RelayDesk through Windows Firewall on private networks.")
+  );
   QCOMPARE(message->text(), QStringLiteral("Allow RelayDesk through Windows Firewall on private networks."));
+  QVERIFY(!message->isVisible());
   QVERIFY(!message->text().contains(QStringLiteral("remote detail")));
   QCOMPARE(openSettings->text(), QStringLiteral("Open settings"));
   QCOMPARE(openSettings->accessibleName(), QStringLiteral("Open settings"));
@@ -340,8 +373,9 @@ void DevicesDockTests::rendersPermissionGuidanceAndKeyboardAction()
       },
   }));
   QVERIFY(banner->isVisible());
-  QCOMPARE(title->text(), QStringLiteral("Permissions ready"));
+  QCOMPARE(title->text(), QStringLiteral("Permissions ready · All required system permissions are ready."));
   QCOMPARE(message->text(), QStringLiteral("All required system permissions are ready."));
+  QVERIFY(!message->isVisible());
   QVERIFY(!openSettings->isVisible());
 }
 
@@ -560,13 +594,19 @@ void DevicesDockTests::choosesFilesAndFolderAndPublishesImmutableIntent()
   fixture.dock.show();
 
   auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *pair = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskPairSelectedButton"));
   auto *sendFiles = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskSendFilesButton"));
   auto *sendFolder = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskSendFolderButton"));
   QVERIFY(list != nullptr);
+  QVERIFY(pair != nullptr);
   QVERIFY(sendFiles != nullptr);
   QVERIFY(sendFolder != nullptr);
   list->setCurrentIndex(fixture.devices.index(0, 0));
   QTRY_VERIFY(sendFiles->isEnabled());
+  QVERIFY(!pair->isVisible());
+  QVERIFY(sendFiles->isVisible());
+  QVERIFY(sendFolder->isVisible());
+  QCOMPARE(sendFiles->geometry().top(), sendFolder->geometry().top());
   QVERIFY(sendFiles->focusPolicy() != Qt::NoFocus);
   QCOMPARE(sendFiles->accessibleName(), QStringLiteral("Send files"));
 
@@ -582,9 +622,8 @@ void DevicesDockTests::choosesFilesAndFolderAndPublishesImmutableIntent()
   second.close();
   const QList<QUrl> files{QUrl::fromLocalFile(firstPath), QUrl::fromLocalFile(secondPath)};
   fixture.dock.setFileChooser([files](QWidget &) { return files; });
-  fixture.dock.setFolderChooser([path = directory.path()](QWidget &) {
-    return QList<QUrl>{QUrl::fromLocalFile(path)};
-  });
+  fixture.dock.setFolderChooser([path = directory.path()](QWidget &) { return QList<QUrl>{QUrl::fromLocalFile(path)}; }
+  );
 
   QSignalSpy requested(&fixture.dock, &DevicesDock::sendItemsRequested);
   sendFiles->setFocus();
@@ -701,17 +740,22 @@ void DevicesDockTests::acceptsLocalUrlDropOnlyForEligiblePeer()
 void DevicesDockTests::rendersNonBlockingIncomingOfferAndKeyboardDecisions()
 {
   Fixture fixture;
-  IncomingOfferModel incomingModel(
-      {
-          .destinationRoot = QStringLiteral("Downloads/RelayDesk"),
-          .availableBytes = 1'000'000,
-          .autoAcceptTrustedDevices = false,
-          .decisionTimeoutMs = 5000,
-      }
-  );
+  IncomingOfferModel incomingModel({
+      .destinationRoot = QStringLiteral("Downloads/RelayDesk"),
+      .availableBytes = 1'000'000,
+      .autoAcceptTrustedDevices = false,
+      .decisionTimeoutMs = 5000,
+  });
   fixture.dock.setIncomingOfferModel(&incomingModel);
-  fixture.dock.resize(460, 760);
+  fixture.dock.resize(532, 300);
   fixture.dock.show();
+  fixture.pairingService.publish(
+      pairingSnapshot(peerSnapshot(), PairingState::AwaitingUserComparison, QStringLiteral("123456")),
+      fixture.fingerprint
+  );
+  auto *pairingPanel = fixture.dock.findChild<QFrame *>(QStringLiteral("relaydeskPairingPanel"));
+  QVERIFY(pairingPanel != nullptr);
+  QTRY_VERIFY(pairingPanel->isVisible());
   QVERIFY(incomingModel.receiveOffer(incomingTransfer()));
 
   auto *panel = fixture.dock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingOfferPanel"));
@@ -734,6 +778,7 @@ void DevicesDockTests::rendersNonBlockingIncomingOfferAndKeyboardDecisions()
   QVERIFY(reject != nullptr);
   QVERIFY(changeSettings != nullptr);
   QVERIFY(panel->isVisible());
+  QVERIFY(!pairingPanel->isVisible());
   QVERIFY(!panel->isWindow());
   QVERIFY(fixture.dock.isEnabled());
   QCOMPARE(heading->textFormat(), Qt::PlainText);
@@ -757,6 +802,7 @@ void DevicesDockTests::rendersNonBlockingIncomingOfferAndKeyboardDecisions()
   QTest::keyClick(accept, Qt::Key_Space);
   QCOMPARE(accepted.count(), 1);
   QVERIFY(!panel->isVisible());
+  QVERIFY(pairingPanel->isVisible());
   QCOMPARE(
       *static_cast<const ::relaydesk::transfer::TransferId *>(accepted.constFirst().at(0).constData()),
       incomingModel.offer()->offer.transferId
