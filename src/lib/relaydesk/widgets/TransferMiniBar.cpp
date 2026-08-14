@@ -32,7 +32,11 @@ int presentedRow(const model::TransferCenterModel &transfers)
     if (!transfers.index(row, 0).data(model::TransferCenterModel::IsTerminalRole).toBool())
       return row;
   }
-  return transfers.rowCount() > 0 ? 0 : -1;
+  for (int row = 0; row < transfers.rowCount(); ++row) {
+    if (transfers.index(row, 0).data(model::TransferCenterModel::CanRetryRole).toBool())
+      return row;
+  }
+  return -1;
 }
 
 } // namespace

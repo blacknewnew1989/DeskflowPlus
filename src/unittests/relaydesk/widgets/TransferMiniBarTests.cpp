@@ -62,7 +62,7 @@ class TransferMiniBarTests final : public QObject
 
 private Q_SLOTS:
   void followsVisibilityAndPresentsActiveTransfer();
-  void selectsActiveThenMostRecentAndDispatchesPrimaryAction();
+  void selectsActiveThenRetryableAndDispatchesPrimaryAction();
 };
 
 void TransferMiniBarTests::followsVisibilityAndPresentsActiveTransfer()
@@ -126,7 +126,7 @@ void TransferMiniBarTests::followsVisibilityAndPresentsActiveTransfer()
   QTRY_VERIFY(bar->isHidden());
 }
 
-void TransferMiniBarTests::selectsActiveThenMostRecentAndDispatchesPrimaryAction()
+void TransferMiniBarTests::selectsActiveThenRetryableAndDispatchesPrimaryAction()
 {
   qRegisterMetaType<TransferId>();
   TransferCenterModel model;
@@ -185,8 +185,7 @@ void TransferMiniBarTests::selectsActiveThenMostRecentAndDispatchesPrimaryAction
       TransferState::Completed, 5, 100
   );
   model.setTransfers({older, completed});
-  QTRY_COMPARE(title->text(), completed.displayName);
-  QVERIFY(!action->isVisible());
+  QTRY_VERIFY(bar->isHidden());
 }
 
 QTEST_MAIN(TransferMiniBarTests)

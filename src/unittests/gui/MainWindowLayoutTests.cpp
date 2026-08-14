@@ -16,6 +16,7 @@
 #include "relaydesk/widgets/TransferMiniBar.h"
 
 #include <QApplication>
+#include <QAction>
 #include <QDialog>
 #include <QDir>
 #include <QDockWidget>
@@ -128,6 +129,19 @@ void MainWindowLayoutTests::freshLaunchUsesCompactSingleHomeSurface()
   QVERIFY(!transfers.isVisible());
   QVERIFY(log != nullptr);
   QVERIFY(!log->isVisible());
+
+  QAction *windowQuit = nullptr;
+  QAction *trayQuit = nullptr;
+  for (auto *action : window.findChildren<QAction *>()) {
+    if (action->menuRole() == QAction::QuitRole)
+      windowQuit = action;
+    else if (action->menuRole() == QAction::NoRole && action->text().contains(QStringLiteral("Quit")))
+      trayQuit = action;
+  }
+  QVERIFY(windowQuit != nullptr);
+  QVERIFY(trayQuit != nullptr);
+  QVERIFY(!windowQuit->shortcut().isEmpty());
+  QVERIFY(trayQuit->shortcut().isEmpty());
 
   int visibleDockSurfaces = 0;
   for (auto *dock : window.findChildren<QDockWidget *>()) {

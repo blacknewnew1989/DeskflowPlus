@@ -205,7 +205,6 @@ MainWindow::MainWindow()
 
   if (!deskflow::platform::isWindows()) {
     m_actionQuit->setShortcut(QKeySequence::Quit);
-    m_actionTrayQuit->setShortcut(QKeySequence::Quit);
   }
 
   m_actionQuit->setIcon(QIcon::fromTheme("application-exit"));
@@ -1191,20 +1190,16 @@ void MainWindow::setTrayIcon()
   static const auto fallbackPath = QStringLiteral(":/icons/%1-%2/apps/64/%3");
 
   QString themeIcon = kRevFqdnName;
-  if (deskflow::platform::isMac()) {
+  if (deskflow::platform::isMac() || deskflow::platform::isWindows()) {
     themeIcon.append(QStringLiteral("-symbolic"));
+  }
+
+  if (deskflow::platform::isMac()) {
     auto icon = QIcon(fallbackPath.arg(kAppId, QStringLiteral("dark"), themeIcon));
     icon.setIsMask(true);
     m_trayIcon->setIcon(icon);
     return;
   }
-
-  if (!Settings::value(Settings::Gui::SymbolicTrayIcon).toBool()) {
-    m_trayIcon->setIcon(QIcon(fallbackPath.arg(kAppId, QStringLiteral("dark"), themeIcon)));
-    return;
-  }
-
-  themeIcon.append(QStringLiteral("-symbolic"));
 
   if (deskflow::platform::isWindows()) {
     QSettings settings(
@@ -1216,6 +1211,13 @@ void MainWindow::setTrayIcon()
     m_trayIcon->setIcon(QIcon(fallbackPath.arg(kAppId, theme, themeIcon)));
     return;
   }
+
+  if (!Settings::value(Settings::Gui::SymbolicTrayIcon).toBool()) {
+    m_trayIcon->setIcon(QIcon(fallbackPath.arg(kAppId, QStringLiteral("dark"), themeIcon)));
+    return;
+  }
+
+  themeIcon.append(QStringLiteral("-symbolic"));
 
   auto icon = QIcon::fromTheme(themeIcon, QIcon(fallbackPath.arg(kAppId, iconMode(), themeIcon)));
   icon.setIsMask(true);
@@ -1750,7 +1752,6 @@ void MainWindow::updateText()
   if (deskflow::platform::isWindows()) {
     //: Quit shortcut
     m_actionQuit->setShortcut(QKeySequence(tr("Ctrl+Q")));
-    m_actionTrayQuit->setShortcut(QKeySequence(tr("Ctrl+Q")));
   }
 
   // General controls
