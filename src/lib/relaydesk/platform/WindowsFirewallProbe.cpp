@@ -490,10 +490,15 @@ WindowsFirewallProbeRequest WindowsFirewallProbe::requestForListeningServices(
       .executablePath = std::move(executablePath),
       .processId = processId,
   };
+  const auto appendListeningPort = [&request](quint16 port) {
+    if (port != 0 && !request.expectedTcpPorts.contains(port)) {
+      request.expectedTcpPorts.append(port);
+    }
+  };
   if (inputIsListening) {
-    request.expectedTcpPorts.append(inputPort);
+    appendListeningPort(inputPort);
   }
-  request.expectedTcpPorts.append(filePort);
+  appendListeningPort(filePort);
   return request;
 }
 

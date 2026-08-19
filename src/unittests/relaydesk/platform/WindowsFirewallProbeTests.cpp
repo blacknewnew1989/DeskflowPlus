@@ -47,6 +47,8 @@ private Q_SLOTS:
   void opensOnlyActionableFirewallSettings();
   void inspectsRealCurrentProcessListener();
   void excludesStoppedInputCorePortFromActiveFileListenerProbe();
+  void collectsOnlyNonZeroListeningPorts_data();
+  void collectsOnlyNonZeroListeningPorts();
 };
 
 void WindowsFirewallProbeTests::publishesStablePermissionMappings_data()
@@ -256,6 +258,41 @@ void WindowsFirewallProbeTests::excludesStoppedInputCorePortFromActiveFileListen
       QStringLiteral("C:/RelayDesk/RelayDesk.exe"), 24800, true, 24801, 4242
   );
   QCOMPARE(activeInputRequest.expectedTcpPorts, QList<quint16>({24800, 24801}));
+}
+
+void WindowsFirewallProbeTests::collectsOnlyNonZeroListeningPorts_data()
+{
+  QTest::addColumn<bool>("inputIsListening");
+  QTest::addColumn<quint16>("inputPort");
+  QTest::addColumn<quint16>("filePort");
+  QTest::addColumn<QList<quint16>>("expectedPorts");
+
+  QTest::newRow("core-stopped-file-listening") << false << quint16{24800} << quint16{24801}
+                                                << QList<quint16>({24801});
+  QTest::newRow("core-client-file-listening") << false << quint16{24800} << quint16{24801}
+                                               << QList<quint16>({24801});
+  QTest::newRow("core-listening-file-listening") << true << quint16{24800} << quint16{24801}
+                                                  << QList<quint16>({24800, 24801});
+  QTest::newRow("core-listening-file-failed") << true << quint16{24800} << quint16{0}
+                                               << QList<quint16>({24800});
+  QTest::newRow("core-stopped-file-failed") << false << quint16{24800} << quint16{0}
+                                             << QList<quint16>();
+  QTest::newRow("same-listener-port") << true << quint16{24801} << quint16{24801}
+                                       << QList<quint16>({24801});
+  QTest::newRow("invalid-listener-ports") << true << quint16{0} << quint16{0} << QList<quint16>();
+}
+
+void WindowsFirewallProbeTests::collectsOnlyNonZeroListeningPorts()
+{
+  QFETCH(bool, inputIsListening);
+  QFETCH(quint16, inputPort);
+  QFETCH(quint16, filePort);
+  QFETCH(QList<quint16>, expectedPorts);
+
+  const auto request = WindowsFirewallProbe::requestForListeningServices(
+      QStringLiteral("C:/RelayDesk/RelayDesk.exe"), inputPort, inputIsListening, filePort, 4242
+  );
+  QCOMPARE(request.expectedTcpPorts, expectedPorts);
 }
 
 QTEST_GUILESS_MAIN(WindowsFirewallProbeTests)
