@@ -72,6 +72,7 @@ public:
   [[nodiscard]] bool isRunning() const;
   [[nodiscard]] quint16 listeningPort() const;
   [[nodiscard]] bool connectPeer(const DeviceId &peerDeviceId, QString *diagnostic = nullptr);
+  [[nodiscard]] bool disconnectPeer(const DeviceId &peerDeviceId);
   [[nodiscard]] bool isPeerReady(const DeviceId &peerDeviceId) const;
   [[nodiscard]] std::optional<::relaydesk::transfer::NegotiatedCapabilities>
   negotiatedCapabilities(const DeviceId &peerDeviceId) const;

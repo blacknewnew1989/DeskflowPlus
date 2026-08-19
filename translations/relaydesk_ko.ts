@@ -19,6 +19,7 @@
     <message><source>devices.status.transfer_busy</source><translation>파일 전송 중</translation></message>
     <message><source>devices.action.send_file</source><translation>파일 보내기</translation></message>
     <message><source>devices.action.send_folder</source><translation>폴더 보내기</translation></message>
+    <message><source>devices.action.revoke_trust</source><translation>신뢰 취소</translation></message>
     <message><source>devices.action.more</source><translation>더 보기</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>자동 정렬</translation></message>
     <message><source>devices.action.reset_layout</source><translation>배치 초기화</translation></message>

@@ -157,6 +157,7 @@ PairingOperationResult PairingTrustRuntime::revoke(const DeviceId &deviceId)
     snapshot->presence = DevicePresence::TrustViolation;
     m_deviceModel.upsertRemoteDevice(*snapshot);
   }
+  Q_EMIT trustRevoked(deviceId);
   return result;
 }
 

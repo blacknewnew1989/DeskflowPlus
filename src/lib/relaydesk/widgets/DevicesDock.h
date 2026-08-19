@@ -62,6 +62,7 @@ public:
 
 Q_SIGNALS:
   void pairingRequested(DeviceId peerDeviceId);
+  void trustRevocationRequested(DeviceId peerDeviceId);
   void sendItemsRequested(DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options);
   void sendItemsRejected(QString message);
   void incomingOfferSettingsRequested();
@@ -80,6 +81,7 @@ private:
   void updateSelection();
   void activateDevice(const QModelIndex &index);
   void requestPairing(const QModelIndex &index);
+  void requestTrustRevocation(const QModelIndex &index);
   void updatePairingPanel();
   void updatePermissionBanner();
   void updatePermissionDetails();
@@ -112,6 +114,7 @@ private:
   QListView *m_deviceList = nullptr;
   QLabel *m_emptyLabel = nullptr;
   QPushButton *m_pairButton = nullptr;
+  QPushButton *m_revokeTrustButton = nullptr;
   QPushButton *m_sendFilesButton = nullptr;
   QPushButton *m_sendFolderButton = nullptr;
   QLabel *m_sendFeedback = nullptr;

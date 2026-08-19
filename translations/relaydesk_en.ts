@@ -19,6 +19,7 @@
     <message><source>devices.status.transfer_busy</source><translation>File transfer in progress</translation></message>
     <message><source>devices.action.send_file</source><translation>Send files</translation></message>
     <message><source>devices.action.send_folder</source><translation>Send folder</translation></message>
+    <message><source>devices.action.revoke_trust</source><translation>Revoke trust</translation></message>
     <message><source>devices.action.more</source><translation>More</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Auto arrange</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Reset layout</translation></message>

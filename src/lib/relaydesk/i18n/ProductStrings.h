@@ -29,6 +29,7 @@ enum class Text
   DevicesStatusTransferBusy,
   DevicesActionSendFile,
   DevicesActionSendFolder,
+  DevicesActionRevokeTrust,
   DevicesActionMore,
   DevicesActionAutoArrange,
   DevicesActionResetLayout,

@@ -19,6 +19,7 @@
     <message><source>devices.status.transfer_busy</source><translation>ファイル転送中</translation></message>
     <message><source>devices.action.send_file</source><translation>ファイルを送信</translation></message>
     <message><source>devices.action.send_folder</source><translation>フォルダーを送信</translation></message>
+    <message><source>devices.action.revoke_trust</source><translation>信頼を取り消す</translation></message>
     <message><source>devices.action.more</source><translation>その他</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>自動配置</translation></message>
     <message><source>devices.action.reset_layout</source><translation>配置をリセット</translation></message>

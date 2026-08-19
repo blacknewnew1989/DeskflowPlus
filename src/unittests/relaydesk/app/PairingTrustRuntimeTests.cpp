@@ -246,7 +246,10 @@ void PairingTrustRuntimeTests::revokePersistsAndPinningPolicyRejectsPeer()
   QVERIFY(pair.secondPairingModel.submitDisplayedSas(sas));
   QTRY_COMPARE_WITH_TIMEOUT(pair.first->snapshot()->state, PairingState::Completed, 3000);
 
+  QSignalSpy revoked(pair.first.get(), &PairingTrustRuntime::trustRevoked);
   QVERIFY(pair.first->revoke(pair.secondInfo.deviceId).ok());
+  QCOMPARE(revoked.count(), 1);
+  QCOMPARE(*static_cast<const DeviceId *>(revoked.first().at(0).constData()), pair.secondInfo.deviceId);
   QCOMPARE(pair.firstModel.snapshot(pair.secondInfo.deviceId)->presence, DevicePresence::TrustViolation);
   const auto pinning = TlsPeerPinningPolicy::verify(
       pair.first->trustedDevices(), pair.secondInfo.deviceId, pair.secondInfo.certificateFingerprintSha256

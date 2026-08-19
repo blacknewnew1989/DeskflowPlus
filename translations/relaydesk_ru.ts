@@ -19,6 +19,7 @@
     <message><source>devices.status.transfer_busy</source><translation>Идёт передача файлов</translation></message>
     <message><source>devices.action.send_file</source><translation>Отправить файлы</translation></message>
     <message><source>devices.action.send_folder</source><translation>Отправить папку</translation></message>
+    <message><source>devices.action.revoke_trust</source><translation>Отозвать доверие</translation></message>
     <message><source>devices.action.more</source><translation>Ещё</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Расставить автоматически</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Сбросить расположение</translation></message>

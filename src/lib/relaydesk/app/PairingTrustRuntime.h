@@ -65,6 +65,9 @@ public:
   [[nodiscard]] std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const override;
   [[nodiscard]] bool expireIfNeeded();
 
+Q_SIGNALS:
+  void trustRevoked(deskflow::relaydesk::DeviceId deviceId);
+
 private:
   friend class AutoReconnectRuntime;
   [[nodiscard]] PairingOperationResult reportPreflightFailure(PairingOperationResult result);

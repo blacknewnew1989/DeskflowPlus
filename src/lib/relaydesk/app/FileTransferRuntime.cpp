@@ -586,6 +586,23 @@ bool FileTransferRuntime::connectPeerAt(
   return true;
 }
 
+bool FileTransferRuntime::disconnectPeer(const DeviceId &peerDeviceId)
+{
+  if (QThread::currentThread() != thread())
+    return false;
+
+  if (auto *connection = m_peerConnections.value(peerDeviceId, nullptr); connection != nullptr) {
+    connection->close();
+    return true;
+  }
+  if (auto *client = m_clients.take(peerDeviceId); client != nullptr) {
+    client->close();
+    client->deleteLater();
+    return true;
+  }
+  return false;
+}
+
 bool FileTransferRuntime::isPeerReady(const DeviceId &peerDeviceId) const
 {
   const auto connection = m_peerConnections.value(peerDeviceId, nullptr);

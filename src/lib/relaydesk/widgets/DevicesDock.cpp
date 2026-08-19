@@ -304,6 +304,9 @@ DevicesDock::DevicesDock(
   m_pairButton = new QPushButton(body);
   m_pairButton->setObjectName(QStringLiteral("relaydeskPairSelectedButton"));
   deviceActions->addWidget(m_pairButton);
+  m_revokeTrustButton = new QPushButton(body);
+  m_revokeTrustButton->setObjectName(QStringLiteral("relaydeskRevokeTrustButton"));
+  deviceActions->addWidget(m_revokeTrustButton);
   m_sendFilesButton = new QPushButton(body);
   m_sendFilesButton->setObjectName(QStringLiteral("relaydeskSendFilesButton"));
   m_sendFolderButton = new QPushButton(body);
@@ -490,6 +493,9 @@ DevicesDock::DevicesDock(
   connect(m_deviceList->selectionModel(), &QItemSelectionModel::selectionChanged, this, &DevicesDock::updateSelection);
   connect(m_deviceList, &QListView::activated, this, &DevicesDock::activateDevice);
   connect(m_pairButton, &QPushButton::clicked, this, [this]() { requestPairing(m_deviceList->currentIndex()); });
+  connect(m_revokeTrustButton, &QPushButton::clicked, this, [this]() {
+    requestTrustRevocation(m_deviceList->currentIndex());
+  });
   connect(m_sendFilesButton, &QPushButton::clicked, this, [this]() { chooseAndSend(false); });
   connect(m_sendFolderButton, &QPushButton::clicked, this, [this]() { chooseAndSend(true); });
   connect(m_acceptIncomingOfferButton, &QPushButton::clicked, this, [this]() {
@@ -719,6 +725,8 @@ void DevicesDock::updateText()
   m_sendFilesButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFile));
   m_sendFolderButton->setText(i18n::translate(Text::DevicesActionSendFolder));
   m_sendFolderButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFolder));
+  m_revokeTrustButton->setText(i18n::translate(Text::DevicesActionRevokeTrust));
+  m_revokeTrustButton->setAccessibleName(i18n::translate(Text::DevicesActionRevokeTrust));
   m_sendFeedback->setAccessibleName(i18n::translate(Text::DevicesActionSendFile));
   m_acceptIncomingOfferButton->setText(i18n::translate(Text::TransferActionAccept));
   m_acceptIncomingOfferButton->setAccessibleName(i18n::translate(Text::TransferActionAccept));
@@ -757,6 +765,9 @@ void DevicesDock::updateSelection()
                      : i18n::translate(Text::PairingActionStart)
   );
   const auto sendable = index.isValid() && index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
+  const auto revocable = index.isValid() && index.data(model::DeviceHomeModel::IsTrustedRole).toBool();
+  m_revokeTrustButton->setVisible(revocable);
+  m_revokeTrustButton->setEnabled(revocable);
   m_sendFilesButton->setVisible(sendable);
   m_sendFolderButton->setVisible(sendable);
   m_sendFilesButton->setEnabled(sendable);
@@ -879,6 +890,16 @@ void DevicesDock::requestPairing(const QModelIndex &index)
   if (!id.has_value())
     return;
   Q_EMIT pairingRequested(*id);
+}
+
+void DevicesDock::requestTrustRevocation(const QModelIndex &index)
+{
+  if (!index.isValid() || !index.data(model::DeviceHomeModel::IsTrustedRole).toBool())
+    return;
+  const auto id = DeviceId::fromString(index.data(model::DeviceHomeModel::DeviceIdRole).toString());
+  if (!id.has_value())
+    return;
+  Q_EMIT trustRevocationRequested(*id);
 }
 
 void DevicesDock::activateDevice(const QModelIndex &index)

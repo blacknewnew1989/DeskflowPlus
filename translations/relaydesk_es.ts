@@ -19,6 +19,7 @@
     <message><source>devices.status.transfer_busy</source><translation>Transferencia de archivos en curso</translation></message>
     <message><source>devices.action.send_file</source><translation>Enviar archivos</translation></message>
     <message><source>devices.action.send_folder</source><translation>Enviar carpeta</translation></message>
+    <message><source>devices.action.revoke_trust</source><translation>Revocar confianza</translation></message>
     <message><source>devices.action.more</source><translation>Más</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Organizar automáticamente</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Restablecer disposición</translation></message>

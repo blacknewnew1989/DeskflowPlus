@@ -361,6 +361,15 @@ void MainWindow::setupRelayDeskDiscovery()
         }
       }
   );
+  connect(
+      m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::trustRevocationRequested, this,
+      [this](const deskflow::relaydesk::DeviceId &peerDeviceId) {
+        const auto result = m_relayDeskPairing->revoke(peerDeviceId);
+        if (!result.ok()) {
+          qWarning().noquote() << "RelayDesk trust revocation failed:" << result.diagnostic;
+        }
+      }
+  );
 
   const auto enabled = discoverySettings.ok ? discoverySettings.settings.enabled : true;
   if (enabled && !m_relayDeskDiscovery->start(&diagnostic)) {

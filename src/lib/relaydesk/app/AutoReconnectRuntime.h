@@ -33,6 +33,7 @@ private:
       const DeviceId &deviceId, const AddressCandidate &candidate,
       AutoReconnectCoordinator::ConnectCallback callback
   );
+  void stopPeer(const DeviceId &deviceId);
   void completeReady(const DeviceId &deviceId);
 
   PairingTrustRuntime &m_pairing;

@@ -387,6 +387,11 @@ void FileTransferRuntimeTests::trustedPeersNegotiateIndependentFileChannel()
   QVERIFY(negotiated->features.contains(QStringLiteral("sha256")));
   QVERIFY(negotiated->localCanReceiveFiles);
   QVERIFY(negotiated->peerCanReceiveFiles);
+
+  QSignalSpy disconnected(&first, &FileTransferRuntime::peerDisconnected);
+  QVERIFY(first.disconnectPeer(secondId));
+  QTRY_VERIFY_WITH_TIMEOUT(disconnected.count() == 1 && !first.isPeerReady(secondId), 5'000);
+  QCOMPARE(*static_cast<const DeviceId *>(disconnected.first().at(0).constData()), secondId);
 }
 
 void FileTransferRuntimeTests::outgoingSingleFileStreamsThroughWorkerPump()

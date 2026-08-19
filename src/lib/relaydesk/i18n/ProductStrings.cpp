@@ -46,6 +46,8 @@ constexpr std::array<Entry, static_cast<std::size_t>(Text::Count)> kEntries{{
      "File transfer in progress"},
     {Text::DevicesActionSendFile, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.send_file"), "Send files"},
     {Text::DevicesActionSendFolder, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.send_folder"), "Send folder"},
+    {Text::DevicesActionRevokeTrust, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.revoke_trust"),
+     "Revoke trust"},
     {Text::DevicesActionMore, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.more"), "More"},
     {Text::DevicesActionAutoArrange, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.auto_arrange"), "Auto arrange"},
     {Text::DevicesActionResetLayout, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.reset_layout"), "Reset layout"},

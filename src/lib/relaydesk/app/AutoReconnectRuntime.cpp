@@ -16,6 +16,7 @@ AutoReconnectRuntime::AutoReconnectRuntime(
 {
   connect(&discovery.registry(), &DiscoveryRegistry::deviceAdded, this, &AutoReconnectRuntime::observe);
   connect(&discovery.registry(), &DiscoveryRegistry::deviceChanged, this, &AutoReconnectRuntime::observe);
+  connect(&pairing, &PairingTrustRuntime::trustRevoked, this, &AutoReconnectRuntime::stopPeer);
   connect(&files, &FileTransferRuntime::peerReady, this, [this](const DeviceId &deviceId, const auto &) {
     completeReady(deviceId);
   });
@@ -96,6 +97,18 @@ void AutoReconnectRuntime::connectCandidate(
     auto completion = m_pending.take(deviceId);
     completion({.error = AutoReconnectConnectError::NetworkError, .diagnostic = std::move(diagnostic)});
   }
+}
+
+void AutoReconnectRuntime::stopPeer(const DeviceId &deviceId)
+{
+  if (auto *coordinator = m_coordinators.take(deviceId); coordinator != nullptr) {
+    coordinator->stop();
+    coordinator->deleteLater();
+  }
+  if (auto *provider = m_providers.take(deviceId); provider != nullptr)
+    provider->deleteLater();
+  m_pending.remove(deviceId);
+  (void)m_files.disconnectPeer(deviceId);
 }
 
 void AutoReconnectRuntime::completeReady(const DeviceId &deviceId)

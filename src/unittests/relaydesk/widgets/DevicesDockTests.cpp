@@ -115,6 +115,8 @@ private Q_SLOTS:
   void rendersEmptyAndPairableDeviceStates();
   void keepsLocalDeviceInFooterOnly();
   void emitsTypedPairingIntent();
+  void emitsTrustRevocationIntentForTrustedDevice();
+  void rejectsTrustRevocationIntentForUntrustedDevice();
   void activatingCardRunsItsVisiblePrimaryAction();
   void rendersAndDrivesSharedPairingModel();
   void confirmsAndCancelsFromPairingPanel();
@@ -216,6 +218,49 @@ void DevicesDockTests::emitsTypedPairingIntent()
   QVERIFY(storedPeer.has_value());
   QCOMPARE(storedPeer->id, peer.id);
   QCOMPARE(storedPeer->displayName, peer.displayName);
+}
+
+void DevicesDockTests::emitsTrustRevocationIntentForTrustedDevice()
+{
+  qRegisterMetaType<DeviceId>();
+  Fixture fixture;
+  auto peer = peerSnapshot(DevicePresence::Online, true);
+  fixture.devices.upsertRemoteDevice(peer);
+  fixture.dock.resize(420, 520);
+  fixture.dock.show();
+
+  auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *revoke = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskRevokeTrustButton"));
+  QVERIFY(list != nullptr);
+  QVERIFY(revoke != nullptr);
+  list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
+  QTRY_VERIFY(revoke->isVisible());
+  QVERIFY(revoke->isEnabled());
+
+  QSignalSpy requested(&fixture.dock, &DevicesDock::trustRevocationRequested);
+  QTest::mouseClick(revoke, Qt::LeftButton);
+  QCOMPARE(requested.count(), 1);
+  QCOMPARE(*static_cast<const DeviceId *>(requested.first().at(0).constData()), peer.id);
+}
+
+void DevicesDockTests::rejectsTrustRevocationIntentForUntrustedDevice()
+{
+  Fixture fixture;
+  const auto peer = peerSnapshot(DevicePresence::Online, false);
+  fixture.devices.upsertRemoteDevice(peer);
+  fixture.dock.show();
+
+  auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *revoke = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskRevokeTrustButton"));
+  QVERIFY(list != nullptr);
+  QVERIFY(revoke != nullptr);
+  list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
+  QTRY_VERIFY(!revoke->isVisible());
+  QVERIFY(!revoke->isEnabled());
+
+  QSignalSpy requested(&fixture.dock, &DevicesDock::trustRevocationRequested);
+  revoke->click();
+  QCOMPARE(requested.count(), 0);
 }
 
 void DevicesDockTests::activatingCardRunsItsVisiblePrimaryAction()
