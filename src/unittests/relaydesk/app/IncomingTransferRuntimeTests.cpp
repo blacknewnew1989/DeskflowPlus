@@ -10,12 +10,14 @@
 #include "relaydesk/transfer/ManifestPageCodec.h"
 
 #include <QCryptographicHash>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QThreadPool>
 
+#include <memory>
 #include <optional>
 
 using namespace deskflow::relaydesk;
@@ -104,6 +106,8 @@ private Q_SLOTS:
   void disconnectInterruptsAcceptedPipeline();
   void cancelledTransferOnlyIgnoresValidatedTailFrames();
   void activeAndCancelledSessionsRouteDataByTransferId();
+  void pendingConflictLifecycle_data();
+  void pendingConflictLifecycle();
 };
 
 void IncomingTransferRuntimeTests::validatesAndPublishesIncomingOffer()
@@ -659,6 +663,195 @@ void IncomingTransferRuntimeTests::activeAndCancelledSessionsRouteDataByTransfer
   QVERIFY2(runtime.enqueueFrame(peer, activePage, &diagnostic), qPrintable(diagnostic));
   QTest::qWait(200);
   QCOMPARE(failures.count(), 0);
+}
+
+void IncomingTransferRuntimeTests::pendingConflictLifecycle_data()
+{
+  QTest::addColumn<QString>("action");
+  QTest::newRow("stop") << QStringLiteral("stop");
+  QTest::newRow("disconnect") << QStringLiteral("disconnect");
+  QTest::newRow("local-cancel") << QStringLiteral("local-cancel");
+  QTest::newRow("remote-cancel") << QStringLiteral("remote-cancel");
+}
+
+void IncomingTransferRuntimeTests::pendingConflictLifecycle()
+{
+  QFETCH(QString, action);
+
+  FakeFileSafety safety;
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const QString relativePath = QStringLiteral("nested/conflict.bin");
+  QVERIFY(QDir(root.path()).mkpath(QStringLiteral("nested")));
+  const QByteArray originalBytes = QByteArrayLiteral("keep-original");
+  QFile original(root.filePath(relativePath));
+  QVERIFY(original.open(QIODevice::WriteOnly));
+  QCOMPARE(original.write(originalBytes), qint64(originalBytes.size()));
+  original.close();
+
+  const QByteArray bytes(64 * 1024 + 17, '\x67');
+  const QByteArray fileDigest = QCryptographicHash::hash(bytes, QCryptographicHash::Sha256);
+  const auto transferId = TransferId::generate();
+  const auto fileId = FileId::generate();
+  const ManifestEntry entry{
+      .id = fileId,
+      .relativeProtocolPath = relativePath,
+      .type = ManifestEntryType::File,
+      .size = static_cast<quint64>(bytes.size()),
+      .modifiedUtc = QDateTime::currentDateTimeUtc(),
+      .sha256 = fileDigest,
+  };
+  QString diagnostic;
+  const QByteArray manifestDigest = ManifestPageCodec::canonicalSha256({entry}, &diagnostic);
+  QVERIFY2(!manifestDigest.isEmpty(), qPrintable(diagnostic));
+  const TransferOffer incoming{
+      .transferId = transferId,
+      .displayName = QStringLiteral("conflict.bin"),
+      .totalBytes = static_cast<quint64>(bytes.size()),
+      .fileCount = 1,
+      .manifestSha256 = manifestDigest,
+      .manifestPageCount = 1,
+      .requestedConflictPolicy = ConflictPolicy::Ask,
+      .createdAtMs = static_cast<quint64>(QDateTime::currentMSecsSinceEpoch()),
+  };
+  const auto peer = DeviceId::generate();
+  auto capabilities = receiverCapabilities();
+  capabilities.conflictPolicies.append(ConflictPolicy::Ask);
+  QThreadPool pool;
+  pool.setMaxThreadCount(2);
+  auto runtime = std::make_unique<IncomingTransferRuntime>(safety, pool);
+  QSignalSpy operations(runtime.get(), &IncomingTransferRuntime::transferOperationFinished);
+  QSignalSpy prompts(runtime.get(), &IncomingTransferRuntime::incomingConflictDecisionRequired);
+  QSignalSpy changes(runtime.get(), &IncomingTransferRuntime::transferChanged);
+  QVERIFY(operations.isValid());
+  QVERIFY(prompts.isValid());
+  QVERIFY(changes.isValid());
+  std::optional<TransferSnapshot> latest;
+  connect(runtime.get(), &IncomingTransferRuntime::transferAdded, this, [&](const auto &snapshot) {
+    latest = snapshot;
+  });
+  connect(runtime.get(), &IncomingTransferRuntime::transferChanged, this, [&](const auto &snapshot) {
+    latest = snapshot;
+  });
+
+  QVERIFY(runtime->receiveOffer(peer, QStringLiteral("Peer"), true, capabilities, incoming));
+  runtime->accept(
+      transferId, {.destinationRoot = root.path(), .conflictPolicy = ConflictPolicy::Ask}
+  );
+  QTRY_COMPARE_WITH_TIMEOUT(operations.count(), 1, 5'000);
+  const Frame manifestPage{
+      .type = MessageType::ManifestPage,
+      .metadata = ManifestPageCodec::encode(
+          {.transferId = transferId, .pageIndex = 0, .pageCount = 1, .entries = {entry}},
+          {}, &diagnostic
+      ),
+  };
+  QVERIFY2(!manifestPage.metadata.isEmpty(), qPrintable(diagnostic));
+  QVERIFY2(runtime->enqueueFrame(peer, manifestPage, &diagnostic), qPrintable(diagnostic));
+  const Frame manifestComplete{
+      .type = MessageType::ManifestComplete,
+      .metadata = ManifestPageCodec::encodeComplete(
+          {.transferId = transferId, .canonicalSha256 = manifestDigest}, &diagnostic
+      ),
+  };
+  QVERIFY2(runtime->enqueueFrame(peer, manifestComplete, &diagnostic), qPrintable(diagnostic));
+  const FileBeginMessage begin{
+      .transferId = transferId,
+      .fileId = fileId,
+      .size = static_cast<quint64>(bytes.size()),
+      .chunkBytes = static_cast<quint32>(bytes.size()),
+      .expectedSha256 = fileDigest,
+  };
+  const Frame beginFrame{
+      .type = MessageType::FileBegin,
+      .streamId = 1,
+      .metadata = FileMessageCodec::encode(FileControlMessage{begin}, &diagnostic),
+  };
+  QVERIFY2(!beginFrame.metadata.isEmpty(), qPrintable(diagnostic));
+  QVERIFY2(runtime->enqueueFrame(peer, beginFrame, &diagnostic), qPrintable(diagnostic));
+  QTRY_COMPARE_WITH_TIMEOUT(prompts.count(), 1, 5'000);
+  const auto *promptArgument = static_cast<const IncomingConflictPrompt *>(
+      prompts.constFirst().constFirst().constData()
+  );
+  QVERIFY(promptArgument != nullptr);
+  const IncomingConflictPrompt prompt = *promptArgument;
+  QCOMPARE(prompt.transferId, transferId);
+  QCOMPARE(prompt.relativeProtocolPath, relativePath);
+  QVERIFY(!QDir::isAbsolutePath(prompt.relativeProtocolPath));
+  QVERIFY(!prompt.relativeProtocolPath.contains(root.path(), Qt::CaseInsensitive));
+  QVERIFY(runtime->hasPendingIncomingConflict(transferId, prompt.conflictId));
+  QVERIFY(latest.has_value());
+  QCOMPARE(latest->state, TransferState::Queued);
+
+  if (action == QStringLiteral("stop")) {
+    QElapsedTimer elapsed;
+    elapsed.start();
+    runtime.reset();
+    QVERIFY2(elapsed.elapsed() < 5'000, "destroying a pending conflict pipeline timed out");
+    QVERIFY(!QFileInfo::exists(
+        QDir(root.path()).filePath(
+            QStringLiteral(".incoming/%1/%2.part").arg(transferId.toString(), fileId.toString())
+        )
+    ));
+    QFile preserved(root.filePath(relativePath));
+    QVERIFY(preserved.open(QIODevice::ReadOnly));
+    QCOMPARE(preserved.readAll(), originalBytes);
+    return;
+  }
+
+  QElapsedTimer elapsed;
+  elapsed.start();
+  if (action == QStringLiteral("disconnect")) {
+    runtime->peerDisconnected(peer);
+  } else {
+    const TransferCommandMessage cancel = TransferCancelMessage{
+        .transferId = transferId,
+        .reason = TransferCancelReason::UserRequested,
+        .keepPartial = false,
+    };
+    if (action == QStringLiteral("local-cancel")) {
+      DeviceId commandPeer = DeviceId::generate();
+      TransferOperationOutcome outcome = TransferOperationOutcome::Rejected;
+      QVERIFY2(runtime->validateLocalCommand(cancel, &commandPeer, &diagnostic), qPrintable(diagnostic));
+      QCOMPARE(commandPeer, peer);
+      QVERIFY2(
+          runtime->applyLocalCommand(cancel, nullptr, &diagnostic, &outcome),
+          qPrintable(diagnostic)
+      );
+      QCOMPARE(outcome, TransferOperationOutcome::Applied);
+    } else {
+      const Frame cancelFrame{
+          .type = MessageType::TransferCancel,
+          .metadata = TransferCommandCodec::encode(cancel, &diagnostic),
+      };
+      QVERIFY2(!cancelFrame.metadata.isEmpty(), qPrintable(diagnostic));
+      QVERIFY2(runtime->receiveCommand(peer, cancelFrame, &diagnostic), qPrintable(diagnostic));
+    }
+  }
+  QVERIFY2(elapsed.elapsed() < 5'000, "terminating a pending conflict pipeline timed out");
+  if (action == QStringLiteral("disconnect")) {
+    QVERIFY(latest.has_value());
+    QCOMPARE(latest->state, TransferState::Interrupted);
+  } else {
+    QTRY_VERIFY_WITH_TIMEOUT(
+        latest.has_value() && latest->state == TransferState::Cancelled, 5'000
+    );
+  }
+  QVERIFY(!runtime->hasPendingIncomingConflict(transferId, prompt.conflictId));
+  const auto changeCount = changes.count();
+  runtime->resolveIncomingConflict(
+      transferId, prompt.conflictId, IncomingConflictDecision::AutoRename
+  );
+  QTest::qWait(100);
+  QCOMPARE(changes.count(), changeCount);
+  QVERIFY(!QFileInfo::exists(
+      QDir(root.path()).filePath(
+          QStringLiteral(".incoming/%1/%2.part").arg(transferId.toString(), fileId.toString())
+      )
+  ));
+  QFile preserved(root.filePath(relativePath));
+  QVERIFY(preserved.open(QIODevice::ReadOnly));
+  QCOMPARE(preserved.readAll(), originalBytes);
 }
 
 QTEST_MAIN(IncomingTransferRuntimeTests)
