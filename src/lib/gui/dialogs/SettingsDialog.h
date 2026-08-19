@@ -47,6 +47,7 @@ private:
   bool isClientMode() const;
   void updateTlsControls();
   void updateTlsControlsEnabled();
+  void updateInputRoleControls();
   void showReadOnlyMessage();
   void updateText();
 

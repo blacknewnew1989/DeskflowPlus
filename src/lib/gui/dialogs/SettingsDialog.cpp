@@ -22,6 +22,7 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QRadioButton>
 
 using namespace deskflow::gui;
 
@@ -90,6 +91,8 @@ void SettingsDialog::initConnections() const
 
   connect(ui->groupSecurity, &QGroupBox::toggled, this, &SettingsDialog::updateTlsControlsEnabled);
   connect(ui->groupService, &QGroupBox::toggled, this, &SettingsDialog::updateControls);
+  connect(ui->rbInputRoleServer, &QRadioButton::toggled, this, &SettingsDialog::updateInputRoleControls);
+  connect(ui->rbInputRoleClient, &QRadioButton::toggled, this, &SettingsDialog::updateInputRoleControls);
   connect(ui->btnTlsRegenCert, &QPushButton::clicked, this, &SettingsDialog::regenCertificates);
   connect(ui->comboTlsKeyLength, &QComboBox::currentIndexChanged, this, &SettingsDialog::updateRequestedKeySize);
   connect(ui->btnTlsCertPath, &QPushButton::clicked, this, &SettingsDialog::browseCertificatePath);
@@ -195,6 +198,12 @@ void SettingsDialog::accept()
   Settings::setValue(Settings::Core::UseWlClipboard, ui->cbUseWlClipboard->isChecked());
   Settings::setValue(Settings::Gui::ShowVersionInTitle, ui->cbShowVersion->isChecked());
 
+  const auto inputRole = ui->rbInputRoleServer->isChecked()
+                             ? Settings::CoreMode::Server
+                             : ui->rbInputRoleClient->isChecked() ? Settings::CoreMode::Client : Settings::CoreMode::None;
+  Settings::setValue(Settings::Core::CoreMode, inputRole);
+  Settings::setValue(Settings::Client::RemoteHost, ui->lineInputRoleRemoteHost->text().trimmed());
+
   Settings::ProcessMode mode;
   if (ui->groupService->isChecked())
     mode = Settings::ProcessMode::Service;
@@ -220,6 +229,11 @@ void SettingsDialog::loadFromConfig()
   ui->cbGuiDebug->setChecked(Settings::value(Settings::Log::GuiDebug).toBool());
   ui->cbUseWlClipboard->setChecked(Settings::value(Settings::Core::UseWlClipboard).toBool());
   ui->cbShowVersion->setChecked(Settings::value(Settings::Gui::ShowVersionInTitle).toBool());
+  const auto inputRole = Settings::value(Settings::Core::CoreMode).value<Settings::CoreMode>();
+  ui->rbInputRoleServer->setChecked(inputRole == Settings::CoreMode::Server);
+  ui->rbInputRoleClient->setChecked(inputRole == Settings::CoreMode::Client);
+  ui->lineInputRoleRemoteHost->setText(Settings::value(Settings::Client::RemoteHost).toString());
+  updateInputRoleControls();
   loadStartAtLogin();
 
   const auto processMode = Settings::value(Settings::Core::ProcessMode).value<Settings::ProcessMode>();
@@ -334,6 +348,22 @@ void SettingsDialog::updateTlsControlsEnabled()
   ui->cbRequireClientCert->setEnabled(enabled && !isClientMode());
 }
 
+void SettingsDialog::updateInputRoleControls()
+{
+  const bool writable = Settings::isWritable();
+  const bool isClient = ui->rbInputRoleClient->isChecked();
+  const bool visibilityChanged = ui->widgetInputRoleRemoteHost->isVisible() != isClient;
+  ui->rbInputRoleServer->setEnabled(writable);
+  ui->rbInputRoleClient->setEnabled(writable);
+  ui->widgetInputRoleRemoteHost->setVisible(isClient);
+  ui->lineInputRoleRemoteHost->setEnabled(writable && isClient);
+  if (visibilityChanged) {
+    setMaximumHeight(QWIDGETSIZE_MAX);
+    adjustSize();
+    setFixedHeight(sizeHint().height());
+  }
+}
+
 bool SettingsDialog::isClientMode() const
 {
   return m_coreProcess.mode() == Settings::CoreMode::Client;
@@ -397,6 +427,8 @@ void SettingsDialog::updateControls()
   }
 
   ui->widgetLogFilename->setEnabled(writable && logToFile);
+
+  updateInputRoleControls();
 
   updateTlsControls();
 }

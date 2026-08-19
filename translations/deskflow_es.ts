@@ -1215,6 +1215,11 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
         <source>Networking</source>
         <translation type="unfinished">Redes</translation>
     </message>
+    <message><source>Input role</source><translation>Rol de entrada</translation></message>
+    <message><source>Control other devices</source><translation>Controlar otros dispositivos</translation></message>
+    <message><source>Be controlled by another device</source><translation>Ser controlado por otro dispositivo</translation></message>
+    <message><source>Remote host or IP</source><translation>Host remoto o IP</translation></message>
+    <message><source>e.g. 192.168.1.20</source><translation>p. ej. 192.168.1.20</translation></message>
     <message>
         <source>Port</source>
         <translation type="unfinished">Puerto</translation>

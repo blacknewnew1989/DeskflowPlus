@@ -1358,6 +1358,11 @@ Enabling this setting will disable the server config GUI.</source>
         <source>Networking</source>
         <translation>网络</translation>
     </message>
+    <message><source>Input role</source><translation>输入角色</translation></message>
+    <message><source>Control other devices</source><translation>控制其他设备</translation></message>
+    <message><source>Be controlled by another device</source><translation>由其他设备控制</translation></message>
+    <message><source>Remote host or IP</source><translation>远端主机或 IP</translation></message>
+    <message><source>e.g. 192.168.1.20</source><translation>例如 192.168.1.20</translation></message>
     <message>
         <source>Port</source>
         <translation>端口</translation>

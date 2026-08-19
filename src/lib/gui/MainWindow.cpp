@@ -65,6 +65,7 @@
 #include <QRegularExpressionValidator>
 #include <QScreen>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QCoreApplication>
@@ -1166,8 +1167,7 @@ void MainWindow::applyConfig()
     setWindowTitle(kAppName);
   }
 
-  if (const auto host = Settings::value(Settings::Client::RemoteHost).toString(); !host.isEmpty())
-    ui->lineHostname->setText(host);
+  syncInputRoleConfiguration();
 
   updateLocalFingerprint();
   setTrayIcon();
@@ -1178,7 +1178,24 @@ void MainWindow::applyConfig()
     m_serverStartSuggestedIP = ip;
   }
 
-  coreModeToggled(true);
+}
+
+void MainWindow::syncInputRoleConfiguration()
+{
+  const auto mode = Settings::value(Settings::Core::CoreMode).value<Settings::CoreMode>();
+  const auto remoteHost = Settings::value(Settings::Client::RemoteHost).toString().trimmed();
+
+  m_coreProcess.setMode(mode);
+  m_coreProcess.setAddress(remoteHost);
+  ui->lineHostname->setText(remoteHost);
+
+  const QSignalBlocker serverBlocker(ui->rbModeServer);
+  const QSignalBlocker clientBlocker(ui->rbModeClient);
+  ui->rbModeServer->setChecked(mode == Settings::CoreMode::Server);
+  ui->rbModeClient->setChecked(mode == Settings::CoreMode::Client);
+
+  updateModeControls();
+  applyInputPermissionGate();
 }
 
 void MainWindow::saveSettings() const

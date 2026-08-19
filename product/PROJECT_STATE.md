@@ -39,6 +39,7 @@
 | ID | 状态 | Owner | 当前证据 / 下一步 |
 |---|---|---|---|
 | UI-010 | IN_PROGRESS | A3/A0 | UI-011 收口树已补齐七语言 178/178；Qt/UI 与脚本回归 PASS，待精确标签 Windows/macOS 构建 |
+| UI-012 | IN_PROGRESS | A3/A0 | 高级页恢复输入角色与 Client 远端主机配置；主窗口保存后显式同步 CoreProcess，新增真实设置路径回归；目录语言 TS 可由 lrelease 编译，本机 GUI 目标待完整 C++ 工具链 |
 | BRAND-002 | IN_PROGRESS | A3/A4/A5 | SVG 单源、主题资源、ICO/ICNS/DMG 与 CMake 接线已完成；macOS/Windows 品牌校验 PASS，待平台包核验 |
 | TRAY-001 | IN_PROGRESS | A3/A4/A5 | 最小化/关闭到 tray 独立设置及安全停机已实现；菜单/托盘独立进程真实退出回归 2/2 PASS，待平台包与真机交互 |
 | MAC-037 | IN_PROGRESS | A5/A3/A0 | 三项权限能力门控、ApplicationActive 自动复检与 150 ms 合并回归 PASS；待最终 App 的系统设置往返前台实测 |

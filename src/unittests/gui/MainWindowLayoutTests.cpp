@@ -18,12 +18,16 @@
 #include <QApplication>
 #include <QAction>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QDockWidget>
 #include <QFile>
+#include <QLineEdit>
+#include <QRadioButton>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 
 #include <memory>
 
@@ -37,6 +41,7 @@ private Q_SLOTS:
   void cleanupTestCase();
 
   void freshLaunchUsesCompactSingleHomeSurface();
+  void settingsCanConfigureInputRoleAndRemoteHost();
   void hiddenWindowKeepsCurrentSessionGeometry();
   void restoredSmallGeometryIsClampedToMinimumSize();
 
@@ -82,6 +87,8 @@ void MainWindowLayoutTests::initTestCase()
 void MainWindowLayoutTests::init()
 {
   Settings::setValue(Settings::Gui::WindowGeometry, {});
+  Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::None);
+  Settings::setValue(Settings::Client::RemoteHost);
 }
 
 void MainWindowLayoutTests::cleanupTestCase()
@@ -159,6 +166,57 @@ void MainWindowLayoutTests::freshLaunchUsesCompactSingleHomeSurface()
     }
   }
   QCOMPARE(visibleTopLevelSurfaces, 1);
+}
+
+void MainWindowLayoutTests::settingsCanConfigureInputRoleAndRemoteHost()
+{
+  MainWindow window;
+
+  bool serverControlsFound = false;
+  QTimer::singleShot(0, &window, [&] {
+    auto *dialog = window.findChild<QDialog *>();
+    QVERIFY(dialog != nullptr);
+    auto *server = dialog->findChild<QRadioButton *>(QStringLiteral("rbInputRoleServer"));
+    auto *client = dialog->findChild<QRadioButton *>(QStringLiteral("rbInputRoleClient"));
+    auto *remoteHostRow = dialog->findChild<QWidget *>(QStringLiteral("widgetInputRoleRemoteHost"));
+    auto *buttons = dialog->findChild<QDialogButtonBox *>();
+    serverControlsFound = server != nullptr && client != nullptr && remoteHostRow != nullptr && buttons != nullptr;
+    if (!serverControlsFound) {
+      dialog->reject();
+      return;
+    }
+    server->setChecked(true);
+    QVERIFY(remoteHostRow->isHidden());
+    buttons->button(QDialogButtonBox::Save)->click();
+  });
+  QVERIFY(QMetaObject::invokeMethod(&window, "openSettings", Qt::DirectConnection));
+  QVERIFY(serverControlsFound);
+  QCOMPARE(window.coreMode(), Settings::CoreMode::Server);
+  QCOMPARE(Settings::value(Settings::Core::CoreMode).value<Settings::CoreMode>(), Settings::CoreMode::Server);
+
+  bool clientControlsFound = false;
+  QTimer::singleShot(0, &window, [&] {
+    auto *dialog = window.findChild<QDialog *>();
+    QVERIFY(dialog != nullptr);
+    auto *client = dialog->findChild<QRadioButton *>(QStringLiteral("rbInputRoleClient"));
+    auto *remoteHost = dialog->findChild<QLineEdit *>(QStringLiteral("lineInputRoleRemoteHost"));
+    auto *remoteHostRow = dialog->findChild<QWidget *>(QStringLiteral("widgetInputRoleRemoteHost"));
+    auto *buttons = dialog->findChild<QDialogButtonBox *>();
+    clientControlsFound = client != nullptr && remoteHost != nullptr && remoteHostRow != nullptr && buttons != nullptr;
+    if (!clientControlsFound) {
+      dialog->reject();
+      return;
+    }
+    client->setChecked(true);
+    QVERIFY(!remoteHostRow->isHidden());
+    remoteHost->setText(QStringLiteral("  192.168.1.20  "));
+    buttons->button(QDialogButtonBox::Save)->click();
+  });
+  QVERIFY(QMetaObject::invokeMethod(&window, "openSettings", Qt::DirectConnection));
+  QVERIFY(clientControlsFound);
+  QCOMPARE(window.coreMode(), Settings::CoreMode::Client);
+  QCOMPARE(Settings::value(Settings::Core::CoreMode).value<Settings::CoreMode>(), Settings::CoreMode::Client);
+  QCOMPARE(Settings::value(Settings::Client::RemoteHost).toString(), QStringLiteral("192.168.1.20"));
 }
 
 void MainWindowLayoutTests::restoredSmallGeometryIsClampedToMinimumSize()

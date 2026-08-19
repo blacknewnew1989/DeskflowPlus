@@ -1215,6 +1215,11 @@ L&apos;abilitazione di questa impostazione disabiliterà l&apos;interfaccia graf
         <source>Networking</source>
         <translation>Rete</translation>
     </message>
+    <message><source>Input role</source><translation>Ruolo di input</translation></message>
+    <message><source>Control other devices</source><translation>Controlla altri dispositivi</translation></message>
+    <message><source>Be controlled by another device</source><translation>Fatti controllare da un altro dispositivo</translation></message>
+    <message><source>Remote host or IP</source><translation>Host remoto o IP</translation></message>
+    <message><source>e.g. 192.168.1.20</source><translation>ad es. 192.168.1.20</translation></message>
     <message>
         <source>Port</source>
         <translation>Porta</translation>

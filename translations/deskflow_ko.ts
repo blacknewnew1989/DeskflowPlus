@@ -1214,6 +1214,11 @@ Enabling this setting will disable the server config GUI.</source>
         <source>Networking</source>
         <translation>네트워크</translation>
     </message>
+    <message><source>Input role</source><translation>입력 역할</translation></message>
+    <message><source>Control other devices</source><translation>다른 장치 제어</translation></message>
+    <message><source>Be controlled by another device</source><translation>다른 장치에서 제어</translation></message>
+    <message><source>Remote host or IP</source><translation>원격 호스트 또는 IP</translation></message>
+    <message><source>e.g. 192.168.1.20</source><translation>예: 192.168.1.20</translation></message>
     <message>
         <source>Port</source>
         <translation>포트</translation>

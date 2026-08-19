@@ -311,6 +311,61 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_4">
        <item>
+        <widget class="QGroupBox" name="groupInputRole">
+         <property name="title">
+          <string>Input role</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayoutInputRole">
+          <item>
+           <widget class="QRadioButton" name="rbInputRoleServer">
+            <property name="text">
+             <string>Control other devices</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="rbInputRoleClient">
+            <property name="text">
+             <string>Be controlled by another device</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QWidget" name="widgetInputRoleRemoteHost" native="true">
+            <layout class="QHBoxLayout" name="horizontalLayoutInputRoleRemoteHost">
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="lblInputRoleRemoteHost">
+               <property name="text">
+                <string>Remote host or IP</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="lineInputRoleRemoteHost">
+               <property name="placeholderText">
+                <string>e.g. 192.168.1.20</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QGroupBox" name="groupNetworking">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Maximum">

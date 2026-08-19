@@ -1214,6 +1214,11 @@ Enabling this setting will disable the server config GUI.</source>
         <source>Networking</source>
         <translation>Сеть</translation>
     </message>
+    <message><source>Input role</source><translation>Роль ввода</translation></message>
+    <message><source>Control other devices</source><translation>Управлять другими устройствами</translation></message>
+    <message><source>Be controlled by another device</source><translation>Управляться с другого устройства</translation></message>
+    <message><source>Remote host or IP</source><translation>Удаленный хост или IP</translation></message>
+    <message><source>e.g. 192.168.1.20</source><translation>например, 192.168.1.20</translation></message>
     <message>
         <source>Port</source>
         <translation>Порт</translation>

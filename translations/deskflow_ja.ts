@@ -1216,6 +1216,11 @@ Enabling this setting will disable the server config GUI.</source>
         <source>Networking</source>
         <translation>ネットワーク</translation>
     </message>
+    <message><source>Input role</source><translation>入力の役割</translation></message>
+    <message><source>Control other devices</source><translation>他のデバイスを操作する</translation></message>
+    <message><source>Be controlled by another device</source><translation>他のデバイスから操作される</translation></message>
+    <message><source>Remote host or IP</source><translation>リモートホストまたは IP</translation></message>
+    <message><source>e.g. 192.168.1.20</source><translation>例: 192.168.1.20</translation></message>
     <message>
         <source>Port</source>
         <translation>ポート</translation>
