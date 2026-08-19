@@ -17,6 +17,7 @@
 
 #include <QHostAddress>
 #include <QSignalSpy>
+#include <QStringList>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -87,6 +88,8 @@ void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer(
   TrustedDeviceStore secondSeed(secondTrustPath);
   QVERIFY(firstSeed.upsert(trustedDevice(secondId, identity.fingerprintSha256)));
   QVERIFY(secondSeed.upsert(trustedDevice(firstId, identity.fingerprintSha256)));
+  QVERIFY(firstSeed.save().ok);
+  QVERIFY(secondSeed.save().ok);
 
   DeviceHomeModel firstModel;
   DeviceHomeModel secondModel;
@@ -106,24 +109,28 @@ void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer(
   QVERIFY(firstPairing.isReady());
   QVERIFY(secondPairing.isReady());
 
-  TrustedDeviceStore firstFileTrust(firstTrustPath);
-  TrustedDeviceStore secondFileTrust(secondTrustPath);
-  QVERIFY(firstFileTrust.load().ok);
-  QVERIFY(secondFileTrust.load().ok);
   FileTransferRuntimeOptions options;
   options.listenAddress = QHostAddress::LocalHost;
-  FileTransferRuntime firstFiles(firstId, firstFileTrust, firstDiscovery, identityPath, options);
-  FileTransferRuntime secondFiles(secondId, secondFileTrust, secondDiscovery, identityPath, options);
+  FileTransferRuntime firstFiles(firstId, firstPairing.trustedDevices(), firstDiscovery, identityPath, options);
+  FileTransferRuntime secondFiles(secondId, secondPairing.trustedDevices(), secondDiscovery, identityPath, options);
   QVERIFY2(firstFiles.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY2(secondFiles.start(&diagnostic), qPrintable(diagnostic));
 
   auto directFirst = firstDiscovery.service().localDevice();
   auto directSecond = secondDiscovery.service().localDevice();
+  directFirst.filePort = firstFiles.listeningPort();
+  directFirst.capabilities.fileV1 = true;
+  directSecond.filePort = secondFiles.listeningPort();
+  directSecond.capabilities.fileV1 = true;
   QVERIFY(firstDiscovery.registry().observeAdvertisement(directSecond, QHostAddress::LocalHost));
   QVERIFY(secondDiscovery.registry().observeAdvertisement(directFirst, QHostAddress::LocalHost));
 
+  QStringList errors;
+  connect(&firstFiles, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(message);
+  });
   AutoReconnectRuntime reconnect(firstPairing, firstDiscovery, firstFiles, {});
-  QTRY_VERIFY_WITH_TIMEOUT(firstFiles.isPeerReady(secondId), 5000);
+  QTRY_VERIFY2_WITH_TIMEOUT(firstFiles.isPeerReady(secondId), qPrintable(errors.join(QStringLiteral("; "))), 5000);
   QVERIFY(reconnect.m_coordinators.contains(secondId));
   reconnect.m_pending.insert(secondId, [](AutoReconnectConnectResult) {});
   QVERIFY(reconnect.m_pending.contains(secondId));
@@ -134,6 +141,9 @@ void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer(
   QVERIFY(!reconnect.m_coordinators.contains(secondId));
   QVERIFY(!reconnect.m_providers.contains(secondId));
   QVERIFY(!reconnect.m_pending.contains(secondId));
+
+  QVERIFY(!firstFiles.connectPeer(secondId, &diagnostic));
+  QCOMPARE(diagnostic, QStringLiteral("Peer file-transfer identity is not trusted"));
 
   QTest::qWait(100);
   QCOMPARE(disconnected.count(), 1);

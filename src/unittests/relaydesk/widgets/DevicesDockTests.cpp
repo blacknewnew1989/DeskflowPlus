@@ -13,7 +13,6 @@
 
 #include "../FakePairingService.h"
 
-#include <QAbstractButton>
 #include <QCoreApplication>
 #include <QAction>
 #include <QDateTime>
@@ -26,7 +25,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
-#include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -251,28 +249,25 @@ void DevicesDockTests::emitsTrustRevocationIntentForTrustedDevice()
 
   QSignalSpy requested(&fixture.dock, &DevicesDock::trustRevocationRequested);
   bool confirmationSeen = false;
-  QTimer::singleShot(0, [&confirmationSeen]() {
-    auto *confirmation = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+  QTimer::singleShot(0, [&fixture, &confirmationSeen]() {
+    auto *confirmation = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskRevokeTrustConfirmation"));
     if (confirmation == nullptr)
       return;
-    confirmationSeen = confirmation->windowTitle() == QStringLiteral("Revoke trust?") &&
-                       confirmation->text().contains(QStringLiteral("Studio Mac for the Long Device Name Layout Regression"));
+    confirmationSeen = confirmation
+                           ->findChild<QLabel *>(QStringLiteral("relaydeskRevokeTrustConfirmationMessage")) != nullptr;
     confirmation->reject();
   });
   revoke->trigger();
   QVERIFY(confirmationSeen);
   QCOMPARE(requested.count(), 0);
 
-  QTimer::singleShot(0, []() {
-    auto *confirmation = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+  QTimer::singleShot(0, [&fixture]() {
+    auto *confirmation = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskRevokeTrustConfirmation"));
     if (confirmation == nullptr)
       return;
-    for (auto *button : confirmation->buttons()) {
-      if (button->text() == QStringLiteral("Revoke trust")) {
-        button->click();
-        return;
-      }
-    }
+    auto *confirm = confirmation->findChild<QPushButton *>(QStringLiteral("relaydeskRevokeTrustConfirmButton"));
+    if (confirm != nullptr)
+      confirm->click();
   });
   revoke->trigger();
   QCOMPARE(requested.count(), 1);

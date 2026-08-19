@@ -32,7 +32,6 @@
 #include <QLineEdit>
 #include <QListView>
 #include <QMenu>
-#include <QMessageBox>
 #include <QLocale>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -914,16 +913,27 @@ void DevicesDock::requestTrustRevocation(const QModelIndex &index)
   if (!id.has_value())
     return;
   const auto displayName = index.data(model::DeviceHomeModel::DisplayNameRole).toString();
-  QMessageBox confirmation(
-      QMessageBox::Warning, i18n::translate(Text::DevicesRevokeTrustTitle),
-      i18n::translate(Text::DevicesRevokeTrustConfirmation).arg(displayName), QMessageBox::NoButton, this
-  );
+  QDialog confirmation(this);
   confirmation.setObjectName(QStringLiteral("relaydeskRevokeTrustConfirmation"));
-  auto *revoke = confirmation.addButton(i18n::translate(Text::DevicesActionRevokeTrust), QMessageBox::DestructiveRole);
-  auto *cancel = confirmation.addButton(i18n::translate(Text::PairingActionCancel), QMessageBox::RejectRole);
-  confirmation.setDefaultButton(cancel);
-  confirmation.exec();
-  if (confirmation.clickedButton() != revoke)
+  confirmation.setWindowTitle(i18n::translate(Text::DevicesRevokeTrustTitle));
+  auto *layout = new QVBoxLayout(&confirmation);
+  auto *message = new QLabel(i18n::translate(Text::DevicesRevokeTrustConfirmation).arg(displayName), &confirmation);
+  message->setObjectName(QStringLiteral("relaydeskRevokeTrustConfirmationMessage"));
+  message->setWordWrap(true);
+  layout->addWidget(message);
+  auto *actions = new QHBoxLayout();
+  actions->addStretch();
+  auto *cancel = new QPushButton(i18n::translate(Text::PairingActionCancel), &confirmation);
+  cancel->setObjectName(QStringLiteral("relaydeskRevokeTrustCancelButton"));
+  cancel->setDefault(true);
+  auto *revoke = new QPushButton(i18n::translate(Text::DevicesActionRevokeTrust), &confirmation);
+  revoke->setObjectName(QStringLiteral("relaydeskRevokeTrustConfirmButton"));
+  actions->addWidget(cancel);
+  actions->addWidget(revoke);
+  layout->addLayout(actions);
+  connect(cancel, &QPushButton::clicked, &confirmation, &QDialog::reject);
+  connect(revoke, &QPushButton::clicked, &confirmation, &QDialog::accept);
+  if (confirmation.exec() != QDialog::Accepted)
     return;
   Q_EMIT trustRevocationRequested(*id);
 }
