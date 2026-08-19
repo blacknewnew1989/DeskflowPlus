@@ -10,15 +10,15 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-# CMake parses cl.exe /showIncludes output to build Ninja header dependencies.
-$Utf8NoBom = [Text.UTF8Encoding]::new($false)
-[Console]::InputEncoding = $Utf8NoBom
-[Console]::OutputEncoding = $Utf8NoBom
-$OutputEncoding = $Utf8NoBom
+# Keep CMake's localized /showIncludes probe and later Ninja compiles on the same native code page.
+$CodePage = [Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage
+$NativeEncoding = [Text.Encoding]::GetEncoding($CodePage)
+[Console]::InputEncoding = $NativeEncoding
+[Console]::OutputEncoding = $NativeEncoding
+$OutputEncoding = $NativeEncoding
 if (Get-Command chcp.com -ErrorAction SilentlyContinue) {
-    & chcp.com 65001 | Out-Null
+    & chcp.com $CodePage | Out-Null
 }
-$env:VSLANG = "1033"
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
     $RepoRoot = (& git rev-parse --show-toplevel).Trim()
 }
@@ -49,6 +49,7 @@ if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
         }
     }
 }
+$env:VSLANG = "1033"
 
 foreach ($command in @("cmake", "ninja", "cl.exe")) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
@@ -125,6 +126,19 @@ if ($env:VCPKG_ROOT) {
 if ($LASTEXITCODE -ne 0) { throw "CMake configure failed." }
 & cmake --build $BuildDir --config $Configuration --parallel
 if ($LASTEXITCODE -ne 0) { throw "Build failed." }
+
+$DependencyProbeObject = "src/lib/relaydesk/i18n/CMakeFiles/relaydesk_i18n.dir/ProductStrings.cpp.obj"
+$DependencyOutput = @(& ninja -C $BuildDir -t deps $DependencyProbeObject 2>&1)
+$DependencyExitCode = $LASTEXITCODE
+$DependencySummary = $DependencyOutput | Where-Object {
+    ([string]$_).StartsWith("${DependencyProbeObject}:", [StringComparison]::OrdinalIgnoreCase)
+} | Select-Object -First 1
+$DependencyMatch = [regex]::Match([string]$DependencySummary, '#deps\s+([1-9][0-9]*)\b')
+if ($DependencyExitCode -ne 0 -or -not $DependencyMatch.Success) {
+    $DependencyDiagnostic = ($DependencyOutput | Select-Object -First 3) -join " | "
+    throw "MSVC_NINJA_DEPENDENCY_DISCOVERY_FAILED: $DependencyDiagnostic"
+}
+Write-Host "MSVC_NINJA_DEPENDENCIES=$($DependencyMatch.Groups[1].Value)"
 
 if ($RunTests) {
     & ctest --test-dir (Join-Path $BuildDir "src/unittests") -C $Configuration --output-on-failure
