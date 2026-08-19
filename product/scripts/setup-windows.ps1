@@ -46,6 +46,7 @@ function Test-QtPrefix([string]$Prefix) {
         "lib\cmake\Qt6\Qt6Config.cmake",
         "lib\cmake\Qt6Svg\Qt6SvgConfig.cmake",
         "bin\lrelease.exe",
+        "bin\qmlimportscanner.exe",
         "plugins\platforms\qwindows.dll"
     )
     foreach ($relative in $required) {
@@ -59,7 +60,7 @@ function Install-QtArchives(
     [string]$Version,
     [string]$OutputRoot
 ) {
-    foreach ($archive in @("qtbase", "qttools", "qtsvg", "qttranslations")) {
+    foreach ($archive in @("qtbase", "qtdeclarative", "qttools", "qtsvg", "qttranslations")) {
         $installed = $false
         for ($attempt = 1; $attempt -le 4; $attempt++) {
             if ($PythonCommand -eq "py") {
