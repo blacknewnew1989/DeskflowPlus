@@ -1456,7 +1456,11 @@ bool IncomingTransferRuntime::receiveResumeQuery(
 void IncomingTransferRuntime::peerDisconnected(const DeviceId &peerDeviceId)
 {
   for (auto *session : std::as_const(m_sessions)) {
-    if (session == nullptr || session->peer != peerDeviceId || session->pipeline == nullptr ||
+    if (session == nullptr || session->peer != peerDeviceId) {
+      continue;
+    }
+    session->pendingConflict.reset();
+    if (session->pipeline == nullptr ||
         !isReceivePipelineActive(session->pipelineSnapshot.state)) {
       continue;
     }
