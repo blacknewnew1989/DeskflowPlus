@@ -39,7 +39,8 @@ if (-not $SigningPlan.Enabled) {
     -Configuration $Configuration `
     -RunTests `
     -SkipAutoSetup `
-    -PackageVariant $SigningPlan.Status
+    -PackageVariant $SigningPlan.Status `
+    -CleanBuild
 
 $BuildDir = Join-Path $RepoRoot "build\windows\release"
 if ($SigningPlan.Enabled) {

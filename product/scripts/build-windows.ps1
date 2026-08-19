@@ -4,11 +4,21 @@ param(
     [string]$Configuration = "Debug",
     [switch]$RunTests,
     [switch]$SkipAutoSetup,
+    [switch]$CleanBuild,
     [ValidateSet("signed", "unsigned")]
     [string]$PackageVariant = "unsigned"
 )
 
 $ErrorActionPreference = "Stop"
+# CMake parses cl.exe /showIncludes output to build Ninja header dependencies.
+$Utf8NoBom = [Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $Utf8NoBom
+[Console]::OutputEncoding = $Utf8NoBom
+$OutputEncoding = $Utf8NoBom
+if (Get-Command chcp.com -ErrorAction SilentlyContinue) {
+    & chcp.com 65001 | Out-Null
+}
+$env:VSLANG = "1033"
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
     $RepoRoot = (& git rev-parse --show-toplevel).Trim()
 }
@@ -63,7 +73,20 @@ if (-not $QtReady) {
 }
 
 $ConfigLower = $Configuration.ToLowerInvariant()
-$BuildDir = Join-Path $RepoRoot ("build\windows\" + $ConfigLower)
+$BuildRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot "build\windows"))
+$BuildDir = [IO.Path]::GetFullPath((Join-Path $BuildRoot $ConfigLower))
+$ExpectedPrefix = $BuildRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) +
+    [IO.Path]::DirectorySeparatorChar
+if (-not $BuildDir.StartsWith($ExpectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "BUILD_CLEAN_PATH_OUTSIDE_REPOSITORY: $BuildDir"
+}
+if ($CleanBuild -and (Test-Path -LiteralPath $BuildDir)) {
+    $BuildItem = Get-Item -LiteralPath $BuildDir -Force
+    if (($BuildItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "BUILD_CLEAN_PATH_OUTSIDE_REPOSITORY: refusing to clean a reparse point: $BuildDir"
+    }
+    Remove-Item -LiteralPath $BuildDir -Recurse -Force
+}
 New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 $Triplet = if ($Configuration -eq "Release") { "x64-windows-release" } else { "x64-windows" }
 $Arguments = @(
