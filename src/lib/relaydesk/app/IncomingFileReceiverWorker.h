@@ -47,6 +47,9 @@ public:
   finish(const ::relaydesk::transfer::FileEndMessage &end);
   [[nodiscard]] ::relaydesk::transfer::FileReceiverSnapshot snapshot() const;
   [[nodiscard]] IncomingFileDisposition disposition() const noexcept;
+  [[nodiscard]] std::optional<::relaydesk::transfer::IncomingConflictPrompt> pendingConflict() const;
+  [[nodiscard]] ::relaydesk::transfer::FileReceiverResult
+  resolveConflict(::relaydesk::transfer::IncomingConflictDecision decision);
   [[nodiscard]] ::relaydesk::transfer::DurableCheckpointResult checkpoint(
       const ::relaydesk::transfer::ResumeStore &store,
       ::relaydesk::transfer::ResumeState &state
@@ -73,6 +76,9 @@ private:
   ::relaydesk::transfer::ConflictResolver m_conflicts;
   ::relaydesk::transfer::ConflictResolveRequest m_conflictRequest;
   std::optional<::relaydesk::transfer::UseTarget> m_target;
+  std::optional<::relaydesk::transfer::IncomingConflictPrompt> m_pendingConflict;
+  std::optional<::relaydesk::transfer::FileReceiveRequest> m_pendingRequest;
+  std::optional<::relaydesk::transfer::ResumeState> m_pendingResumeState;
   IncomingFileDisposition m_disposition = IncomingFileDisposition::Receive;
   QString m_receiveRoot;
 };

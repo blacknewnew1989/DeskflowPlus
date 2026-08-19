@@ -140,6 +140,7 @@ private Q_SLOTS:
   void retriesAutoRenameWhenDestinationAppearsBeforeCommit();
   void overwritesFileButRejectsDirectoryAndPreservesOriginal();
   void skipsExistingFileWithoutCreatingPart();
+  void resolvesAskConflictOnTheSameDiskWorker();
 };
 
 void IncomingFileReceiverWorkerTests::ownsCompleteFileReceiverLifecycleOnDiskWorker()
@@ -550,6 +551,54 @@ void IncomingFileReceiverWorkerTests::skipsExistingFileWithoutCreatingPart()
   QFile preserved(root.filePath(QStringLiteral("skip.bin")));
   QVERIFY(preserved.open(QIODevice::ReadOnly));
   QCOMPARE(preserved.readAll(), oldBytes);
+}
+
+void IncomingFileReceiverWorkerTests::resolvesAskConflictOnTheSameDiskWorker()
+{
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const QByteArray bytes = QByteArrayLiteral("replacement");
+  auto request = requestFor(root.path(), bytes);
+  request.entry.relativeProtocolPath = QStringLiteral("ask.bin");
+  request.conflictPolicy = ConflictPolicy::Ask;
+  QFile existing(root.filePath(QStringLiteral("ask.bin")));
+  QVERIFY(existing.open(QIODevice::WriteOnly));
+  existing.write("old");
+  existing.close();
+  FakeFileSafety safety;
+  QThreadPool pool;
+  auto future = QtConcurrent::run(&pool, [&]() {
+    IncomingFileReceiverWorker worker(safety);
+    const auto pending = worker.begin(request);
+    const auto prompt = worker.pendingConflict();
+    if (!prompt.has_value()) {
+      return std::pair{pending, FileReceiverResult{}};
+    }
+    const auto resolved = worker.resolveConflict(IncomingConflictDecision::AutoRename);
+    if (!resolved.ok()) {
+      return std::pair{pending, resolved};
+    }
+    FileChunkMessage chunk{
+        .transferId = request.begin.transferId,
+        .fileId = request.begin.fileId,
+        .offset = 0,
+        .sequence = 0,
+    };
+    const auto appended = worker.append(chunk, bytes);
+    FileEndMessage end{
+        .transferId = request.begin.transferId,
+        .fileId = request.begin.fileId,
+        .size = static_cast<quint64>(bytes.size()),
+        .sha256 = request.entry.sha256,
+    };
+    return std::pair{pending, appended.ok() ? worker.finish(end) : appended};
+  });
+  future.waitForFinished();
+  QVERIFY(!future.result().first.ok());
+  QVERIFY2(future.result().second.ok(), qPrintable(future.result().second.diagnostic));
+  QFile renamed(root.filePath(QStringLiteral("ask (1).bin")));
+  QVERIFY(renamed.open(QIODevice::ReadOnly));
+  QCOMPARE(renamed.readAll(), bytes);
 }
 
 QTEST_MAIN(IncomingFileReceiverWorkerTests)

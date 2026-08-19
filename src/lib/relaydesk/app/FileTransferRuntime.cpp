@@ -303,6 +303,16 @@ FileTransferRuntime::FileTransferRuntime(
     }
     connect(incoming, &IncomingTransferRuntime::incomingOffer, this, &IFileTransferService::incomingOffer);
     connect(
+        incoming, &IncomingTransferRuntime::incomingConflictDecisionRequired, this,
+        &IFileTransferService::incomingConflictDecisionRequired
+    );
+    connect(
+        incoming, &IncomingTransferRuntime::incomingConflictCancelRequested, this,
+        [this](const ::relaydesk::transfer::TransferId &transferId) {
+          cancel(transferId, {.reason = ::relaydesk::transfer::TransferCancelReason::UserRequested});
+        }
+    );
+    connect(
         incoming, &IncomingTransferRuntime::transferOperationFinished, this,
         &IFileTransferService::transferOperationFinished
     );
@@ -709,6 +719,16 @@ void FileTransferRuntime::accept(
       ::relaydesk::transfer::TransferOperationError::UnknownTransfer,
       QStringLiteral("No incoming transfer exists for this ID")
   );
+}
+
+void FileTransferRuntime::resolveIncomingConflict(
+    const ::relaydesk::transfer::TransferId &transferId, const QUuid &conflictId,
+    ::relaydesk::transfer::IncomingConflictDecision decision
+)
+{
+  if (auto *incoming = m_incoming.get(); incoming != nullptr && incoming->contains(transferId)) {
+    incoming->resolveIncomingConflict(transferId, conflictId, decision);
+  }
 }
 
 void FileTransferRuntime::reject(

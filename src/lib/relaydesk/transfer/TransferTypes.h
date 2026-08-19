@@ -208,6 +208,26 @@ struct IncomingOffer
   [[nodiscard]] bool operator==(const IncomingOffer &) const = default;
 };
 
+enum class IncomingConflictDecision : quint8
+{
+  Overwrite = 0,
+  AutoRename = 1,
+  Skip = 2,
+  CancelTransfer = 3,
+};
+
+// This is deliberately a protocol-relative path. The receiver's destination
+// remains private to the receiving device and must never cross the service API.
+struct IncomingConflictPrompt
+{
+  TransferId transferId;
+  QUuid conflictId;
+  QString relativeProtocolPath;
+  bool existingIsDirectory = false;
+
+  [[nodiscard]] bool operator==(const IncomingConflictPrompt &) const = default;
+};
+
 } // namespace relaydesk::transfer
 
 Q_DECLARE_METATYPE(relaydesk::transfer::SendOptions)
@@ -216,6 +236,8 @@ Q_DECLARE_METATYPE(relaydesk::transfer::PartialDisposition)
 Q_DECLARE_METATYPE(relaydesk::transfer::TransferCancelOptions)
 Q_DECLARE_METATYPE(relaydesk::transfer::AcceptanceOrigin)
 Q_DECLARE_METATYPE(relaydesk::transfer::IncomingOffer)
+Q_DECLARE_METATYPE(relaydesk::transfer::IncomingConflictDecision)
+Q_DECLARE_METATYPE(relaydesk::transfer::IncomingConflictPrompt)
 Q_DECLARE_METATYPE(relaydesk::transfer::TransferStartError)
 Q_DECLARE_METATYPE(relaydesk::transfer::TransferStartResult)
 Q_DECLARE_METATYPE(relaydesk::transfer::TransferOperation)

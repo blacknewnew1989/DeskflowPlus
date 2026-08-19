@@ -46,11 +46,16 @@ public:
       const ::relaydesk::transfer::TransferCancelOptions &options
   ) = 0;
   virtual void retry(const ::relaydesk::transfer::TransferId &transferId) = 0;
+  virtual void resolveIncomingConflict(
+      const ::relaydesk::transfer::TransferId &transferId, const QUuid &conflictId,
+      ::relaydesk::transfer::IncomingConflictDecision decision
+  ) = 0;
 
   [[nodiscard]] virtual QList<::relaydesk::transfer::TransferSnapshot> activeTransfers() const = 0;
 
 Q_SIGNALS:
   void incomingOffer(::relaydesk::transfer::IncomingOffer offer);
+  void incomingConflictDecisionRequired(::relaydesk::transfer::IncomingConflictPrompt prompt);
   void transferAdded(::relaydesk::transfer::TransferSnapshot transfer);
   void transferChanged(::relaydesk::transfer::TransferSnapshot transfer);
   void transferRemoved(::relaydesk::transfer::TransferId transferId);

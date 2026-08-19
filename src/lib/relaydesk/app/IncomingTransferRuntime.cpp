@@ -55,6 +55,7 @@ struct IncomingTransferRuntime::Session
   bool resumeNegotiated = false;
   std::optional<::relaydesk::transfer::ResumeResponseMessage> lastResumeResponse;
   quint64 pipelineGeneration = 0;
+  std::optional<::relaydesk::transfer::IncomingConflictPrompt> pendingConflict;
   ::relaydesk::transfer::TransferSnapshot pipelineSnapshot{
       .id = offer.transferId,
       .peerId = peer,
@@ -288,6 +289,10 @@ public:
   {
     const QMutexLocker lock(&m_mutex);
     m_paused = true;
+    // A conflict wait shares this condition variable. Waking here lets the
+    // worker re-check cancellation and keeps pause from being mistaken for a
+    // decision while it remains blocked on the prompt.
+    m_ready.wakeAll();
   }
 
   void resume()
@@ -295,6 +300,19 @@ public:
     const QMutexLocker lock(&m_mutex);
     m_paused = false;
     m_ready.wakeAll();
+  }
+
+  [[nodiscard]] bool resolveConflict(
+      const QUuid &conflictId, ::relaydesk::transfer::IncomingConflictDecision decision
+  )
+  {
+    const QMutexLocker lock(&m_mutex);
+    if (!m_pendingConflict.has_value() || m_pendingConflict->conflictId != conflictId || m_stopping) {
+      return false;
+    }
+    m_conflictDecision = decision;
+    m_ready.wakeAll();
+    return true;
   }
 
   void waitForFinished()
@@ -404,9 +422,23 @@ private:
       const bool reusePart = resumeFile != nullptr && QFileInfo::exists(partPath);
       const auto result = reusePart ? m_receiver->resume(request, *m_resumeState)
                                     : m_receiver->begin(request);
-      if (!result.ok()) {
-        sendFileResult(result);
-        fail(receiverErrorCode(result.error), result.diagnostic);
+      auto resolved = result;
+      if (const auto prompt = m_receiver->pendingConflict(); prompt.has_value()) {
+        const auto decision = waitForConflictDecision(*prompt);
+        if (!decision.has_value()) {
+          return false;
+        }
+        if (*decision == IncomingConflictDecision::CancelTransfer) {
+          invoke([id = m_offer.transferId](IncomingTransferRuntime &runtime) {
+            Q_EMIT runtime.incomingConflictCancelRequested(id);
+          });
+          return false;
+        }
+        resolved = m_receiver->resolveConflict(*decision);
+      }
+      if (!resolved.ok()) {
+        sendFileResult(resolved);
+        fail(receiverErrorCode(resolved.error), resolved.diagnostic);
         return false;
       }
       if (m_receiver->disposition() == IncomingFileDisposition::Skip) {
@@ -828,6 +860,36 @@ private:
     });
   }
 
+  [[nodiscard]] std::optional<::relaydesk::transfer::IncomingConflictDecision>
+  waitForConflictDecision(const ::relaydesk::transfer::IncomingConflictPrompt &prompt)
+  {
+    {
+      const QMutexLocker lock(&m_mutex);
+      m_pendingConflict = prompt;
+      m_conflictDecision.reset();
+    }
+    invoke([id = m_offer.transferId, generation = m_generation, prompt](IncomingTransferRuntime &runtime) {
+      auto *session = runtime.m_sessions.value(id, nullptr);
+      if (session == nullptr || session->pipelineGeneration != generation ||
+          !isReceivePipelineActive(session->pipelineSnapshot.state)) {
+        return;
+      }
+      session->pendingConflict = prompt;
+      Q_EMIT runtime.incomingConflictDecisionRequired(prompt);
+    });
+    QMutexLocker lock(&m_mutex);
+    while ((!m_conflictDecision.has_value() || m_paused) && !m_stopping) {
+      m_ready.wait(&m_mutex);
+    }
+    if (m_stopping) {
+      return std::nullopt;
+    }
+    const auto decision = m_conflictDecision;
+    m_conflictDecision.reset();
+    m_pendingConflict.reset();
+    return decision;
+  }
+
   template <typename Callback> void invoke(Callback callback)
   {
     QPointer<IncomingTransferRuntime> runtime = m_runtime;
@@ -863,6 +925,8 @@ private:
   quint64 m_queuedBytes = 0;
   bool m_stopping = false;
   bool m_paused = false;
+  std::optional<::relaydesk::transfer::IncomingConflictPrompt> m_pendingConflict;
+  std::optional<::relaydesk::transfer::IncomingConflictDecision> m_conflictDecision;
   QFuture<void> m_future;
 };
 
@@ -1036,6 +1100,24 @@ void IncomingTransferRuntime::reject(
   Q_ASSERT(updated.has_value() && updated->rejection.has_value());
   Q_EMIT transferRejected(session->peer, *updated->rejection);
   publishOperation(transferId, TransferOperation::Reject, TransferOperationOutcome::Applied);
+}
+
+void IncomingTransferRuntime::resolveIncomingConflict(
+    const ::relaydesk::transfer::TransferId &transferId, const QUuid &conflictId,
+    ::relaydesk::transfer::IncomingConflictDecision decision
+)
+{
+  auto *session = m_sessions.value(transferId, nullptr);
+  if (session == nullptr || session->pipeline == nullptr || !session->pendingConflict.has_value() ||
+      session->pendingConflict->conflictId != conflictId) {
+    return;
+  }
+  // Consume the public identity before waking the worker. Repeated and stale
+  // calls are then harmless even if a queued worker callback runs later.
+  session->pendingConflict.reset();
+  if (!session->pipeline->resolveConflict(conflictId, decision)) {
+    return;
+  }
 }
 
 bool IncomingTransferRuntime::receiveCommand(
@@ -1419,12 +1501,6 @@ void IncomingTransferRuntime::finishAcceptPreflight(
         TransferOperationError::InvalidState, result.safety.diagnostic
     );
     return;
-  }
-  // The frozen service facade has no per-file conflict-decision intent. An
-  // explicit user Accept is therefore the minimal Ask decision bridge and
-  // selects the non-destructive AutoRename policy for this transfer.
-  if (options.conflictPolicy == ConflictPolicy::Ask) {
-    options.conflictPolicy = ConflictPolicy::AutoRename;
   }
   const auto accepted = session->stateMachine.acceptIncoming(
       options.conflictPolicy, logicalDestination(options.destinationRoot), result.freeBytes,

@@ -732,7 +732,6 @@ void FileTransferRuntimeTests::incomingConflictPolicies_data()
   QTest::newRow("auto-rename") << ConflictPolicy::AutoRename << QStringLiteral("conflict (1).bin") << false;
   QTest::newRow("overwrite") << ConflictPolicy::Overwrite << QStringLiteral("conflict.bin") << true;
   QTest::newRow("skip") << ConflictPolicy::Skip << QString{} << false;
-  QTest::newRow("ask-user-accept") << ConflictPolicy::Ask << QStringLiteral("conflict (1).bin") << false;
 }
 
 void FileTransferRuntimeTests::incomingConflictPolicies()

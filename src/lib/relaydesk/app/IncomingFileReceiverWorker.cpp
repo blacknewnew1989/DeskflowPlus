@@ -104,6 +104,9 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
   }
 
   m_disposition = IncomingFileDisposition::Receive;
+  m_pendingConflict.reset();
+  m_pendingRequest.reset();
+  m_pendingResumeState.reset();
   m_conflictRequest = {
       .targetRoot = request.receiveRoot,
       .relativeProtocolPath = request.entry.relativeProtocolPath,
@@ -127,9 +130,20 @@ IncomingFileReceiverWorker::IncomingFileReceiverWorker(IPlatformFileSafety &file
           .diagnostic = failure->diagnostic,
       };
     }
+    const auto &ask = std::get<AskTarget>(decision);
+    m_pendingConflict = IncomingConflictPrompt{
+        .transferId = request.begin.transferId,
+        .conflictId = ask.conflictId,
+        .relativeProtocolPath = request.entry.relativeProtocolPath,
+        .existingIsDirectory = QFileInfo(ask.absolutePath).isDir(),
+    };
+    m_pendingRequest = request;
+    if (resumeState != nullptr) {
+      m_pendingResumeState = *resumeState;
+    }
     return {
         .error = FileReceiverError::UnsupportedConflictPolicy,
-        .diagnostic = QStringLiteral("conflict policy requires a decision before receiving file bytes"),
+        .diagnostic = QStringLiteral("conflict decision is pending"),
     };
   }
   const auto targetDirectory = ensureSafeDirectoryPath(
@@ -315,6 +329,46 @@ IncomingFileReceiverWorker::finish(const ::relaydesk::transfer::FileEndMessage &
 IncomingFileDisposition IncomingFileReceiverWorker::disposition() const noexcept
 {
   return m_disposition;
+}
+
+std::optional<::relaydesk::transfer::IncomingConflictPrompt>
+IncomingFileReceiverWorker::pendingConflict() const
+{
+  return m_pendingConflict;
+}
+
+::relaydesk::transfer::FileReceiverResult IncomingFileReceiverWorker::resolveConflict(
+    ::relaydesk::transfer::IncomingConflictDecision decision
+)
+{
+  using namespace ::relaydesk::transfer;
+
+  if (!isOwningThread()) {
+    return wrongThread();
+  }
+  if (!m_pendingRequest.has_value()) {
+    return {
+        .error = FileReceiverError::InvalidState,
+        .diagnostic = QStringLiteral("no conflict decision is pending"),
+    };
+  }
+  if (decision == IncomingConflictDecision::CancelTransfer) {
+    return {
+        .error = FileReceiverError::InvalidState,
+        .diagnostic = QStringLiteral("transfer cancellation requested"),
+    };
+  }
+  auto request = *m_pendingRequest;
+  request.conflictPolicy = decision == IncomingConflictDecision::Overwrite
+                               ? ConflictPolicy::Overwrite
+                               : decision == IncomingConflictDecision::AutoRename
+                                     ? ConflictPolicy::AutoRename
+                                     : ConflictPolicy::Skip;
+  const auto resumeState = m_pendingResumeState;
+  m_pendingConflict.reset();
+  m_pendingRequest.reset();
+  m_pendingResumeState.reset();
+  return resumeState.has_value() ? beginInternal(request, &*resumeState) : beginInternal(request, nullptr);
 }
 
 ::relaydesk::transfer::DurableCheckpointResult IncomingFileReceiverWorker::checkpoint(

@@ -97,6 +97,10 @@ public:
       const ::relaydesk::transfer::TransferCancelOptions &options
   ) override;
   void retry(const ::relaydesk::transfer::TransferId &transferId) override;
+  void resolveIncomingConflict(
+      const ::relaydesk::transfer::TransferId &transferId, const QUuid &conflictId,
+      ::relaydesk::transfer::IncomingConflictDecision decision
+  ) override;
   [[nodiscard]] QList<::relaydesk::transfer::TransferSnapshot> activeTransfers() const override;
 
 Q_SIGNALS:

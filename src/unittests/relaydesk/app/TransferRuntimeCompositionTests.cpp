@@ -56,6 +56,9 @@ public:
   void retry(const TransferId &) override
   {
   }
+  void resolveIncomingConflict(const TransferId &, const QUuid &, IncomingConflictDecision) override
+  {
+  }
   QList<TransferSnapshot> activeTransfers() const override
   {
     return {};

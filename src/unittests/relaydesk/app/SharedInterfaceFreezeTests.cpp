@@ -167,8 +167,12 @@ using AcceptMethod = void (IFileTransferService::*)(const TransferId &, const Re
 using RejectMethod = void (IFileTransferService::*)(const TransferId &, RejectReason);
 using TransferIdMethod = void (IFileTransferService::*)(const TransferId &);
 using CancelMethod = void (IFileTransferService::*)(const TransferId &, const TransferCancelOptions &);
+using ResolveConflictMethod = void (IFileTransferService::*)(
+    const TransferId &, const QUuid &, IncomingConflictDecision
+);
 using ActiveTransfersMethod = QList<TransferSnapshot> (IFileTransferService::*)() const;
 using IncomingOfferSignal = void (IFileTransferService::*)(IncomingOffer);
+using IncomingConflictSignal = void (IFileTransferService::*)(IncomingConflictPrompt);
 using TransferSnapshotSignal = void (IFileTransferService::*)(TransferSnapshot);
 using TransferRemovedSignal = void (IFileTransferService::*)(TransferId);
 using TransferOperationSignal = void (IFileTransferService::*)(TransferOperationResult);
@@ -196,8 +200,12 @@ static_assert(std::is_same_v<decltype(&IFileTransferService::pause), TransferIdM
 static_assert(std::is_same_v<decltype(&IFileTransferService::resume), TransferIdMethod>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::cancel), CancelMethod>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::retry), TransferIdMethod>);
+static_assert(std::is_same_v<decltype(&IFileTransferService::resolveIncomingConflict), ResolveConflictMethod>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::activeTransfers), ActiveTransfersMethod>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::incomingOffer), IncomingOfferSignal>);
+static_assert(
+    std::is_same_v<decltype(&IFileTransferService::incomingConflictDecisionRequired), IncomingConflictSignal>
+);
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferAdded), TransferSnapshotSignal>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferChanged), TransferSnapshotSignal>);
 static_assert(std::is_same_v<decltype(&IFileTransferService::transferRemoved), TransferRemovedSignal>);
@@ -298,6 +306,7 @@ static_assert(std::is_copy_constructible_v<DeviceId>);
 static_assert(std::is_copy_constructible_v<DeviceInfo>);
 static_assert(std::is_copy_constructible_v<DeviceSnapshot>);
 static_assert(std::is_copy_constructible_v<IncomingOffer>);
+static_assert(std::is_copy_constructible_v<IncomingConflictPrompt>);
 static_assert(std::is_copy_constructible_v<TransferSnapshot>);
 static_assert(std::is_copy_constructible_v<TransferHistoryRecord>);
 static_assert(std::is_copy_constructible_v<SendOptions>);
@@ -336,6 +345,7 @@ Q_SIGNALS:
 void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
 {
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::incomingOffer).isValid());
+  QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::incomingConflictDecisionRequired).isValid());
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferAdded).isValid());
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferChanged).isValid());
   QVERIFY(QMetaMethod::fromSignal(&IFileTransferService::transferRemoved).isValid());
@@ -347,6 +357,8 @@ void SharedInterfaceFreezeTests::freezesServiceSignalsAndMetaTypes()
   QVERIFY(QMetaType::fromType<DeviceInfo>().isValid());
   QVERIFY(QMetaType::fromType<DeviceSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<IncomingOffer>().isValid());
+  QVERIFY(QMetaType::fromType<IncomingConflictPrompt>().isValid());
+  QVERIFY(QMetaType::fromType<IncomingConflictDecision>().isValid());
   QVERIFY(QMetaType::fromType<TransferSnapshot>().isValid());
   QVERIFY(QMetaType::fromType<TransferHistoryRecord>().isValid());
   QVERIFY(QMetaType::fromType<SendOptions>().isValid());

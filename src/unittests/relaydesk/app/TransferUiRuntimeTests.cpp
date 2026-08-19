@@ -155,6 +155,10 @@ public:
     retriedIds.append(transferId);
   }
 
+  void resolveIncomingConflict(const TransferId &, const QUuid &, IncomingConflictDecision) override
+  {
+  }
+
   [[nodiscard]] QList<TransferSnapshot> activeTransfers() const override
   {
     ++activeTransferCalls;

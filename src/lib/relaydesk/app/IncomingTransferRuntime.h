@@ -51,6 +51,10 @@ public:
       const ::relaydesk::transfer::TransferId &transferId,
       ::relaydesk::transfer::RejectReason reason
   );
+  void resolveIncomingConflict(
+      const ::relaydesk::transfer::TransferId &transferId, const QUuid &conflictId,
+      ::relaydesk::transfer::IncomingConflictDecision decision
+  );
   [[nodiscard]] bool receiveCommand(
       const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
       QString *diagnostic = nullptr
@@ -78,6 +82,8 @@ public:
 
 Q_SIGNALS:
   void incomingOffer(::relaydesk::transfer::IncomingOffer offer);
+  void incomingConflictDecisionRequired(::relaydesk::transfer::IncomingConflictPrompt prompt);
+  void incomingConflictCancelRequested(::relaydesk::transfer::TransferId transferId);
   void transferAccepted(
       deskflow::relaydesk::DeviceId peerDeviceId,
       ::relaydesk::transfer::TransferAccept acceptance
