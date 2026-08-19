@@ -31,7 +31,17 @@
     <message><source>devices.send.unavailable</source><translation>I file possono essere inviati solo a un dispositivo attendibile online</translation></message>
     <message><source>devices.send.local_only</source><translation>Scegli file o cartelle memorizzati su questo dispositivo</translation></message>
     <message><source>devices.send.empty</source><translation>Scegli almeno un file o una cartella</translation></message>
-    <message><source>devices.send.unreadable</source><translation>Impossibile leggere uno o più elementi selezionati</translation></message><message><source>devices.manual_address.manage</source><translation>Add address</translation></message><message><source>devices.manual_address.title</source><translation>Manual addresses</translation></message><message><source>devices.manual_address.host</source><translation>Host</translation></message><message><source>devices.manual_address.input_port</source><translation>Input port</translation></message><message><source>devices.manual_address.file_port</source><translation>File port</translation></message><message><source>devices.manual_address.add</source><translation>Add</translation></message><message><source>devices.manual_address.remove</source><translation>Remove</translation></message><message><source>devices.manual_address.save</source><translation>Save</translation></message><message><source>devices.manual_address.invalid</source><translation>Enter a valid host and ports</translation></message><message><source>devices.manual_address.empty</source><translation>No manual addresses</translation></message>
+    <message><source>devices.send.unreadable</source><translation>Impossibile leggere uno o più elementi selezionati</translation></message>
+    <message><source>devices.manual_address.manage</source><translation>Aggiungi indirizzo</translation></message>
+    <message><source>devices.manual_address.title</source><translation>Indirizzi manuali</translation></message>
+    <message><source>devices.manual_address.host</source><translation>Host</translation></message>
+    <message><source>devices.manual_address.input_port</source><translation>Porta di input</translation></message>
+    <message><source>devices.manual_address.file_port</source><translation>Porta file</translation></message>
+    <message><source>devices.manual_address.add</source><translation>Aggiungi</translation></message>
+    <message><source>devices.manual_address.remove</source><translation>Rimuovi</translation></message>
+    <message><source>devices.manual_address.save</source><translation>Salva</translation></message>
+    <message><source>devices.manual_address.invalid</source><translation>Inserisci host e porte validi</translation></message>
+    <message><source>devices.manual_address.empty</source><translation>Nessun indirizzo manuale</translation></message>
     <message><source>pairing.title</source><translation>Associa dispositivo</translation></message>
     <message><source>pairing.code.prompt</source><translation>Inserisci il codice a sei cifre</translation></message>
     <message><source>pairing.state.ready</source><translation>Pronto per l’associazione</translation></message>

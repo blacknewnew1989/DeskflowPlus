@@ -31,7 +31,17 @@
     <message><source>devices.send.unavailable</source><translation>온라인 상태인 신뢰할 수 있는 기기에만 파일을 보낼 수 있습니다</translation></message>
     <message><source>devices.send.local_only</source><translation>이 기기에 저장된 파일이나 폴더를 선택하세요</translation></message>
     <message><source>devices.send.empty</source><translation>파일이나 폴더를 하나 이상 선택하세요</translation></message>
-    <message><source>devices.send.unreadable</source><translation>선택한 항목 중 일부를 읽을 수 없습니다</translation></message><message><source>devices.manual_address.manage</source><translation>Add address</translation></message><message><source>devices.manual_address.title</source><translation>Manual addresses</translation></message><message><source>devices.manual_address.host</source><translation>Host</translation></message><message><source>devices.manual_address.input_port</source><translation>Input port</translation></message><message><source>devices.manual_address.file_port</source><translation>File port</translation></message><message><source>devices.manual_address.add</source><translation>Add</translation></message><message><source>devices.manual_address.remove</source><translation>Remove</translation></message><message><source>devices.manual_address.save</source><translation>Save</translation></message><message><source>devices.manual_address.invalid</source><translation>Enter a valid host and ports</translation></message><message><source>devices.manual_address.empty</source><translation>No manual addresses</translation></message>
+    <message><source>devices.send.unreadable</source><translation>선택한 항목 중 일부를 읽을 수 없습니다</translation></message>
+    <message><source>devices.manual_address.manage</source><translation>주소 추가</translation></message>
+    <message><source>devices.manual_address.title</source><translation>수동 주소</translation></message>
+    <message><source>devices.manual_address.host</source><translation>호스트</translation></message>
+    <message><source>devices.manual_address.input_port</source><translation>입력 포트</translation></message>
+    <message><source>devices.manual_address.file_port</source><translation>파일 포트</translation></message>
+    <message><source>devices.manual_address.add</source><translation>추가</translation></message>
+    <message><source>devices.manual_address.remove</source><translation>삭제</translation></message>
+    <message><source>devices.manual_address.save</source><translation>저장</translation></message>
+    <message><source>devices.manual_address.invalid</source><translation>올바른 호스트와 포트를 입력하세요</translation></message>
+    <message><source>devices.manual_address.empty</source><translation>수동 주소가 없습니다</translation></message>
     <message><source>pairing.title</source><translation>기기 페어링</translation></message>
     <message><source>pairing.code.prompt</source><translation>6자리 코드를 입력하세요</translation></message>
     <message><source>pairing.state.ready</source><translation>페어링 준비됨</translation></message>

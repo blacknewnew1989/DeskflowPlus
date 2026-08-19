@@ -32,7 +32,16 @@
     <message><source>devices.send.local_only</source><translation>请选择存储在本机上的文件或文件夹</translation></message>
     <message><source>devices.send.empty</source><translation>请至少选择一个文件或文件夹</translation></message>
     <message><source>devices.send.unreadable</source><translation>一个或多个所选项目无法读取</translation></message>
-    <message><source>devices.manual_address.manage</source><translation>添加地址</translation></message><message><source>devices.manual_address.title</source><translation>手动地址</translation></message><message><source>devices.manual_address.host</source><translation>主机</translation></message><message><source>devices.manual_address.input_port</source><translation>输入端口</translation></message><message><source>devices.manual_address.file_port</source><translation>文件端口</translation></message><message><source>devices.manual_address.add</source><translation>添加</translation></message><message><source>devices.manual_address.remove</source><translation>删除</translation></message><message><source>devices.manual_address.save</source><translation>保存</translation></message><message><source>devices.manual_address.invalid</source><translation>请输入有效的主机和端口</translation></message><message><source>devices.manual_address.empty</source><translation>没有手动地址</translation></message>
+    <message><source>devices.manual_address.manage</source><translation>添加地址</translation></message>
+    <message><source>devices.manual_address.title</source><translation>手动地址</translation></message>
+    <message><source>devices.manual_address.host</source><translation>主机</translation></message>
+    <message><source>devices.manual_address.input_port</source><translation>输入端口</translation></message>
+    <message><source>devices.manual_address.file_port</source><translation>文件端口</translation></message>
+    <message><source>devices.manual_address.add</source><translation>添加</translation></message>
+    <message><source>devices.manual_address.remove</source><translation>删除</translation></message>
+    <message><source>devices.manual_address.save</source><translation>保存</translation></message>
+    <message><source>devices.manual_address.invalid</source><translation>请输入有效的主机和端口</translation></message>
+    <message><source>devices.manual_address.empty</source><translation>没有手动地址</translation></message>
     <message><source>pairing.title</source><translation>配对设备</translation></message>
     <message><source>pairing.code.prompt</source><translation>输入六位配对码</translation></message>
     <message><source>pairing.state.ready</source><translation>可以开始配对</translation></message>

@@ -31,7 +31,17 @@
     <message><source>devices.send.unavailable</source><translation>Файлы можно отправлять только доверенному устройству в сети</translation></message>
     <message><source>devices.send.local_only</source><translation>Выберите файлы или папки на этом устройстве</translation></message>
     <message><source>devices.send.empty</source><translation>Выберите хотя бы один файл или папку</translation></message>
-    <message><source>devices.send.unreadable</source><translation>Не удаётся прочитать один или несколько выбранных объектов</translation></message><message><source>devices.manual_address.manage</source><translation>Add address</translation></message><message><source>devices.manual_address.title</source><translation>Manual addresses</translation></message><message><source>devices.manual_address.host</source><translation>Host</translation></message><message><source>devices.manual_address.input_port</source><translation>Input port</translation></message><message><source>devices.manual_address.file_port</source><translation>File port</translation></message><message><source>devices.manual_address.add</source><translation>Add</translation></message><message><source>devices.manual_address.remove</source><translation>Remove</translation></message><message><source>devices.manual_address.save</source><translation>Save</translation></message><message><source>devices.manual_address.invalid</source><translation>Enter a valid host and ports</translation></message><message><source>devices.manual_address.empty</source><translation>No manual addresses</translation></message>
+    <message><source>devices.send.unreadable</source><translation>Не удаётся прочитать один или несколько выбранных объектов</translation></message>
+    <message><source>devices.manual_address.manage</source><translation>Добавить адрес</translation></message>
+    <message><source>devices.manual_address.title</source><translation>Ручные адреса</translation></message>
+    <message><source>devices.manual_address.host</source><translation>Хост</translation></message>
+    <message><source>devices.manual_address.input_port</source><translation>Входной порт</translation></message>
+    <message><source>devices.manual_address.file_port</source><translation>Порт файлов</translation></message>
+    <message><source>devices.manual_address.add</source><translation>Добавить</translation></message>
+    <message><source>devices.manual_address.remove</source><translation>Удалить</translation></message>
+    <message><source>devices.manual_address.save</source><translation>Сохранить</translation></message>
+    <message><source>devices.manual_address.invalid</source><translation>Введите корректные хост и порты</translation></message>
+    <message><source>devices.manual_address.empty</source><translation>Нет ручных адресов</translation></message>
     <message><source>pairing.title</source><translation>Сопряжение устройства</translation></message>
     <message><source>pairing.code.prompt</source><translation>Введите шестизначный код</translation></message>
     <message><source>pairing.state.ready</source><translation>Готово к сопряжению</translation></message>
