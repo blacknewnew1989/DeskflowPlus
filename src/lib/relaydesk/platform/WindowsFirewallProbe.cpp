@@ -575,6 +575,14 @@ PermissionOpenResult WindowsFirewallProbe::openSystemSettings(PermissionKind kin
 WindowsFirewallInspection WindowsFirewallProbe::inspectCurrentSystem(WindowsFirewallProbeRequest request)
 {
 #if defined(Q_OS_WIN)
+  if (request.expectedTcpPorts.isEmpty()) {
+    return {
+        .firewall = WindowsFirewallRuleStatus::NotRequired,
+        .listeningPort = WindowsListeningPortStatus::NotRequired,
+        .firewallDiagnostic = QStringLiteral("no active RelayDesk TCP listeners require a firewall rule"),
+        .listeningPortDiagnostic = QStringLiteral("no TCP listener ports were requested"),
+    };
+  }
   WindowsFirewallInspection result;
   result.firewall = inspectFirewallRules(request, &result.firewallDiagnostic);
   result.listeningPort = inspectListeningPorts(request, &result.listeningPortDiagnostic);

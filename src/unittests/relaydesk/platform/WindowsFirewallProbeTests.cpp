@@ -46,6 +46,7 @@ private Q_SLOTS:
   void staleAsyncInspectionCannotReplaceNewestSnapshot();
   void opensOnlyActionableFirewallSettings();
   void inspectsRealCurrentProcessListener();
+  void skipsFirewallInspectionWhenNoListenersAreExpected();
   void excludesStoppedInputCorePortFromActiveFileListenerProbe();
   void collectsOnlyNonZeroListeningPorts_data();
   void collectsOnlyNonZeroListeningPorts();
@@ -71,6 +72,11 @@ void WindowsFirewallProbeTests::publishesStablePermissionMappings_data()
       << WindowsFirewallRuleStatus::MissingAllowRule << PermissionState::NeedsAction
       << PermissionErrorCode::WindowsFirewallBlocked << WindowsListeningPortStatus::Unavailable
       << PermissionState::Unknown << PermissionErrorCode::ProbeUnavailable;
+  QTest::newRow("missing-listening") << WindowsFirewallRuleStatus::MissingAllowRule
+                                     << PermissionState::NeedsAction
+                                     << PermissionErrorCode::WindowsFirewallBlocked
+                                     << WindowsListeningPortStatus::Listening << PermissionState::Granted
+                                     << PermissionErrorCode::None;
   QTest::newRow("disabled-no-ports") << WindowsFirewallRuleStatus::NotRequired << PermissionState::NotRequired
                                     << PermissionErrorCode::None << WindowsListeningPortStatus::NotRequired
                                     << PermissionState::NotRequired << PermissionErrorCode::None;
@@ -241,6 +247,35 @@ void WindowsFirewallProbeTests::inspectsRealCurrentProcessListener()
 #else
   QCOMPARE(inspection.listeningPort, WindowsListeningPortStatus::Unavailable);
   QCOMPARE(inspection.firewall, WindowsFirewallRuleStatus::Unavailable);
+#endif
+}
+
+void WindowsFirewallProbeTests::skipsFirewallInspectionWhenNoListenersAreExpected()
+{
+  const WindowsFirewallProbeRequest request{
+      .executablePath = QCoreApplication::applicationFilePath(),
+      .processId = static_cast<quint32>(QCoreApplication::applicationPid()),
+  };
+  const auto inspection = WindowsFirewallProbe::inspectCurrentSystem(request);
+
+#if defined(Q_OS_WIN)
+  QCOMPARE(inspection.firewall, WindowsFirewallRuleStatus::NotRequired);
+  QCOMPARE(inspection.listeningPort, WindowsListeningPortStatus::NotRequired);
+
+  WindowsFirewallProbe probe;
+  QSignalSpy changed(&probe, &WindowsFirewallProbe::snapshotChanged);
+  probe.refresh(request);
+  QTRY_COMPARE_WITH_TIMEOUT(changed.count(), 1, 3000);
+  const auto snapshot = probe.current();
+  const auto &firewall = entry(snapshot, PermissionKind::WindowsFirewall);
+  const auto &listener = entry(snapshot, PermissionKind::WindowsListeningPort);
+  QCOMPARE(firewall.state, PermissionState::NotRequired);
+  QCOMPARE(firewall.errorCode, PermissionErrorCode::None);
+  QCOMPARE(listener.state, PermissionState::NotRequired);
+  QCOMPARE(listener.errorCode, PermissionErrorCode::None);
+#else
+  QCOMPARE(inspection.firewall, WindowsFirewallRuleStatus::Unavailable);
+  QCOMPARE(inspection.listeningPort, WindowsListeningPortStatus::Unavailable);
 #endif
 }
 
