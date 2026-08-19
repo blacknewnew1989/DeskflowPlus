@@ -1,7 +1,5 @@
 # SPDX-FileCopyrightText: Chris Rizzitello <sithlord48@gmail.com>
 # SPDX-License-Identifier: MIT
-set_directory_properties(PROPERTIES CLEAN_NO_CUSTOM 1)
-option(CLEAN_TRS "Clean obsolete translations from tr files" OFF)
 find_package(Qt6 ${REQUIRED_QT_VERSION} REQUIRED NO_MODULE COMPONENTS LinguistTools)
 
 # All translation targets consume the canonical RelayDesk language list.
@@ -14,25 +12,14 @@ foreach(LANG IN LISTS RELAYDESK_SUPPORTED_LANGUAGES)
   endif()
 endforeach()
 
-set(TR_OPTIONS -no-ui-lines -locations none -silent)
-if(CLEAN_TRS)
-  list(APPEND TR_OPTIONS -no-obsolete)
-endif()
-
-# English will have only plurals
-qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${CMAKE_PROJECT_NAME}_en.ts OPTIONS -pluralonly ${TR_OPTIONS})
-
-# Other languages contain the full set of strings.
-qt_create_translation(TRS ${CMAKE_SOURCE_DIR}/src ${${CMAKE_PROJECT_NAME}_TRS} OPTIONS ${TR_OPTIONS})
-
-# RelayDesk UI uses semantic keys, so keep its source-language catalog complete
-# instead of applying Deskflow's plurals-only English catalog rule.
-qt_create_translation(
-  RELAYDESK_TRS
-  ${CMAKE_SOURCE_DIR}/src/lib/relaydesk/i18n
-  ${RELAYDESK_TS}
-  OPTIONS ${TR_OPTIONS}
+# Normal builds compile the reviewed catalogs without rewriting source files.
+qt_add_translation(
+  TRS
+  ${CMAKE_PROJECT_NAME}_en.ts
+  ${${CMAKE_PROJECT_NAME}_TRS}
+  OPTIONS -silent
 )
+qt_add_translation(RELAYDESK_TRS ${RELAYDESK_TS} OPTIONS -silent)
 
 #ensure that the targets are built always
 add_custom_target(app_translations ALL DEPENDS ${TRS} ${RELAYDESK_TRS})

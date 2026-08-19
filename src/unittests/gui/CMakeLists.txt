@@ -17,6 +17,20 @@ create_test(
   SOURCE MainWindowLayoutTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/gui"
 )
+add_dependencies(MainWindowLayoutTests app_translations)
+set(main_window_layout_translations_dir "$<TARGET_FILE_DIR:MainWindowLayoutTests>/translations")
+add_custom_target(
+  MainWindowLayoutTestTranslations
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${main_window_layout_translations_dir}"
+  COMMAND
+    ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_BINARY_DIR}/translations/${CMAKE_PROJECT_NAME}_zh_CN.qm"
+    "${CMAKE_BINARY_DIR}/translations/${RELAYDESK_TRANSLATION_CATALOG}_zh_CN.qm"
+    "${main_window_layout_translations_dir}"
+  VERBATIM
+)
+add_dependencies(MainWindowLayoutTestTranslations app_translations)
+add_dependencies(MainWindowLayoutTests MainWindowLayoutTestTranslations)
 set_tests_properties(
   MainWindowLayoutTests
   PROPERTIES
