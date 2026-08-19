@@ -20,8 +20,8 @@
     <message><source>devices.action.send_file</source><translation>Enviar archivos</translation></message>
     <message><source>devices.action.send_folder</source><translation>Enviar carpeta</translation></message>
     <message><source>devices.action.revoke_trust</source><translation>Revocar confianza</translation></message>
-    <message><source>devices.revoke_trust.title</source><translation>Revocar confianza?</translation></message>
-    <message><source>devices.revoke_trust.confirmation</source><translation>Quitar la confianza de %1? Su conexion de archivos se cerrara y la reconexion automatica se detendra.</translation></message>
+    <message><source>devices.revoke_trust.title</source><translation>¿Revocar la confianza?</translation></message>
+    <message><source>devices.revoke_trust.confirmation</source><translation>¿Quitar la confianza de %1? Se cerrará su conexión de archivos y se detendrá la reconexión automática.</translation></message>
     <message><source>devices.action.more</source><translation>Más</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Organizar automáticamente</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Restablecer disposición</translation></message>

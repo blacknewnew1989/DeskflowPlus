@@ -19,9 +19,9 @@
     <message><source>devices.status.transfer_busy</source><translation>Trasferimento file in corso</translation></message>
     <message><source>devices.action.send_file</source><translation>Invia file</translation></message>
     <message><source>devices.action.send_folder</source><translation>Invia cartella</translation></message>
-    <message><source>devices.action.revoke_trust</source><translation>Revoca attendibilita</translation></message>
-    <message><source>devices.revoke_trust.title</source><translation>Revocare l'attendibilita?</translation></message>
-    <message><source>devices.revoke_trust.confirmation</source><translation>Rimuovere l'attendibilita di %1? La connessione file verra chiusa e la riconnessione automatica verra interrotta.</translation></message>
+    <message><source>devices.action.revoke_trust</source><translation>Revoca attendibilità</translation></message>
+    <message><source>devices.revoke_trust.title</source><translation>Revocare l'attendibilità?</translation></message>
+    <message><source>devices.revoke_trust.confirmation</source><translation>Rimuovere l'attendibilità di %1? La connessione per i file verrà chiusa e la riconnessione automatica verrà interrotta.</translation></message>
     <message><source>devices.action.more</source><translation>Altro</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Disponi automaticamente</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Ripristina disposizione</translation></message>
