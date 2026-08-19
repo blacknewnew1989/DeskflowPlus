@@ -20,6 +20,8 @@
     <message><source>devices.action.send_file</source><translation>Отправить файлы</translation></message>
     <message><source>devices.action.send_folder</source><translation>Отправить папку</translation></message>
     <message><source>devices.action.revoke_trust</source><translation>Отозвать доверие</translation></message>
+    <message><source>devices.revoke_trust.title</source><translation>Отозвать доверие?</translation></message>
+    <message><source>devices.revoke_trust.confirmation</source><translation>Удалить доверие к %1? Файловое соединение будет закрыто, а автоподключение остановлено.</translation></message>
     <message><source>devices.action.more</source><translation>Ещё</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Расставить автоматически</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Сбросить расположение</translation></message>

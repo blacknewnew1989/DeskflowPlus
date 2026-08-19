@@ -13,7 +13,9 @@
 
 #include "../FakePairingService.h"
 
+#include <QAbstractButton>
 #include <QCoreApplication>
+#include <QAction>
 #include <QDateTime>
 #include <QDialog>
 #include <QDragEnterEvent>
@@ -24,12 +26,14 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QToolButton>
+#include <QTimer>
 
 #include <chrono>
 #include <utility>
@@ -225,20 +229,52 @@ void DevicesDockTests::emitsTrustRevocationIntentForTrustedDevice()
   qRegisterMetaType<DeviceId>();
   Fixture fixture;
   auto peer = peerSnapshot(DevicePresence::Online, true);
+  peer.displayName = QStringLiteral("Studio Mac for the Long Device Name Layout Regression");
   fixture.devices.upsertRemoteDevice(peer);
-  fixture.dock.resize(420, 520);
+  fixture.dock.resize(520, 380);
   fixture.dock.show();
 
   auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
-  auto *revoke = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskRevokeTrustButton"));
+  auto *more = fixture.dock.findChild<QToolButton *>(QStringLiteral("relaydeskDeviceMoreButton"));
+  auto *revoke = fixture.dock.findChild<QAction *>(QStringLiteral("relaydeskRevokeTrustMenuAction"));
   QVERIFY(list != nullptr);
+  QVERIFY(more != nullptr);
   QVERIFY(revoke != nullptr);
   list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
-  QTRY_VERIFY(revoke->isVisible());
+  QTRY_VERIFY(more->isVisible());
+  QVERIFY(more->isEnabled());
+  QVERIFY(more->width() <= 40);
+  QCOMPARE(more->accessibleName(), QStringLiteral("More"));
+  QCOMPARE(more->toolTip(), QStringLiteral("More"));
+  QCOMPARE(revoke->text(), QStringLiteral("Revoke trust"));
   QVERIFY(revoke->isEnabled());
 
   QSignalSpy requested(&fixture.dock, &DevicesDock::trustRevocationRequested);
-  QTest::mouseClick(revoke, Qt::LeftButton);
+  bool confirmationSeen = false;
+  QTimer::singleShot(0, [&confirmationSeen]() {
+    auto *confirmation = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+    if (confirmation == nullptr)
+      return;
+    confirmationSeen = confirmation->windowTitle() == QStringLiteral("Revoke trust?") &&
+                       confirmation->text().contains(QStringLiteral("Studio Mac for the Long Device Name Layout Regression"));
+    confirmation->reject();
+  });
+  revoke->trigger();
+  QVERIFY(confirmationSeen);
+  QCOMPARE(requested.count(), 0);
+
+  QTimer::singleShot(0, []() {
+    auto *confirmation = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+    if (confirmation == nullptr)
+      return;
+    for (auto *button : confirmation->buttons()) {
+      if (button->text() == QStringLiteral("Revoke trust")) {
+        button->click();
+        return;
+      }
+    }
+  });
+  revoke->trigger();
   QCOMPARE(requested.count(), 1);
   QCOMPARE(*static_cast<const DeviceId *>(requested.first().at(0).constData()), peer.id);
 }
@@ -251,15 +287,17 @@ void DevicesDockTests::rejectsTrustRevocationIntentForUntrustedDevice()
   fixture.dock.show();
 
   auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
-  auto *revoke = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskRevokeTrustButton"));
+  auto *more = fixture.dock.findChild<QToolButton *>(QStringLiteral("relaydeskDeviceMoreButton"));
+  auto *revoke = fixture.dock.findChild<QAction *>(QStringLiteral("relaydeskRevokeTrustMenuAction"));
   QVERIFY(list != nullptr);
+  QVERIFY(more != nullptr);
   QVERIFY(revoke != nullptr);
   list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
-  QTRY_VERIFY(!revoke->isVisible());
+  QTRY_VERIFY(!more->isVisible());
   QVERIFY(!revoke->isEnabled());
 
   QSignalSpy requested(&fixture.dock, &DevicesDock::trustRevocationRequested);
-  revoke->click();
+  revoke->trigger();
   QCOMPARE(requested.count(), 0);
 }
 

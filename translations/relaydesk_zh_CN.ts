@@ -20,6 +20,8 @@
     <message><source>devices.action.send_file</source><translation>发送文件</translation></message>
     <message><source>devices.action.send_folder</source><translation>发送文件夹</translation></message>
     <message><source>devices.action.revoke_trust</source><translation>撤销信任</translation></message>
+    <message><source>devices.revoke_trust.title</source><translation>撤销信任？</translation></message>
+    <message><source>devices.revoke_trust.confirmation</source><translation>要撤销对 %1 的信任吗？其文件连接将关闭，自动重连将停止。</translation></message>
     <message><source>devices.action.more</source><translation>更多</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>自动排列</translation></message>
     <message><source>devices.action.reset_layout</source><translation>恢复默认布局</translation></message>

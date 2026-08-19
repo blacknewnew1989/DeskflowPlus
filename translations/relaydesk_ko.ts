@@ -20,6 +20,8 @@
     <message><source>devices.action.send_file</source><translation>파일 보내기</translation></message>
     <message><source>devices.action.send_folder</source><translation>폴더 보내기</translation></message>
     <message><source>devices.action.revoke_trust</source><translation>신뢰 취소</translation></message>
+    <message><source>devices.revoke_trust.title</source><translation>신뢰를 취소할까요?</translation></message>
+    <message><source>devices.revoke_trust.confirmation</source><translation>%1의 신뢰를 해제할까요? 파일 연결이 닫히고 자동 재연결이 중지됩니다.</translation></message>
     <message><source>devices.action.more</source><translation>더 보기</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>자동 정렬</translation></message>
     <message><source>devices.action.reset_layout</source><translation>배치 초기화</translation></message>

@@ -20,6 +20,8 @@
     <message><source>devices.action.send_file</source><translation>Send files</translation></message>
     <message><source>devices.action.send_folder</source><translation>Send folder</translation></message>
     <message><source>devices.action.revoke_trust</source><translation>Revoke trust</translation></message>
+    <message><source>devices.revoke_trust.title</source><translation>Revoke trust?</translation></message>
+    <message><source>devices.revoke_trust.confirmation</source><translation>Remove trust for %1? Its file connection will close and automatic reconnect will stop.</translation></message>
     <message><source>devices.action.more</source><translation>More</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Auto arrange</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Reset layout</translation></message>

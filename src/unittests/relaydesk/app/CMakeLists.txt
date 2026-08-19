@@ -51,6 +51,13 @@ create_test(
 )
 
 create_test(
+  NAME RelayDeskAutoReconnectRuntimeTests
+  DEPENDS relaydesk_app
+  SOURCE AutoReconnectRuntimeTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+)
+
+create_test(
   NAME RelayDeskIncomingFileReceiverWorkerTests
   DEPENDS relaydesk_app
   SOURCE IncomingFileReceiverWorkerTests.cpp

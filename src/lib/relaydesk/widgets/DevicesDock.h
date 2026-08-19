@@ -27,9 +27,11 @@ class QFrame;
 class QLabel;
 class QLineEdit;
 class QListView;
+class QMenu;
 class QModelIndex;
 class QPushButton;
 class QToolButton;
+class QAction;
 class QWidget;
 
 namespace deskflow::relaydesk::model {
@@ -114,7 +116,9 @@ private:
   QListView *m_deviceList = nullptr;
   QLabel *m_emptyLabel = nullptr;
   QPushButton *m_pairButton = nullptr;
-  QPushButton *m_revokeTrustButton = nullptr;
+  QToolButton *m_moreButton = nullptr;
+  QMenu *m_moreMenu = nullptr;
+  QAction *m_revokeTrustAction = nullptr;
   QPushButton *m_sendFilesButton = nullptr;
   QPushButton *m_sendFolderButton = nullptr;
   QLabel *m_sendFeedback = nullptr;

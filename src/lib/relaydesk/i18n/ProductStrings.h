@@ -30,6 +30,8 @@ enum class Text
   DevicesActionSendFile,
   DevicesActionSendFolder,
   DevicesActionRevokeTrust,
+  DevicesRevokeTrustTitle,
+  DevicesRevokeTrustConfirmation,
   DevicesActionMore,
   DevicesActionAutoArrange,
   DevicesActionResetLayout,

@@ -9,6 +9,8 @@
 #include <QHash>
 #include <QObject>
 
+class AutoReconnectRuntimeTests;
+
 namespace deskflow::relaydesk {
 class DeviceDiscoveryRuntime;
 class FileTransferRuntime;
@@ -28,6 +30,7 @@ public:
   void stop();
 
 private:
+  friend class ::AutoReconnectRuntimeTests;
   void observe(DeviceSnapshot snapshot);
   void connectCandidate(
       const DeviceId &deviceId, const AddressCandidate &candidate,
