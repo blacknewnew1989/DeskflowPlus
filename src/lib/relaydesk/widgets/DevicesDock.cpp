@@ -315,6 +315,7 @@ DevicesDock::DevicesDock(
   m_moreButton = new QToolButton(body);
   m_moreButton->setObjectName(QStringLiteral("relaydeskDeviceMoreButton"));
   m_moreButton->setAutoRaise(true);
+  m_moreButton->setFixedSize(32, 32);
   m_moreButton->setText(QStringLiteral("..."));
   m_moreButton->setPopupMode(QToolButton::InstantPopup);
   m_moreMenu = new QMenu(m_moreButton);
