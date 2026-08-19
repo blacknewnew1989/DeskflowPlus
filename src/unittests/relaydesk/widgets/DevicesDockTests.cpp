@@ -139,6 +139,7 @@ private Q_SLOTS:
   void cancellingManualAddressChangesDoesNotSaveOrCommit();
   void removingManualAddressEditsWorkingCopyUntilSaved();
   void duplicateManualAddressesAreNormalizedBeforeSave();
+  void labelsManualAddressInputsAtCompactSize();
 };
 
 void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
@@ -365,6 +366,55 @@ void DevicesDockTests::duplicateManualAddressesAreNormalizedBeforeSave()
   });
   manage->click();
   QCOMPARE(savedAddresses, QList<ManualAddress>{*parseManualAddress(QStringLiteral("host.local"))});
+}
+
+void DevicesDockTests::labelsManualAddressInputsAtCompactSize()
+{
+  Fixture fixture;
+  fixture.dock.resize(520, 380);
+  fixture.dock.show();
+  auto *manage = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskManageManualAddressesButton"));
+  QVERIFY(manage != nullptr);
+  QTimer::singleShot(0, [&fixture]() {
+    auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
+    QVERIFY(dialog != nullptr);
+    dialog->resize(520, 380);
+    QCoreApplication::processEvents();
+    const auto labeledControl = [dialog](const QString &labelName, const QString &controlName, const QString &text) {
+      auto *label = dialog->findChild<QLabel *>(labelName);
+      auto *control = dialog->findChild<QWidget *>(controlName);
+      QVERIFY(label != nullptr);
+      QVERIFY(control != nullptr);
+      QVERIFY(label->isVisible());
+      QVERIFY(control->isVisible());
+      QCOMPARE(label->text(), text);
+      QCOMPARE(label->buddy(), control);
+      QCOMPARE(control->accessibleName(), text);
+      QVERIFY(dialog->rect().contains(label->geometry()));
+      QVERIFY(dialog->rect().contains(control->geometry()));
+      QVERIFY(label->geometry().bottom() < control->geometry().top());
+    };
+    labeledControl(
+        QStringLiteral("relaydeskManualAddressHostLabel"), QStringLiteral("relaydeskManualAddressHost"),
+        QStringLiteral("Host")
+    );
+    labeledControl(
+        QStringLiteral("relaydeskManualAddressInputPortLabel"),
+        QStringLiteral("relaydeskManualAddressInputPort"), QStringLiteral("Input port")
+    );
+    labeledControl(
+        QStringLiteral("relaydeskManualAddressFilePortLabel"),
+        QStringLiteral("relaydeskManualAddressFilePort"), QStringLiteral("File port")
+    );
+    auto *host = dialog->findChild<QWidget *>(QStringLiteral("relaydeskManualAddressHost"));
+    auto *inputPort = dialog->findChild<QWidget *>(QStringLiteral("relaydeskManualAddressInputPort"));
+    auto *filePort = dialog->findChild<QWidget *>(QStringLiteral("relaydeskManualAddressFilePort"));
+    QVERIFY(!host->geometry().intersects(inputPort->geometry()));
+    QVERIFY(!host->geometry().intersects(filePort->geometry()));
+    QVERIFY(!inputPort->geometry().intersects(filePort->geometry()));
+    dialog->reject();
+  });
+  manage->click();
 }
 
 void DevicesDockTests::keepsLocalDeviceInFooterOnly()
