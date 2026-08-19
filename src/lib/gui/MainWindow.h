@@ -198,6 +198,9 @@ private:
   [[nodiscard]] bool coreConfigurationReady() const;
   [[nodiscard]] QString inputPermissionReason() const;
   void applyInputPermissionGate();
+#if defined(Q_OS_WIN)
+  void refreshWindowsPermissionStatus();
+#endif
   void updateSharingAction();
   void toggleSharingPaused();
   void showCloseToTrayReminder();

@@ -148,18 +148,13 @@ MainWindow::MainWindow()
       }
   );
   connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
-    if (state == Qt::ApplicationActive && m_windowsFirewallProbe != nullptr && m_relayDeskTransfer != nullptr) {
-      const auto inputPort = Settings::value(Settings::Core::Port).toInt();
-      const auto filePort = static_cast<deskflow::relaydesk::FileTransferRuntime &>(
-                                m_relayDeskTransfer->service()
-                            ).listeningPort();
-      m_windowsFirewallProbe->refresh({
-          .executablePath = QCoreApplication::applicationFilePath(),
-          .expectedTcpPorts = {static_cast<quint16>(inputPort), filePort},
-          .processId = static_cast<quint32>(QCoreApplication::applicationPid()),
-      });
-    }
+    if (state == Qt::ApplicationActive)
+      refreshWindowsPermissionStatus();
   });
+  connect(
+      &m_coreProcess, &CoreProcess::connectionStateChanged, this,
+      [this](CoreProcess::ConnectionState) { refreshWindowsPermissionStatus(); }
+  );
 #endif
 #if defined(Q_OS_MACOS)
   m_macPermissionProbe = new deskflow::relaydesk::MacPermissionProbe(this);
@@ -449,14 +444,7 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
     qWarning().noquote() << "RelayDesk file transfer could not start:" << diagnostic;
   }
 #if defined(Q_OS_WIN)
-  if (m_windowsFirewallProbe != nullptr) {
-    m_windowsFirewallProbe->refresh({
-        .executablePath = QCoreApplication::applicationFilePath(),
-        .expectedTcpPorts = {static_cast<quint16>(Settings::value(Settings::Core::Port).toInt()),
-                             runtimeObserver->listeningPort()},
-        .processId = static_cast<quint32>(QCoreApplication::applicationPid()),
-    });
-  }
+  refreshWindowsPermissionStatus();
 #endif
   QSettings relayDeskSettings(Settings::settingsFile(), QSettings::IniFormat);
   const auto discoverySettings = deskflow::relaydesk::DiscoverySettingsStore(relayDeskSettings).load();
@@ -465,6 +453,26 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
       discoverySettings.ok ? discoverySettings.settings : deskflow::relaydesk::DiscoverySettings{}, this
   );
 }
+
+#if defined(Q_OS_WIN)
+void MainWindow::refreshWindowsPermissionStatus()
+{
+  if (m_windowsFirewallProbe == nullptr || m_relayDeskTransfer == nullptr) {
+    return;
+  }
+
+  const auto inputPortValue = Settings::value(Settings::Core::Port).toInt();
+  const auto inputPort = inputPortValue > 0 && inputPortValue <= 65535 ? static_cast<quint16>(inputPortValue) : 0;
+  const auto filePort = static_cast<deskflow::relaydesk::FileTransferRuntime &>(
+                            m_relayDeskTransfer->service()
+                        ).listeningPort();
+  m_windowsFirewallProbe->refresh(deskflow::relaydesk::WindowsFirewallProbe::requestForListeningServices(
+      QCoreApplication::applicationFilePath(), inputPort,
+      m_coreProcess.connectionState() == CoreConnectionState::Listening, filePort,
+      static_cast<quint32>(QCoreApplication::applicationPid())
+  ));
+}
+#endif
 
 deskflow::relaydesk::model::DeviceHomeModel &MainWindow::relayDeskDeviceModel()
 {

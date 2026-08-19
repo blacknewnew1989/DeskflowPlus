@@ -482,6 +482,21 @@ WindowsFirewallProbe::WindowsFirewallProbe(
   m_snapshot = snapshotFromInspection({});
 }
 
+WindowsFirewallProbeRequest WindowsFirewallProbe::requestForListeningServices(
+    QString executablePath, quint16 inputPort, bool inputIsListening, quint16 filePort, quint32 processId
+)
+{
+  WindowsFirewallProbeRequest request{
+      .executablePath = std::move(executablePath),
+      .processId = processId,
+  };
+  if (inputIsListening) {
+    request.expectedTcpPorts.append(inputPort);
+  }
+  request.expectedTcpPorts.append(filePort);
+  return request;
+}
+
 void WindowsFirewallProbe::refresh(WindowsFirewallProbeRequest request)
 {
   request.executablePath = request.executablePath.trimmed();

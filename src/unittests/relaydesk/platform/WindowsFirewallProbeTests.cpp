@@ -46,6 +46,7 @@ private Q_SLOTS:
   void staleAsyncInspectionCannotReplaceNewestSnapshot();
   void opensOnlyActionableFirewallSettings();
   void inspectsRealCurrentProcessListener();
+  void excludesStoppedInputCorePortFromActiveFileListenerProbe();
 };
 
 void WindowsFirewallProbeTests::publishesStablePermissionMappings_data()
@@ -239,6 +240,22 @@ void WindowsFirewallProbeTests::inspectsRealCurrentProcessListener()
   QCOMPARE(inspection.listeningPort, WindowsListeningPortStatus::Unavailable);
   QCOMPARE(inspection.firewall, WindowsFirewallRuleStatus::Unavailable);
 #endif
+}
+
+void WindowsFirewallProbeTests::excludesStoppedInputCorePortFromActiveFileListenerProbe()
+{
+  const auto request = WindowsFirewallProbe::requestForListeningServices(
+      QStringLiteral("C:/RelayDesk/RelayDesk.exe"), 24800, false, 24801, 4242
+  );
+
+  QCOMPARE(request.executablePath, QStringLiteral("C:/RelayDesk/RelayDesk.exe"));
+  QCOMPARE(request.processId, quint32{4242});
+  QCOMPARE(request.expectedTcpPorts, QList<quint16>({24801}));
+
+  const auto activeInputRequest = WindowsFirewallProbe::requestForListeningServices(
+      QStringLiteral("C:/RelayDesk/RelayDesk.exe"), 24800, true, 24801, 4242
+  );
+  QCOMPARE(activeInputRequest.expectedTcpPorts, QList<quint16>({24800, 24801}));
 }
 
 QTEST_GUILESS_MAIN(WindowsFirewallProbeTests)

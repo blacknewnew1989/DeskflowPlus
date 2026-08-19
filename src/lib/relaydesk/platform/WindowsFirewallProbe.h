@@ -71,6 +71,9 @@ public:
   [[nodiscard]] PermissionOpenResult openSystemSettings(PermissionKind kind) override;
 
   [[nodiscard]] static WindowsFirewallInspection inspectCurrentSystem(WindowsFirewallProbeRequest request);
+  [[nodiscard]] static WindowsFirewallProbeRequest requestForListeningServices(
+      QString executablePath, quint16 inputPort, bool inputIsListening, quint16 filePort, quint32 processId
+  );
 
 Q_SIGNALS:
   void snapshotChanged(PermissionSnapshot snapshot);
