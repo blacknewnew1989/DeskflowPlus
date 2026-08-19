@@ -41,6 +41,7 @@
     <message><source>devices.manual_address.remove</source><translation>Rimuovi</translation></message>
     <message><source>devices.manual_address.save</source><translation>Salva</translation></message>
     <message><source>devices.manual_address.invalid</source><translation>Inserisci host e porte validi</translation></message>
+    <message><source>devices.manual_address.save_failed</source><translation>Impossibile salvare gli indirizzi manuali. Riprova.</translation></message>
     <message><source>devices.manual_address.empty</source><translation>Nessun indirizzo manuale</translation></message>
     <message><source>pairing.title</source><translation>Associa dispositivo</translation></message>
     <message><source>pairing.code.prompt</source><translation>Inserisci il codice a sei cifre</translation></message>

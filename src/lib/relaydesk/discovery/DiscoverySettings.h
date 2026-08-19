@@ -67,6 +67,8 @@ public:
   [[nodiscard]] static QString legacyManualFilePortKey();
 
 private:
+  [[nodiscard]] bool saveValidated(DiscoverySettings settings, QString *diagnostic);
+
   QSettings &m_settings;
 };
 

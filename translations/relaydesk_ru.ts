@@ -41,6 +41,7 @@
     <message><source>devices.manual_address.remove</source><translation>Удалить</translation></message>
     <message><source>devices.manual_address.save</source><translation>Сохранить</translation></message>
     <message><source>devices.manual_address.invalid</source><translation>Введите корректные хост и порты</translation></message>
+    <message><source>devices.manual_address.save_failed</source><translation>Не удалось сохранить ручные адреса. Повторите попытку.</translation></message>
     <message><source>devices.manual_address.empty</source><translation>Нет ручных адресов</translation></message>
     <message><source>pairing.title</source><translation>Сопряжение устройства</translation></message>
     <message><source>pairing.code.prompt</source><translation>Введите шестизначный код</translation></message>

@@ -82,6 +82,8 @@ constexpr std::array<Entry, static_cast<std::size_t>(Text::Count)> kEntries{{
     {Text::DevicesManualAddressSave, QT_TRANSLATE_NOOP("RelayDesk", "devices.manual_address.save"), "Save"},
     {Text::DevicesManualAddressInvalid, QT_TRANSLATE_NOOP("RelayDesk", "devices.manual_address.invalid"),
      "Enter a valid host and ports"},
+    {Text::DevicesManualAddressSaveFailed, QT_TRANSLATE_NOOP("RelayDesk", "devices.manual_address.save_failed"),
+     "Could not save manual addresses. Try again."},
     {Text::DevicesManualAddressEmpty, QT_TRANSLATE_NOOP("RelayDesk", "devices.manual_address.empty"),
      "No manual addresses"},
     {Text::PairingTitle, QT_TRANSLATE_NOOP("RelayDesk", "pairing.title"), "Pair device"},

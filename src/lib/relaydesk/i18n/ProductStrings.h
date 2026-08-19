@@ -51,6 +51,7 @@ enum class Text
   DevicesManualAddressRemove,
   DevicesManualAddressSave,
   DevicesManualAddressInvalid,
+  DevicesManualAddressSaveFailed,
   DevicesManualAddressEmpty,
   PairingTitle,
   PairingCodePrompt,

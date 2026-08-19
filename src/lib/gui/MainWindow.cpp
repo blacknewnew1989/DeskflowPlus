@@ -374,20 +374,30 @@ void MainWindow::setupRelayDeskDiscovery()
   );
   connect(
       m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::manualAddressesSaveRequested, this,
-      [this](QList<deskflow::relaydesk::ManualAddress> addresses) {
+      [this](
+          QList<deskflow::relaydesk::ManualAddress> addresses,
+          deskflow::relaydesk::widgets::DevicesDock::ManualAddressesSaveReceipt receipt
+      ) {
         QSettings settings(Settings::settingsFile(), QSettings::IniFormat);
         deskflow::relaydesk::DiscoverySettingsStore store(settings);
-        auto loaded = store.load();
-        auto updated = loaded.ok ? loaded.settings : deskflow::relaydesk::DiscoverySettings{};
+        const auto loaded = store.load();
+        if (!loaded.ok) {
+          qWarning().noquote() << "RelayDesk manual addresses could not save:" << loaded.diagnostic;
+          receipt(false);
+          return;
+        }
+        auto updated = loaded.settings;
         updated.manualAddresses = std::move(addresses);
         QString diagnostic;
         if (!store.save(updated, &diagnostic)) {
           qWarning().noquote() << "RelayDesk manual addresses could not save:" << diagnostic;
+          receipt(false);
           return;
         }
         m_devicesDock->setManualAddresses(updated.manualAddresses);
         if (m_relayDeskReconnect != nullptr)
           m_relayDeskReconnect->setSettings(std::move(updated));
+        receipt(true);
       }
   );
 

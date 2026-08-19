@@ -1025,12 +1025,26 @@ void DevicesDock::manageManualAddresses()
       refresh();
     }
   });
-  connect(save, &QPushButton::clicked, &dialog, &QDialog::accept);
+  connect(save, &QPushButton::clicked, &dialog, [&]() {
+    save->setEnabled(false);
+    bool receiptReceived = false;
+    Q_EMIT manualAddressesSaveRequested(workingAddresses, [&](bool success) {
+      receiptReceived = true;
+      if (success) {
+        m_manualAddresses = workingAddresses;
+        dialog.accept();
+        return;
+      }
+      error->setText(i18n::translate(Text::DevicesManualAddressSaveFailed));
+      save->setEnabled(true);
+    });
+    if (!receiptReceived) {
+      error->setText(i18n::translate(Text::DevicesManualAddressSaveFailed));
+      save->setEnabled(true);
+    }
+  });
   connect(cancel, &QPushButton::clicked, &dialog, &QDialog::reject);
-  if (dialog.exec() == QDialog::Accepted) {
-    m_manualAddresses = std::move(workingAddresses);
-    Q_EMIT manualAddressesSaveRequested(m_manualAddresses);
-  }
+  dialog.exec();
 }
 
 void DevicesDock::activateDevice(const QModelIndex &index)

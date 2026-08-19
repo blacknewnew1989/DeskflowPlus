@@ -41,6 +41,7 @@
     <message><source>devices.manual_address.remove</source><translation>Remove</translation></message>
     <message><source>devices.manual_address.save</source><translation>Save</translation></message>
     <message><source>devices.manual_address.invalid</source><translation>Enter a valid host and ports</translation></message>
+    <message><source>devices.manual_address.save_failed</source><translation>Could not save manual addresses. Try again.</translation></message>
     <message><source>devices.manual_address.empty</source><translation>No manual addresses</translation></message>
     <message><source>pairing.title</source><translation>Pair device</translation></message>
     <message><source>pairing.code.prompt</source><translation>Enter the six-digit code</translation></message>

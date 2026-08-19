@@ -49,6 +49,8 @@ class DevicesDock final : public QDockWidget
   Q_OBJECT
 
 public:
+  using ManualAddressesSaveReceipt = std::function<void(bool success)>;
+
   using ItemChooser = std::function<QList<QUrl>(QWidget &parent)>;
 
   explicit DevicesDock(
@@ -70,7 +72,7 @@ Q_SIGNALS:
   void sendItemsRequested(DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options);
   void sendItemsRejected(QString message);
   void incomingOfferSettingsRequested();
-  void manualAddressesSaveRequested(QList<ManualAddress> addresses);
+  void manualAddressesSaveRequested(QList<ManualAddress> addresses, ManualAddressesSaveReceipt receipt);
 
 protected:
   void changeEvent(QEvent *event) override;

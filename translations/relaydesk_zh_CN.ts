@@ -41,6 +41,7 @@
     <message><source>devices.manual_address.remove</source><translation>删除</translation></message>
     <message><source>devices.manual_address.save</source><translation>保存</translation></message>
     <message><source>devices.manual_address.invalid</source><translation>请输入有效的主机和端口</translation></message>
+    <message><source>devices.manual_address.save_failed</source><translation>无法保存手动地址，请重试。</translation></message>
     <message><source>devices.manual_address.empty</source><translation>没有手动地址</translation></message>
     <message><source>pairing.title</source><translation>配对设备</translation></message>
     <message><source>pairing.code.prompt</source><translation>输入六位配对码</translation></message>

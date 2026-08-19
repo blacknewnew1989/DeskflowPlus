@@ -24,6 +24,7 @@ private Q_SLOTS:
   void storeRoundTripsAndDeduplicates();
   void migratesLegacySingleAddress();
   void corruptAndFutureSettingsAreRejected();
+  void saveRefusesToOverwriteUnreadableSettings();
 };
 
 void DiscoverySettingsTests::parsesIpv4Ipv6AndHostname_data()
@@ -142,6 +143,33 @@ void DiscoverySettingsTests::corruptAndFutureSettingsAreRejected()
   settings.setValue(QStringLiteral("filePort"), 24801);
   settings.endArray();
   QVERIFY(!store.load().ok);
+}
+
+void DiscoverySettingsTests::saveRefusesToOverwriteUnreadableSettings()
+{
+  QTemporaryDir temporaryDirectory;
+  QVERIFY(temporaryDirectory.isValid());
+  QSettings settings(temporaryDirectory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+  settings.setValue(DiscoverySettingsStore::schemaVersionKey(), kDiscoverySettingsSchemaVersion + 1);
+  settings.setValue(DiscoverySettingsStore::enabledKey(), false);
+  settings.beginWriteArray(DiscoverySettingsStore::manualAddressesKey(), 1);
+  settings.setArrayIndex(0);
+  settings.setValue(QStringLiteral("host"), QStringLiteral("future-settings.local"));
+  settings.setValue(QStringLiteral("inputPort"), 25000);
+  settings.setValue(QStringLiteral("filePort"), 25001);
+  settings.endArray();
+  settings.sync();
+
+  DiscoverySettingsStore store(settings);
+  QString diagnostic;
+  QVERIFY(!store.save({.manualAddresses = {*parseManualAddress(QStringLiteral("replacement.local"))}}, &diagnostic));
+  QVERIFY(!diagnostic.isEmpty());
+  QCOMPARE(settings.value(DiscoverySettingsStore::schemaVersionKey()).toInt(), kDiscoverySettingsSchemaVersion + 1);
+  QCOMPARE(settings.value(DiscoverySettingsStore::enabledKey()).toBool(), false);
+  QCOMPARE(settings.beginReadArray(DiscoverySettingsStore::manualAddressesKey()), 1);
+  settings.setArrayIndex(0);
+  QCOMPARE(settings.value(QStringLiteral("host")).toString(), QStringLiteral("future-settings.local"));
+  settings.endArray();
 }
 
 QTEST_MAIN(DiscoverySettingsTests)

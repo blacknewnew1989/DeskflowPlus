@@ -179,7 +179,7 @@ DiscoverySettingsLoadResult DiscoverySettingsStore::load()
         return {.ok = true, .settings = std::move(migrated)};
       }
       QString diagnostic;
-      if (!save(migrated, &diagnostic)) {
+      if (!saveValidated(migrated, &diagnostic)) {
         return {.ok = false, .diagnostic = QStringLiteral("Unable to migrate discovery settings: %1").arg(diagnostic)};
       }
       return {.ok = true, .settings = std::move(migrated), .migrated = true};
@@ -195,7 +195,7 @@ DiscoverySettingsLoadResult DiscoverySettingsStore::load()
         .enabled = m_settings.value(enabledKey(), true).toBool(),
         .manualAddresses = {*migratedAddress},
     };
-    if (!save(migrated, &diagnostic)) {
+    if (!saveValidated(migrated, &diagnostic)) {
       return {.ok = false, .diagnostic = QStringLiteral("Unable to migrate discovery settings: %1").arg(diagnostic)};
     }
     m_settings.remove(legacyManualHostKey());
@@ -247,6 +247,16 @@ bool DiscoverySettingsStore::save(DiscoverySettings settings, QString *diagnosti
   if (diagnostic != nullptr) {
     diagnostic->clear();
   }
+  const auto existing = load();
+  if (!existing.ok) {
+    setDiagnostic(diagnostic, QStringLiteral("Refusing to overwrite unreadable RelayDesk discovery settings"));
+    return false;
+  }
+  return saveValidated(std::move(settings), diagnostic);
+}
+
+bool DiscoverySettingsStore::saveValidated(DiscoverySettings settings, QString *diagnostic)
+{
   bool normalized = false;
   settings.manualAddresses =
       normalizeAndDeduplicate(settings.manualAddresses, diagnostic, &normalized);

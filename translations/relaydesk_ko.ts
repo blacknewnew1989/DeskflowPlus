@@ -41,6 +41,7 @@
     <message><source>devices.manual_address.remove</source><translation>삭제</translation></message>
     <message><source>devices.manual_address.save</source><translation>저장</translation></message>
     <message><source>devices.manual_address.invalid</source><translation>올바른 호스트와 포트를 입력하세요</translation></message>
+    <message><source>devices.manual_address.save_failed</source><translation>수동 주소를 저장할 수 없습니다. 다시 시도하세요.</translation></message>
     <message><source>devices.manual_address.empty</source><translation>수동 주소가 없습니다</translation></message>
     <message><source>pairing.title</source><translation>기기 페어링</translation></message>
     <message><source>pairing.code.prompt</source><translation>6자리 코드를 입력하세요</translation></message>

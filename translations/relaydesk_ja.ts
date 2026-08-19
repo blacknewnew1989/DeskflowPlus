@@ -41,6 +41,7 @@
     <message><source>devices.manual_address.remove</source><translation>削除</translation></message>
     <message><source>devices.manual_address.save</source><translation>保存</translation></message>
     <message><source>devices.manual_address.invalid</source><translation>有効なホストとポートを入力してください</translation></message>
+    <message><source>devices.manual_address.save_failed</source><translation>手動アドレスを保存できませんでした。もう一度お試しください。</translation></message>
     <message><source>devices.manual_address.empty</source><translation>手動アドレスはありません</translation></message>
     <message><source>pairing.title</source><translation>デバイスをペアリング</translation></message>
     <message><source>pairing.code.prompt</source><translation>6桁のコードを入力してください</translation></message>
