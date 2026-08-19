@@ -727,11 +727,15 @@ void FileTransferRuntimeTests::incomingConflictPolicies_data()
   using ::relaydesk::transfer::ConflictPolicy;
 
   QTest::addColumn<ConflictPolicy>("policy");
+  QTest::addColumn<::relaydesk::transfer::IncomingConflictDecision>("askDecision");
   QTest::addColumn<QString>("committedName");
   QTest::addColumn<bool>("originalReplaced");
-  QTest::newRow("auto-rename") << ConflictPolicy::AutoRename << QStringLiteral("conflict (1).bin") << false;
-  QTest::newRow("overwrite") << ConflictPolicy::Overwrite << QStringLiteral("conflict.bin") << true;
-  QTest::newRow("skip") << ConflictPolicy::Skip << QString{} << false;
+  QTest::newRow("auto-rename") << ConflictPolicy::AutoRename << ::relaydesk::transfer::IncomingConflictDecision::AutoRename << QStringLiteral("conflict (1).bin") << false;
+  QTest::newRow("overwrite") << ConflictPolicy::Overwrite << ::relaydesk::transfer::IncomingConflictDecision::Overwrite << QStringLiteral("conflict.bin") << true;
+  QTest::newRow("skip") << ConflictPolicy::Skip << ::relaydesk::transfer::IncomingConflictDecision::Skip << QString{} << false;
+  QTest::newRow("ask-overwrite") << ConflictPolicy::Ask << ::relaydesk::transfer::IncomingConflictDecision::Overwrite << QStringLiteral("conflict.bin") << true;
+  QTest::newRow("ask-auto-rename") << ConflictPolicy::Ask << ::relaydesk::transfer::IncomingConflictDecision::AutoRename << QStringLiteral("conflict (1).bin") << false;
+  QTest::newRow("ask-skip") << ConflictPolicy::Ask << ::relaydesk::transfer::IncomingConflictDecision::Skip << QString{} << false;
 }
 
 void FileTransferRuntimeTests::incomingConflictPolicies()
@@ -739,6 +743,7 @@ void FileTransferRuntimeTests::incomingConflictPolicies()
   using namespace ::relaydesk::transfer;
 
   QFETCH(ConflictPolicy, policy);
+  QFETCH(IncomingConflictDecision, askDecision);
   QFETCH(QString, committedName);
   QFETCH(bool, originalReplaced);
   QTemporaryDir directory;
@@ -790,6 +795,12 @@ void FileTransferRuntimeTests::incomingConflictPolicies()
         offer.offer.transferId, {.destinationRoot = receiveRoot, .conflictPolicy = policy}
     );
   });
+  QSignalSpy prompts(&receiver, &IFileTransferService::incomingConflictDecisionRequired);
+  connect(&receiver, &IFileTransferService::incomingConflictDecisionRequired, this,
+          [&](const IncomingConflictPrompt &prompt) {
+            QVERIFY(!prompt.relativeProtocolPath.isEmpty());
+            receiver.resolveIncomingConflict(prompt.transferId, prompt.conflictId, askDecision);
+          });
   std::optional<TransferSnapshot> senderLatest;
   std::optional<TransferSnapshot> receiverLatest;
   connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
@@ -841,6 +852,7 @@ void FileTransferRuntimeTests::incomingConflictPolicies()
   QCOMPARE(receiverLatest->progress.completedFiles, quint64{1});
   QCOMPARE(receiverLatest->progress.completedBytes, static_cast<quint64>(sourceBytes.size()));
   QVERIFY2(errors.isEmpty(), qPrintable(evidence));
+  QCOMPARE(prompts.count(), policy == ConflictPolicy::Ask ? 1 : 0);
 }
 
 void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoint()
