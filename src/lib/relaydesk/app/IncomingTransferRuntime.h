@@ -9,6 +9,7 @@
 #include "relaydesk/device/DeviceId.h"
 #include "relaydesk/platform/IPlatformFileSafety.h"
 #include "relaydesk/transfer/CapabilityCodec.h"
+#include "relaydesk/transfer/TransferCommandCodec.h"
 #include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/transfer/TransferOfferStateMachine.h"
 
@@ -50,6 +51,19 @@ public:
       const ::relaydesk::transfer::TransferId &transferId,
       ::relaydesk::transfer::RejectReason reason
   );
+  [[nodiscard]] bool receiveCommand(
+      const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
+      QString *diagnostic = nullptr
+  );
+  [[nodiscard]] bool applyLocalCommand(
+      const ::relaydesk::transfer::TransferCommandMessage &command, DeviceId *peerDeviceId,
+      QString *diagnostic = nullptr,
+      ::relaydesk::transfer::TransferOperationOutcome *outcome = nullptr
+  );
+  [[nodiscard]] bool validateLocalCommand(
+      const ::relaydesk::transfer::TransferCommandMessage &command, DeviceId *peerDeviceId,
+      QString *diagnostic = nullptr
+  ) const;
   [[nodiscard]] bool enqueueFrame(
       const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
       QString *diagnostic = nullptr

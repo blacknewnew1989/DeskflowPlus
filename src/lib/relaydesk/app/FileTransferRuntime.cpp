@@ -14,6 +14,7 @@
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
 #include "relaydesk/transfer/ResumeMessageCodec.h"
+#include "relaydesk/transfer/TransferCommandCodec.h"
 #include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/transfer/TransferOfferStateMachine.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
@@ -730,6 +731,35 @@ void FileTransferRuntime::pause(const ::relaydesk::transfer::TransferId &transfe
 {
   using namespace ::relaydesk::transfer;
 
+  if (auto *incoming = m_incoming.get(); incoming != nullptr && incoming->contains(transferId)) {
+    DeviceId peer = DeviceId::generate();
+    QString diagnostic;
+    const TransferCommandMessage command = TransferPauseMessage{.transferId = transferId};
+    if (!incoming->validateLocalCommand(command, &peer, &diagnostic)) {
+      publishOperation(
+          transferId, TransferOperation::Pause, TransferOperationOutcome::Rejected,
+          TransferOperationError::InvalidState, diagnostic
+      );
+      return;
+    }
+    if (!sendCommand(peer, command, &diagnostic)) {
+      publishOperation(
+          transferId, TransferOperation::Pause, TransferOperationOutcome::Rejected,
+          TransferOperationError::TransportFailed, diagnostic
+      );
+      return;
+    }
+    TransferOperationOutcome outcome = TransferOperationOutcome::Applied;
+    if (!incoming->applyLocalCommand(command, nullptr, &diagnostic, &outcome)) {
+      publishOperation(
+          transferId, TransferOperation::Pause, TransferOperationOutcome::Rejected,
+          TransferOperationError::InvalidState, diagnostic
+      );
+      return;
+    }
+    publishOperation(transferId, TransferOperation::Pause, outcome);
+    return;
+  }
   auto *session = outgoing(transferId);
   if (session == nullptr) {
     publishOperation(
@@ -760,6 +790,11 @@ void FileTransferRuntime::pause(const ::relaydesk::transfer::TransferId &transfe
   session->paused = true;
   session->snapshot = session->control->snapshot();
   Q_EMIT transferChanged(session->snapshot);
+  QString diagnostic;
+  if (!sendCommand(session->peer, TransferPauseMessage{.transferId = transferId}, &diagnostic)) {
+    failOutgoing(*session, TransferErrorCode::ConnectionLost, diagnostic);
+    return;
+  }
   publishOperation(transferId, TransferOperation::Pause, TransferOperationOutcome::Applied);
 }
 
@@ -767,6 +802,35 @@ void FileTransferRuntime::resume(const ::relaydesk::transfer::TransferId &transf
 {
   using namespace ::relaydesk::transfer;
 
+  if (auto *incoming = m_incoming.get(); incoming != nullptr && incoming->contains(transferId)) {
+    DeviceId peer = DeviceId::generate();
+    QString diagnostic;
+    const TransferCommandMessage command = TransferResumeMessage{.transferId = transferId};
+    if (!incoming->validateLocalCommand(command, &peer, &diagnostic)) {
+      publishOperation(
+          transferId, TransferOperation::Resume, TransferOperationOutcome::Rejected,
+          TransferOperationError::InvalidState, diagnostic
+      );
+      return;
+    }
+    if (!sendCommand(peer, command, &diagnostic)) {
+      publishOperation(
+          transferId, TransferOperation::Resume, TransferOperationOutcome::Rejected,
+          TransferOperationError::TransportFailed, diagnostic
+      );
+      return;
+    }
+    TransferOperationOutcome outcome = TransferOperationOutcome::Applied;
+    if (!incoming->applyLocalCommand(command, nullptr, &diagnostic, &outcome)) {
+      publishOperation(
+          transferId, TransferOperation::Resume, TransferOperationOutcome::Rejected,
+          TransferOperationError::InvalidState, diagnostic
+      );
+      return;
+    }
+    publishOperation(transferId, TransferOperation::Resume, outcome);
+    return;
+  }
   auto *session = outgoing(transferId);
   if (session == nullptr) {
     publishOperation(
@@ -797,17 +861,55 @@ void FileTransferRuntime::resume(const ::relaydesk::transfer::TransferId &transf
   session->paused = false;
   session->snapshot = session->control->snapshot();
   Q_EMIT transferChanged(session->snapshot);
+  QString diagnostic;
+  if (!sendCommand(session->peer, TransferResumeMessage{.transferId = transferId}, &diagnostic)) {
+    failOutgoing(*session, TransferErrorCode::ConnectionLost, diagnostic);
+    return;
+  }
   scheduleSenderPump(transferId);
   publishOperation(transferId, TransferOperation::Resume, TransferOperationOutcome::Applied);
 }
 
 void FileTransferRuntime::cancel(
     const ::relaydesk::transfer::TransferId &transferId,
-    const ::relaydesk::transfer::TransferCancelOptions &
+    const ::relaydesk::transfer::TransferCancelOptions &options
 )
 {
   using namespace ::relaydesk::transfer;
 
+  if (auto *incoming = m_incoming.get(); incoming != nullptr && incoming->contains(transferId)) {
+    DeviceId peer = DeviceId::generate();
+    QString diagnostic;
+    const TransferCommandMessage command = TransferCancelMessage{
+        .transferId = transferId,
+        .reason = options.reason,
+        .keepPartial = options.partialDisposition == PartialDisposition::Keep,
+    };
+    if (!incoming->validateLocalCommand(command, &peer, &diagnostic)) {
+      publishOperation(
+          transferId, TransferOperation::Cancel, TransferOperationOutcome::Rejected,
+          TransferOperationError::InvalidState, diagnostic
+      );
+      return;
+    }
+    if (!sendCommand(peer, command, &diagnostic)) {
+      publishOperation(
+          transferId, TransferOperation::Cancel, TransferOperationOutcome::Rejected,
+          TransferOperationError::TransportFailed, diagnostic
+      );
+      return;
+    }
+    TransferOperationOutcome outcome = TransferOperationOutcome::Applied;
+    if (!incoming->applyLocalCommand(command, nullptr, &diagnostic, &outcome)) {
+      publishOperation(
+          transferId, TransferOperation::Cancel, TransferOperationOutcome::Rejected,
+          TransferOperationError::InvalidState, diagnostic
+      );
+      return;
+    }
+    publishOperation(transferId, TransferOperation::Cancel, outcome);
+    return;
+  }
   auto *session = outgoing(transferId);
   if (session == nullptr) {
     publishOperation(
@@ -840,6 +942,18 @@ void FileTransferRuntime::cancel(
     session->snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
   }
   Q_EMIT transferChanged(session->snapshot);
+  QString diagnostic;
+  if (!sendCommand(
+          session->peer,
+          TransferCancelMessage{
+              .transferId = transferId,
+              .reason = options.reason,
+              .keepPartial = options.partialDisposition == PartialDisposition::Keep,
+          },
+          &diagnostic
+      )) {
+    Q_EMIT errorOccurred(FileTransferRuntimeError::TransportFailed, FileTlsError::ConnectionFailed, diagnostic);
+  }
   publishOperation(transferId, TransferOperation::Cancel, TransferOperationOutcome::Applied);
 }
 
@@ -1106,6 +1220,20 @@ void FileTransferRuntime::routeTransferFrame(const DeviceId &peerDeviceId, const
     }
     break;
   }
+  case MessageType::TransferPause:
+  case MessageType::TransferResume:
+  case MessageType::TransferCancel: {
+    QString diagnostic;
+    auto *incoming = m_incoming.get();
+    if (!applyRemoteCommand(peerDeviceId, frame, &diagnostic) &&
+        (incoming == nullptr || !incoming->receiveCommand(peerDeviceId, frame, &diagnostic))) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          std::move(diagnostic)
+      );
+    }
+    break;
+  }
   case MessageType::ManifestPage:
   case MessageType::ManifestComplete:
   case MessageType::FileBegin:
@@ -1126,6 +1254,65 @@ void FileTransferRuntime::routeTransferFrame(const DeviceId &peerDeviceId, const
   }
 }
 
+bool FileTransferRuntime::applyRemoteCommand(
+    const DeviceId &peerDeviceId, const Frame &frame, QString *diagnostic
+)
+{
+  using namespace ::relaydesk::transfer;
+
+  const auto decoded = TransferCommandCodec::decode(frame.version, frame.type, frame.metadata);
+  if (!decoded.ok()) {
+    setDiagnostic(diagnostic, decoded.diagnostic);
+    return false;
+  }
+  const auto transferId = std::visit([](const auto &typed) { return typed.transferId; }, *decoded.message);
+  auto *session = outgoing(transferId);
+  if (session == nullptr || session->peer != peerDeviceId || session->control == nullptr) {
+    return false;
+  }
+  if (std::holds_alternative<TransferCancelMessage>(*decoded.message) &&
+      (session->cancelled || session->snapshot.state == TransferState::Cancelled)) {
+    return true;
+  }
+  if (std::holds_alternative<TransferPauseMessage>(*decoded.message)) {
+    if (session->paused) {
+      return true;
+    }
+    const auto result = session->control->pause();
+    if (!result.ok()) {
+      setDiagnostic(diagnostic, result.diagnostic);
+      return false;
+    }
+    session->paused = true;
+  } else if (std::holds_alternative<TransferResumeMessage>(*decoded.message)) {
+    if (!session->paused) {
+      return true;
+    }
+    const auto resumed = session->control->resume();
+    if (!resumed.ok() || !session->control->advance(TransferState::Transferring).ok()) {
+      setDiagnostic(diagnostic, resumed.diagnostic);
+      return false;
+    }
+    session->paused = false;
+    scheduleSenderPump(transferId);
+  } else {
+    const auto cancelled = session->control->cancel();
+    if (!cancelled.ok()) {
+      setDiagnostic(diagnostic, cancelled.diagnostic);
+      return false;
+    }
+    const auto confirmed = session->control->confirmCancelled();
+    if (!confirmed.ok()) {
+      setDiagnostic(diagnostic, confirmed.diagnostic);
+      return false;
+    }
+    session->cancelled = true;
+  }
+  session->snapshot = session->control->snapshot();
+  Q_EMIT transferChanged(session->snapshot);
+  return true;
+}
+
 bool FileTransferRuntime::sendPeerFrame(const DeviceId &peerDeviceId, const Frame &frame, QString *diagnostic)
 {
   auto *connection = m_peerConnections.value(peerDeviceId, nullptr);
@@ -1135,6 +1322,24 @@ bool FileTransferRuntime::sendPeerFrame(const DeviceId &peerDeviceId, const Fram
   }
   const auto result = connection->sendFrame(frame, diagnostic);
   return result == FileTlsError::None;
+}
+
+bool FileTransferRuntime::sendCommand(
+    const DeviceId &peerDeviceId, const ::relaydesk::transfer::TransferCommandMessage &command,
+    QString *diagnostic
+)
+{
+  QString encodeDiagnostic;
+  Frame frame{
+      .type = ::relaydesk::transfer::messageType(command),
+      .flags = ::relaydesk::transfer::AckRequired,
+      .metadata = ::relaydesk::transfer::TransferCommandCodec::encode(command, &encodeDiagnostic),
+  };
+  if (frame.metadata.isEmpty()) {
+    setDiagnostic(diagnostic, std::move(encodeDiagnostic));
+    return false;
+  }
+  return sendPeerFrame(peerDeviceId, frame, diagnostic);
 }
 
 void FileTransferRuntime::prepareOutgoing(const ::relaydesk::transfer::TransferId &transferId)

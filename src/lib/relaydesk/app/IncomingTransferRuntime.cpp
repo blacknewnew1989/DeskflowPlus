@@ -28,6 +28,7 @@
 #include <atomic>
 #include <limits>
 #include <utility>
+#include <variant>
 
 namespace deskflow::relaydesk {
 
@@ -76,6 +77,16 @@ struct IncomingTransferRuntime::AcceptPreflightResult
   quint64 freeBytes = 0;
 };
 
+struct CancelCleanupResult
+{
+  QString diagnostic;
+
+  [[nodiscard]] bool ok() const noexcept
+  {
+    return diagnostic.isEmpty();
+  }
+};
+
 namespace {
 
 constexpr quint64 kMaximumQueuedReceiveBytes = 32U * 1024U * 1024U;
@@ -107,7 +118,50 @@ bool isReceivePipelineActive(::relaydesk::transfer::TransferState state)
 {
   return state == ::relaydesk::transfer::TransferState::Queued ||
          state == ::relaydesk::transfer::TransferState::Transferring ||
+         state == ::relaydesk::transfer::TransferState::Paused ||
          state == ::relaydesk::transfer::TransferState::Resuming;
+}
+
+std::optional<::relaydesk::transfer::TransferId> decodedDataTransferId(
+    const ::relaydesk::transfer::Frame &frame, QString *diagnostic
+)
+{
+  using namespace ::relaydesk::transfer;
+  if (frame.type == MessageType::ManifestPage) {
+    const auto decoded = ManifestPageCodec::decode(frame.version, frame.metadata);
+    if (!decoded.ok()) {
+      if (diagnostic != nullptr) {
+        *diagnostic = decoded.diagnostic;
+      }
+      return std::nullopt;
+    }
+    return decoded.page->transferId;
+  }
+  if (frame.type == MessageType::ManifestComplete) {
+    const auto decoded = ManifestPageCodec::decodeComplete(frame.version, frame.metadata);
+    if (!decoded.ok()) {
+      if (diagnostic != nullptr) {
+        *diagnostic = decoded.diagnostic;
+      }
+      return std::nullopt;
+    }
+    return decoded.message->transferId;
+  }
+  if (frame.type == MessageType::FileBegin || frame.type == MessageType::FileChunk ||
+      frame.type == MessageType::FileEnd) {
+    const auto decoded = FileMessageCodec::decode(frame.type, frame.metadata);
+    if (!decoded.ok()) {
+      if (diagnostic != nullptr) {
+        *diagnostic = decoded.diagnostic;
+      }
+      return std::nullopt;
+    }
+    return std::visit([](const auto &message) { return message.transferId; }, *decoded.message);
+  }
+  if (diagnostic != nullptr) {
+    *diagnostic = QStringLiteral("frame type is not a valid cancelled transfer tail frame");
+  }
+  return std::nullopt;
 }
 
 FileSafetyResult ensureSafeDirectoryPath(
@@ -230,6 +284,24 @@ public:
     m_ready.wakeAll();
   }
 
+  void pause()
+  {
+    const QMutexLocker lock(&m_mutex);
+    m_paused = true;
+  }
+
+  void resume()
+  {
+    const QMutexLocker lock(&m_mutex);
+    m_paused = false;
+    m_ready.wakeAll();
+  }
+
+  void waitForFinished()
+  {
+    m_future.waitForFinished();
+  }
+
 private:
   void run()
   {
@@ -237,7 +309,7 @@ private:
       ::relaydesk::transfer::Frame frame;
       {
         QMutexLocker lock(&m_mutex);
-        while (m_frames.isEmpty() && !m_stopping) {
+        while ((m_frames.isEmpty() || m_paused) && !m_stopping) {
           m_ready.wait(&m_mutex);
         }
         if (m_stopping) {
@@ -698,6 +770,9 @@ private:
       if (!isReceivePipelineActive(snapshot.state)) {
         return;
       }
+      if (snapshot.state == ::relaydesk::transfer::TransferState::Paused) {
+        return;
+      }
       snapshot.state = ::relaydesk::transfer::TransferState::Transferring;
       snapshot.progress.completedBytes = bytes;
       snapshot.progress.completedFiles = files;
@@ -787,6 +862,7 @@ private:
   QQueue<::relaydesk::transfer::Frame> m_frames;
   quint64 m_queuedBytes = 0;
   bool m_stopping = false;
+  bool m_paused = false;
   QFuture<void> m_future;
 };
 
@@ -962,6 +1038,212 @@ void IncomingTransferRuntime::reject(
   publishOperation(transferId, TransferOperation::Reject, TransferOperationOutcome::Applied);
 }
 
+bool IncomingTransferRuntime::receiveCommand(
+    const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame, QString *diagnostic
+)
+{
+  using namespace ::relaydesk::transfer;
+
+  if (diagnostic != nullptr) {
+    diagnostic->clear();
+  }
+  if (QThread::currentThread() != thread()) {
+    setDiagnostic(diagnostic, QStringLiteral("incoming transfer runtime must be called on its owning thread"));
+    return false;
+  }
+  if (frame.streamId != 0 || !frame.payload.isEmpty()) {
+    setDiagnostic(diagnostic, QStringLiteral("transfer command must use stream zero without payload"));
+    return false;
+  }
+  const auto decoded = TransferCommandCodec::decode(frame.version, frame.type, frame.metadata);
+  if (!decoded.ok()) {
+    setDiagnostic(diagnostic, decoded.diagnostic);
+    return false;
+  }
+
+  const auto transferId = std::visit([](const auto &command) { return command.transferId; }, *decoded.message);
+  auto *session = m_sessions.value(transferId, nullptr);
+  if (session == nullptr || session->peer != peerDeviceId) {
+    setDiagnostic(diagnostic, QStringLiteral("transfer command does not match an active incoming transfer"));
+    return false;
+  }
+
+  const auto publish = [this, session] {
+    Q_EMIT transferChanged(session->pipelineSnapshot);
+  };
+  if (std::holds_alternative<TransferPauseMessage>(*decoded.message)) {
+    if (session->pipeline == nullptr ||
+        (session->pipelineSnapshot.state != TransferState::Transferring &&
+         session->pipelineSnapshot.state != TransferState::Queued)) {
+      setDiagnostic(diagnostic, QStringLiteral("incoming transfer cannot be paused in its current state"));
+      return false;
+    }
+    session->pipeline->pause();
+    session->pipelineSnapshot.state = TransferState::Paused;
+    session->pipelineSnapshot.canPause = false;
+    session->pipelineSnapshot.canResume = true;
+    publish();
+    return true;
+  }
+  if (std::holds_alternative<TransferResumeMessage>(*decoded.message)) {
+    if (session->pipeline == nullptr || session->pipelineSnapshot.state != TransferState::Paused) {
+      setDiagnostic(diagnostic, QStringLiteral("incoming transfer cannot be resumed in its current state"));
+      return false;
+    }
+    session->pipeline->resume();
+    session->pipelineSnapshot.state = TransferState::Transferring;
+    session->pipelineSnapshot.canPause = true;
+    session->pipelineSnapshot.canResume = false;
+    publish();
+    return true;
+  }
+
+  const auto &cancel = std::get<TransferCancelMessage>(*decoded.message);
+  if (session->pipelineSnapshot.state == TransferState::Cancelling ||
+      session->pipelineSnapshot.state == TransferState::Cancelled) {
+    return true;
+  }
+  if (session->pipeline == nullptr) {
+    setDiagnostic(diagnostic, QStringLiteral("incoming transfer cannot be cancelled in its current state"));
+    return false;
+  }
+  const auto pipeline = std::move(session->pipeline);
+  pipeline->stop();
+  const quint64 generation = ++session->pipelineGeneration;
+  session->pipelineSnapshot.state = TransferState::Cancelling;
+  session->pipelineSnapshot.canPause = false;
+  session->pipelineSnapshot.canResume = false;
+  session->pipelineSnapshot.canCancel = false;
+  publish();
+
+  const QString destinationRoot = session->receiveOptions.destinationRoot;
+  const auto pipelineHolder = std::make_shared<std::shared_ptr<ReceivePipeline>>(pipeline);
+  auto *watcher = new QFutureWatcher<CancelCleanupResult>(this);
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, transferId, generation, watcher]() {
+    const auto result = watcher->result();
+    watcher->deleteLater();
+    auto *current = m_sessions.value(transferId, nullptr);
+    if (current == nullptr || current->pipelineGeneration != generation ||
+        current->pipelineSnapshot.state != ::relaydesk::transfer::TransferState::Cancelling) {
+      return;
+    }
+    if (!result.ok()) {
+      current->pipelineSnapshot.state = ::relaydesk::transfer::TransferState::Failed;
+      current->pipelineSnapshot.errorCode = ::relaydesk::transfer::TransferErrorCode::InternalError;
+      current->pipelineSnapshot.canRetry = false;
+      current->pipelineSnapshot.finishedUtc = QDateTime::currentDateTimeUtc();
+      Q_EMIT transferChanged(current->pipelineSnapshot);
+      Q_EMIT pipelineFailed(transferId, current->pipelineSnapshot.errorCode, result.diagnostic);
+      return;
+    }
+    current->pipelineSnapshot.state = ::relaydesk::transfer::TransferState::Cancelled;
+    current->pipelineSnapshot.finishedUtc = QDateTime::currentDateTimeUtc();
+    Q_EMIT transferChanged(current->pipelineSnapshot);
+  });
+  watcher->setFuture(QtConcurrent::run(
+      &m_workerPool, [pipelineHolder, destinationRoot, transferId, keepPartial = cancel.keepPartial]() {
+        (*pipelineHolder)->waitForFinished();
+        pipelineHolder->reset();
+        CancelCleanupResult result;
+        if (keepPartial) {
+          return result;
+        }
+        const auto stagingRoot = QDir(destinationRoot).filePath(
+            QStringLiteral(".incoming/%1").arg(transferId.toString())
+        );
+        if (QFileInfo::exists(stagingRoot) && !QDir(stagingRoot).removeRecursively()) {
+          result.diagnostic = QStringLiteral("could not remove cancelled transfer staging directory");
+          return result;
+        }
+        ResumeStore store(QDir(destinationRoot).filePath(QStringLiteral(".incoming/resume-active")));
+        const auto removed = store.remove(transferId);
+        if (!removed.ok()) {
+          result.diagnostic = removed.diagnostic;
+        }
+        return result;
+      }
+  ));
+  return true;
+}
+
+bool IncomingTransferRuntime::applyLocalCommand(
+    const ::relaydesk::transfer::TransferCommandMessage &command, DeviceId *peerDeviceId,
+    QString *diagnostic, ::relaydesk::transfer::TransferOperationOutcome *outcome
+)
+{
+  using namespace ::relaydesk::transfer;
+
+  const auto transferId = std::visit([](const auto &typed) { return typed.transferId; }, command);
+  const auto *session = m_sessions.value(transferId, nullptr);
+  if (session == nullptr) {
+    setDiagnostic(diagnostic, QStringLiteral("incoming transfer is unknown"));
+    return false;
+  }
+  if (outcome != nullptr) {
+    *outcome = std::holds_alternative<TransferCancelMessage>(command) &&
+                       (session->pipelineSnapshot.state == TransferState::Cancelling ||
+                        session->pipelineSnapshot.state == TransferState::Cancelled)
+                   ? TransferOperationOutcome::Idempotent
+                   : TransferOperationOutcome::Applied;
+  }
+  QString encodeDiagnostic;
+  Frame frame{
+      .type = messageType(command),
+      .flags = AckRequired,
+      .metadata = TransferCommandCodec::encode(command, &encodeDiagnostic),
+  };
+  if (frame.metadata.isEmpty()) {
+    setDiagnostic(diagnostic, std::move(encodeDiagnostic));
+    return false;
+  }
+  if (!receiveCommand(session->peer, frame, diagnostic)) {
+    return false;
+  }
+  if (peerDeviceId != nullptr) {
+    *peerDeviceId = session->peer;
+  }
+  return true;
+}
+
+bool IncomingTransferRuntime::validateLocalCommand(
+    const ::relaydesk::transfer::TransferCommandMessage &command, DeviceId *peerDeviceId,
+    QString *diagnostic
+) const
+{
+  using namespace ::relaydesk::transfer;
+  const auto transferId = std::visit([](const auto &typed) { return typed.transferId; }, command);
+  const auto *session = m_sessions.value(transferId, nullptr);
+  if (session == nullptr) {
+    setDiagnostic(diagnostic, QStringLiteral("incoming transfer is unavailable"));
+    return false;
+  }
+  const auto state = session->pipelineSnapshot.state;
+  if (std::holds_alternative<TransferCancelMessage>(command) &&
+      (state == TransferState::Cancelling || state == TransferState::Cancelled)) {
+    if (peerDeviceId != nullptr) {
+      *peerDeviceId = session->peer;
+    }
+    return true;
+  }
+  if (session->pipeline == nullptr) {
+    setDiagnostic(diagnostic, QStringLiteral("incoming transfer is unavailable"));
+    return false;
+  }
+  const bool valid = std::holds_alternative<TransferPauseMessage>(command)
+                         ? (state == TransferState::Queued || state == TransferState::Transferring)
+                         : std::holds_alternative<TransferResumeMessage>(command)
+                               ? state == TransferState::Paused
+                               : state != TransferState::Cancelling && !TransferControlStateMachine::isTerminal(state);
+  if (!valid) {
+    setDiagnostic(diagnostic, QStringLiteral("incoming transfer cannot apply this control in its current state"));
+    return false;
+  }
+  if (peerDeviceId != nullptr) {
+    *peerDeviceId = session->peer;
+  }
+  return true;
+}
+
 bool IncomingTransferRuntime::enqueueFrame(
     const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
     QString *diagnostic
@@ -970,23 +1252,21 @@ bool IncomingTransferRuntime::enqueueFrame(
   if (diagnostic != nullptr) {
     diagnostic->clear();
   }
-  Session *session = nullptr;
-  for (auto *candidate : std::as_const(m_sessions)) {
-    if (candidate == nullptr || candidate->peer != peerDeviceId || candidate->pipeline == nullptr ||
-        !isReceivePipelineActive(candidate->pipelineSnapshot.state)) {
-      continue;
-    }
-    if (session != nullptr) {
-      setDiagnostic(
-          diagnostic,
-          QStringLiteral("peer has multiple active incoming sessions; frame routing is ambiguous")
-      );
-      return false;
-    }
-    session = candidate;
+  const auto transferId = decodedDataTransferId(frame, diagnostic);
+  if (!transferId.has_value()) {
+    return false;
   }
-  if (session == nullptr) {
-    setDiagnostic(diagnostic, QStringLiteral("incoming frame has no accepted receive session"));
+  auto *session = m_sessions.value(*transferId, nullptr);
+  if (session == nullptr || session->peer != peerDeviceId) {
+    setDiagnostic(diagnostic, QStringLiteral("incoming frame does not match an accepted receive session"));
+    return false;
+  }
+  if (session->pipelineSnapshot.state == ::relaydesk::transfer::TransferState::Cancelling ||
+      session->pipelineSnapshot.state == ::relaydesk::transfer::TransferState::Cancelled) {
+      return true;
+  }
+  if (session->pipeline == nullptr || !isReceivePipelineActive(session->pipelineSnapshot.state)) {
+    setDiagnostic(diagnostic, QStringLiteral("incoming frame has no active receive pipeline"));
     return false;
   }
   return session->pipeline->enqueue(frame, diagnostic);
@@ -1109,7 +1389,9 @@ QList<::relaydesk::transfer::TransferSnapshot> IncomingTransferRuntime::activeTr
 {
   QList<::relaydesk::transfer::TransferSnapshot> result;
   for (const auto *session : m_sessions) {
-    if (session != nullptr && session->pipeline != nullptr &&
+    if (session != nullptr &&
+        (session->pipeline != nullptr ||
+         session->pipelineSnapshot.state == ::relaydesk::transfer::TransferState::Cancelling) &&
         !::relaydesk::transfer::TransferControlStateMachine::isTerminal(
             session->pipelineSnapshot.state
         )) {

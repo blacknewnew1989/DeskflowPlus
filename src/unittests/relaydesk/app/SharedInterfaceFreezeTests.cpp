@@ -268,6 +268,7 @@ static_assert(static_cast<quint32>(TransferOperationError::UnknownTransfer) == 1
 static_assert(static_cast<quint32>(TransferOperationError::UnsupportedOperation) == 2);
 static_assert(static_cast<quint32>(TransferOperationError::InvalidState) == 3);
 static_assert(static_cast<quint32>(TransferOperationError::StartFailed) == 4);
+static_assert(static_cast<quint32>(TransferOperationError::TransportFailed) == 5);
 static_assert(std::is_same_v<std::underlying_type_t<TransferErrorCode>, quint32>);
 static_assert(static_cast<quint32>(TransferErrorCode::None) == 0);
 static_assert(static_cast<quint32>(TransferErrorCode::ManifestBuildFailed) == 1001);

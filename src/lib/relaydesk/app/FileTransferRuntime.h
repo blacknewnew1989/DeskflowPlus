@@ -11,6 +11,7 @@
 #include "relaydesk/transfer/CapabilityCodec.h"
 #include "relaydesk/transfer/IFileTransferService.h"
 #include "relaydesk/transfer/ManifestBuilder.h"
+#include "relaydesk/transfer/TransferCommandCodec.h"
 #include "relaydesk/transfer/TransferSender.h"
 
 #include <QHash>
@@ -29,6 +30,7 @@ class AutoReconnectRuntime;
 class IncomingTransferRuntime;
 class IPlatformFileSafety;
 class TrustedDeviceStore;
+class FileTransferRuntimeTestAccess;
 
 struct FileTransferRuntimeOptions
 {
@@ -112,6 +114,7 @@ Q_SIGNALS:
 
 private:
   friend class AutoReconnectRuntime;
+  friend class FileTransferRuntimeTestAccess;
   struct ConnectionContext
   {
     std::optional<DeviceId> expectedPeer;
@@ -158,6 +161,14 @@ private:
       quint64 generation, const ::relaydesk::transfer::SenderPumpResult &result
   );
   void handleFileResult(const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame);
+  [[nodiscard]] bool applyRemoteCommand(
+      const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
+      QString *diagnostic = nullptr
+  );
+  [[nodiscard]] bool sendCommand(
+      const DeviceId &peerDeviceId, const ::relaydesk::transfer::TransferCommandMessage &command,
+      QString *diagnostic = nullptr
+  );
   void updateOutgoingProgress(OutgoingSession &session);
   void completeOutgoing(OutgoingSession &session);
   void markOutgoingConnectionLost(OutgoingSession &session);

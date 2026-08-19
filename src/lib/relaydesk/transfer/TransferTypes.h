@@ -134,6 +134,7 @@ enum class TransferOperationError : quint32
   UnsupportedOperation = 2,
   InvalidState = 3,
   StartFailed = 4,
+  TransportFailed = 5,
 };
 
 struct TransferOperationResult

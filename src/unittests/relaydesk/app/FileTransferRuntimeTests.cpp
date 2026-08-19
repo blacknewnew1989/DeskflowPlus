@@ -29,6 +29,17 @@
 
 using namespace deskflow::relaydesk;
 
+namespace deskflow::relaydesk {
+class FileTransferRuntimeTestAccess final
+{
+public:
+  static void removePeerChannel(FileTransferRuntime &runtime, const DeviceId &peerDeviceId)
+  {
+    runtime.m_peerConnections.remove(peerDeviceId);
+  }
+};
+} // namespace deskflow::relaydesk
+
 namespace {
 DeviceInfo localDevice(DeviceId id, QByteArray fingerprint, QString name)
 {
@@ -75,8 +86,19 @@ private Q_SLOTS:
   void runtimeSourceUsesCanonicalSenderBoundary();
   void runtimeSourceComposesPlatformReceiver();
   void runtimeEnablesComposedReceiverCapability();
+  void remoteCommandsSynchronizeIncomingTransfer();
+  void incomingControlsSynchronizeOutgoingTransfer();
+  void incomingCancelKeepsPartialDataAndIsIdempotent();
+  void incomingControlsRejectTransportFailureWithoutLocalMutation_data();
+  void incomingControlsRejectTransportFailureWithoutLocalMutation();
   void unknownControlOperationsPublishTypedResults();
   void invalidIdentityFailsWithoutPublishingAListener();
+
+private:
+  void commandsSynchronizeTransfer(
+      bool receiverControls, ::relaydesk::transfer::PartialDisposition partialDisposition,
+      bool repeatCancel = false
+  );
 };
 
 void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
@@ -1238,6 +1260,330 @@ void FileTransferRuntimeTests::runtimeEnablesComposedReceiverCapability()
   QCOMPARE(discovery.service().localDevice().filePort, runtime.listeningPort());
   QVERIFY(discovery.service().localDevice().capabilities.fileV1);
   QCOMPARE(errors.count(), 0);
+}
+
+void FileTransferRuntimeTests::commandsSynchronizeTransfer(
+    bool receiverControls, ::relaydesk::transfer::PartialDisposition partialDisposition, bool repeatCancel
+)
+{
+  using namespace ::relaydesk::transfer;
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  const QByteArray sourceBytes(12 * 1024 * 1024 + 113, '\x5a');
+  const auto sourcePath = directory.filePath(QStringLiteral("commands-source.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+  source.close();
+  const auto receiveRoot = directory.filePath(QStringLiteral("commands-received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("commands-sender-trust.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("commands-receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  model::DeviceHomeModel senderModel;
+  model::DeviceHomeModel receiverModel;
+  DeviceDiscoveryRuntime senderDiscovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Command sender")), senderModel
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Command receiver")), receiverModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  options.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  QSignalSpy senderOperations(&sender, &IFileTransferService::transferOperationFinished);
+  QSignalSpy receiverOperations(&receiver, &IFileTransferService::transferOperationFinished);
+  QVERIFY(senderOperations.isValid());
+  QVERIFY(receiverOperations.isValid());
+  const auto pauseTransfer = [&](const TransferId &transferId) {
+    if (receiverControls) {
+      receiver.pause(transferId);
+    } else {
+      sender.pause(transferId);
+    }
+  };
+  const auto resumeTransfer = [&](const TransferId &transferId) {
+    if (receiverControls) {
+      receiver.resume(transferId);
+    } else {
+      sender.resume(transferId);
+    }
+  };
+  const auto cancelTransfer = [&](const TransferId &transferId) {
+    const TransferCancelOptions options{.partialDisposition = partialDisposition};
+    if (receiverControls) {
+      receiver.cancel(transferId, options);
+    } else {
+      sender.cancel(transferId, options);
+    }
+  };
+  QStringList errors;
+  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("sender: ") + message);
+  });
+  connect(&receiver, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("receiver: ") + message);
+  });
+  connect(&receiver, &IFileTransferService::incomingOffer, this, [&](const IncomingOffer &offer) {
+    receiver.accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
+  });
+
+  std::optional<TransferId> pausedTransfer;
+  std::optional<TransferId> cancelledTransfer;
+  bool pauseSent = false;
+  bool cancelSent = false;
+  std::optional<TransferSnapshot> senderPaused;
+  std::optional<TransferSnapshot> receiverPaused;
+  std::optional<TransferSnapshot> senderCancelled;
+  std::optional<TransferSnapshot> receiverCancelled;
+  QList<TransferState> receiverCancelStates;
+  bool receiverCancellationEventLoopResponsive = false;
+  bool duplicateCancelScheduled = false;
+  bool duplicateCancelSent = false;
+  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction != TransferDirection::Sending) {
+      return;
+    }
+    if (pausedTransfer.has_value() && snapshot.id == *pausedTransfer) {
+      senderPaused = snapshot;
+      if (!pauseSent && snapshot.state == TransferState::Transferring &&
+          snapshot.progress.completedBytes >= 1024U * 1024U) {
+        pauseSent = true;
+        pauseTransfer(snapshot.id);
+      }
+    }
+    if (cancelledTransfer.has_value() && snapshot.id == *cancelledTransfer) {
+      senderCancelled = snapshot;
+    }
+  });
+  connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction != TransferDirection::Receiving) {
+      return;
+    }
+    if (pausedTransfer.has_value() && snapshot.id == *pausedTransfer) {
+      receiverPaused = snapshot;
+    }
+    if (cancelledTransfer.has_value() && snapshot.id == *cancelledTransfer) {
+      receiverCancelled = snapshot;
+      receiverCancelStates.append(snapshot.state);
+      if (!cancelSent && snapshot.state == TransferState::Transferring &&
+          snapshot.progress.completedBytes >= 1024U * 1024U) {
+        cancelSent = true;
+        cancelTransfer(snapshot.id);
+      }
+      if (snapshot.state == TransferState::Cancelling) {
+        QTimer::singleShot(0, this, [&] { receiverCancellationEventLoopResponsive = true; });
+      }
+      if (repeatCancel && snapshot.state == TransferState::Cancelled && !duplicateCancelScheduled) {
+        duplicateCancelScheduled = true;
+        QTimer::singleShot(0, this, [&] {
+          cancelTransfer(*cancelledTransfer);
+          duplicateCancelSent = true;
+        });
+      }
+    }
+  });
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+
+  const auto paused = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(paused.ok(), qPrintable(paused.diagnostic));
+  QVERIFY(paused.transferId.has_value());
+  pausedTransfer = *paused.transferId;
+  QTRY_VERIFY_WITH_TIMEOUT(
+      pauseSent && senderPaused.has_value() && receiverPaused.has_value() &&
+          senderPaused->state == TransferState::Paused && receiverPaused->state == TransferState::Paused,
+      15'000
+  );
+  const auto pausedReceiverBytes = receiverPaused->progress.completedBytes;
+  QTest::qWait(200);
+  QCOMPARE(receiverPaused->state, TransferState::Paused);
+  QCOMPARE(receiverPaused->progress.completedBytes, pausedReceiverBytes);
+  resumeTransfer(*pausedTransfer);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderPaused.has_value() && receiverPaused.has_value() && senderPaused->state == TransferState::Completed &&
+          receiverPaused->state == TransferState::Completed,
+      20'000
+  );
+
+  const auto cancelled = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(cancelled.ok(), qPrintable(cancelled.diagnostic));
+  QVERIFY(cancelled.transferId.has_value());
+  cancelledTransfer = *cancelled.transferId;
+  QTRY_VERIFY_WITH_TIMEOUT(
+      cancelSent && senderCancelled.has_value() && receiverCancelled.has_value() &&
+          senderCancelled->state == TransferState::Cancelled && receiverCancelled->state == TransferState::Cancelled &&
+          (!repeatCancel || duplicateCancelSent),
+      15'000
+  );
+  QVERIFY(receiverCancellationEventLoopResponsive);
+  QVERIFY(receiverCancelStates.indexOf(TransferState::Cancelling) >= 0);
+  QVERIFY(receiverCancelStates.indexOf(TransferState::Cancelling) <
+          receiverCancelStates.lastIndexOf(TransferState::Cancelled));
+  const auto staging = QDir(receiveRoot).filePath(
+      QStringLiteral(".incoming/%1").arg(cancelledTransfer->toString())
+  );
+  QCOMPARE(QFileInfo::exists(staging), partialDisposition == PartialDisposition::Keep);
+  const auto resumeState = QDir(receiveRoot).filePath(
+      QStringLiteral(".incoming/resume-active/%1.resume.cbor").arg(cancelledTransfer->toString())
+  );
+  QCOMPARE(QFileInfo::exists(resumeState), partialDisposition == PartialDisposition::Keep);
+  const auto &controllerOperations = receiverControls ? receiverOperations : senderOperations;
+  std::optional<TransferOperationResult> lastCancelOperation;
+  for (qsizetype index = 0; index < controllerOperations.count(); ++index) {
+    const auto *operation = static_cast<const TransferOperationResult *>(
+        controllerOperations.at(index).constFirst().constData()
+    );
+    QVERIFY(operation != nullptr);
+    if (operation->transferId == *cancelledTransfer && operation->operation == TransferOperation::Cancel) {
+      lastCancelOperation = *operation;
+    }
+  }
+  QVERIFY(lastCancelOperation.has_value());
+  QCOMPARE(
+      lastCancelOperation->outcome,
+      repeatCancel ? TransferOperationOutcome::Idempotent : TransferOperationOutcome::Applied
+  );
+  QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
+}
+
+void FileTransferRuntimeTests::remoteCommandsSynchronizeIncomingTransfer()
+{
+  commandsSynchronizeTransfer(false, ::relaydesk::transfer::PartialDisposition::Remove);
+}
+
+void FileTransferRuntimeTests::incomingControlsSynchronizeOutgoingTransfer()
+{
+  commandsSynchronizeTransfer(true, ::relaydesk::transfer::PartialDisposition::Remove);
+}
+
+void FileTransferRuntimeTests::incomingCancelKeepsPartialDataAndIsIdempotent()
+{
+  commandsSynchronizeTransfer(true, ::relaydesk::transfer::PartialDisposition::Keep, true);
+}
+
+void FileTransferRuntimeTests::incomingControlsRejectTransportFailureWithoutLocalMutation_data()
+{
+  using namespace ::relaydesk::transfer;
+  QTest::addColumn<TransferOperation>("operation");
+  QTest::newRow("pause") << TransferOperation::Pause;
+  QTest::newRow("resume") << TransferOperation::Resume;
+  QTest::newRow("cancel") << TransferOperation::Cancel;
+}
+
+void FileTransferRuntimeTests::incomingControlsRejectTransportFailureWithoutLocalMutation()
+{
+  using namespace ::relaydesk::transfer;
+  QFETCH(TransferOperation, operation);
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  const QByteArray sourceBytes(12 * 1024 * 1024 + 113, '\x5a');
+  const auto sourcePath = directory.filePath(QStringLiteral("transport-failure-source.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+  source.close();
+  const auto receiveRoot = directory.filePath(QStringLiteral("transport-failure-received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("transport-failure-sender.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("transport-failure-receiver.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  model::DeviceHomeModel senderModel;
+  model::DeviceHomeModel receiverModel;
+  DeviceDiscoveryRuntime senderDiscovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender")), senderModel
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver")), receiverModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  options.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  std::optional<TransferSnapshot> receiverLatest;
+  QSignalSpy operations(&receiver, &IFileTransferService::transferOperationFinished);
+  QVERIFY(operations.isValid());
+  connect(&receiver, &IFileTransferService::incomingOffer, this, [&](const IncomingOffer &offer) {
+    receiver.accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
+  });
+  connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Receiving) {
+      receiverLatest = snapshot;
+    }
+  });
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+  const auto started = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+  QVERIFY(started.transferId.has_value());
+  const auto transferId = *started.transferId;
+  QTRY_VERIFY_WITH_TIMEOUT(
+      receiverLatest.has_value() && receiverLatest->id == transferId &&
+          receiverLatest->state == TransferState::Transferring &&
+          receiverLatest->progress.completedBytes >= 1024U * 1024U,
+      15'000
+  );
+
+  if (operation == TransferOperation::Resume) {
+    receiver.pause(transferId);
+    QTRY_VERIFY_WITH_TIMEOUT(
+        receiverLatest.has_value() && receiverLatest->state == TransferState::Paused, 5'000
+    );
+  }
+  const auto before = *receiverLatest;
+  const auto operationCountBefore = operations.count();
+  FileTransferRuntimeTestAccess::removePeerChannel(receiver, senderId);
+  switch (operation) {
+  case TransferOperation::Pause:
+    receiver.pause(transferId);
+    break;
+  case TransferOperation::Resume:
+    receiver.resume(transferId);
+    break;
+  case TransferOperation::Cancel:
+    receiver.cancel(transferId, {.partialDisposition = PartialDisposition::Remove});
+    break;
+  default:
+    QFAIL("unexpected operation");
+  }
+  QCOMPARE(receiverLatest->state, before.state);
+  QCOMPARE(receiverLatest->progress.completedBytes, before.progress.completedBytes);
+  QCOMPARE(operations.count(), operationCountBefore + 1);
+  const auto *result = static_cast<const TransferOperationResult *>(operations.last().constFirst().constData());
+  QVERIFY(result != nullptr);
+  QCOMPARE(result->transferId, transferId);
+  QCOMPARE(result->operation, operation);
+  QCOMPARE(result->outcome, TransferOperationOutcome::Rejected);
+  QCOMPARE(result->error, TransferOperationError::TransportFailed);
 }
 
 void FileTransferRuntimeTests::unknownControlOperationsPublishTypedResults()

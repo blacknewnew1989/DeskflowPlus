@@ -102,6 +102,8 @@ private Q_SLOTS:
   void receivesAcceptedFileThroughAtomicCommit();
   void receivesPagedEmptyDirectoryManifest();
   void disconnectInterruptsAcceptedPipeline();
+  void cancelledTransferOnlyIgnoresValidatedTailFrames();
+  void activeAndCancelledSessionsRouteDataByTransferId();
 };
 
 void IncomingTransferRuntimeTests::validatesAndPublishesIncomingOffer()
@@ -527,10 +529,136 @@ void IncomingTransferRuntimeTests::disconnectInterruptsAcceptedPipeline()
   QCOMPARE(changes.count(), 1);
   QString diagnostic;
   QVERIFY(!runtime.enqueueFrame(peer, {.type = MessageType::ManifestPage}, &diagnostic));
-  QVERIFY(diagnostic.contains(QStringLiteral("no accepted receive session")));
+  QVERIFY(!diagnostic.isEmpty());
   runtime.accept(incoming.transferId, {.destinationRoot = root.path()});
   QCOMPARE(operations.count(), 2);
   QCOMPARE(operation(operations, 1).outcome, TransferOperationOutcome::Idempotent);
+}
+
+void IncomingTransferRuntimeTests::cancelledTransferOnlyIgnoresValidatedTailFrames()
+{
+  FakeFileSafety safety;
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  QThreadPool pool;
+  IncomingTransferRuntime runtime(safety, pool);
+  const auto incoming = offer();
+  const auto peer = DeviceId::generate();
+  QSignalSpy operations(&runtime, &IncomingTransferRuntime::transferOperationFinished);
+  std::optional<TransferSnapshot> latest;
+  connect(&runtime, &IncomingTransferRuntime::transferChanged, this, [&](const auto &snapshot) {
+    latest = snapshot;
+  });
+  QVERIFY(runtime.receiveOffer(peer, QStringLiteral("Peer"), true, receiverCapabilities(), incoming));
+  runtime.accept(incoming.transferId, {.destinationRoot = root.path()});
+  QTRY_COMPARE_WITH_TIMEOUT(operations.count(), 1, 5'000);
+
+  QString diagnostic;
+  const Frame cancel{
+      .type = MessageType::TransferCancel,
+      .metadata = TransferCommandCodec::encode(
+          TransferCommandMessage{TransferCancelMessage{.transferId = incoming.transferId, .keepPartial = true}},
+          &diagnostic
+      ),
+  };
+  QVERIFY2(runtime.receiveCommand(peer, cancel, &diagnostic), qPrintable(diagnostic));
+  QTRY_VERIFY_WITH_TIMEOUT(latest.has_value() && latest->state == TransferState::Cancelled, 5'000);
+
+  const QByteArray digest(kSha256Bytes, '\x35');
+  const Frame validTail{
+      .type = MessageType::ManifestComplete,
+      .metadata = ManifestPageCodec::encodeComplete(
+          {.transferId = incoming.transferId, .canonicalSha256 = digest}, &diagnostic
+      ),
+  };
+  QVERIFY2(runtime.enqueueFrame(peer, validTail, &diagnostic), qPrintable(diagnostic));
+
+  const Frame differentTransfer{
+      .type = MessageType::ManifestComplete,
+      .metadata = ManifestPageCodec::encodeComplete(
+          {.transferId = TransferId::generate(), .canonicalSha256 = digest}, &diagnostic
+      ),
+  };
+  QVERIFY(!runtime.enqueueFrame(peer, differentTransfer, &diagnostic));
+  QVERIFY(!diagnostic.isEmpty());
+
+  const Frame malformedTail{
+      .type = MessageType::FileChunk,
+      .streamId = 1,
+      .metadata = QByteArrayLiteral("not-cbor"),
+      .payload = QByteArrayLiteral("payload"),
+  };
+  QVERIFY(!runtime.enqueueFrame(peer, malformedTail, &diagnostic));
+  QVERIFY(!diagnostic.isEmpty());
+}
+
+void IncomingTransferRuntimeTests::activeAndCancelledSessionsRouteDataByTransferId()
+{
+  FakeFileSafety safety;
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  QThreadPool pool;
+  IncomingTransferRuntime runtime(safety, pool);
+  const auto peer = DeviceId::generate();
+  const auto cancelledOffer = offer();
+  const auto activeOffer = offer();
+  QSignalSpy operations(&runtime, &IncomingTransferRuntime::transferOperationFinished);
+  QSignalSpy failures(&runtime, &IncomingTransferRuntime::pipelineFailed);
+  QHash<TransferId, TransferSnapshot> snapshots;
+  connect(&runtime, &IncomingTransferRuntime::transferChanged, this, [&](const auto &snapshot) {
+    snapshots.insert(snapshot.id, snapshot);
+  });
+
+  QVERIFY(runtime.receiveOffer(peer, QStringLiteral("Peer"), true, receiverCapabilities(), cancelledOffer));
+  runtime.accept(cancelledOffer.transferId, {.destinationRoot = root.path()});
+  QTRY_COMPARE_WITH_TIMEOUT(operations.count(), 1, 5'000);
+  QString diagnostic;
+  const Frame cancel{
+      .type = MessageType::TransferCancel,
+      .metadata = TransferCommandCodec::encode(
+          TransferCommandMessage{TransferCancelMessage{.transferId = cancelledOffer.transferId}}, &diagnostic
+      ),
+  };
+  QVERIFY2(runtime.receiveCommand(peer, cancel, &diagnostic), qPrintable(diagnostic));
+  QTRY_VERIFY_WITH_TIMEOUT(
+      snapshots.constFind(cancelledOffer.transferId) != snapshots.constEnd() &&
+          snapshots.constFind(cancelledOffer.transferId)->state == TransferState::Cancelled,
+      5'000
+  );
+
+  QVERIFY(runtime.receiveOffer(peer, QStringLiteral("Peer"), true, receiverCapabilities(), activeOffer));
+  runtime.accept(activeOffer.transferId, {.destinationRoot = root.path()});
+  QTRY_COMPARE_WITH_TIMEOUT(operations.count(), 2, 5'000);
+
+  const Frame cancelledComplete{
+      .type = MessageType::ManifestComplete,
+      .metadata = ManifestPageCodec::encodeComplete(
+          {.transferId = cancelledOffer.transferId, .canonicalSha256 = cancelledOffer.manifestSha256}, &diagnostic
+      ),
+  };
+  const Frame cancelledChunk{
+      .type = MessageType::FileChunk,
+      .streamId = 1,
+      .metadata = FileMessageCodec::encode(
+          FileControlMessage{FileChunkMessage{
+              .transferId = cancelledOffer.transferId,
+              .fileId = FileId::generate(),
+          }},
+          &diagnostic
+      ),
+      .payload = QByteArrayLiteral("queued-tail"),
+  };
+  const Frame activePage{
+      .type = MessageType::ManifestPage,
+      .metadata = ManifestPageCodec::encode(
+          {.transferId = activeOffer.transferId, .pageIndex = 0, .pageCount = 1}, {}, &diagnostic
+      ),
+  };
+  QVERIFY2(runtime.enqueueFrame(peer, cancelledComplete, &diagnostic), qPrintable(diagnostic));
+  QVERIFY2(runtime.enqueueFrame(peer, cancelledChunk, &diagnostic), qPrintable(diagnostic));
+  QVERIFY2(runtime.enqueueFrame(peer, activePage, &diagnostic), qPrintable(diagnostic));
+  QTest::qWait(200);
+  QCOMPARE(failures.count(), 0);
 }
 
 QTEST_MAIN(IncomingTransferRuntimeTests)
