@@ -180,6 +180,7 @@
     <message><source>settings.startup</source><translation>시스템 시작 시 실행</translation></message>
     <message><source>settings.advanced</source><translation>고급 설정 및 로그</translation></message>
     <message><source>about.title</source><translation>RelayDesk 정보</translation></message>
+    <message><source>about.description</source><translation>로컬 네트워크에서 키보드, 마우스, 클립보드 및 파일 공유</translation></message>
     <message><source>about.diagnostics</source><translation>진단</translation></message>
 </context>
 </TS>

@@ -7,7 +7,9 @@
 #include "gui/MainWindow.h"
 
 #include "common/Constants.h"
+#include "common/I18N.h"
 #include "common/Settings.h"
+#include "gui/dialogs/AboutDialog.h"
 #include "gui/widgets/LogDock.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
 #include "relaydesk/widgets/DevicesDock.h"
@@ -15,21 +17,73 @@
 #include "relaydesk/widgets/TransferCenterDock.h"
 #include "relaydesk/widgets/TransferMiniBar.h"
 
-#include <QApplication>
 #include <QAction>
+#include <QApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDockWidget>
+#include <QEvent>
 #include <QFile>
+#include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
+#include <QPushButton>
 #include <QRadioButton>
 #include <QSettings>
+#include <QSystemTrayIcon>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
 
+#include <functional>
 #include <memory>
+#include <utility>
+
+namespace {
+
+QAction *findMenuRoleAction(MainWindow &window, QAction::MenuRole role)
+{
+  for (auto *action : window.findChildren<QAction *>()) {
+    if (action->menuRole() == role)
+      return action;
+  }
+  return nullptr;
+}
+
+class NextDialogInteractor final : public QObject
+{
+public:
+  NextDialogInteractor(QWidget &owner, std::function<void(QDialog *)> interaction)
+      : QObject(&owner),
+        m_owner(owner),
+        m_interaction(std::move(interaction))
+  {
+    qApp->installEventFilter(this);
+  }
+
+  ~NextDialogInteractor() override
+  {
+    qApp->removeEventFilter(this);
+  }
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override
+  {
+    auto *dialog = qobject_cast<QDialog *>(watched);
+    if (m_interaction && event->type() == QEvent::Show && dialog != nullptr && dialog->parentWidget() == &m_owner) {
+      auto interaction = std::move(m_interaction);
+      QTimer::singleShot(0, dialog, [dialog, interaction = std::move(interaction)] { interaction(dialog); });
+    }
+    return QObject::eventFilter(watched, event);
+  }
+
+private:
+  QWidget &m_owner;
+  std::function<void(QDialog *)> m_interaction;
+};
+
+} // namespace
 
 class MainWindowLayoutTests final : public QObject
 {
@@ -44,6 +98,7 @@ private Q_SLOTS:
   void settingsCanConfigureInputRoleAndRemoteHost();
   void hiddenWindowKeepsCurrentSessionGeometry();
   void restoredSmallGeometryIsClampedToMinimumSize();
+  void chineseProductChromeUsesLocalizedText();
 
 private:
   std::unique_ptr<QTemporaryDir> m_directory;
@@ -66,6 +121,7 @@ void MainWindowLayoutTests::initTestCase()
   Settings::setValue(Settings::Gui::CloseToTray, false);
   Settings::setValue(Settings::Gui::MinimizeToTray, false);
   Settings::setValue(Settings::Gui::LogExpanded, false);
+  Settings::setValue(Settings::Core::ProcessMode, Settings::ProcessMode::Desktop);
   Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::Client);
   Settings::setValue(Settings::Client::RemoteHost, QStringLiteral("127.0.0.1"));
 
@@ -171,49 +227,71 @@ void MainWindowLayoutTests::freshLaunchUsesCompactSingleHomeSurface()
 void MainWindowLayoutTests::settingsCanConfigureInputRoleAndRemoteHost()
 {
   MainWindow window;
+  auto *settingsAction = findMenuRoleAction(window, QAction::PreferencesRole);
+  QVERIFY(settingsAction != nullptr);
 
   bool serverControlsFound = false;
-  QTimer::singleShot(0, &window, [&] {
-    auto *dialog = window.findChild<QDialog *>();
-    QVERIFY(dialog != nullptr);
+  bool serverVisibilityCorrect = false;
+  bool serverAccepted = false;
+  NextDialogInteractor serverDialog(window, [&](QDialog *dialog) {
     auto *server = dialog->findChild<QRadioButton *>(QStringLiteral("rbInputRoleServer"));
     auto *client = dialog->findChild<QRadioButton *>(QStringLiteral("rbInputRoleClient"));
     auto *remoteHostRow = dialog->findChild<QWidget *>(QStringLiteral("widgetInputRoleRemoteHost"));
     auto *buttons = dialog->findChild<QDialogButtonBox *>();
-    serverControlsFound = server != nullptr && client != nullptr && remoteHostRow != nullptr && buttons != nullptr;
+    auto *save = buttons == nullptr ? nullptr : buttons->button(QDialogButtonBox::Save);
+    serverControlsFound = server != nullptr && client != nullptr && remoteHostRow != nullptr && save != nullptr;
     if (!serverControlsFound) {
       dialog->reject();
       return;
     }
     server->setChecked(true);
-    QVERIFY(remoteHostRow->isHidden());
-    buttons->button(QDialogButtonBox::Save)->click();
+    serverVisibilityCorrect = remoteHostRow->isHidden();
+    if (!serverVisibilityCorrect) {
+      dialog->reject();
+      return;
+    }
+    save->click();
+    serverAccepted = dialog->result() == QDialog::Accepted;
+    if (!serverAccepted)
+      dialog->reject();
   });
-  QVERIFY(QMetaObject::invokeMethod(&window, "openSettings", Qt::DirectConnection));
+  settingsAction->trigger();
   QVERIFY(serverControlsFound);
+  QVERIFY(serverVisibilityCorrect);
+  QVERIFY(serverAccepted);
   QCOMPARE(window.coreMode(), Settings::CoreMode::Server);
   QCOMPARE(Settings::value(Settings::Core::CoreMode).value<Settings::CoreMode>(), Settings::CoreMode::Server);
 
   bool clientControlsFound = false;
-  QTimer::singleShot(0, &window, [&] {
-    auto *dialog = window.findChild<QDialog *>();
-    QVERIFY(dialog != nullptr);
+  bool clientVisibilityCorrect = false;
+  bool clientAccepted = false;
+  NextDialogInteractor clientDialog(window, [&](QDialog *dialog) {
     auto *client = dialog->findChild<QRadioButton *>(QStringLiteral("rbInputRoleClient"));
     auto *remoteHost = dialog->findChild<QLineEdit *>(QStringLiteral("lineInputRoleRemoteHost"));
     auto *remoteHostRow = dialog->findChild<QWidget *>(QStringLiteral("widgetInputRoleRemoteHost"));
     auto *buttons = dialog->findChild<QDialogButtonBox *>();
-    clientControlsFound = client != nullptr && remoteHost != nullptr && remoteHostRow != nullptr && buttons != nullptr;
+    auto *save = buttons == nullptr ? nullptr : buttons->button(QDialogButtonBox::Save);
+    clientControlsFound = client != nullptr && remoteHost != nullptr && remoteHostRow != nullptr && save != nullptr;
     if (!clientControlsFound) {
       dialog->reject();
       return;
     }
     client->setChecked(true);
-    QVERIFY(!remoteHostRow->isHidden());
+    clientVisibilityCorrect = !remoteHostRow->isHidden();
+    if (!clientVisibilityCorrect) {
+      dialog->reject();
+      return;
+    }
     remoteHost->setText(QStringLiteral("  192.168.1.20  "));
-    buttons->button(QDialogButtonBox::Save)->click();
+    save->click();
+    clientAccepted = dialog->result() == QDialog::Accepted;
+    if (!clientAccepted)
+      dialog->reject();
   });
-  QVERIFY(QMetaObject::invokeMethod(&window, "openSettings", Qt::DirectConnection));
+  settingsAction->trigger();
   QVERIFY(clientControlsFound);
+  QVERIFY(clientVisibilityCorrect);
+  QVERIFY(clientAccepted);
   QCOMPARE(window.coreMode(), Settings::CoreMode::Client);
   QCOMPARE(Settings::value(Settings::Core::CoreMode).value<Settings::CoreMode>(), Settings::CoreMode::Client);
   QCOMPARE(Settings::value(Settings::Client::RemoteHost).toString(), QStringLiteral("192.168.1.20"));
@@ -250,6 +328,42 @@ void MainWindowLayoutTests::hiddenWindowKeepsCurrentSessionGeometry()
   window.open(false);
   QTRY_VERIFY(window.isVisible());
   QCOMPARE(window.geometry(), currentSessionGeometry);
+}
+
+void MainWindowLayoutTests::chineseProductChromeUsesLocalizedText()
+{
+  I18N::reDetectLanguages();
+  I18N::setLanguage(QStringLiteral("zh_CN"));
+  QCOMPARE(I18N::currentLanguage(), QStringLiteral("zh_CN"));
+
+  MainWindow window;
+  auto *aboutAction = findMenuRoleAction(window, QAction::AboutRole);
+  QVERIFY(aboutAction != nullptr);
+  auto *tray = window.findChild<QSystemTrayIcon *>();
+  QVERIFY(tray != nullptr);
+  QVERIFY(tray->contextMenu() != nullptr);
+  QVERIFY(!tray->contextMenu()->actions().isEmpty());
+  QCOMPARE(tray->contextMenu()->actions().constFirst()->text(), QStringLiteral("打开 RelayDesk(&O)"));
+
+  bool inspected = false;
+  bool localized = false;
+  NextDialogInteractor aboutDialog(window, [&](QDialog *baseDialog) {
+    auto *dialog = qobject_cast<AboutDialog *>(baseDialog);
+    if (dialog == nullptr) {
+      baseDialog->reject();
+      return;
+    }
+    auto *description = dialog->findChild<QLabel *>(QStringLiteral("lblDescription"));
+    inspected = description != nullptr;
+    localized = inspected && dialog->windowTitle() == QStringLiteral("关于 RelayDesk") &&
+                description->text() == QStringLiteral("局域网键盘、鼠标、剪贴板和文件共享");
+    baseDialog->reject();
+  });
+  aboutAction->trigger();
+  QVERIFY(inspected);
+  QVERIFY(localized);
+
+  I18N::setLanguage(QStringLiteral("en"));
 }
 
 QTEST_MAIN(MainWindowLayoutTests)

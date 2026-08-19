@@ -180,6 +180,7 @@
     <message><source>settings.startup</source><translation>システム起動時に開始</translation></message>
     <message><source>settings.advanced</source><translation>詳細設定とログ</translation></message>
     <message><source>about.title</source><translation>RelayDesk について</translation></message>
+    <message><source>about.description</source><translation>ローカルネットワークでキーボード、マウス、クリップボード、ファイルを共有</translation></message>
     <message><source>about.diagnostics</source><translation>診断</translation></message>
 </context>
 </TS>

@@ -180,6 +180,7 @@
     <message><source>settings.startup</source><translation>开机启动</translation></message>
     <message><source>settings.advanced</source><translation>高级与日志</translation></message>
     <message><source>about.title</source><translation>关于 RelayDesk</translation></message>
+    <message><source>about.description</source><translation>局域网键盘、鼠标、剪贴板和文件共享</translation></message>
     <message><source>about.diagnostics</source><translation>诊断</translation></message>
 </context>
 </TS>

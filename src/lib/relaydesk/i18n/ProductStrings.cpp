@@ -297,6 +297,8 @@ constexpr std::array<Entry, static_cast<std::size_t>(Text::Count)> kEntries{{
     {Text::SettingsStartup, QT_TRANSLATE_NOOP("RelayDesk", "settings.startup"), "Start with system"},
     {Text::SettingsAdvanced, QT_TRANSLATE_NOOP("RelayDesk", "settings.advanced"), "Advanced and logs"},
     {Text::AboutTitle, QT_TRANSLATE_NOOP("RelayDesk", "about.title"), "About RelayDesk"},
+    {Text::AboutDescription, QT_TRANSLATE_NOOP("RelayDesk", "about.description"),
+     "Local network keyboard, mouse, clipboard, and file sharing"},
     {Text::AboutDiagnostics, QT_TRANSLATE_NOOP("RelayDesk", "about.diagnostics"), "Diagnostics"},
 }};
 

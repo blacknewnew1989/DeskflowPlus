@@ -11,13 +11,17 @@
 
 #include "common/Constants.h"
 #include "common/VersionInfo.h"
+#include "relaydesk/i18n/ProductStrings.h"
 
 #include <QClipboard>
 
 AboutDialog::AboutDialog(QWidget *parent) : QDialog(parent), ui{std::make_unique<Ui::AboutDialog>()}
 {
+  using deskflow::relaydesk::i18n::Text;
+  using deskflow::relaydesk::i18n::translate;
+
   ui->setupUi(this);
-  setWindowTitle(tr("About %1").arg(kAppName));
+  setWindowTitle(translate(Text::AboutTitle));
   ui->lblName->setText(kAppName);
 
   const int px = (fontMetrics().height() * 6);
@@ -31,7 +35,7 @@ AboutDialog::AboutDialog(QWidget *parent) : QDialog(parent), ui{std::make_unique
   connect(ui->btnCopyVersion, &QPushButton::clicked, this, &AboutDialog::copyVersionText);
 
   ui->lblVersion->setText(kDisplayVersion);
-  ui->lblDescription->setText(kAppDescription);
+  ui->lblDescription->setText(translate(Text::AboutDescription));
   ui->lblCopyright->setText(kCopyright);
 
   // Use non-breaking space in each awesome dev name so names are not split across lines.

@@ -180,6 +180,7 @@
     <message><source>settings.startup</source><translation>Start with system</translation></message>
     <message><source>settings.advanced</source><translation>Advanced and logs</translation></message>
     <message><source>about.title</source><translation>About RelayDesk</translation></message>
+    <message><source>about.description</source><translation>Local network keyboard, mouse, clipboard, and file sharing</translation></message>
     <message><source>about.diagnostics</source><translation>Diagnostics</translation></message>
 </context>
 </TS>

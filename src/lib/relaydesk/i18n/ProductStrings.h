@@ -190,6 +190,7 @@ enum class Text
   SettingsStartup,
   SettingsAdvanced,
   AboutTitle,
+  AboutDescription,
   AboutDiagnostics,
   Count
 };

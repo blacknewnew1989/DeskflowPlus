@@ -70,8 +70,9 @@ CONSUMERS = {
         "@RELAYDESK_MACOS_MENU_BAR_TEMPLATE_SOURCE@",
     ),
     ROOT / "src/lib/gui/dialogs/AboutDialog.cpp": (
-        'setWindowTitle(tr("About %1").arg(kAppName))',
+        "setWindowTitle(translate(Text::AboutTitle))",
         "ui->lblName->setText(kAppName)",
+        "ui->lblDescription->setText(translate(Text::AboutDescription))",
     ),
     ROOT / "src/apps/res/deskflow.plist.in": ("@BUNDLE_LOCAL_NETWORK_USAGE_DESCRIPTION@",),
     ROOT / "deploy/CMakeLists.txt": ("${RELAYDESK_PACKAGE_ID}",),

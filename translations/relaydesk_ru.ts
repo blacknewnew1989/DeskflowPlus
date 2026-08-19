@@ -180,6 +180,7 @@
     <message><source>settings.startup</source><translation>Запускать вместе с системой</translation></message>
     <message><source>settings.advanced</source><translation>Дополнительно и журналы</translation></message>
     <message><source>about.title</source><translation>О RelayDesk</translation></message>
+    <message><source>about.description</source><translation>Совместное использование клавиатуры, мыши, буфера обмена и файлов в локальной сети</translation></message>
     <message><source>about.diagnostics</source><translation>Диагностика</translation></message>
 </context>
 </TS>

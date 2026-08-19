@@ -180,6 +180,7 @@
     <message><source>settings.startup</source><translation>Avvia con il sistema</translation></message>
     <message><source>settings.advanced</source><translation>Avanzate e registri</translation></message>
     <message><source>about.title</source><translation>Informazioni su RelayDesk</translation></message>
+    <message><source>about.description</source><translation>Condivisione di tastiera, mouse, appunti e file sulla rete locale</translation></message>
     <message><source>about.diagnostics</source><translation>Diagnostica</translation></message>
 </context>
 </TS>

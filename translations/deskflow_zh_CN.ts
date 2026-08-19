@@ -525,9 +525,9 @@ A bound IP is now invalid, you may need to restart the server.</source>
         <translation>退出(&amp;Q)</translation>
     </message>
     <message>
-        <source>&amp;Show %1</source>
+        <source>&amp;Open %1</source>
         <extracomment>%1 will be the replaced with the appname</extracomment>
-        <translation>显示 %1(&amp;S)</translation>
+        <translation>打开 %1(&amp;O)</translation>
     </message>
     <message>
         <source>&amp;Preferences</source>

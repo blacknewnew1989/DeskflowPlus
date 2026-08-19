@@ -125,6 +125,9 @@ void ProductStringsTests::untranslatedCatalogUsesEnglishFallback()
   QCOMPARE(key(Text::DevicesStatusOnline), QStringLiteral("devices.status.online"));
   QCOMPARE(translate(Text::DevicesStatusOnline), QStringLiteral("Online"));
   QCOMPARE(translate(Text::TransferActionOpenFolder), QStringLiteral("Open folder"));
+  QCOMPARE(
+      translate(Text::AboutDescription), QStringLiteral("Local network keyboard, mouse, clipboard, and file sharing")
+  );
 }
 
 void ProductStringsTests::pluralFallbackUsesCount()
