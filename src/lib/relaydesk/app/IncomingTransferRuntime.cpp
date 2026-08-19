@@ -1120,6 +1120,15 @@ void IncomingTransferRuntime::resolveIncomingConflict(
   }
 }
 
+bool IncomingTransferRuntime::hasPendingIncomingConflict(
+    const ::relaydesk::transfer::TransferId &transferId, const QUuid &conflictId
+) const
+{
+  const auto *session = m_sessions.value(transferId, nullptr);
+  return session != nullptr && session->pendingConflict.has_value() &&
+         session->pendingConflict->conflictId == conflictId;
+}
+
 bool IncomingTransferRuntime::receiveCommand(
     const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame, QString *diagnostic
 )
@@ -1190,6 +1199,7 @@ bool IncomingTransferRuntime::receiveCommand(
     return false;
   }
   const auto pipeline = std::move(session->pipeline);
+  session->pendingConflict.reset();
   pipeline->stop();
   const quint64 generation = ++session->pipelineGeneration;
   session->pipelineSnapshot.state = TransferState::Cancelling;

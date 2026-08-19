@@ -55,6 +55,9 @@ public:
       const ::relaydesk::transfer::TransferId &transferId, const QUuid &conflictId,
       ::relaydesk::transfer::IncomingConflictDecision decision
   );
+  [[nodiscard]] bool hasPendingIncomingConflict(
+      const ::relaydesk::transfer::TransferId &transferId, const QUuid &conflictId
+  ) const;
   [[nodiscard]] bool receiveCommand(
       const DeviceId &peerDeviceId, const ::relaydesk::transfer::Frame &frame,
       QString *diagnostic = nullptr

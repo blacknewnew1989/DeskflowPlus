@@ -727,6 +727,15 @@ void FileTransferRuntime::resolveIncomingConflict(
 )
 {
   if (auto *incoming = m_incoming.get(); incoming != nullptr && incoming->contains(transferId)) {
+    if (decision == ::relaydesk::transfer::IncomingConflictDecision::CancelTransfer) {
+      if (!incoming->hasPendingIncomingConflict(transferId, conflictId)) {
+        return;
+      }
+      // Reuse cancel's send-before-local-apply order. A transport failure
+      // leaves the prompt and disk worker untouched so the caller can retry.
+      cancel(transferId, {});
+      return;
+    }
     incoming->resolveIncomingConflict(transferId, conflictId, decision);
   }
 }
@@ -1912,8 +1921,11 @@ void FileTransferRuntime::handleFileResult(const DeviceId &peerDeviceId, const F
       session->manifest->entries.at(session->currentEntry).entry.id != result->fileId) {
     return;
   }
+  // A receiver-side Ask decision may choose Skip even though the negotiated
+  // sender policy remains Ask. TARGET_SKIPPED is therefore a completed file,
+  // independent of the sender's original policy.
   const bool skipped = result->code == FileResultCode::TargetExists &&
-                       session->effectiveConflictPolicy == ::relaydesk::transfer::ConflictPolicy::Skip;
+                       result->diagnostic == QStringLiteral("TARGET_SKIPPED");
   if (result->code != FileResultCode::Ok && !skipped) {
     failOutgoing(*session, TransferErrorCode::PeerFileFailed, result->diagnostic);
     return;
