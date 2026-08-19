@@ -7,6 +7,7 @@
 #pragma once
 
 #include "relaydesk/device/DeviceId.h"
+#include "relaydesk/discovery/DiscoverySettings.h"
 #include "relaydesk/transfer/TransferTypes.h"
 
 #include <QDockWidget>
@@ -61,6 +62,7 @@ public:
   void setFileChooser(ItemChooser chooser);
   void setFolderChooser(ItemChooser chooser);
   void setIncomingOfferModel(model::IncomingOfferModel *incomingOffers);
+  void setManualAddresses(QList<ManualAddress> addresses);
 
 Q_SIGNALS:
   void pairingRequested(DeviceId peerDeviceId);
@@ -68,6 +70,7 @@ Q_SIGNALS:
   void sendItemsRequested(DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options);
   void sendItemsRejected(QString message);
   void incomingOfferSettingsRequested();
+  void manualAddressesSaveRequested(QList<ManualAddress> addresses);
 
 protected:
   void changeEvent(QEvent *event) override;
@@ -84,6 +87,7 @@ private:
   void activateDevice(const QModelIndex &index);
   void requestPairing(const QModelIndex &index);
   void requestTrustRevocation(const QModelIndex &index);
+  void manageManualAddresses();
   void updatePairingPanel();
   void updatePermissionBanner();
   void updatePermissionDetails();
@@ -116,6 +120,7 @@ private:
   QListView *m_deviceList = nullptr;
   QLabel *m_emptyLabel = nullptr;
   QPushButton *m_pairButton = nullptr;
+  QPushButton *m_manageManualAddressesButton = nullptr;
   QToolButton *m_moreButton = nullptr;
   QMenu *m_moreMenu = nullptr;
   QAction *m_revokeTrustAction = nullptr;
@@ -152,6 +157,7 @@ private:
   ItemChooser m_folderChooser;
   QPersistentModelIndex m_dropTargetIndex;
   model::IncomingOfferModel *m_incomingOffers = nullptr;
+  QList<ManualAddress> m_manualAddresses;
 };
 
 } // namespace deskflow::relaydesk::widgets

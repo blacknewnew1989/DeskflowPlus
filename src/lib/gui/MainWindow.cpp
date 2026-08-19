@@ -292,6 +292,8 @@ void MainWindow::setupRelayDeskDiscovery()
   if (!discoverySettings.ok) {
     qWarning().noquote() << "RelayDesk discovery settings ignored:" << discoverySettings.diagnostic;
   }
+  m_devicesDock->setManualAddresses(discoverySettings.ok ? discoverySettings.settings.manualAddresses
+                                                          : QList<deskflow::relaydesk::ManualAddress>{});
 
   const auto inputPortValue = Settings::value(Settings::Core::Port).toInt();
   const quint16 inputPort =
@@ -368,6 +370,24 @@ void MainWindow::setupRelayDeskDiscovery()
         if (!result.ok()) {
           qWarning().noquote() << "RelayDesk trust revocation failed:" << result.diagnostic;
         }
+      }
+  );
+  connect(
+      m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::manualAddressesSaveRequested, this,
+      [this](QList<deskflow::relaydesk::ManualAddress> addresses) {
+        QSettings settings(Settings::settingsFile(), QSettings::IniFormat);
+        deskflow::relaydesk::DiscoverySettingsStore store(settings);
+        auto loaded = store.load();
+        auto updated = loaded.ok ? loaded.settings : deskflow::relaydesk::DiscoverySettings{};
+        updated.manualAddresses = std::move(addresses);
+        QString diagnostic;
+        if (!store.save(updated, &diagnostic)) {
+          qWarning().noquote() << "RelayDesk manual addresses could not save:" << diagnostic;
+          return;
+        }
+        m_devicesDock->setManualAddresses(updated.manualAddresses);
+        if (m_relayDeskReconnect != nullptr)
+          m_relayDeskReconnect->setSettings(std::move(updated));
       }
   );
 

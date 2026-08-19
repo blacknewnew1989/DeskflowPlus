@@ -28,6 +28,7 @@ public:
       DiscoverySettings settings, QObject *parent = nullptr
   );
   void stop();
+  void setSettings(DiscoverySettings settings);
 
 private:
   friend class ::AutoReconnectRuntimeTests;

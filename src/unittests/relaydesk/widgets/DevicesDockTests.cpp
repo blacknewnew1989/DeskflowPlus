@@ -25,9 +25,11 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QListWidget>
 #include <QMimeData>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QSpinBox>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QToolButton>
@@ -132,6 +134,7 @@ private Q_SLOTS:
   void acceptsLocalUrlDropOnlyForEligiblePeer();
   void rendersNonBlockingIncomingOfferAndKeyboardDecisions();
   void rendersUntrustedAndExpiredOfferSafely();
+  void managesManualAddressesAtCompactSize();
 };
 
 void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
@@ -170,6 +173,30 @@ void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
   list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
   QTRY_VERIFY(pair->isEnabled());
   QCOMPARE(pair->text(), QStringLiteral("Pair again"));
+}
+
+void DevicesDockTests::managesManualAddressesAtCompactSize()
+{
+  qRegisterMetaType<ManualAddress>();
+  Fixture fixture;
+  fixture.dock.resize(520, 380);
+  fixture.dock.show();
+  auto *manage = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskManageManualAddressesButton"));
+  QVERIFY(manage != nullptr);
+  QVERIFY(manage->isVisible());
+  QSignalSpy saved(&fixture.dock, &DevicesDock::manualAddressesSaveRequested);
+  QTimer::singleShot(0, [&fixture]() {
+    auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
+    if (dialog == nullptr) return;
+    dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"))->setText(QStringLiteral("192.168.1.20"));
+    dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressAddButton"))->click();
+    dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressSaveButton"))->click();
+  });
+  manage->click();
+  QCOMPARE(saved.count(), 1);
+  QCOMPARE(saved.first().at(0).value<QList<ManualAddress>>().size(), 1);
+  fixture.devices.upsertRemoteDevice(peerSnapshot(DevicePresence::Online, true));
+  QVERIFY(manage->isVisible());
 }
 
 void DevicesDockTests::keepsLocalDeviceInFooterOnly()

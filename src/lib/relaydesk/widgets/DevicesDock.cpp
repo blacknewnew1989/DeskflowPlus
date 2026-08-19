@@ -31,6 +31,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QListWidget>
 #include <QMenu>
 #include <QLocale>
 #include <QMimeData>
@@ -39,6 +40,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QSpinBox>
 #include <QSizePolicy>
 #include <QStyle>
 #include <QStyledItemDelegate>
@@ -306,6 +308,9 @@ DevicesDock::DevicesDock(
   m_pairButton = new QPushButton(body);
   m_pairButton->setObjectName(QStringLiteral("relaydeskPairSelectedButton"));
   deviceActions->addWidget(m_pairButton);
+  m_manageManualAddressesButton = new QPushButton(body);
+  m_manageManualAddressesButton->setObjectName(QStringLiteral("relaydeskManageManualAddressesButton"));
+  deviceActions->addWidget(m_manageManualAddressesButton);
   m_sendFilesButton = new QPushButton(body);
   m_sendFilesButton->setObjectName(QStringLiteral("relaydeskSendFilesButton"));
   m_sendFolderButton = new QPushButton(body);
@@ -504,6 +509,7 @@ DevicesDock::DevicesDock(
   connect(m_deviceList->selectionModel(), &QItemSelectionModel::selectionChanged, this, &DevicesDock::updateSelection);
   connect(m_deviceList, &QListView::activated, this, &DevicesDock::activateDevice);
   connect(m_pairButton, &QPushButton::clicked, this, [this]() { requestPairing(m_deviceList->currentIndex()); });
+  connect(m_manageManualAddressesButton, &QPushButton::clicked, this, &DevicesDock::manageManualAddresses);
   connect(m_revokeTrustAction, &QAction::triggered, this, [this]() {
     requestTrustRevocation(m_deviceList->currentIndex());
   });
@@ -596,6 +602,11 @@ void DevicesDock::setIncomingOfferModel(model::IncomingOfferModel *incomingOffer
     });
   }
   updateIncomingOfferPanel();
+}
+
+void DevicesDock::setManualAddresses(QList<ManualAddress> addresses)
+{
+  m_manualAddresses = std::move(addresses);
 }
 
 void DevicesDock::changeEvent(QEvent *event)
@@ -736,6 +747,8 @@ void DevicesDock::updateText()
   m_sendFilesButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFile));
   m_sendFolderButton->setText(i18n::translate(Text::DevicesActionSendFolder));
   m_sendFolderButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFolder));
+  m_manageManualAddressesButton->setText(i18n::translate(Text::DevicesManualAddressManage));
+  m_manageManualAddressesButton->setAccessibleName(i18n::translate(Text::DevicesManualAddressManage));
   m_moreButton->setToolTip(i18n::translate(Text::DevicesActionMore));
   m_moreButton->setAccessibleName(i18n::translate(Text::DevicesActionMore));
   m_revokeTrustAction->setText(i18n::translate(Text::DevicesActionRevokeTrust));
@@ -772,6 +785,8 @@ void DevicesDock::updateSelection()
   const auto pairable = devicePairable && m_permissions.canConnectDevices();
   m_pairButton->setEnabled(pairable);
   m_pairButton->setVisible(devicePairable);
+  m_manageManualAddressesButton->setVisible(true);
+  m_manageManualAddressesButton->setEnabled(true);
   m_pairButton->setText(
       devicePairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
                      : i18n::translate(Text::PairingActionStart)
@@ -937,6 +952,85 @@ void DevicesDock::requestTrustRevocation(const QModelIndex &index)
   if (confirmation.exec() != QDialog::Accepted)
     return;
   Q_EMIT trustRevocationRequested(*id);
+}
+
+void DevicesDock::manageManualAddresses()
+{
+  auto workingAddresses = m_manualAddresses;
+  QDialog dialog(this);
+  dialog.setObjectName(QStringLiteral("relaydeskManualAddressesDialog"));
+  dialog.setWindowTitle(i18n::translate(Text::DevicesManualAddressTitle));
+  dialog.setMinimumWidth(360);
+  auto *layout = new QVBoxLayout(&dialog);
+  auto *addresses = new QListWidget(&dialog);
+  addresses->setObjectName(QStringLiteral("relaydeskManualAddressesList"));
+  auto refresh = [&]() {
+    addresses->clear();
+    for (const auto &entry : workingAddresses)
+      addresses->addItem(QStringLiteral("%1  %2 / %3").arg(entry.host).arg(entry.inputPort).arg(entry.filePort));
+  };
+  refresh();
+  layout->addWidget(addresses);
+  auto *host = new QLineEdit(&dialog);
+  host->setObjectName(QStringLiteral("relaydeskManualAddressHost"));
+  host->setPlaceholderText(i18n::translate(Text::DevicesManualAddressHost));
+  layout->addWidget(host);
+  auto *ports = new QHBoxLayout();
+  auto *inputPort = new QSpinBox(&dialog);
+  inputPort->setObjectName(QStringLiteral("relaydeskManualAddressInputPort"));
+  inputPort->setRange(1, 65535);
+  inputPort->setValue(kDefaultManualInputPort);
+  auto *filePort = new QSpinBox(&dialog);
+  filePort->setObjectName(QStringLiteral("relaydeskManualAddressFilePort"));
+  filePort->setRange(1, 65535);
+  filePort->setValue(kDefaultManualFilePort);
+  ports->addWidget(inputPort);
+  ports->addWidget(filePort);
+  layout->addLayout(ports);
+  auto *error = new QLabel(&dialog);
+  error->setObjectName(QStringLiteral("relaydeskManualAddressError"));
+  error->setWordWrap(true);
+  layout->addWidget(error);
+  auto *actions = new QHBoxLayout();
+  auto *add = new QPushButton(i18n::translate(Text::DevicesManualAddressAdd), &dialog);
+  add->setObjectName(QStringLiteral("relaydeskManualAddressAddButton"));
+  auto *remove = new QPushButton(i18n::translate(Text::DevicesManualAddressRemove), &dialog);
+  remove->setObjectName(QStringLiteral("relaydeskManualAddressRemoveButton"));
+  auto *save = new QPushButton(i18n::translate(Text::DevicesManualAddressSave), &dialog);
+  save->setObjectName(QStringLiteral("relaydeskManualAddressSaveButton"));
+  auto *cancel = new QPushButton(i18n::translate(Text::PairingActionCancel), &dialog);
+  actions->addWidget(add);
+  actions->addWidget(remove);
+  actions->addStretch();
+  actions->addWidget(cancel);
+  actions->addWidget(save);
+  layout->addLayout(actions);
+  connect(add, &QPushButton::clicked, &dialog, [&]() {
+    QString diagnostic;
+    const auto parsed = parseManualAddress(host->text(), inputPort->value(), filePort->value(), &diagnostic);
+    if (!parsed.has_value()) {
+      error->setText(i18n::translate(Text::DevicesManualAddressInvalid));
+      return;
+    }
+    if (!workingAddresses.contains(*parsed))
+      workingAddresses.append(*parsed);
+    host->clear();
+    error->clear();
+    refresh();
+  });
+  connect(remove, &QPushButton::clicked, &dialog, [&]() {
+    const auto row = addresses->currentRow();
+    if (row >= 0 && row < workingAddresses.size()) {
+      workingAddresses.removeAt(row);
+      refresh();
+    }
+  });
+  connect(save, &QPushButton::clicked, &dialog, &QDialog::accept);
+  connect(cancel, &QPushButton::clicked, &dialog, &QDialog::reject);
+  if (dialog.exec() == QDialog::Accepted) {
+    m_manualAddresses = std::move(workingAddresses);
+    Q_EMIT manualAddressesSaveRequested(m_manualAddresses);
+  }
 }
 
 void DevicesDock::activateDevice(const QModelIndex &index)

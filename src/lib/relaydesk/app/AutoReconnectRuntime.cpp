@@ -54,6 +54,13 @@ void AutoReconnectRuntime::stop()
   m_pending.clear();
 }
 
+void AutoReconnectRuntime::setSettings(DiscoverySettings settings)
+{
+  m_settings = std::move(settings);
+  for (const auto &snapshot : m_discovery.registry().snapshots())
+    observe(snapshot);
+}
+
 void AutoReconnectRuntime::observe(DeviceSnapshot snapshot)
 {
   const auto trusted = m_pairing.m_trustedDevices.find(snapshot.id);
