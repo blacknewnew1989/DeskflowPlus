@@ -68,6 +68,7 @@ class AutoReconnectRuntimeTests final : public QObject
 
 private Q_SLOTS:
   void trustRevocationStopsReconnectAndDisconnectsPeer();
+  void settingsRefreshReplaysExistingTrustedSnapshot();
 };
 
 void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer()
@@ -148,6 +149,48 @@ void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer(
   QTest::qWait(100);
   QCOMPARE(disconnected.count(), 1);
   QVERIFY(!reconnect.m_coordinators.contains(secondId));
+}
+
+void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+
+  const auto localId = DeviceId::generate();
+  const auto peerId = DeviceId::generate();
+  const auto localInfo = device(localId, identity.fingerprintSha256, QStringLiteral("Local"));
+  auto peerInfo = device(peerId, identity.fingerprintSha256, QStringLiteral("Peer"));
+  peerInfo.filePort = 24801;
+  const auto trustPath = directory.filePath(QStringLiteral("trusted.json"));
+  TrustedDeviceStore seed(trustPath);
+  QVERIFY(seed.upsert(trustedDevice(peerId, identity.fingerprintSha256)));
+  QVERIFY(seed.save().ok);
+
+  DeviceHomeModel model;
+  PairingWizardModel pairingModel;
+  DeviceDiscoveryRuntime discovery(localInfo, model, loopbackDiscovery());
+  QString diagnostic;
+  QVERIFY2(discovery.start(&diagnostic), qPrintable(diagnostic));
+  PairingTrustRuntime pairing(localInfo, trustPath, discovery, model, pairingModel);
+  QVERIFY(pairing.isReady());
+  QVERIFY(discovery.registry().observeAdvertisement(peerInfo, QHostAddress(QStringLiteral("192.0.2.60"))));
+
+  FileTransferRuntime files(localId, pairing.trustedDevices(), discovery, identityPath);
+  AutoReconnectRuntime reconnect(pairing, discovery, files, {});
+  QTRY_VERIFY(reconnect.m_coordinators.contains(peerId));
+  auto *coordinator = reconnect.m_coordinators.value(peerId);
+  QVERIFY(coordinator != nullptr);
+  QSignalSpy connecting(coordinator, &AutoReconnectCoordinator::connecting);
+  QTRY_VERIFY(connecting.count() >= 1);
+  const auto initialAttemptCount = connecting.count();
+
+  reconnect.setSettings({.manualAddresses = {*parseManualAddress(QStringLiteral("192.0.2.61"), 24800, 24801)}});
+
+  QTRY_VERIFY(connecting.count() >= initialAttemptCount + 2);
+  QCOMPARE(connecting.last().at(1).value<AddressCandidate>().source, AddressCandidateSource::Manual);
 }
 
 QTEST_MAIN(AutoReconnectRuntimeTests)

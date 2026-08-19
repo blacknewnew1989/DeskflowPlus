@@ -999,6 +999,7 @@ void DevicesDock::manageManualAddresses()
   auto *save = new QPushButton(i18n::translate(Text::DevicesManualAddressSave), &dialog);
   save->setObjectName(QStringLiteral("relaydeskManualAddressSaveButton"));
   auto *cancel = new QPushButton(i18n::translate(Text::PairingActionCancel), &dialog);
+  cancel->setObjectName(QStringLiteral("relaydeskManualAddressCancelButton"));
   actions->addWidget(add);
   actions->addWidget(remove);
   actions->addStretch();

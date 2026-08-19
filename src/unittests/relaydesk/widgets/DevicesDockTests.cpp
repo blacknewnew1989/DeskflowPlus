@@ -136,6 +136,9 @@ private Q_SLOTS:
   void rendersUntrustedAndExpiredOfferSafely();
   void managesManualAddressesAtCompactSize();
   void retriesManualAddressSaveAfterFailure();
+  void cancellingManualAddressChangesDoesNotSaveOrCommit();
+  void removingManualAddressEditsWorkingCopyUntilSaved();
+  void duplicateManualAddressesAreNormalizedBeforeSave();
 };
 
 void DevicesDockTests::rendersEmptyAndPairableDeviceStates()
@@ -245,6 +248,123 @@ void DevicesDockTests::retriesManualAddressSaveAfterFailure()
   });
   manage->click();
   QCOMPARE(saveRequests, 2);
+}
+
+void DevicesDockTests::cancellingManualAddressChangesDoesNotSaveOrCommit()
+{
+  Fixture fixture;
+  fixture.dock.setManualAddresses({*parseManualAddress(QStringLiteral("kept.local"))});
+  auto *manage = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskManageManualAddressesButton"));
+  QVERIFY(manage != nullptr);
+
+  int saveRequests = 0;
+  connect(
+      &fixture.dock, &DevicesDock::manualAddressesSaveRequested, this,
+      [&saveRequests](QList<ManualAddress>, const DevicesDock::ManualAddressesSaveReceipt &) { ++saveRequests; }
+  );
+  QTimer::singleShot(0, [&fixture]() {
+    auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
+    QVERIFY(dialog != nullptr);
+    dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"))->setText(QStringLiteral("discarded.local"));
+    dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressAddButton"))->click();
+    dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressCancelButton"))->click();
+  });
+  manage->click();
+  QCOMPARE(saveRequests, 0);
+
+  QTimer::singleShot(0, [&fixture]() {
+    auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
+    QVERIFY(dialog != nullptr);
+    auto *addresses = dialog->findChild<QListWidget *>(QStringLiteral("relaydeskManualAddressesList"));
+    QVERIFY(addresses != nullptr);
+    QCOMPARE(addresses->count(), 1);
+    QCOMPARE(addresses->item(0)->text(), QStringLiteral("kept.local  24800 / 24801"));
+    dialog->reject();
+  });
+  manage->click();
+}
+
+void DevicesDockTests::removingManualAddressEditsWorkingCopyUntilSaved()
+{
+  Fixture fixture;
+  fixture.dock.setManualAddresses(
+      {*parseManualAddress(QStringLiteral("first.local")), *parseManualAddress(QStringLiteral("second.local"))}
+  );
+  auto *manage = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskManageManualAddressesButton"));
+  QVERIFY(manage != nullptr);
+  int saveRequests = 0;
+  QList<ManualAddress> savedAddresses;
+  connect(
+      &fixture.dock, &DevicesDock::manualAddressesSaveRequested, this,
+      [&saveRequests, &savedAddresses](
+          QList<ManualAddress> addresses, const DevicesDock::ManualAddressesSaveReceipt &receipt
+      ) {
+        ++saveRequests;
+        savedAddresses = std::move(addresses);
+        receipt(true);
+      }
+  );
+
+  QTimer::singleShot(0, [&fixture]() {
+    auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
+    QVERIFY(dialog != nullptr);
+    auto *addresses = dialog->findChild<QListWidget *>(QStringLiteral("relaydeskManualAddressesList"));
+    addresses->setCurrentRow(0);
+    dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressRemoveButton"))->click();
+    dialog->reject();
+  });
+  manage->click();
+
+  QTimer::singleShot(0, [&fixture]() {
+    auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
+    QVERIFY(dialog != nullptr);
+    auto *addresses = dialog->findChild<QListWidget *>(QStringLiteral("relaydeskManualAddressesList"));
+    QCOMPARE(addresses->count(), 2);
+    addresses->setCurrentRow(0);
+    dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressRemoveButton"))->click();
+    dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressSaveButton"))->click();
+  });
+  manage->click();
+  QCOMPARE(saveRequests, 1);
+  QCOMPARE(savedAddresses, QList<ManualAddress>{*parseManualAddress(QStringLiteral("second.local"))});
+
+  QTimer::singleShot(0, [&fixture]() {
+    auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
+    QVERIFY(dialog != nullptr);
+    auto *addresses = dialog->findChild<QListWidget *>(QStringLiteral("relaydeskManualAddressesList"));
+    QCOMPARE(addresses->count(), 1);
+    QCOMPARE(addresses->item(0)->text(), QStringLiteral("second.local  24800 / 24801"));
+    dialog->reject();
+  });
+  manage->click();
+}
+
+void DevicesDockTests::duplicateManualAddressesAreNormalizedBeforeSave()
+{
+  Fixture fixture;
+  auto *manage = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskManageManualAddressesButton"));
+  QVERIFY(manage != nullptr);
+  QList<ManualAddress> savedAddresses;
+  connect(
+      &fixture.dock, &DevicesDock::manualAddressesSaveRequested, this,
+      [&savedAddresses](QList<ManualAddress> addresses, const DevicesDock::ManualAddressesSaveReceipt &receipt) {
+        savedAddresses = std::move(addresses);
+        receipt(true);
+      }
+  );
+  QTimer::singleShot(0, [&fixture]() {
+    auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
+    QVERIFY(dialog != nullptr);
+    auto *host = dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"));
+    auto *add = dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressAddButton"));
+    host->setText(QStringLiteral("HOST.local"));
+    add->click();
+    host->setText(QStringLiteral("host.local."));
+    add->click();
+    dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressSaveButton"))->click();
+  });
+  manage->click();
+  QCOMPARE(savedAddresses, QList<ManualAddress>{*parseManualAddress(QStringLiteral("host.local"))});
 }
 
 void DevicesDockTests::keepsLocalDeviceInFooterOnly()
