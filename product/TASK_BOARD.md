@@ -13,7 +13,7 @@ In Progress 任务跟踪。
 | ID | 任务 | Owner | 当前范围与完成证据 |
 |---|---|---|---|
 | UI-010 | 按已确认设计图实现共享 Qt 紧凑单栏首页 | A3/A0 | 收口树 `8aba552b8`；默认 560×420、最小 520×380，七语言 178/178 与 Qt/UI 回归 PASS；待精确标签双平台构建 |
-| UI-012 | 在高级设置页恢复输入角色与 Client 远端主机配置 | A3/A0 | `agent/a3/input-role-settings`：Server/Client 保存后同步 CoreProcess，新增真实 SettingsDialog 路径回归；目录语言 TS lrelease PASS；本机 GUI 目标因 C++ 工具链缺失为 NOT_RUN |
+| UI-012 | 在高级设置页恢复输入角色与 Client 远端主机配置 | A3/A0 | Server/Client 保存后同步 CoreProcess，TLS 控件按当前 radio 即时更新，远端主机行显示与尺寸恢复回归已覆盖；MSVC + Qt 6.10.1 `MainWindowLayoutTests` 8/8 PASS，待安装包平台运行验证 |
 | BRAND-002 | 实现原创“双设备 + 中继点”临时 Logo | A3/A4/A5 | `5c2092203`；SVG 单源、ICO/ICNS/DMG 同步及 macOS/Windows 品牌校验 PASS；待平台包核验 |
 | TRAY-001 | 完成最小化/关闭到托盘与后台生命周期 | A3/A4/A5 | `56568584f`；独立设置与同步安全停机已实现，菜单/托盘独立进程真实退出 2/2 PASS；待双平台构建和真机交互 |
 | MAC-037 | 适配紧凑首页、权限能力门控和 macOS menu bar | A5/A3/A0 | `9ac7f0d79`；同一 PermissionSnapshot、三项能力门控、激活复检、template 图标与定向回归 PASS；待最终 App 系统权限前台往返实测 |

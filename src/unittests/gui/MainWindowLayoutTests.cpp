@@ -9,7 +9,10 @@
 #include "common/Constants.h"
 #include "common/I18N.h"
 #include "common/Settings.h"
+#include "gui/config/ServerConfig.h"
+#include "gui/core/CoreProcess.h"
 #include "gui/dialogs/AboutDialog.h"
+#include "gui/dialogs/SettingsDialog.h"
 #include "gui/widgets/LogDock.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
 #include "relaydesk/widgets/DevicesDock.h"
@@ -19,6 +22,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -32,6 +36,7 @@
 #include <QRadioButton>
 #include <QSettings>
 #include <QSystemTrayIcon>
+#include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
@@ -96,6 +101,7 @@ private Q_SLOTS:
 
   void freshLaunchUsesCompactSingleHomeSurface();
   void settingsCanConfigureInputRoleAndRemoteHost();
+  void settingsRoleImmediatelyUpdatesTlsControlsAndRemoteHostLayout();
   void hiddenWindowKeepsCurrentSessionGeometry();
   void restoredSmallGeometryIsClampedToMinimumSize();
   void chineseProductChromeUsesLocalizedText();
@@ -142,6 +148,7 @@ void MainWindowLayoutTests::initTestCase()
 
 void MainWindowLayoutTests::init()
 {
+  Settings::setValue(Settings::Security::TlsEnabled, false);
   Settings::setValue(Settings::Gui::WindowGeometry, {});
   Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::None);
   Settings::setValue(Settings::Client::RemoteHost);
@@ -295,6 +302,58 @@ void MainWindowLayoutTests::settingsCanConfigureInputRoleAndRemoteHost()
   QCOMPARE(window.coreMode(), Settings::CoreMode::Client);
   QCOMPARE(Settings::value(Settings::Core::CoreMode).value<Settings::CoreMode>(), Settings::CoreMode::Client);
   QCOMPARE(Settings::value(Settings::Client::RemoteHost).toString(), QStringLiteral("192.168.1.20"));
+}
+
+void MainWindowLayoutTests::settingsRoleImmediatelyUpdatesTlsControlsAndRemoteHostLayout()
+{
+  Settings::setValue(Settings::Security::TlsEnabled, true);
+  Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::Server);
+
+  ServerConfig config;
+  deskflow::gui::CoreProcess core(config);
+  core.setMode(Settings::CoreMode::Client);
+  SettingsDialog dialog(nullptr, config, core);
+  dialog.show();
+  QTRY_VERIFY(dialog.isVisible());
+
+  auto *tabs = dialog.findChild<QTabWidget *>();
+  auto *advanced = dialog.findChild<QWidget *>(QStringLiteral("tabAdvanced"));
+  auto *server = dialog.findChild<QRadioButton *>(QStringLiteral("rbInputRoleServer"));
+  auto *client = dialog.findChild<QRadioButton *>(QStringLiteral("rbInputRoleClient"));
+  auto *remoteHostRow = dialog.findChild<QWidget *>(QStringLiteral("widgetInputRoleRemoteHost"));
+  auto *requireClientCert = dialog.findChild<QCheckBox *>(QStringLiteral("cbRequireClientCert"));
+  QVERIFY(tabs != nullptr);
+  QVERIFY(advanced != nullptr);
+  QVERIFY(server != nullptr);
+  QVERIFY(client != nullptr);
+  QVERIFY(remoteHostRow != nullptr);
+  QVERIFY(requireClientCert != nullptr);
+  tabs->setCurrentWidget(advanced);
+
+  QVERIFY(server->isChecked());
+  QVERIFY(requireClientCert->isEnabled());
+  const int serverHeight = dialog.height();
+
+  client->setChecked(true);
+  QTRY_VERIFY(client->isChecked());
+  QTRY_VERIFY(!requireClientCert->isEnabled());
+  QTRY_VERIFY(remoteHostRow->isVisible());
+  QVERIFY(remoteHostRow->mapTo(&dialog, remoteHostRow->rect().bottomRight()).y() <= dialog.rect().bottom());
+  QVERIFY(dialog.height() >= serverHeight);
+
+  server->setChecked(true);
+  QTRY_VERIFY(server->isChecked());
+  QTRY_VERIFY(requireClientCert->isEnabled());
+  QTRY_VERIFY(!remoteHostRow->isVisible());
+  QTRY_VERIFY2(
+      dialog.height() == serverHeight,
+      qPrintable(QStringLiteral("height=%1 sizeHint=%2 minimumHeight=%3 maximumHeight=%4 serverHeight=%5")
+                     .arg(dialog.height())
+                     .arg(dialog.sizeHint().height())
+                     .arg(dialog.minimumHeight())
+                     .arg(dialog.maximumHeight())
+                     .arg(serverHeight))
+  );
 }
 
 void MainWindowLayoutTests::restoredSmallGeometryIsClampedToMinimumSize()

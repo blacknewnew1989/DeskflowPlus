@@ -23,6 +23,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QRadioButton>
+#include <QTimer>
 
 using namespace deskflow::gui;
 
@@ -93,6 +94,8 @@ void SettingsDialog::initConnections() const
   connect(ui->groupService, &QGroupBox::toggled, this, &SettingsDialog::updateControls);
   connect(ui->rbInputRoleServer, &QRadioButton::toggled, this, &SettingsDialog::updateInputRoleControls);
   connect(ui->rbInputRoleClient, &QRadioButton::toggled, this, &SettingsDialog::updateInputRoleControls);
+  connect(ui->rbInputRoleServer, &QRadioButton::toggled, this, &SettingsDialog::updateTlsControlsEnabled);
+  connect(ui->rbInputRoleClient, &QRadioButton::toggled, this, &SettingsDialog::updateTlsControlsEnabled);
   connect(ui->btnTlsRegenCert, &QPushButton::clicked, this, &SettingsDialog::regenCertificates);
   connect(ui->comboTlsKeyLength, &QComboBox::currentIndexChanged, this, &SettingsDialog::updateRequestedKeySize);
   connect(ui->btnTlsCertPath, &QPushButton::clicked, this, &SettingsDialog::browseCertificatePath);
@@ -358,15 +361,18 @@ void SettingsDialog::updateInputRoleControls()
   ui->widgetInputRoleRemoteHost->setVisible(isClient);
   ui->lineInputRoleRemoteHost->setEnabled(writable && isClient);
   if (visibilityChanged) {
-    setMaximumHeight(QWIDGETSIZE_MAX);
-    adjustSize();
-    setFixedHeight(sizeHint().height());
+    QTimer::singleShot(0, this, [this] {
+      setMinimumHeight(0);
+      setMaximumHeight(QWIDGETSIZE_MAX);
+      adjustSize();
+      setFixedHeight(sizeHint().height());
+    });
   }
 }
 
 bool SettingsDialog::isClientMode() const
 {
-  return m_coreProcess.mode() == Settings::CoreMode::Client;
+  return ui->rbInputRoleClient->isChecked();
 }
 
 void SettingsDialog::updateKeyLengthOnFile(const QString &path)
