@@ -10,8 +10,8 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 4 后续紧凑界面与后台运行改版（UI-011 收口树与本地回归 `PASS`；精确标签双平台构建待执行）
-- Last updated: 2026-08-14
+- Current phase: Phase 4 最终收口（撤销信任链与本地六目标回归 `PASS`；接收方传输控制、手动地址入口、`Ask` 用户决策及精确标签双平台构建待完成）
+- Last updated: 2026-08-20
 - User action required during development: none
 
 ## Git 状态
@@ -21,10 +21,22 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- UI-011 closeout implementation tip: `8aba552b89a6a8a4600df3c5d4270e711de07416`（代理分支已推送，待产品分支快进）
+- Last pushed integration tip: `939bbb3a02d9d7062a6a5cff4363cea95f1abd11`
+- Current local implementation tip: `088702900731a167c0efb1a3c7114f99be75b2cc`（尚未推送）
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
-- Current implementation: the v1 internal-release code path is composed. The shared Qt shell now uses the approved compact home, stable permission strip/details, compact device/transfer panels, original RelayDesk icon resources, independent minimize/close-to-tray settings and explicit background pause/resume/quit lifecycle. File-transfer shutdown persists resumable interruption state, and core shutdown handles retry and start-in-progress states. macOS per-capability permission gating and physical menu-bar verification remain owned by MAC-037.
+- Current implementation: v1 内部发布主链已组合。共享 Qt 外壳包含紧凑首页、权限分项、设备/传输区域、集中品牌资源、托盘后台生命周期、输入角色设置和可信设备撤销。撤销后既有文件 TLS 连接关闭，主动连接与自动重连均拒绝该设备。接收方直接暂停/继续/取消的发送端同步仍有取消收尾红测；RelayDesk 手动地址录入和冲突策略 `Ask` 的逐文件用户决策尚无 GUI 入口。macOS TCC/menu bar 与 Win↔Mac 物理双机验收仍为 `NOT_RUN`。
 - Last verified stage tag: `relaydesk-phase4-20260813-03` (`05f92a1ab721f7fd8b893e47e05643d5988e1719`)
+
+## 2026-08-20 收口复验
+
+| ID | 状态 | Owner | 当前证据 / 下一步 |
+|---|---|---|---|
+| PAIR-006 | PASS | A2/A3/A0 | `dc4b7efed`、`19e5ab583`、`3f6efb6d1`、`d4d312e88`、`088702900`；撤销确认、TLS 断开、重连拒绝与 520×380 更多菜单已接通；MSVC/Qt 6.10.1 六目标 CTest 6/6 PASS |
+| CTRL-002 | FAIL | A6/A0 | 接收方直接 pause/resume 已越过，直接 cancel 后双端未在 15 秒内同时进入 `Cancelled`；修复前不得集成 A6 控制帧提交 |
+| DISC-005 | NOT_STARTED | A2/A3/A0 | `DiscoverySettings.manualAddresses` 与候选解析已存在，但 RelayDesk GUI 尚无录入/管理入口 |
+| CONFLICT-003 | NOT_STARTED | A6/A3/A0 | 底层策略组合已存在，但 Incoming Offer 仍固定 AutoRename，`Ask` 尚无逐文件决策入口 |
+| WIN-019 | IN_PROGRESS | A4/A7/A0 | 最新代码的 Windows unsigned 安装包、安装后桌面/托盘/参数/生命周期验收待上述红项收口后执行 |
+| MAC-038 | NOT_RUN | A5/A7/A0 | 最新 App 的 TCC/menu bar 与 Win↔Mac 物理双机仍需真实 macOS 对端；不以本地或 Actions 测试替代 |
 
 ## 2026-08-14 紧凑界面变更
 
@@ -38,7 +50,7 @@
 
 | ID | 状态 | Owner | 当前证据 / 下一步 |
 |---|---|---|---|
-| UI-010 | IN_PROGRESS | A3/A0 | UI-011 收口树已补齐七语言 178/178；Qt/UI 与脚本回归 PASS，待精确标签 Windows/macOS 构建 |
+| UI-010 | IN_PROGRESS | A3/A0 | 当前树已补齐七语言 182/182；Qt/UI 与脚本回归 PASS，待精确标签 Windows/macOS 构建 |
 | UI-012 | IN_PROGRESS | A3/A0 | 高级页恢复输入角色与 Client 远端主机配置；TLS 控件按当前角色即时更新，远端主机行往返尺寸可恢复；MSVC + Qt 6.10.1 `MainWindowLayoutTests` 8/8 PASS，待安装包平台运行验证 |
 | BRAND-002 | IN_PROGRESS | A3/A4/A5 | SVG 单源、主题资源、ICO/ICNS/DMG 与 CMake 接线已完成；macOS/Windows 品牌校验 PASS，待平台包核验 |
 | TRAY-001 | IN_PROGRESS | A3/A4/A5 | 最小化/关闭到 tray 独立设置及安全停机已实现；菜单/托盘独立进程真实退出回归 2/2 PASS，待平台包与真机交互 |
@@ -68,8 +80,10 @@
 | Product GUI/reconnect/permission composition | PASS | `479a0f78f`, `b251933dd`, `cc923dacc`, `0341c9b86`, `f79cc64dd`; targeted composition/reconnect/firewall tests PASS |
 | Pairing input-layout composition | PASS | `05f92a1ab`; trusted input peer add/persist/idempotency/rejection tests PASS on Windows and macOS |
 | Phase 4 exact-tag release | PASS | tag `relaydesk-phase4-20260813-03`; run `31706167585`; Windows 89/89, macOS 90/90, Windows installer and macOS lifecycle PASS; unsigned draft Release published |
-| UI-011 local closeout | PASS | branch `agent/a0/ui011-final-closeout` at `8aba552b8`; 7 Qt regressions, 29 Python contracts, seven catalogs 178/178, Windows staged-QM loader and brand checks PASS |
-| UI-011 exact-SHA dual-platform Actions | NOT_RUN | closeout implementation is ready; run only after the product branch is fast-forwarded to the single final SHA |
+| UI-011 local closeout | PASS | product branch reached `939bbb3a0`; 7 Qt regressions, 29 Python contracts, Windows staged-QM loader and brand checks PASS |
+| Current seven-language catalogs | PASS | `088702900`; en/es/it/ja/ko/ru/zh_CN are each 182/182; Qt catalog load and 14 translation contracts PASS |
+| Current revoke-trust composition | PASS | `dc4b7efed` through `088702900`; clean MSVC/Qt 6.10.1 targeted CTest 6/6 PASS |
+| Current exact-SHA dual-platform Actions | NOT_RUN | run only after CTRL-002, DISC-005 and CONFLICT-003 are closed on one final product SHA |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
