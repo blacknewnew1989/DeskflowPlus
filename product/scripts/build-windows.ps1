@@ -75,17 +75,33 @@ if (-not $QtReady) {
 $ConfigLower = $Configuration.ToLowerInvariant()
 $BuildRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot "build\windows"))
 $BuildDir = [IO.Path]::GetFullPath((Join-Path $BuildRoot $ConfigLower))
+$ExpectedRepoPrefix = $RepoRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) +
+    [IO.Path]::DirectorySeparatorChar
 $ExpectedPrefix = $BuildRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) +
     [IO.Path]::DirectorySeparatorChar
-if (-not $BuildDir.StartsWith($ExpectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+if (-not $BuildRoot.StartsWith($ExpectedRepoPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+    -not $BuildDir.StartsWith($ExpectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw "BUILD_CLEAN_PATH_OUTSIDE_REPOSITORY: $BuildDir"
 }
-if ($CleanBuild -and (Test-Path -LiteralPath $BuildDir)) {
-    $BuildItem = Get-Item -LiteralPath $BuildDir -Force
-    if (($BuildItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-        throw "BUILD_CLEAN_PATH_OUTSIDE_REPOSITORY: refusing to clean a reparse point: $BuildDir"
+
+if ($CleanBuild) {
+    $BuildPathComponents = @(
+        [IO.Path]::GetFullPath((Join-Path $RepoRoot "build")),
+        $BuildRoot,
+        $BuildDir
+    )
+    foreach ($PathComponent in $BuildPathComponents) {
+        if (-not (Test-Path -LiteralPath $PathComponent)) {
+            continue
+        }
+        $PathItem = Get-Item -LiteralPath $PathComponent -Force
+        if (($PathItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "BUILD_CLEAN_PATH_OUTSIDE_REPOSITORY: refusing to traverse a reparse point: $PathComponent"
+        }
     }
-    Remove-Item -LiteralPath $BuildDir -Recurse -Force
+    if (Test-Path -LiteralPath $BuildDir) {
+        Remove-Item -LiteralPath $BuildDir -Recurse -Force
+    }
 }
 New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 $Triplet = if ($Configuration -eq "Release") { "x64-windows-release" } else { "x64-windows" }
