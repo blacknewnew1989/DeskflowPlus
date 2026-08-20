@@ -31,9 +31,10 @@ class WindowsToolchainSetupTests(unittest.TestCase):
         self.assertIn("ConvertFrom-Json", SETUP)
         self.assertIn("'builtin-baseline'", SETUP)
         self.assertIn("GIT_NO_LAZY_FETCH", SETUP)
+        self.assertIn(":versions/baseline.json", SETUP)
         self.assertRegex(
             SETUP,
-            r"fetch --depth=1 --no-filter origin \$VcpkgBaseline",
+            r"fetch --refetch --depth=1 --no-tags --no-filter origin \$VcpkgBaseline",
         )
         self.assertIn("refs/relaydesk/vcpkg-baselines", SETUP)
 

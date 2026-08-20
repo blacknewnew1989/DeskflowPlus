@@ -249,6 +249,7 @@ if ($VcpkgBaseline -notmatch '^[0-9a-fA-F]{40}$') {
     throw "VCPKG_BASELINE_INVALID"
 }
 $VcpkgBaselineObject = "$VcpkgBaseline^{commit}"
+$VcpkgBaselineIndex = "${VcpkgBaseline}:versions/baseline.json"
 if (-not (Test-Path $BootstrapVcpkg)) {
     if ((Has-Command "git") -and (-not (Test-Path (Join-Path $VcpkgRoot ".git")))) {
         for ($attempt = 1; $attempt -le 4; $attempt++) {
@@ -273,21 +274,25 @@ if (-not (Test-Path $BootstrapVcpkg)) {
     }
 }
 if ((Has-Command "git") -and (Test-Path (Join-Path $VcpkgRoot ".git")) -and
-    (-not (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineObject))) {
+    ((-not (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineObject)) -or
+     (-not (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineIndex)))) {
     $BaselineRef = "refs/relaydesk/vcpkg-baselines/$VcpkgBaseline"
     for ($attempt = 1; $attempt -le 4; $attempt++) {
         & git -C $VcpkgRoot -c http.sslBackend=openssl -c http.version=HTTP/1.1 `
             -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 `
-            fetch --depth=1 --no-filter origin $VcpkgBaseline
+            fetch --refetch --depth=1 --no-tags --no-filter origin $VcpkgBaseline
         if ($LASTEXITCODE -eq 0) {
             & git -C $VcpkgRoot update-ref $BaselineRef FETCH_HEAD
-            if (($LASTEXITCODE -eq 0) -and (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineObject)) {
+            if (($LASTEXITCODE -eq 0) -and
+                (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineObject) -and
+                (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineIndex)) {
                 break
             }
         }
         Start-Sleep -Seconds (3 * $attempt)
     }
-    if (-not (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineObject)) {
+    if ((-not (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineObject)) -or
+        (-not (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineIndex))) {
         $ActionsFallback = $true
     }
 }
