@@ -5,6 +5,7 @@
 
 #include <QDataStream>
 #include <QDir>
+#include <QFile>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -54,6 +55,7 @@ class TransferSettingsTests final : public QObject
 private Q_SLOTS:
   void defaultsToDownloadsRelayDeskAndAsk();
   void roundTripsNormalizedSettings();
+  void roundTripsAcrossReopenedIniStore();
   void rejectsUnsafeReceiveRootsAndInvalidPersistedValues();
   void rejectsPartialSettingsWithoutSchemaAndPreservesThem();
   void saveRefusesToOverwriteUnreadableSettings();
@@ -99,6 +101,32 @@ void TransferSettingsTests::roundTripsNormalizedSettings()
   QCOMPARE(settings.value(TransferSettingsStore::schemaVersionKey()).toInt(), kTransferSettingsSchemaVersion);
 }
 
+void TransferSettingsTests::roundTripsAcrossReopenedIniStore()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const auto path = temporary.filePath(QStringLiteral("settings.ini"));
+  const auto coldReadPath = temporary.filePath(QStringLiteral("cold-read.ini"));
+  const TransferSettings expected{
+      .receiveRoot = temporary.filePath(QStringLiteral("receive")),
+      .incomingPolicy = IncomingTransferPolicy::AutoAcceptTrusted,
+      .defaultConflictPolicy = ConflictPolicy::Ask,
+  };
+  {
+    QSettings settings(path, QSettings::IniFormat);
+    TransferSettingsStore store(settings);
+    QString diagnostic;
+    QVERIFY2(store.save(expected, &diagnostic), qPrintable(diagnostic));
+  }
+  QVERIFY(QFile::copy(path, coldReadPath));
+
+  QSettings reopened(coldReadPath, QSettings::IniFormat);
+  TransferSettingsStore reopenedStore(reopened);
+  const auto loaded = reopenedStore.load();
+  QVERIFY2(loaded.ok, qPrintable(loaded.diagnostic));
+  QCOMPARE(loaded.settings, expected);
+}
+
 void TransferSettingsTests::rejectsUnsafeReceiveRootsAndInvalidPersistedValues()
 {
   QString diagnostic;
@@ -117,6 +145,11 @@ void TransferSettingsTests::rejectsUnsafeReceiveRootsAndInvalidPersistedValues()
   QVERIFY(!store.load().ok);
   settings.setValue(TransferSettingsStore::receiveRootKey(), temporary.path());
   settings.setValue(TransferSettingsStore::incomingPolicyKey(), QStringLiteral("always"));
+  QVERIFY(!store.load().ok);
+  settings.setValue(TransferSettingsStore::incomingPolicyKey(), QStringLiteral("ask"));
+  settings.setValue(TransferSettingsStore::schemaVersionKey(), true);
+  QVERIFY(!store.load().ok);
+  settings.setValue(TransferSettingsStore::schemaVersionKey(), QStringLiteral("01"));
   QVERIFY(!store.load().ok);
 }
 

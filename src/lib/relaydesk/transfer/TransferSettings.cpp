@@ -126,9 +126,12 @@ TransferSettingsLoadResult TransferSettingsStore::load()
     }
     return {.ok = true, .settings = {.receiveRoot = defaultReceiveRoot()}};
   }
-  bool schemaOk = false;
-  if (schema.metaType().id() != QMetaType::Int || schema.toInt(&schemaOk) != kTransferSettingsSchemaVersion ||
-      !schemaOk) {
+  const auto schemaType = schema.metaType().id();
+  const bool schemaMatches =
+      (schemaType == QMetaType::Int && schema.toInt() == kTransferSettingsSchemaVersion) ||
+      (schemaType == QMetaType::QString &&
+       schema.toString() == QString::number(kTransferSettingsSchemaVersion));
+  if (!schemaMatches) {
     return {.ok = false, .diagnostic = QStringLiteral("Unsupported transfer settings schema version")};
   }
   const auto root = m_settings.value(receiveRootKey());
