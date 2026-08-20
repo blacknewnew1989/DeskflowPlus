@@ -21,6 +21,19 @@ class MacosPackagingContractTests(unittest.TestCase):
             "product/scripts/package-macos.sh",
         ):
             script = ROOT / relative_path
+            if sys.platform == "win32":
+                result = subprocess.run(
+                    ["git", "ls-files", "--stage", "--", relative_path],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                fields = result.stdout.split(maxsplit=3)
+                self.assertEqual(len(fields), 4, result.stdout)
+                self.assertEqual(fields[0], "100755", result.stdout)
+                self.assertEqual(fields[3].strip(), relative_path, result.stdout)
+                continue
             self.assertNotEqual(
                 script.stat().st_mode & 0o111,
                 0,
