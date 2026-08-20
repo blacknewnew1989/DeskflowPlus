@@ -324,9 +324,6 @@ void MainWindow::setupRelayDeskDiscovery()
   m_relayDeskDiscovery = new deskflow::relaydesk::DeviceDiscoveryRuntime(
       localDevice, *m_relayDeskDeviceModel, std::move(discoveryOptions), this
   );
-  m_relayDeskDiscovery->setManualAddresses(
-      savedDiscoverySettings.manualAddresses
-  );
   connect(
       m_relayDeskDiscovery, &deskflow::relaydesk::DeviceDiscoveryRuntime::errorOccurred, this,
       [](deskflow::relaydesk::DiscoveryServiceError error, const QString &message) {
