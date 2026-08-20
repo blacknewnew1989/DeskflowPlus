@@ -52,6 +52,8 @@ add_library(relaydesk_transfer STATIC
   TransferId.h
   TransferSender.cpp
   TransferSender.h
+  TransferSettings.cpp
+  TransferSettings.h
   TransferTypes.h
 )
 

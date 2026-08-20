@@ -2,6 +2,13 @@
 # SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
 
 create_test(
+  NAME RelayDeskTransferSettingsTests
+  DEPENDS relaydesk_transfer
+  SOURCE TransferSettingsTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/transfer"
+)
+
+create_test(
   NAME RelayDeskControlMessageCodecTests
   DEPENDS relaydesk_transfer
   SOURCE ControlMessageCodecTests.cpp
