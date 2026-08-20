@@ -190,6 +190,7 @@
     <message><source>transfer.conflict.overwrite</source><translation>替换</translation></message>
     <message><source>transfer.conflict.auto_rename</source><translation>保留两个</translation></message>
     <message><source>transfer.conflict.skip</source><translation>跳过</translation></message>
+    <message><source>transfer.conflict.cancel_transport_failed</source><translation>无法取消此传输。请检查连接后重试。</translation></message>
     <message><source>settings.title</source><translation>设置</translation></message>
     <message><source>settings.general</source><translation>常规</translation></message>
     <message><source>settings.input</source><translation>键盘与鼠标</translation></message>

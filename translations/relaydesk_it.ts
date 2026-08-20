@@ -190,6 +190,7 @@
     <message><source>transfer.conflict.overwrite</source><translation>Sostituisci</translation></message>
     <message><source>transfer.conflict.auto_rename</source><translation>Conserva entrambi</translation></message>
     <message><source>transfer.conflict.skip</source><translation>Salta</translation></message>
+    <message><source>transfer.conflict.cancel_transport_failed</source><translation>Impossibile annullare il trasferimento. Controlla la connessione e riprova.</translation></message>
     <message><source>settings.title</source><translation>Impostazioni</translation></message>
     <message><source>settings.general</source><translation>Generali</translation></message>
     <message><source>settings.input</source><translation>Tastiera e mouse</translation></message>

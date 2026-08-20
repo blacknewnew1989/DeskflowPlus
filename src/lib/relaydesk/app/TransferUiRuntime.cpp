@@ -75,6 +75,19 @@ TransferUiRuntime::TransferUiRuntime(
         service.resolveIncomingConflict(transferId, conflictId, decision);
       }
   );
+  connect(
+      &service, &IFileTransferService::transferOperationFinished, &devicesDock,
+      [&devicesDock](const ::relaydesk::transfer::TransferOperationResult &result) {
+        if (result.operation != ::relaydesk::transfer::TransferOperation::Cancel)
+          return;
+        if (result.outcome == ::relaydesk::transfer::TransferOperationOutcome::Rejected &&
+            result.error == ::relaydesk::transfer::TransferOperationError::TransportFailed) {
+          devicesDock.showIncomingConflictCancelTransportFailure(result.transferId);
+        } else if (result.ok()) {
+          devicesDock.clearIncomingConflictPrompts(result.transferId);
+        }
+      }
+  );
 
   auto &transfers = transferCenterDock.transferModel();
   connect(&transfers, &model::TransferCenterModel::pauseRequested, &service, &IFileTransferService::pause);

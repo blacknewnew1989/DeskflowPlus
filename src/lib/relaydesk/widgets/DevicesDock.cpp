@@ -426,6 +426,10 @@ DevicesDock::DevicesDock(
   m_incomingConflictPath->setWordWrap(true);
   m_incomingConflictPath->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
   conflictLayout->addWidget(m_incomingConflictPath);
+  m_incomingConflictError = new QLabel(m_incomingConflictPanel);
+  m_incomingConflictError->setObjectName(QStringLiteral("relaydeskIncomingConflictError"));
+  m_incomingConflictError->setWordWrap(true);
+  conflictLayout->addWidget(m_incomingConflictError);
   auto *conflictActions = new QHBoxLayout();
   conflictActions->setSpacing(4);
   m_overwriteIncomingConflictButton = new QPushButton(m_incomingConflictPanel);
@@ -673,6 +677,15 @@ void DevicesDock::showIncomingConflictPrompt(::relaydesk::transfer::IncomingConf
   if (duplicate)
     return;
   m_incomingConflictPrompts.append(std::move(prompt));
+  m_incomingConflictErrorText.clear();
+  updateIncomingConflictPanel();
+}
+
+void DevicesDock::showIncomingConflictCancelTransportFailure(const ::relaydesk::transfer::TransferId &transferId)
+{
+  if (m_incomingConflictPrompts.isEmpty() || m_incomingConflictPrompts.constFirst().transferId != transferId)
+    return;
+  m_incomingConflictErrorText = i18n::translate(Text::TransferConflictCancelTransportFailed);
   updateIncomingConflictPanel();
 }
 
@@ -687,6 +700,7 @@ void DevicesDock::clearIncomingConflictPrompts(const ::relaydesk::transfer::Tran
   if (first == m_incomingConflictPrompts.end())
     return;
   m_incomingConflictPrompts.erase(first, m_incomingConflictPrompts.end());
+  m_incomingConflictErrorText.clear();
   updateIncomingConflictPanel();
 }
 
@@ -1218,8 +1232,14 @@ void DevicesDock::updateIncomingConflictPanel()
   if (visible) {
     const auto &prompt = m_incomingConflictPrompts.constFirst();
     m_incomingConflictPath->setText(prompt.relativeProtocolPath);
+    m_incomingConflictError->setText(m_incomingConflictErrorText);
+    m_incomingConflictError->setVisible(!m_incomingConflictErrorText.isEmpty());
     m_incomingConflictPanel->setAccessibleName(i18n::translate(Text::TransferConflictTitle));
-    m_incomingConflictPanel->setAccessibleDescription(prompt.relativeProtocolPath);
+    m_incomingConflictPanel->setAccessibleDescription(
+        prompt.relativeProtocolPath + (m_incomingConflictErrorText.isEmpty()
+                                           ? QString{}
+                                           : QStringLiteral(". ") + m_incomingConflictErrorText)
+    );
   }
   updateActivityPanel();
 }
@@ -1275,6 +1295,7 @@ void DevicesDock::resolveIncomingConflict(::relaydesk::transfer::IncomingConflic
   if (m_incomingConflictPrompts.isEmpty())
     return;
   const auto prompt = m_incomingConflictPrompts.constFirst();
+  m_incomingConflictErrorText.clear();
   Q_EMIT incomingConflictDecisionRequested(prompt.transferId, prompt.conflictId, decision);
   if (decision == ::relaydesk::transfer::IncomingConflictDecision::CancelTransfer)
     return;

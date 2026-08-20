@@ -368,13 +368,32 @@ void TransferUiRuntimeTests::bridgesIncomingConflictDecisionsThroughTypedUiInten
       fixture.service.resolvedConflictDecision,
       std::optional<IncomingConflictDecision>{IncomingConflictDecision::CancelTransfer}
   );
+  Q_EMIT fixture.service.transferOperationFinished({
+      .transferId = prompt.transferId,
+      .operation = TransferOperation::Cancel,
+      .outcome = TransferOperationOutcome::Rejected,
+      .error = TransferOperationError::TransportFailed,
+  });
+  auto *error = fixture.devicesDock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingConflictError"));
+  QVERIFY(error != nullptr);
+  QCOMPARE(error->text(), QStringLiteral("Could not cancel this transfer. Check the connection and try again."));
+  QVERIFY(error->isVisible());
+  Q_EMIT fixture.service.transferOperationFinished({
+      .transferId = prompt.transferId,
+      .operation = TransferOperation::Cancel,
+      .outcome = TransferOperationOutcome::Applied,
+      .error = TransferOperationError::None,
+  });
+  auto *panel = fixture.devicesDock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingConflictPanel"));
+  QVERIFY(panel != nullptr);
+  QVERIFY(!panel->isVisible());
+
+  Q_EMIT fixture.service.incomingConflictDecisionRequired(prompt);
   auto terminal = transferSnapshot(
       QStringLiteral("55555555-5555-4555-8555-555555555555"), TransferState::Canceled
   );
   terminal.id = prompt.transferId;
   Q_EMIT fixture.service.transferChanged(terminal);
-  auto *panel = fixture.devicesDock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingConflictPanel"));
-  QVERIFY(panel != nullptr);
   QVERIFY(!panel->isVisible());
 }
 

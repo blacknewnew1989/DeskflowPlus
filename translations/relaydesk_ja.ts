@@ -190,6 +190,7 @@
     <message><source>transfer.conflict.overwrite</source><translation>置き換える</translation></message>
     <message><source>transfer.conflict.auto_rename</source><translation>両方保持</translation></message>
     <message><source>transfer.conflict.skip</source><translation>スキップ</translation></message>
+    <message><source>transfer.conflict.cancel_transport_failed</source><translation>この転送をキャンセルできませんでした。接続を確認してもう一度試してください。</translation></message>
     <message><source>settings.title</source><translation>設定</translation></message>
     <message><source>settings.general</source><translation>一般</translation></message>
     <message><source>settings.input</source><translation>キーボードとマウス</translation></message>

@@ -190,6 +190,7 @@
     <message><source>transfer.conflict.overwrite</source><translation>Заменить</translation></message>
     <message><source>transfer.conflict.auto_rename</source><translation>Сохранить оба</translation></message>
     <message><source>transfer.conflict.skip</source><translation>Пропустить</translation></message>
+    <message><source>transfer.conflict.cancel_transport_failed</source><translation>Не удалось отменить передачу. Проверьте соединение и повторите попытку.</translation></message>
     <message><source>settings.title</source><translation>Настройки</translation></message>
     <message><source>settings.general</source><translation>Основные</translation></message>
     <message><source>settings.input</source><translation>Клавиатура и мышь</translation></message>

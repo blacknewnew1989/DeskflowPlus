@@ -200,6 +200,7 @@ enum class Text
   TransferConflictOverwrite,
   TransferConflictAutoRename,
   TransferConflictSkip,
+  TransferConflictCancelTransportFailed,
   SettingsTitle,
   SettingsGeneral,
   SettingsInput,

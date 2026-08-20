@@ -1241,6 +1241,12 @@ void DevicesDockTests::rendersAndResolvesQueuedIncomingConflicts()
   QCOMPARE(overwriteButton->accessibleName(), QStringLiteral("Replace"));
   QVERIFY(overwriteButton->focusPolicy() != Qt::NoFocus);
   QVERIFY(panel->geometry().right() <= fixture.dock.widget()->geometry().right());
+  fixture.dock.showIncomingConflictCancelTransportFailure(secondTransfer);
+  auto *error = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingConflictError"));
+  QVERIFY(error != nullptr);
+  QCOMPARE(error->text(), QStringLiteral("Could not cancel this transfer. Check the connection and try again."));
+  QVERIFY(error->isVisible());
+  QVERIFY(panel->accessibleDescription().contains(error->text()));
 
   QList<IncomingConflictDecision> decisions;
   QList<TransferId> transferIds;

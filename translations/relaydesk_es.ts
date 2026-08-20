@@ -190,6 +190,7 @@
     <message><source>transfer.conflict.overwrite</source><translation>Reemplazar</translation></message>
     <message><source>transfer.conflict.auto_rename</source><translation>Conservar ambos</translation></message>
     <message><source>transfer.conflict.skip</source><translation>Omitir</translation></message>
+    <message><source>transfer.conflict.cancel_transport_failed</source><translation>No se pudo cancelar esta transferencia. Comprueba la conexion e intentalo de nuevo.</translation></message>
     <message><source>settings.title</source><translation>Ajustes</translation></message>
     <message><source>settings.general</source><translation>General</translation></message>
     <message><source>settings.input</source><translation>Teclado y ratón</translation></message>
