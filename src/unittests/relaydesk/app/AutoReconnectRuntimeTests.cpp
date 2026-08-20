@@ -16,6 +16,7 @@
 #include "../TestTlsIdentity.h"
 
 #include <QHostAddress>
+#include <QPointer>
 #include <QSignalSpy>
 #include <QStringList>
 #include <QTemporaryDir>
@@ -130,25 +131,34 @@ void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer(
   connect(&firstFiles, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
     errors.append(message);
   });
-  AutoReconnectRuntime reconnect(firstPairing, firstDiscovery, firstFiles, {});
-  QTRY_VERIFY2_WITH_TIMEOUT(firstFiles.isPeerReady(secondId), qPrintable(errors.join(QStringLiteral("; "))), 5000);
-  QVERIFY(reconnect.m_coordinators.contains(secondId));
-  reconnect.m_pending.insert(secondId, [](AutoReconnectConnectResult) {});
-  QVERIFY(reconnect.m_pending.contains(secondId));
+  QPointer<AutoReconnectCoordinator> coordinator;
+  {
+    AutoReconnectRuntime reconnect(firstPairing, firstDiscovery, firstFiles, {});
+    QTRY_VERIFY2_WITH_TIMEOUT(firstFiles.isPeerReady(secondId), qPrintable(errors.join(QStringLiteral("; "))), 5000);
+    QVERIFY(reconnect.m_coordinators.contains(secondId));
+    coordinator = reconnect.m_coordinators.value(secondId);
+    QVERIFY(coordinator != nullptr);
+    reconnect.m_pending.insert(secondId, [](AutoReconnectConnectResult) {});
+    QVERIFY(reconnect.m_pending.contains(secondId));
 
-  QSignalSpy disconnected(&firstFiles, &FileTransferRuntime::peerDisconnected);
-  QVERIFY(firstPairing.revoke(secondId).ok());
-  QTRY_VERIFY_WITH_TIMEOUT(disconnected.count() == 1 && !firstFiles.isPeerReady(secondId), 5000);
-  QVERIFY(!reconnect.m_coordinators.contains(secondId));
-  QVERIFY(!reconnect.m_providers.contains(secondId));
-  QVERIFY(!reconnect.m_pending.contains(secondId));
+    QSignalSpy disconnected(&firstFiles, &FileTransferRuntime::peerDisconnected);
+    QVERIFY(firstPairing.revoke(secondId).ok());
+    QVERIFY(coordinator.isNull());
+    QTRY_VERIFY_WITH_TIMEOUT(disconnected.count() == 1 && !firstFiles.isPeerReady(secondId), 5000);
+    QVERIFY(!reconnect.m_coordinators.contains(secondId));
+    QVERIFY(!reconnect.m_providers.contains(secondId));
+    QVERIFY(!reconnect.m_pending.contains(secondId));
 
-  QVERIFY(!firstFiles.connectPeer(secondId, &diagnostic));
-  QCOMPARE(diagnostic, QStringLiteral("Peer file-transfer identity is not trusted"));
+    QVERIFY(!firstFiles.connectPeer(secondId, &diagnostic));
+    QCOMPARE(diagnostic, QStringLiteral("Peer file-transfer identity is not trusted"));
 
-  QTest::qWait(100);
-  QCOMPARE(disconnected.count(), 1);
-  QVERIFY(!reconnect.m_coordinators.contains(secondId));
+    QTest::qWait(100);
+    QCOMPARE(disconnected.count(), 1);
+    QVERIFY(!reconnect.m_coordinators.contains(secondId));
+  }
+
+  QTest::qWait(1100);
+  QVERIFY(coordinator.isNull());
 }
 
 void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
@@ -179,18 +189,24 @@ void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
   QVERIFY(discovery.registry().observeAdvertisement(peerInfo, QHostAddress(QStringLiteral("192.0.2.60"))));
 
   FileTransferRuntime files(localId, pairing.trustedDevices(), discovery, identityPath);
-  AutoReconnectRuntime reconnect(pairing, discovery, files, {});
-  QTRY_VERIFY(reconnect.m_coordinators.contains(peerId));
-  auto *coordinator = reconnect.m_coordinators.value(peerId);
-  QVERIFY(coordinator != nullptr);
-  QSignalSpy connecting(coordinator, &AutoReconnectCoordinator::connecting);
-  QTRY_VERIFY(connecting.count() >= 1);
-  const auto initialAttemptCount = connecting.count();
+  QPointer<AutoReconnectCoordinator> coordinator;
+  {
+    AutoReconnectRuntime reconnect(pairing, discovery, files, {});
+    QTRY_VERIFY(reconnect.m_coordinators.contains(peerId));
+    coordinator = reconnect.m_coordinators.value(peerId);
+    QVERIFY(coordinator != nullptr);
+    QSignalSpy connecting(coordinator, &AutoReconnectCoordinator::connecting);
+    QTRY_VERIFY(connecting.count() >= 1);
+    const auto initialAttemptCount = connecting.count();
 
-  reconnect.setSettings({.manualAddresses = {*parseManualAddress(QStringLiteral("192.0.2.61"), 24800, 24801)}});
+    reconnect.setSettings({.manualAddresses = {*parseManualAddress(QStringLiteral("192.0.2.61"), 24800, 24801)}});
 
-  QTRY_VERIFY(connecting.count() >= initialAttemptCount + 2);
-  QCOMPARE(connecting.last().at(1).value<AddressCandidate>().source, AddressCandidateSource::Manual);
+    QTRY_VERIFY(connecting.count() >= initialAttemptCount + 2);
+    QCOMPARE(connecting.last().at(1).value<AddressCandidate>().source, AddressCandidateSource::Manual);
+  }
+
+  QVERIFY(coordinator.isNull());
+  QTest::qWait(1100);
 }
 
 QTEST_MAIN(AutoReconnectRuntimeTests)

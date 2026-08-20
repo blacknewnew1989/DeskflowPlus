@@ -27,6 +27,7 @@ public:
       PairingTrustRuntime &pairing, DeviceDiscoveryRuntime &discovery, FileTransferRuntime &files,
       DiscoverySettings settings, QObject *parent = nullptr
   );
+  ~AutoReconnectRuntime() override;
   void stop();
   void setSettings(DiscoverySettings settings);
 

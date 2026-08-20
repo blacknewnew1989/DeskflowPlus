@@ -48,6 +48,13 @@ AutoReconnectRuntime::AutoReconnectRuntime(
   }
 }
 
+AutoReconnectRuntime::~AutoReconnectRuntime()
+{
+  stop();
+  qDeleteAll(m_coordinators);
+  m_coordinators.clear();
+}
+
 void AutoReconnectRuntime::stop()
 {
   for (auto *coordinator : m_coordinators) coordinator->stop();
@@ -110,10 +117,10 @@ void AutoReconnectRuntime::stopPeer(const DeviceId &deviceId)
 {
   if (auto *coordinator = m_coordinators.take(deviceId); coordinator != nullptr) {
     coordinator->stop();
-    coordinator->deleteLater();
+    delete coordinator;
   }
   if (auto *provider = m_providers.take(deviceId); provider != nullptr)
-    provider->deleteLater();
+    delete provider;
   m_pending.remove(deviceId);
   (void)m_files.disconnectPeer(deviceId);
 }
