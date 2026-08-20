@@ -378,7 +378,7 @@ void MainWindow::setupRelayDeskDiscovery()
       [this](const deskflow::relaydesk::DeviceId &peerDeviceId) {
         // This does not change the selected role. In client mode it refreshes only RelayDesk's managed target;
         // in server mode the existing ScreenSetupView provides the drag-and-drop placement surface.
-        syncRelayDeskInputLayout(peerDeviceId);
+        syncRelayDeskInputLayout(peerDeviceId, true);
         if (m_coreProcess.mode() == CoreMode::Server) showConfigureServer({});
       }
   );
@@ -418,7 +418,9 @@ void MainWindow::setupRelayDeskDiscovery()
   setupRelayDeskTransfer(*deviceId);
 }
 
-void MainWindow::syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &peerDeviceId)
+void MainWindow::syncRelayDeskInputLayout(
+    const deskflow::relaydesk::DeviceId &peerDeviceId, bool explicitSelection
+)
 {
   if (m_relayDeskDeviceModel == nullptr || m_relayDeskDiscovery == nullptr) {
     return;
@@ -436,8 +438,13 @@ void MainWindow::syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &p
     deskflow::gui::RelayDeskInputTarget target;
     const auto result = deskflow::gui::syncRelayDeskClientTarget(
         settings, *peer, *endpoint, Settings::value(Settings::Client::RemoteHost).toString(),
-        static_cast<quint16>(Settings::value(Settings::Core::Port).toUInt()), &target
+        static_cast<quint16>(Settings::value(Settings::Core::Port).toUInt()), explicitSelection, &target
     );
+    if (result == deskflow::gui::RelayDeskInputTargetResult::PortMismatchPreserved) {
+      qWarning().noquote() << "RelayDesk left the client host unchanged because the discovered input port differs"
+                           << "from the configured shared port:" << endpoint->inputPort;
+      return;
+    }
     if (result != deskflow::gui::RelayDeskInputTargetResult::Updated) return;
 
     settings.sync();
@@ -446,7 +453,6 @@ void MainWindow::syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &p
       return;
     }
     Settings::setValue(Settings::Client::RemoteHost, target.host);
-    Settings::setValue(Settings::Core::Port, target.port);
     Settings::save();
     m_coreProcess.setAddress(target.host);
     const QSignalBlocker blocker(ui->lineHostname);
