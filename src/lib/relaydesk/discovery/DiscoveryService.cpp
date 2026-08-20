@@ -81,9 +81,13 @@ bool DiscoveryService::start(QString *errorMessage)
     return false;
   }
 
-  m_announcementTimer.start();
+  if (m_settings.broadcastsEnabled) {
+    m_announcementTimer.start();
+  }
   Q_EMIT started(boundPort());
-  static_cast<void>(announceNow());
+  if (m_settings.broadcastsEnabled) {
+    static_cast<void>(announceNow());
+  }
   return true;
 }
 
@@ -101,6 +105,9 @@ bool DiscoveryService::announceNow(QString *errorMessage)
 {
   if (errorMessage != nullptr) {
     errorMessage->clear();
+  }
+  if (!m_settings.broadcastsEnabled) {
+    return true;
   }
 
   QString encodeError;
@@ -191,6 +198,10 @@ qint64 DiscoveryService::sendPeerDatagram(
   }
   if (destination.isNull() || port == 0) {
     setError(errorMessage, QStringLiteral("Peer datagram destination is invalid"));
+    return -1;
+  }
+  if (destination.protocol() != QAbstractSocket::IPv4Protocol) {
+    setError(errorMessage, QStringLiteral("IPv6 peer datagrams are not supported by the IPv4 discovery listener"));
     return -1;
   }
 

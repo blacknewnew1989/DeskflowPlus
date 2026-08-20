@@ -37,7 +37,7 @@ DeviceInfo device(QString name)
 DeviceDiscoveryRuntimeOptions loopbackOptions()
 {
   return {
-      .serviceSettings = {.port = 0, .announcementIntervalMs = 60000},
+      .serviceSettings = {.port = 0, .announcementIntervalMs = 60000, .broadcastsEnabled = false},
       .interfaceProvider = []() { return QList<DiscoveryInterface>{}; },
   };
 }
@@ -52,6 +52,8 @@ private Q_SLOTS:
   void updateAndExpiryFlowThroughSameModel();
   void publishesNamedFileEndpointAnnouncement();
   void manualLoopbackProbeDiscoversUnpairedPeer();
+  void manualProbeWorksWhenBroadcastDiscoveryIsDisabled();
+  void ipv6ManualCandidatesAreDiagnosedAndIpv4FallbackWorks();
   void invalidAndStaleManualResolutionDoNotFabricatePeers();
   void destructionStopsListenerAndReleasesPort();
 };
@@ -152,6 +154,82 @@ void DeviceDiscoveryRuntimeTests::manualLoopbackProbeDiscoversUnpairedPeer()
 
   QTRY_COMPARE_WITH_TIMEOUT(localModel.rowCount(), 2, 2000);
   QVERIFY(localModel.snapshot(peer.service().localDevice().deviceId).has_value());
+}
+
+void DeviceDiscoveryRuntimeTests::manualProbeWorksWhenBroadcastDiscoveryIsDisabled()
+{
+  DeviceHomeModel peerModel;
+  DeviceDiscoveryRuntime peer(device(QStringLiteral("Manual peer")), peerModel, loopbackOptions());
+  QVERIFY(peer.start());
+
+  int broadcasts = 0;
+  DeviceHomeModel localModel;
+  auto options = loopbackOptions();
+  options.manualAddresses = {*parseManualAddress(QStringLiteral("127.0.0.1"))};
+  options.manualProbePort = peer.service().boundPort();
+  options.interfaceProvider = []() {
+    return QList{DiscoveryInterface{
+        .name = QStringLiteral("ethernet"),
+        .address = QHostAddress(QStringLiteral("192.168.1.10")),
+        .broadcastAddress = QHostAddress(QStringLiteral("192.168.1.255")),
+        .isUp = true,
+        .isRunning = true,
+    }};
+  };
+  options.datagramSender = [&broadcasts](
+                              const QByteArray &payload, const QHostAddress &, quint16, const QHostAddress &, QString *
+                          ) {
+    ++broadcasts;
+    return qint64(payload.size());
+  };
+  DeviceDiscoveryRuntime local(device(QStringLiteral("Manual source")), localModel, std::move(options));
+  QVERIFY(local.start());
+
+  QTRY_COMPARE_WITH_TIMEOUT(localModel.rowCount(), 2, 2000);
+  QCOMPARE(broadcasts, 0);
+}
+
+void DeviceDiscoveryRuntimeTests::ipv6ManualCandidatesAreDiagnosedAndIpv4FallbackWorks()
+{
+  DeviceHomeModel peerModel;
+  DeviceDiscoveryRuntime peer(device(QStringLiteral("IPv4 peer")), peerModel, loopbackOptions());
+  QVERIFY(peer.start());
+
+  DeviceHomeModel localModel;
+  auto options = loopbackOptions();
+  options.manualProbePort = peer.service().boundPort();
+  options.manualHostResolver = [](const QString &host, AddressCandidateProvider::HostResolutionCallback callback) {
+    if (host == QStringLiteral("aaaa-only.local")) {
+      callback({QHostAddress(QStringLiteral("2001:db8::20"))}, {});
+      return;
+    }
+    if (host == QStringLiteral("dual-stack.local")) {
+      callback(
+          {QHostAddress(QStringLiteral("2001:db8::21")), QHostAddress::LocalHost}, {}
+      );
+      return;
+    }
+    callback({}, QStringLiteral("unexpected host"));
+  };
+  DeviceDiscoveryRuntime local(device(QStringLiteral("IPv4 source")), localModel, std::move(options));
+  QSignalSpy errors(&local, &DeviceDiscoveryRuntime::errorOccurred);
+  QVERIFY(local.start());
+
+  local.setManualAddresses({*parseManualAddress(QStringLiteral("2001:db8::10"))});
+  QTRY_COMPARE_WITH_TIMEOUT(errors.size(), 1, 2000);
+  QCOMPARE(errors.at(0).at(0).value<DiscoveryServiceError>(), DiscoveryServiceError::SendFailed);
+  QVERIFY(errors.at(0).at(1).toString().contains(QStringLiteral("IPv6")));
+  QCOMPARE(localModel.rowCount(), 1);
+
+  local.setManualAddresses({*parseManualAddress(QStringLiteral("aaaa-only.local"))});
+  QTRY_COMPARE_WITH_TIMEOUT(errors.size(), 2, 2000);
+  QVERIFY(errors.at(1).at(1).toString().contains(QStringLiteral("aaaa-only.local")));
+  QCOMPARE(localModel.rowCount(), 1);
+
+  local.setManualAddresses({*parseManualAddress(QStringLiteral("dual-stack.local"))});
+  QTRY_COMPARE_WITH_TIMEOUT(localModel.rowCount(), 2, 2000);
+  QTRY_COMPARE_WITH_TIMEOUT(errors.size(), 3, 2000);
+  QVERIFY(errors.at(2).at(1).toString().contains(QStringLiteral("dual-stack.local")));
 }
 
 void DeviceDiscoveryRuntimeTests::invalidAndStaleManualResolutionDoNotFabricatePeers()
