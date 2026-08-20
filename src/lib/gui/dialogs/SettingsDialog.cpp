@@ -201,6 +201,7 @@ void SettingsDialog::setLogToFile(bool logToFile)
 void SettingsDialog::showEvent(QShowEvent *event)
 {
   QDialog::showEvent(event);
+  QTimer::singleShot(0, this, [this] { resizeToContents(); });
   Q_EMIT shown();
 }
 
