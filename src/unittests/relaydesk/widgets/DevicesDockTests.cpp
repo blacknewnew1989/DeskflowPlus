@@ -135,6 +135,7 @@ private Q_SLOTS:
   void acceptsLocalUrlDropOnlyForEligiblePeer();
   void rendersNonBlockingIncomingOfferAndKeyboardDecisions();
   void rendersAndResolvesQueuedIncomingConflicts();
+  void retainsCurrentConflictFailureWhileQueueChanges();
   void rendersUntrustedAndExpiredOfferSafely();
   void managesManualAddressesAtCompactSize();
   void retriesManualAddressSaveAfterFailure();
@@ -1288,6 +1289,48 @@ void DevicesDockTests::rendersAndResolvesQueuedIncomingConflicts()
   QCOMPARE(decisions.size(), 5);
   fixture.dock.clearIncomingConflictPrompts(queuedTransfer);
   QVERIFY(!panel->isVisible());
+}
+
+void DevicesDockTests::retainsCurrentConflictFailureWhileQueueChanges()
+{
+  Fixture fixture;
+  fixture.dock.show();
+  const auto currentTransfer = TransferId::generate();
+  const auto queuedTransfer = TransferId::generate();
+  fixture.dock.showIncomingConflictPrompt({
+      .transferId = currentTransfer,
+      .conflictId = QUuid::createUuid(),
+      .relativeProtocolPath = QStringLiteral("current.txt"),
+  });
+  fixture.dock.showIncomingConflictCancelTransportFailure(currentTransfer);
+
+  auto *panel = fixture.dock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingConflictPanel"));
+  auto *error = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingConflictError"));
+  QVERIFY(panel != nullptr);
+  QVERIFY(error != nullptr);
+  const auto failure = QStringLiteral("Could not cancel this transfer. Check the connection and try again.");
+  QCOMPARE(error->text(), failure);
+
+  fixture.dock.showIncomingConflictPrompt({
+      .transferId = queuedTransfer,
+      .conflictId = QUuid::createUuid(),
+      .relativeProtocolPath = QStringLiteral("queued.txt"),
+  });
+  QCOMPARE(error->text(), failure);
+  QVERIFY(panel->accessibleDescription().contains(failure));
+
+  fixture.dock.clearIncomingConflictPrompts(queuedTransfer);
+  QCOMPARE(error->text(), failure);
+  QVERIFY(panel->accessibleDescription().contains(failure));
+
+  fixture.dock.clearIncomingConflictPrompts(currentTransfer);
+  QVERIFY(!panel->isVisible());
+  fixture.dock.showIncomingConflictPrompt({
+      .transferId = queuedTransfer,
+      .conflictId = QUuid::createUuid(),
+      .relativeProtocolPath = QStringLiteral("next.txt"),
+  });
+  QCOMPARE(error->text(), QString{});
 }
 
 void DevicesDockTests::rendersUntrustedAndExpiredOfferSafely()

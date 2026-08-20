@@ -676,8 +676,10 @@ void DevicesDock::showIncomingConflictPrompt(::relaydesk::transfer::IncomingConf
   );
   if (duplicate)
     return;
+  const auto wasEmpty = m_incomingConflictPrompts.isEmpty();
   m_incomingConflictPrompts.append(std::move(prompt));
-  m_incomingConflictErrorText.clear();
+  if (wasEmpty)
+    m_incomingConflictErrorText.clear();
   updateIncomingConflictPanel();
 }
 
@@ -691,6 +693,8 @@ void DevicesDock::showIncomingConflictCancelTransportFailure(const ::relaydesk::
 
 void DevicesDock::clearIncomingConflictPrompts(const ::relaydesk::transfer::TransferId &transferId)
 {
+  const auto clearsActive = !m_incomingConflictPrompts.isEmpty() &&
+                            m_incomingConflictPrompts.constFirst().transferId == transferId;
   const auto first = std::remove_if(
       m_incomingConflictPrompts.begin(), m_incomingConflictPrompts.end(),
       [&transferId](const ::relaydesk::transfer::IncomingConflictPrompt &prompt) {
@@ -700,7 +704,8 @@ void DevicesDock::clearIncomingConflictPrompts(const ::relaydesk::transfer::Tran
   if (first == m_incomingConflictPrompts.end())
     return;
   m_incomingConflictPrompts.erase(first, m_incomingConflictPrompts.end());
-  m_incomingConflictErrorText.clear();
+  if (clearsActive)
+    m_incomingConflictErrorText.clear();
   updateIncomingConflictPanel();
 }
 
