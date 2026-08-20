@@ -185,6 +185,10 @@
     <message><source>transfer.incoming.invalid</source><translation>The incoming transfer request is invalid</translation></message>
     <message><source>transfer.incoming.busy</source><translation>Another transfer request is waiting</translation></message>
     <message><source>transfer.incoming.decision_unavailable</source><translation>This transfer request cannot be accepted right now</translation></message>
+    <message><source>transfer.conflict.title</source><translation>File already exists</translation></message>
+    <message><source>transfer.conflict.overwrite</source><translation>Replace</translation></message>
+    <message><source>transfer.conflict.auto_rename</source><translation>Keep both</translation></message>
+    <message><source>transfer.conflict.skip</source><translation>Skip</translation></message>
     <message><source>settings.title</source><translation>Settings</translation></message>
     <message><source>settings.general</source><translation>General</translation></message>
     <message><source>settings.input</source><translation>Keyboard and mouse</translation></message>

@@ -47,6 +47,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <utility>
 
 namespace deskflow::relaydesk::widgets {
@@ -405,6 +406,42 @@ DevicesDock::DevicesDock(
   incomingLayout->addLayout(incomingActions);
   activityLayout->addWidget(m_incomingOfferPanel);
 
+  m_incomingConflictPanel = new QFrame(m_activityRegion);
+  m_incomingConflictPanel->setObjectName(QStringLiteral("relaydeskIncomingConflictPanel"));
+  m_incomingConflictPanel->setFrameShape(QFrame::StyledPanel);
+  auto *conflictLayout = new QVBoxLayout(m_incomingConflictPanel);
+  conflictLayout->setContentsMargins(8, 7, 8, 7);
+  conflictLayout->setSpacing(4);
+  m_incomingConflictTitle = new QLabel(m_incomingConflictPanel);
+  m_incomingConflictTitle->setObjectName(QStringLiteral("relaydeskIncomingConflictTitle"));
+  QFont incomingConflictTitleFont(m_incomingConflictTitle->font());
+  incomingConflictTitleFont.setWeight(QFont::DemiBold);
+  m_incomingConflictTitle->setFont(incomingConflictTitleFont);
+  conflictLayout->addWidget(m_incomingConflictTitle);
+  m_incomingConflictPath = new QLabel(m_incomingConflictPanel);
+  m_incomingConflictPath->setObjectName(QStringLiteral("relaydeskIncomingConflictPath"));
+  m_incomingConflictPath->setTextFormat(Qt::PlainText);
+  m_incomingConflictPath->setWordWrap(true);
+  m_incomingConflictPath->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
+  conflictLayout->addWidget(m_incomingConflictPath);
+  auto *conflictActions = new QHBoxLayout();
+  conflictActions->setSpacing(4);
+  m_overwriteIncomingConflictButton = new QPushButton(m_incomingConflictPanel);
+  m_overwriteIncomingConflictButton->setObjectName(QStringLiteral("relaydeskIncomingConflictOverwriteButton"));
+  m_autoRenameIncomingConflictButton = new QPushButton(m_incomingConflictPanel);
+  m_autoRenameIncomingConflictButton->setObjectName(QStringLiteral("relaydeskIncomingConflictAutoRenameButton"));
+  m_skipIncomingConflictButton = new QPushButton(m_incomingConflictPanel);
+  m_skipIncomingConflictButton->setObjectName(QStringLiteral("relaydeskIncomingConflictSkipButton"));
+  m_cancelIncomingConflictButton = new QPushButton(m_incomingConflictPanel);
+  m_cancelIncomingConflictButton->setObjectName(QStringLiteral("relaydeskIncomingConflictCancelButton"));
+  conflictActions->addWidget(m_overwriteIncomingConflictButton);
+  conflictActions->addWidget(m_autoRenameIncomingConflictButton);
+  conflictActions->addWidget(m_skipIncomingConflictButton);
+  conflictActions->addStretch();
+  conflictActions->addWidget(m_cancelIncomingConflictButton);
+  conflictLayout->addLayout(conflictActions);
+  activityLayout->addWidget(m_incomingConflictPanel);
+
   m_pairingPanel = new QFrame(m_activityRegion);
   m_pairingPanel->setObjectName(QStringLiteral("relaydeskPairingPanel"));
   m_pairingPanel->setFrameShape(QFrame::StyledPanel);
@@ -530,6 +567,18 @@ DevicesDock::DevicesDock(
     if (m_incomingOffers != nullptr)
       m_incomingOffers->dismiss();
   });
+  connect(m_overwriteIncomingConflictButton, &QPushButton::clicked, this, [this]() {
+    resolveIncomingConflict(::relaydesk::transfer::IncomingConflictDecision::Overwrite);
+  });
+  connect(m_autoRenameIncomingConflictButton, &QPushButton::clicked, this, [this]() {
+    resolveIncomingConflict(::relaydesk::transfer::IncomingConflictDecision::AutoRename);
+  });
+  connect(m_skipIncomingConflictButton, &QPushButton::clicked, this, [this]() {
+    resolveIncomingConflict(::relaydesk::transfer::IncomingConflictDecision::Skip);
+  });
+  connect(m_cancelIncomingConflictButton, &QPushButton::clicked, this, [this]() {
+    resolveIncomingConflict(::relaydesk::transfer::IncomingConflictDecision::CancelTransfer);
+  });
 
   connect(&m_pairing, &model::PairingWizardModel::changed, this, &DevicesDock::updatePairingPanel);
   connect(&m_permissions, &model::PermissionStatusModel::snapshotChanged, this, &DevicesDock::updatePermissionBanner);
@@ -558,6 +607,7 @@ DevicesDock::DevicesDock(
   updateSelection();
   showSendFeedback({});
   updateIncomingOfferPanel();
+  updateIncomingConflictPanel();
   updatePairingPanel();
   updatePermissionBanner();
 }
@@ -602,6 +652,34 @@ void DevicesDock::setIncomingOfferModel(model::IncomingOfferModel *incomingOffer
     });
   }
   updateIncomingOfferPanel();
+}
+
+void DevicesDock::showIncomingConflictPrompt(::relaydesk::transfer::IncomingConflictPrompt prompt)
+{
+  const auto duplicate = std::any_of(
+      m_incomingConflictPrompts.cbegin(), m_incomingConflictPrompts.cend(),
+      [&prompt](const ::relaydesk::transfer::IncomingConflictPrompt &candidate) {
+        return candidate.transferId == prompt.transferId && candidate.conflictId == prompt.conflictId;
+      }
+  );
+  if (duplicate)
+    return;
+  m_incomingConflictPrompts.append(std::move(prompt));
+  updateIncomingConflictPanel();
+}
+
+void DevicesDock::clearIncomingConflictPrompts(const ::relaydesk::transfer::TransferId &transferId)
+{
+  const auto first = std::remove_if(
+      m_incomingConflictPrompts.begin(), m_incomingConflictPrompts.end(),
+      [&transferId](const ::relaydesk::transfer::IncomingConflictPrompt &prompt) {
+        return prompt.transferId == transferId;
+      }
+  );
+  if (first == m_incomingConflictPrompts.end())
+    return;
+  m_incomingConflictPrompts.erase(first, m_incomingConflictPrompts.end());
+  updateIncomingConflictPanel();
 }
 
 void DevicesDock::setManualAddresses(QList<ManualAddress> addresses)
@@ -761,6 +839,15 @@ void DevicesDock::updateText()
   m_changeIncomingOfferSettingsButton->setAccessibleName(i18n::translate(Text::TransferActionChangeSettings));
   m_dismissIncomingOfferButton->setText(i18n::translate(Text::TransferActionDismiss));
   m_dismissIncomingOfferButton->setAccessibleName(i18n::translate(Text::TransferActionDismiss));
+  m_incomingConflictTitle->setText(i18n::translate(Text::TransferConflictTitle));
+  m_overwriteIncomingConflictButton->setText(i18n::translate(Text::TransferConflictOverwrite));
+  m_overwriteIncomingConflictButton->setAccessibleName(i18n::translate(Text::TransferConflictOverwrite));
+  m_autoRenameIncomingConflictButton->setText(i18n::translate(Text::TransferConflictAutoRename));
+  m_autoRenameIncomingConflictButton->setAccessibleName(i18n::translate(Text::TransferConflictAutoRename));
+  m_skipIncomingConflictButton->setText(i18n::translate(Text::TransferConflictSkip));
+  m_skipIncomingConflictButton->setAccessibleName(i18n::translate(Text::TransferConflictSkip));
+  m_cancelIncomingConflictButton->setText(i18n::translate(Text::TransferActionCancel));
+  m_cancelIncomingConflictButton->setAccessibleName(i18n::translate(Text::TransferActionCancel));
 }
 
 void DevicesDock::updateEmptyState()
@@ -1111,6 +1198,18 @@ void DevicesDock::updateIncomingOfferPanel()
   updateActivityPanel();
 }
 
+void DevicesDock::updateIncomingConflictPanel()
+{
+  const auto visible = !m_incomingConflictPrompts.isEmpty();
+  if (visible) {
+    const auto &prompt = m_incomingConflictPrompts.constFirst();
+    m_incomingConflictPath->setText(prompt.relativeProtocolPath);
+    m_incomingConflictPanel->setAccessibleName(i18n::translate(Text::TransferConflictTitle));
+    m_incomingConflictPanel->setAccessibleDescription(prompt.relativeProtocolPath);
+  }
+  updateActivityPanel();
+}
+
 void DevicesDock::updatePairingPanel()
 {
   const auto active = m_pairing.active();
@@ -1148,11 +1247,25 @@ void DevicesDock::updatePairingPanel()
 
 void DevicesDock::updateActivityPanel()
 {
+  const auto conflictVisible = !m_incomingConflictPrompts.isEmpty();
   const auto incomingVisible = m_incomingOffers != nullptr && m_incomingOffers->visible();
-  const auto pairingVisible = m_pairing.active() && !incomingVisible;
-  m_incomingOfferPanel->setVisible(incomingVisible);
+  const auto pairingVisible = m_pairing.active() && !incomingVisible && !conflictVisible;
+  m_incomingConflictPanel->setVisible(conflictVisible);
+  m_incomingOfferPanel->setVisible(incomingVisible && !conflictVisible);
   m_pairingPanel->setVisible(pairingVisible);
-  m_activityRegion->setVisible(incomingVisible || pairingVisible);
+  m_activityRegion->setVisible(conflictVisible || incomingVisible || pairingVisible);
+}
+
+void DevicesDock::resolveIncomingConflict(::relaydesk::transfer::IncomingConflictDecision decision)
+{
+  if (m_incomingConflictPrompts.isEmpty())
+    return;
+  const auto prompt = m_incomingConflictPrompts.constFirst();
+  Q_EMIT incomingConflictDecisionRequested(prompt.transferId, prompt.conflictId, decision);
+  if (decision == ::relaydesk::transfer::IncomingConflictDecision::CancelTransfer)
+    return;
+  m_incomingConflictPrompts.removeFirst();
+  updateIncomingConflictPanel();
 }
 
 void DevicesDock::submitPairingCode()

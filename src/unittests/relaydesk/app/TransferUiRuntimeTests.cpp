@@ -155,8 +155,12 @@ public:
     retriedIds.append(transferId);
   }
 
-  void resolveIncomingConflict(const TransferId &, const QUuid &, IncomingConflictDecision) override
+  void resolveIncomingConflict(const TransferId &transferId, const QUuid &conflictId, IncomingConflictDecision decision) override
   {
+    ++resolveConflictCalls;
+    resolvedConflictTransferId = transferId;
+    resolvedConflictId = conflictId;
+    resolvedConflictDecision = decision;
   }
 
   [[nodiscard]] QList<TransferSnapshot> activeTransfers() const override
@@ -172,6 +176,7 @@ public:
   int resumeCalls = 0;
   int cancelCalls = 0;
   int retryCalls = 0;
+  int resolveConflictCalls = 0;
   mutable int activeTransferCalls = 0;
   std::optional<DeviceId> sentTarget;
   QList<QUrl> sentItems;
@@ -186,6 +191,9 @@ public:
   std::optional<TransferCancelOptions> cancelOptions;
   QList<TransferId> retriedIds;
   QList<TransferSnapshot> initialTransfers;
+  std::optional<TransferId> resolvedConflictTransferId;
+  std::optional<QUuid> resolvedConflictId;
+  std::optional<IncomingConflictDecision> resolvedConflictDecision;
 };
 
 struct Fixture
@@ -226,6 +234,7 @@ private Q_SLOTS:
   void opensResolvedCompletionOnlyInsideExistingReceiveRoot();
   void rejectsUntrustedCompletionPathsBeforeCallingOpener();
   void rejectsUnavailableCompositionDependencies();
+  void bridgesIncomingConflictDecisionsThroughTypedUiIntent();
 };
 
 void TransferUiRuntimeTests::composesTypedUiIntentsThroughOneServiceBoundary()
@@ -303,6 +312,43 @@ void TransferUiRuntimeTests::composesTypedUiIntentsThroughOneServiceBoundary()
   Q_EMIT fixture.service.transferRemoved(active.id);
   QCOMPARE(removed.count(), 1);
   QVERIFY(!fixture.transfers.snapshot(active.id).has_value());
+}
+
+void TransferUiRuntimeTests::bridgesIncomingConflictDecisionsThroughTypedUiIntent()
+{
+  Fixture fixture;
+  TransferUiRuntime runtime(fixture.service, fixture.devicesDock, fixture.transferDock, fixture.incoming);
+  const IncomingConflictPrompt prompt{
+      .transferId = TransferId::generate(),
+      .conflictId = QUuid::createUuid(),
+      .relativeProtocolPath = QStringLiteral("Project/conflict.txt"),
+  };
+  fixture.devicesDock.show();
+  Q_EMIT fixture.service.incomingConflictDecisionRequired(prompt);
+
+  auto *overwrite = fixture.devicesDock.findChild<QPushButton *>(QStringLiteral("relaydeskIncomingConflictOverwriteButton"));
+  QVERIFY(overwrite != nullptr);
+  QTest::mouseClick(overwrite, Qt::LeftButton);
+  QCOMPARE(fixture.service.resolveConflictCalls, 1);
+  QCOMPARE(fixture.service.resolvedConflictTransferId, std::optional<TransferId>{prompt.transferId});
+  QCOMPARE(fixture.service.resolvedConflictId, std::optional<QUuid>{prompt.conflictId});
+  QCOMPARE(
+      fixture.service.resolvedConflictDecision,
+      std::optional<IncomingConflictDecision>{IncomingConflictDecision::Overwrite}
+  );
+
+  Q_EMIT fixture.service.incomingConflictDecisionRequired(prompt);
+  auto *cancel = fixture.devicesDock.findChild<QPushButton *>(QStringLiteral("relaydeskIncomingConflictCancelButton"));
+  QVERIFY(cancel != nullptr);
+  QTest::mouseClick(cancel, Qt::LeftButton);
+  QTest::mouseClick(cancel, Qt::LeftButton);
+  QCOMPARE(fixture.service.resolveConflictCalls, 3);
+  QCOMPARE(fixture.service.resolvedConflictTransferId, std::optional<TransferId>{prompt.transferId});
+  QCOMPARE(fixture.service.resolvedConflictId, std::optional<QUuid>{prompt.conflictId});
+  QCOMPARE(
+      fixture.service.resolvedConflictDecision,
+      std::optional<IncomingConflictDecision>{IncomingConflictDecision::CancelTransfer}
+  );
 }
 
 void TransferUiRuntimeTests::opensResolvedCompletionOnlyInsideExistingReceiveRoot()

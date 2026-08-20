@@ -185,6 +185,10 @@
     <message><source>transfer.incoming.invalid</source><translation>들어오는 전송 요청이 올바르지 않습니다</translation></message>
     <message><source>transfer.incoming.busy</source><translation>다른 전송 요청이 대기 중입니다</translation></message>
     <message><source>transfer.incoming.decision_unavailable</source><translation>현재 이 전송 요청을 수락할 수 없습니다</translation></message>
+    <message><source>transfer.conflict.title</source><translation>파일이 이미 있습니다</translation></message>
+    <message><source>transfer.conflict.overwrite</source><translation>바꾸기</translation></message>
+    <message><source>transfer.conflict.auto_rename</source><translation>둘 다 유지</translation></message>
+    <message><source>transfer.conflict.skip</source><translation>건너뛰기</translation></message>
     <message><source>settings.title</source><translation>설정</translation></message>
     <message><source>settings.general</source><translation>일반</translation></message>
     <message><source>settings.input</source><translation>키보드 및 마우스</translation></message>

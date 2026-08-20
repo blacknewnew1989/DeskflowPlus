@@ -64,6 +64,8 @@ public:
   void setFileChooser(ItemChooser chooser);
   void setFolderChooser(ItemChooser chooser);
   void setIncomingOfferModel(model::IncomingOfferModel *incomingOffers);
+  void showIncomingConflictPrompt(::relaydesk::transfer::IncomingConflictPrompt prompt);
+  void clearIncomingConflictPrompts(const ::relaydesk::transfer::TransferId &transferId);
   void setManualAddresses(QList<ManualAddress> addresses);
 
 Q_SIGNALS:
@@ -72,6 +74,10 @@ Q_SIGNALS:
   void sendItemsRequested(DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options);
   void sendItemsRejected(QString message);
   void incomingOfferSettingsRequested();
+  void incomingConflictDecisionRequested(
+      ::relaydesk::transfer::TransferId transferId, QUuid conflictId,
+      ::relaydesk::transfer::IncomingConflictDecision decision
+  );
   void manualAddressesSaveRequested(QList<ManualAddress> addresses, ManualAddressesSaveReceipt receipt);
 
 protected:
@@ -94,7 +100,9 @@ private:
   void updatePermissionBanner();
   void updatePermissionDetails();
   void updateIncomingOfferPanel();
+  void updateIncomingConflictPanel();
   void updateActivityPanel();
+  void resolveIncomingConflict(::relaydesk::transfer::IncomingConflictDecision decision);
   void submitPairingCode();
   void chooseAndSend(bool folder);
   [[nodiscard]] QModelIndex targetIndexAt(const QPoint &position) const;
@@ -141,6 +149,13 @@ private:
   QPushButton *m_rejectIncomingOfferButton = nullptr;
   QPushButton *m_changeIncomingOfferSettingsButton = nullptr;
   QPushButton *m_dismissIncomingOfferButton = nullptr;
+  QFrame *m_incomingConflictPanel = nullptr;
+  QLabel *m_incomingConflictTitle = nullptr;
+  QLabel *m_incomingConflictPath = nullptr;
+  QPushButton *m_overwriteIncomingConflictButton = nullptr;
+  QPushButton *m_autoRenameIncomingConflictButton = nullptr;
+  QPushButton *m_skipIncomingConflictButton = nullptr;
+  QPushButton *m_cancelIncomingConflictButton = nullptr;
   QFrame *m_pairingPanel = nullptr;
   QLabel *m_pairingPeer = nullptr;
   QLabel *m_pairingState = nullptr;
@@ -159,6 +174,7 @@ private:
   ItemChooser m_folderChooser;
   QPersistentModelIndex m_dropTargetIndex;
   model::IncomingOfferModel *m_incomingOffers = nullptr;
+  QList<::relaydesk::transfer::IncomingConflictPrompt> m_incomingConflictPrompts;
   QList<ManualAddress> m_manualAddresses;
 };
 
