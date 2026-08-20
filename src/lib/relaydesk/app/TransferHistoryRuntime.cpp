@@ -31,6 +31,17 @@ struct TransferHistoryRuntime::StartupSnapshot
   quint64 availableBytes = 0;
 };
 
+quint64 availableBytesForReceiveRoot(const QString &receiveRoot)
+{
+  QStorageInfo storage(receiveRoot);
+  if (!storage.isValid() || !storage.isReady()) {
+    storage.setPath(QFileInfo(receiveRoot).absolutePath());
+  }
+  return storage.isValid() && storage.isReady() && storage.bytesAvailable() > 0
+             ? static_cast<quint64>(storage.bytesAvailable())
+             : 0;
+}
+
 TransferHistoryRuntime::TransferHistoryRuntime(
     IFileTransferService &service, model::TransferCenterModel &transfers,
     model::IncomingOfferModel &incomingOffers, QString receiveRoot, QString historyPath, QObject *parent
@@ -54,10 +65,21 @@ void TransferHistoryRuntime::start()
   loadSnapshotAsync();
 }
 
+void TransferHistoryRuntime::setReceiveRoot(QString receiveRoot)
+{
+  if (m_receiveRoot == receiveRoot)
+    return;
+  m_receiveRoot = std::move(receiveRoot);
+  ++m_receiveRootGeneration;
+  if (m_started)
+    probeReceiveRootAsync();
+}
+
 void TransferHistoryRuntime::loadSnapshotAsync()
 {
+  const auto receiveRootGeneration = m_receiveRootGeneration;
   auto *watcher = new QFutureWatcher<StartupSnapshot>(this);
-  connect(watcher, &QFutureWatcher<StartupSnapshot>::finished, this, [this, watcher]() {
+  connect(watcher, &QFutureWatcher<StartupSnapshot>::finished, this, [this, watcher, receiveRootGeneration]() {
     const auto snapshot = watcher->result();
     watcher->deleteLater();
     if (!snapshot.maintenance.ok()) {
@@ -79,9 +101,11 @@ void TransferHistoryRuntime::loadSnapshotAsync()
       });
       m_transfers.setHistoryRecords(m_records);
     }
-    auto settings = m_incomingOffers.settings();
-    settings.availableBytes = snapshot.availableBytes;
-    m_incomingOffers.setSettings(settings);
+    if (receiveRootGeneration == m_receiveRootGeneration) {
+      auto settings = m_incomingOffers.settings();
+      settings.availableBytes = snapshot.availableBytes;
+      m_incomingOffers.setSettings(settings);
+    }
   });
 
   const auto store = m_store;
@@ -96,15 +120,26 @@ void TransferHistoryRuntime::loadSnapshotAsync()
         snapshot.history = store.page(0, kDefaultMaximumHistoryEntries);
       }
     }
-    QStorageInfo storage(receiveRoot);
-    if (!storage.isValid() || !storage.isReady()) {
-      storage.setPath(QFileInfo(receiveRoot).absolutePath());
-    }
-    if (storage.isValid() && storage.isReady() && storage.bytesAvailable() > 0) {
-      snapshot.availableBytes = static_cast<quint64>(storage.bytesAvailable());
-    }
+    snapshot.availableBytes = availableBytesForReceiveRoot(receiveRoot);
     return snapshot;
   }));
+}
+
+void TransferHistoryRuntime::probeReceiveRootAsync()
+{
+  const auto receiveRootGeneration = m_receiveRootGeneration;
+  const auto receiveRoot = m_receiveRoot;
+  auto *watcher = new QFutureWatcher<quint64>(this);
+  connect(watcher, &QFutureWatcher<quint64>::finished, this, [this, watcher, receiveRootGeneration]() {
+    const auto availableBytes = watcher->result();
+    watcher->deleteLater();
+    if (receiveRootGeneration != m_receiveRootGeneration)
+      return;
+    auto settings = m_incomingOffers.settings();
+    settings.availableBytes = availableBytes;
+    m_incomingOffers.setSettings(settings);
+  });
+  watcher->setFuture(QtConcurrent::run([receiveRoot]() { return availableBytesForReceiveRoot(receiveRoot); }));
 }
 
 void TransferHistoryRuntime::persistTerminal(const TransferSnapshot &snapshot)

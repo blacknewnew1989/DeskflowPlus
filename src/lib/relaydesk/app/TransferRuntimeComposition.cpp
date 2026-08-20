@@ -92,4 +92,12 @@ model::IncomingOfferModel &TransferRuntimeComposition::incomingOffers() noexcept
   return m_incomingOffers;
 }
 
+void TransferRuntimeComposition::setIncomingOfferSettings(model::IncomingOfferSettingsSnapshot settings)
+{
+  const auto rootChanged = m_incomingOffers.settings().destinationRoot != settings.destinationRoot;
+  m_incomingOffers.setSettings(std::move(settings));
+  if (rootChanged && m_historyRuntime != nullptr)
+    m_historyRuntime->setReceiveRoot(m_incomingOffers.settings().destinationRoot);
+}
+
 } // namespace deskflow::relaydesk

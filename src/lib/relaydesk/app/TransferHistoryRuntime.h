@@ -41,6 +41,7 @@ public:
   Q_DISABLE_COPY_MOVE(TransferHistoryRuntime)
 
   void start();
+  void setReceiveRoot(QString receiveRoot);
   [[nodiscard]] static std::optional<::relaydesk::transfer::TransferHistoryRecord> recordForSnapshot(
       const ::relaydesk::transfer::TransferSnapshot &snapshot
   );
@@ -52,6 +53,7 @@ private:
   struct StartupSnapshot;
 
   void loadSnapshotAsync();
+  void probeReceiveRootAsync();
   void persistTerminal(const ::relaydesk::transfer::TransferSnapshot &snapshot);
   model::TransferCenterModel &m_transfers;
   model::IncomingOfferModel &m_incomingOffers;
@@ -60,6 +62,7 @@ private:
   std::shared_ptr<QMutex> m_storeMutex;
   QSet<::relaydesk::transfer::TransferId> m_persistedOrPending;
   QList<::relaydesk::transfer::TransferHistoryRecord> m_records;
+  quint64 m_receiveRootGeneration = 0;
   bool m_started = false;
 };
 

@@ -21,6 +21,7 @@
 #include <QTemporaryDir>
 #include <QSignalSpy>
 #include <QFileInfo>
+#include <QDir>
 
 using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
@@ -88,7 +89,9 @@ private Q_SLOTS:
   void ownsTypedServiceBindingAndLifecycle();
   void reportsUnavailableOrFailedStartupWithoutStopping();
   void loadsAndPersistsHistoryOffTheUiContract();
+  void updatesIncomingOfferSettingsForSubsequentOffers();
   void loadsMoreThanOneHundredHistoryRecordsAtStartup();
+  void appliesIncomingSettingsAndRefreshesReceiveRootSpaceAsync();
 };
 
 void TransferRuntimeCompositionTests::ownsTypedServiceBindingAndLifecycle()
@@ -222,6 +225,34 @@ void TransferRuntimeCompositionTests::loadsAndPersistsHistoryOffTheUiContract()
   QCOMPARE(page.page.records.first().topLevelTargetRelativePath, QStringLiteral("Project"));
 }
 
+void TransferRuntimeCompositionTests::updatesIncomingOfferSettingsForSubsequentOffers()
+{
+  Fixture fixture;
+  TransferRuntimeComposition composition(
+      std::make_unique<FakeFileTransferService>(),
+      {.start = [](QString *) { return true; }, .stop = [] {}}, fixture.devicesDock, fixture.transferDock,
+      {
+          .destinationRoot = QStringLiteral("C:/RelayDesk"),
+          .availableBytes = 4096,
+          .autoAcceptTrustedDevices = false,
+          .defaultConflictPolicy = ConflictPolicy::AutoRename,
+      }
+  );
+
+  composition.setIncomingOfferSettings(
+      {
+          .destinationRoot = QStringLiteral("D:/Incoming"),
+          .availableBytes = 4096,
+          .autoAcceptTrustedDevices = true,
+          .defaultConflictPolicy = ConflictPolicy::Ask,
+      }
+  );
+  const auto settings = composition.incomingOffers().settings();
+  QCOMPARE(settings.destinationRoot, QStringLiteral("D:/Incoming"));
+  QVERIFY(settings.autoAcceptTrustedDevices);
+  QCOMPARE(settings.defaultConflictPolicy, ConflictPolicy::Ask);
+}
+
 void TransferRuntimeCompositionTests::loadsMoreThanOneHundredHistoryRecordsAtStartup()
 {
   Fixture fixture;
@@ -254,6 +285,33 @@ void TransferRuntimeCompositionTests::loadsMoreThanOneHundredHistoryRecordsAtSta
   );
   QVERIFY(composition.start());
   QTRY_COMPARE_WITH_TIMEOUT(fixture.transfers.rowCount(), 101, 5000);
+}
+
+void TransferRuntimeCompositionTests::appliesIncomingSettingsAndRefreshesReceiveRootSpaceAsync()
+{
+  Fixture fixture;
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const auto historyPath = temporary.filePath(QStringLiteral("history/transfers.jsonl"));
+  const auto updatedRoot = temporary.filePath(QStringLiteral("updated-receive-root"));
+  QVERIFY(QDir().mkpath(updatedRoot));
+  TransferRuntimeComposition composition(
+      std::make_unique<FakeFileTransferService>(),
+      {.start = [](QString *) { return true; }, .stop = [] {}}, fixture.devicesDock, fixture.transferDock,
+      {.destinationRoot = QStringLiteral("X:/stale-receive-root"), .availableBytes = 1}, historyPath
+  );
+  QVERIFY(composition.start());
+
+  composition.setIncomingOfferSettings({
+      .destinationRoot = updatedRoot,
+      .availableBytes = 0,
+      .autoAcceptTrustedDevices = true,
+      .defaultConflictPolicy = ConflictPolicy::Ask,
+  });
+  QCOMPARE(composition.incomingOffers().settings().destinationRoot, updatedRoot);
+  QCOMPARE(composition.incomingOffers().settings().defaultConflictPolicy, ConflictPolicy::Ask);
+  QTRY_VERIFY_WITH_TIMEOUT(composition.incomingOffers().settings().availableBytes > 0, 5000);
+  QCOMPARE(composition.incomingOffers().settings().destinationRoot, updatedRoot);
 }
 
 QTEST_MAIN(TransferRuntimeCompositionTests)

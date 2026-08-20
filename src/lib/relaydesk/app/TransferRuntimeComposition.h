@@ -55,6 +55,7 @@ public:
   [[nodiscard]] bool isRunning() const noexcept;
   [[nodiscard]] IFileTransferService &service() const noexcept;
   [[nodiscard]] model::IncomingOfferModel &incomingOffers() noexcept;
+  void setIncomingOfferSettings(model::IncomingOfferSettingsSnapshot settings);
 
 private:
   std::unique_ptr<IFileTransferService> m_service;
