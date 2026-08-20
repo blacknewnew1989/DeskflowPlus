@@ -136,8 +136,9 @@ TransferSettingsLoadResult TransferSettingsStore::load()
   const auto conflictPolicy = parseConflictPolicy(m_settings.value(defaultConflictPolicyKey()));
   if (root.metaType().id() != QMetaType::QString || !incomingPolicy.has_value() || !conflictPolicy.has_value())
     return {.ok = false, .diagnostic = QStringLiteral("Transfer settings contain invalid fields")};
-  TransferSettings settings{.receiveRoot = root.toString(), .incomingPolicy = *incomingPolicy,
-                            .defaultConflictPolicy = *conflictPolicy};
+  TransferSettings settings{
+      .receiveRoot = root.toString(), .incomingPolicy = *incomingPolicy, .defaultConflictPolicy = *conflictPolicy
+  };
   QString diagnostic;
   if (!validateReceiveRoot(settings.receiveRoot, &diagnostic))
     return {.ok = false, .diagnostic = std::move(diagnostic)};
@@ -172,7 +173,9 @@ bool TransferSettingsStore::saveValidated(TransferSettings settings, QString *di
   const std::array previous{
       PreviousValue{schemaVersionKey(), m_settings.contains(schemaVersionKey()), m_settings.value(schemaVersionKey())},
       PreviousValue{receiveRootKey(), m_settings.contains(receiveRootKey()), m_settings.value(receiveRootKey())},
-      PreviousValue{incomingPolicyKey(), m_settings.contains(incomingPolicyKey()), m_settings.value(incomingPolicyKey())},
+      PreviousValue{
+          incomingPolicyKey(), m_settings.contains(incomingPolicyKey()), m_settings.value(incomingPolicyKey())
+      },
       PreviousValue{
           defaultConflictPolicyKey(), m_settings.contains(defaultConflictPolicyKey()),
           m_settings.value(defaultConflictPolicyKey())
@@ -184,6 +187,7 @@ bool TransferSettingsStore::saveValidated(TransferSettings settings, QString *di
   m_settings.setValue(defaultConflictPolicyKey(), conflictPolicyName(settings.defaultConflictPolicy));
   m_settings.sync();
   if (m_settings.status() != QSettings::NoError) {
+    // Atomic sync leaves the previous file intact; restore this instance so its destructor cannot retry new values.
     for (const auto &entry : previous) {
       if (entry.existed)
         m_settings.setValue(entry.key, entry.value);
@@ -196,9 +200,21 @@ bool TransferSettingsStore::saveValidated(TransferSettings settings, QString *di
   return true;
 }
 
-QString TransferSettingsStore::schemaVersionKey() { return key(kSchemaVersionName); }
-QString TransferSettingsStore::receiveRootKey() { return key(kReceiveRootName); }
-QString TransferSettingsStore::incomingPolicyKey() { return key(kIncomingPolicyName); }
-QString TransferSettingsStore::defaultConflictPolicyKey() { return key(kDefaultConflictPolicyName); }
+QString TransferSettingsStore::schemaVersionKey()
+{
+  return key(kSchemaVersionName);
+}
+QString TransferSettingsStore::receiveRootKey()
+{
+  return key(kReceiveRootName);
+}
+QString TransferSettingsStore::incomingPolicyKey()
+{
+  return key(kIncomingPolicyName);
+}
+QString TransferSettingsStore::defaultConflictPolicyKey()
+{
+  return key(kDefaultConflictPolicyName);
+}
 
 } // namespace relaydesk::transfer
