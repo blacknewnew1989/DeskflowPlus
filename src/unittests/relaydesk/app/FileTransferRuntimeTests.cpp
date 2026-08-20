@@ -667,7 +667,9 @@ void FileTransferRuntimeTests::incomingSingleFileCommitsThroughPlatformReceiver(
   TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("vertical-sender-trust.json")));
   TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("vertical-receiver-trust.json")));
   QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
-  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  auto receiverTrustedSender = trustedDevice(senderId, identity.fingerprintSha256);
+  receiverTrustedSender.autoAcceptFiles = true;
+  QVERIFY(receiverTrust.upsert(receiverTrustedSender));
   model::DeviceHomeModel senderModel;
   model::DeviceHomeModel receiverModel;
   DeviceDiscoveryRuntime senderDiscovery(
@@ -738,6 +740,7 @@ void FileTransferRuntimeTests::incomingSingleFileCommitsThroughPlatformReceiver(
   );
   QVERIFY(incoming.has_value());
   QCOMPARE(incoming->offer.transferId, *started.transferId);
+  QVERIFY(incoming->mayAutoAccept);
   QFile committed(QDir(receiveRoot).filePath(QStringLiteral("vertical-source.bin")));
   QVERIFY2(committed.open(QIODevice::ReadOnly), qPrintable(committed.errorString()));
   QCOMPARE(committed.readAll(), sourceBytes);

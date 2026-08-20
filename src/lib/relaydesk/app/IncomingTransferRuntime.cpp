@@ -35,18 +35,19 @@ namespace deskflow::relaydesk {
 struct IncomingTransferRuntime::Session
 {
   Session(
-      DeviceId peerDeviceId, QString peerName, bool trusted,
+      DeviceId peerDeviceId, QString peerName, bool trusted, bool allowsAutoAccept,
       ::relaydesk::transfer::TransferOffer incomingOffer,
       ::relaydesk::transfer::NegotiatedCapabilities capabilities
   )
       : peer(std::move(peerDeviceId)), peerDisplayName(std::move(peerName)), peerTrusted(trusted),
-        offer(std::move(incomingOffer)), stateMachine(std::move(capabilities))
+        peerAllowsAutoAccept(allowsAutoAccept), offer(std::move(incomingOffer)), stateMachine(std::move(capabilities))
   {
   }
 
   DeviceId peer;
   QString peerDisplayName;
   bool peerTrusted = false;
+  bool peerAllowsAutoAccept = false;
   ::relaydesk::transfer::TransferOffer offer;
   ::relaydesk::transfer::TransferOfferStateMachine stateMachine;
   bool acceptPreflightPending = false;
@@ -960,9 +961,9 @@ private:
 };
 
 IncomingTransferRuntime::IncomingTransferRuntime(
-    IPlatformFileSafety &fileSafety, QThreadPool &workerPool, QObject *parent
+    IPlatformFileSafety &fileSafety, QThreadPool &workerPool, TrustChecker trustChecker, QObject *parent
 )
-    : QObject(parent), m_fileSafety(fileSafety), m_workerPool(workerPool)
+    : QObject(parent), m_fileSafety(fileSafety), m_workerPool(workerPool), m_trustChecker(std::move(trustChecker))
 {
 }
 
@@ -979,6 +980,17 @@ IncomingTransferRuntime::~IncomingTransferRuntime()
 
 bool IncomingTransferRuntime::receiveOffer(
     const DeviceId &peerDeviceId, QString peerDisplayName, bool peerTrusted,
+    const ::relaydesk::transfer::NegotiatedCapabilities &capabilities,
+    const ::relaydesk::transfer::TransferOffer &offer, QString *diagnostic
+)
+{
+  return receiveOffer(
+      peerDeviceId, std::move(peerDisplayName), peerTrusted, false, capabilities, offer, diagnostic
+  );
+}
+
+bool IncomingTransferRuntime::receiveOffer(
+    const DeviceId &peerDeviceId, QString peerDisplayName, bool peerTrusted, bool peerAllowsAutoAccept,
     const ::relaydesk::transfer::NegotiatedCapabilities &capabilities,
     const ::relaydesk::transfer::TransferOffer &offer, QString *diagnostic
 )
@@ -1000,7 +1012,7 @@ bool IncomingTransferRuntime::receiveOffer(
   }
 
   auto *session = new Session(
-      peerDeviceId, std::move(peerDisplayName), peerTrusted, offer, capabilities
+      peerDeviceId, std::move(peerDisplayName), peerTrusted, peerAllowsAutoAccept, offer, capabilities
   );
   session->resumeNegotiated = capabilities.features.contains(QStringLiteral("resume.v1"));
   const auto received = session->stateMachine.receiveIncoming(offer);
@@ -1015,7 +1027,7 @@ bool IncomingTransferRuntime::receiveOffer(
       .peerDisplayName = session->peerDisplayName,
       .offer = session->offer,
       .peerTrusted = session->peerTrusted,
-      .mayAutoAccept = false,
+      .mayAutoAccept = session->peerTrusted && session->peerAllowsAutoAccept,
   });
   return true;
 }
@@ -1044,14 +1056,17 @@ void IncomingTransferRuntime::accept(
       !options.destinationRoot.isEmpty() && !QDir::isAbsolutePath(options.destinationRoot);
   const bool invalidAutomaticAcceptance =
       options.acceptanceOrigin == AcceptanceOrigin::TrustedDevicePolicy && !session->peerTrusted;
+  const bool trustRevoked = session->peerTrusted && !isCurrentlyTrusted(*session);
   if (session->acceptPreflightPending || !snapshot.has_value() ||
       snapshot->state != OfferState::AwaitingLocalDecision || invalidDestination ||
-      invalidAutomaticAcceptance) {
+      invalidAutomaticAcceptance || trustRevoked) {
     publishOperation(
         transferId, TransferOperation::Accept, TransferOperationOutcome::Rejected,
         TransferOperationError::InvalidState,
         session->acceptPreflightPending
             ? QStringLiteral("Receive-root preflight is already pending")
+            : trustRevoked
+              ? QStringLiteral("Incoming transfer peer is no longer trusted")
             : QStringLiteral("Incoming transfer cannot be accepted with the supplied state and options")
     );
     return;
@@ -1538,6 +1553,13 @@ void IncomingTransferRuntime::finishAcceptPreflight(
     return;
   }
   session->acceptPreflightPending = false;
+  if (session->peerTrusted && !isCurrentlyTrusted(*session)) {
+    publishOperation(
+        transferId, TransferOperation::Accept, TransferOperationOutcome::Rejected,
+        TransferOperationError::InvalidState, QStringLiteral("Incoming transfer peer is no longer trusted")
+    );
+    return;
+  }
   if (!result.safety.ok()) {
     publishOperation(
         transferId, TransferOperation::Accept, TransferOperationOutcome::Rejected,
@@ -1567,6 +1589,11 @@ void IncomingTransferRuntime::finishAcceptPreflight(
   Q_EMIT transferAdded(session->pipelineSnapshot);
   Q_EMIT transferAccepted(session->peer, *snapshot->acceptance);
   publishOperation(transferId, TransferOperation::Accept, TransferOperationOutcome::Applied);
+}
+
+bool IncomingTransferRuntime::isCurrentlyTrusted(const Session &session) const
+{
+  return !m_trustChecker || m_trustChecker(session.peer);
 }
 
 void IncomingTransferRuntime::publishOperation(

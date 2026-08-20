@@ -16,6 +16,7 @@
 #include <QHash>
 #include <QObject>
 
+#include <functional>
 #include <memory>
 
 class QThreadPool;
@@ -31,8 +32,11 @@ class IncomingTransferRuntime final : public QObject
   Q_OBJECT
 
 public:
+  using TrustChecker = std::function<bool(const DeviceId &)>;
+
   IncomingTransferRuntime(
-      IPlatformFileSafety &fileSafety, QThreadPool &workerPool, QObject *parent = nullptr
+      IPlatformFileSafety &fileSafety, QThreadPool &workerPool, TrustChecker trustChecker = {},
+      QObject *parent = nullptr
   );
   ~IncomingTransferRuntime() override;
 
@@ -40,6 +44,11 @@ public:
 
   [[nodiscard]] bool receiveOffer(
       const DeviceId &peerDeviceId, QString peerDisplayName, bool peerTrusted,
+      const ::relaydesk::transfer::NegotiatedCapabilities &capabilities,
+      const ::relaydesk::transfer::TransferOffer &offer, QString *diagnostic = nullptr
+  );
+  [[nodiscard]] bool receiveOffer(
+      const DeviceId &peerDeviceId, QString peerDisplayName, bool peerTrusted, bool peerAllowsAutoAccept,
       const ::relaydesk::transfer::NegotiatedCapabilities &capabilities,
       const ::relaydesk::transfer::TransferOffer &offer, QString *diagnostic = nullptr
   );
@@ -123,9 +132,11 @@ private:
           ::relaydesk::transfer::TransferOperationError::None,
       QString diagnostic = {}
   );
+  [[nodiscard]] bool isCurrentlyTrusted(const Session &session) const;
 
   IPlatformFileSafety &m_fileSafety;
   QThreadPool &m_workerPool;
+  TrustChecker m_trustChecker;
   QHash<::relaydesk::transfer::TransferId, Session *> m_sessions;
 };
 

@@ -8,17 +8,20 @@
 
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
+#include "relaydesk/trust/TrustedDeviceStore.h"
 
 #include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QSignalSpy>
+#include <QSemaphore>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QThreadPool>
 
 #include <memory>
 #include <optional>
+#include <tuple>
 
 using namespace deskflow::relaydesk;
 using namespace relaydesk::transfer;
@@ -48,6 +51,25 @@ public:
   mutable QString verifiedRoot;
   mutable QThread *verificationThread = nullptr;
   FileSafetyResult rootResult;
+};
+
+class BlockingFileSafety final : public IPlatformFileSafety
+{
+public:
+  FileSafetyResult verifyReceiveRoot(const VerifyReceiveRootRequest &request) const override
+  {
+    verifiedRoot = request.receiveRoot;
+    preflightEntered.release();
+    continuePreflight.acquire();
+    return {};
+  }
+
+  FileSafetyResult verifyNoLinkTraversal(const VerifyNoLinkTraversalRequest &) const override { return {}; }
+  FileSafetyResult commitStagedFile(const CommitStagedFileRequest &) override { return {}; }
+
+  mutable QString verifiedRoot;
+  mutable QSemaphore preflightEntered;
+  mutable QSemaphore continuePreflight;
 };
 
 NegotiatedCapabilities receiverCapabilities()
@@ -89,6 +111,15 @@ const TransferOperationResult &operation(const QSignalSpy &spy, qsizetype index)
   return *result;
 }
 
+TrustedDevice trustedDevice(const DeviceId &id)
+{
+  return {
+      .deviceId = id,
+      .platform = QStringLiteral("windows"),
+      .fingerprintSha256 = QByteArray(kSha256FingerprintBytes, '\x44'),
+  };
+}
+
 } // namespace
 
 class IncomingTransferRuntimeTests final : public QObject
@@ -97,6 +128,9 @@ class IncomingTransferRuntimeTests final : public QObject
 
 private Q_SLOTS:
   void validatesAndPublishesIncomingOffer();
+  void publishesAutoAcceptEligibilityOnlyForTrustedRecord();
+  void rejectsTrustedOfferAfterTrustIsRevokedBeforePreflight();
+  void rejectsTrustedOfferRevokedDuringPreflight();
   void acceptsAfterWorkerFileSafetyPreflight();
   void rejectsUnsafeRootAndUntrustedAutomaticAcceptance();
   void rejectsAndPublishesExactlyOneTypedResultPerIntent();
@@ -136,6 +170,79 @@ void IncomingTransferRuntimeTests::validatesAndPublishesIncomingOffer()
   QVERIFY(published->peerTrusted);
   QVERIFY(!published->mayAutoAccept);
   QVERIFY(!runtime.receiveOffer(peer, QStringLiteral("Duplicate"), true, receiverCapabilities(), incoming));
+}
+
+void IncomingTransferRuntimeTests::publishesAutoAcceptEligibilityOnlyForTrustedRecord()
+{
+  FakeFileSafety safety;
+  QThreadPool pool;
+  for (const auto &[trusted, recordAllowsAutoAccept, expected] :
+       {std::tuple{true, true, true}, std::tuple{true, false, false}, std::tuple{false, true, false}}) {
+    IncomingTransferRuntime runtime(safety, pool);
+    std::optional<IncomingOffer> published;
+    connect(&runtime, &IncomingTransferRuntime::incomingOffer, this, [&](const IncomingOffer &offer) {
+      published = offer;
+    });
+    QString diagnostic;
+    QVERIFY2(
+        runtime.receiveOffer(
+            DeviceId::generate(), QStringLiteral("Peer"), trusted, recordAllowsAutoAccept,
+            receiverCapabilities(), offer(), &diagnostic
+        ),
+        qPrintable(diagnostic)
+    );
+    QVERIFY(published.has_value());
+    QCOMPARE(published->mayAutoAccept, expected);
+  }
+}
+
+void IncomingTransferRuntimeTests::rejectsTrustedOfferAfterTrustIsRevokedBeforePreflight()
+{
+  FakeFileSafety safety;
+  QThreadPool pool;
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  TrustedDeviceStore trust(temporary.filePath(QStringLiteral("trusted.json")));
+  const auto peer = DeviceId::generate();
+  QVERIFY(trust.upsert(trustedDevice(peer)));
+  IncomingTransferRuntime runtime(safety, pool, [&trust](const DeviceId &id) {
+    const auto device = trust.find(id);
+    return device.has_value() && !device->revoked;
+  });
+  const auto incoming = offer();
+  QVERIFY(runtime.receiveOffer(peer, QStringLiteral("Peer"), true, receiverCapabilities(), incoming));
+  QVERIFY(trust.revoke(peer));
+  QSignalSpy operations(&runtime, &IncomingTransferRuntime::transferOperationFinished);
+  runtime.accept(incoming.transferId, {.destinationRoot = QDir::tempPath()});
+  QCOMPARE(operations.count(), 1);
+  QCOMPARE(operation(operations, 0).outcome, TransferOperationOutcome::Rejected);
+  QCOMPARE(operation(operations, 0).error, TransferOperationError::InvalidState);
+  QVERIFY(safety.verifiedRoot.isEmpty());
+}
+
+void IncomingTransferRuntimeTests::rejectsTrustedOfferRevokedDuringPreflight()
+{
+  BlockingFileSafety safety;
+  QThreadPool pool;
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  TrustedDeviceStore trust(temporary.filePath(QStringLiteral("trusted.json")));
+  const auto peer = DeviceId::generate();
+  QVERIFY(trust.upsert(trustedDevice(peer)));
+  IncomingTransferRuntime runtime(safety, pool, [&trust](const DeviceId &id) {
+    const auto device = trust.find(id);
+    return device.has_value() && !device->revoked;
+  });
+  const auto incoming = offer();
+  QVERIFY(runtime.receiveOffer(peer, QStringLiteral("Peer"), true, receiverCapabilities(), incoming));
+  QSignalSpy operations(&runtime, &IncomingTransferRuntime::transferOperationFinished);
+  runtime.accept(incoming.transferId, {.destinationRoot = QDir::tempPath()});
+  QTRY_VERIFY_WITH_TIMEOUT(safety.preflightEntered.available() == 1, 3'000);
+  QVERIFY(trust.revoke(peer));
+  safety.continuePreflight.release();
+  QTRY_COMPARE_WITH_TIMEOUT(operations.count(), 1, 3'000);
+  QCOMPARE(operation(operations, 0).outcome, TransferOperationOutcome::Rejected);
+  QCOMPARE(operation(operations, 0).error, TransferOperationError::InvalidState);
 }
 
 void IncomingTransferRuntimeTests::acceptsAfterWorkerFileSafetyPreflight()

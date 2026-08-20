@@ -276,7 +276,14 @@ FileTransferRuntime::FileTransferRuntime(
   m_workerPool->setExpiryTimeout(30'000);
   m_fileSafety = createPlatformFileSafety();
   if (m_fileSafety != nullptr) {
-    m_incoming = std::make_unique<IncomingTransferRuntime>(*m_fileSafety, *m_workerPool, this);
+    m_incoming = std::make_unique<IncomingTransferRuntime>(
+        *m_fileSafety, *m_workerPool,
+        [this](const DeviceId &deviceId) {
+          const auto trusted = m_trustedDevices.find(deviceId);
+          return trusted.has_value() && !trusted->revoked;
+        },
+        this
+    );
   }
   auto *incoming = m_incoming.get();
   if (incoming != nullptr) {
@@ -1194,6 +1201,8 @@ void FileTransferRuntime::routeTransferFrame(const DeviceId &peerDeviceId, const
     const auto capabilities = negotiatedCapabilities(peerDeviceId);
     const auto peer = m_discoveryRuntime.registry().snapshot(peerDeviceId);
     const auto trusted = m_trustedDevices.find(peerDeviceId);
+    const bool peerTrusted = trusted.has_value() && !trusted->revoked;
+    const bool peerAllowsAutoAccept = peerTrusted && trusted->autoAcceptFiles;
     QString diagnostic;
     if (offer == nullptr) {
       Q_EMIT errorOccurred(
@@ -1209,7 +1218,7 @@ void FileTransferRuntime::routeTransferFrame(const DeviceId &peerDeviceId, const
             peer.has_value()
                 ? peer->displayName
                 : (trusted.has_value() ? trusted->alias : QStringLiteral("Trusted peer")),
-            trusted.has_value() && !trusted->revoked, *capabilities, *offer, &diagnostic
+            peerTrusted, peerAllowsAutoAccept, *capabilities, *offer, &diagnostic
         )) {
       Q_EMIT errorOccurred(
           FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
