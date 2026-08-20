@@ -175,13 +175,15 @@ std::optional<TransferHistoryRecord> TransferHistoryRuntime::recordForSnapshot(c
       .finishedUtc = snapshot.finishedUtc,
       .status = status,
       .errorCode = status == HistoryStatus::Failed ? snapshot.errorCode : TransferErrorCode::None,
-      .completedRelativePath =
-          status == HistoryStatus::Completed && snapshot.direction == TransferDirection::Receiving
-              ? snapshot.currentRelativeDisplayPath
-              : QString{},
+      .completedRelativePath = status == HistoryStatus::Completed && snapshot.direction == TransferDirection::Receiving &&
+                                       snapshot.currentRelativeDisplayPath != QStringLiteral(".")
+                                   ? snapshot.currentRelativeDisplayPath
+                                   : QString{},
       .topLevelTargetRelativePath =
           status == HistoryStatus::Completed && snapshot.direction == TransferDirection::Receiving
-              ? snapshot.currentRelativeDisplayPath.section(u'/', 0, 0)
+              ? snapshot.currentRelativeDisplayPath == QStringLiteral(".")
+                    ? QStringLiteral(".")
+                    : snapshot.currentRelativeDisplayPath.section(u'/', 0, 0)
               : QString{},
   };
 }

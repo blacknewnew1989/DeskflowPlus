@@ -484,6 +484,9 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
           -> std::optional<deskflow::relaydesk::ResolvedTransferCompletion> {
         const QString relativePath = record.fileCount == 1 ? record.completedRelativePath
                                                            : record.topLevelTargetRelativePath;
+        if (relativePath == QStringLiteral(".")) {
+          return deskflow::relaydesk::ResolvedTransferCompletion{receiveRoot, receiveRoot};
+        }
         QString completedPath;
         const auto joined = ::relaydesk::transfer::PathPolicy::joinLexicallyUnderRoot(
             receiveRoot, relativePath, completedPath

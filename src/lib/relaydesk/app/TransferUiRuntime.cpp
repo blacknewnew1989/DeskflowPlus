@@ -67,8 +67,15 @@ TransferUiRuntime::TransferUiRuntime(
   connect(&transfers, &model::TransferCenterModel::resumeRequested, &service, &IFileTransferService::resume);
   connect(&transfers, &model::TransferCenterModel::cancelRequested, &service, &IFileTransferService::cancel);
   connect(&transfers, &model::TransferCenterModel::retryRequested, &service, &IFileTransferService::retry);
+  connect(&transfers, &model::TransferCenterModel::historyRetryRequested, &service, &IFileTransferService::retry);
   connect(
-      &transfers, &model::TransferCenterModel::historyRetryRequested, &service, &IFileTransferService::retry
+      &service, &IFileTransferService::transferOperationFinished, &transfers,
+      [&transfers](const ::relaydesk::transfer::TransferOperationResult &result) {
+        using namespace ::relaydesk::transfer;
+        if (result.operation == TransferOperation::Retry && result.outcome == TransferOperationOutcome::Rejected) {
+          transfers.setHistoryRetryAvailable(result.transferId, true);
+        }
+      }
   );
   connect(
       &service, &IFileTransferService::incomingOffer, &incomingOffers,

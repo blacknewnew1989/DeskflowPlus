@@ -541,9 +541,12 @@ bool TransferCenterModel::requestRetry(const TransferId &transferId)
     return false;
 
   const auto &entry = m_entries.at(row);
-  if (entry.history.has_value())
+  if (entry.history.has_value()) {
+    m_historyRetryAvailable.remove(transferId);
+    const auto changed = index(row, 0);
+    Q_EMIT dataChanged(changed, changed, {CanRetryRole});
     Q_EMIT historyRetryRequested(transferId);
-  else
+  } else
     Q_EMIT retryRequested(transferId);
   return true;
 }
