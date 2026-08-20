@@ -24,6 +24,7 @@
     <message><source>devices.revoke_trust.confirmation</source><translation>Удалить доверие к %1? Файловое соединение будет закрыто, а автоподключение остановлено.</translation></message>
     <message><source>devices.action.more</source><translation>Ещё</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Расставить автоматически</translation></message>
+    <message><source>devices.action.configure_input</source><translation>Расположить ввод</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Сбросить расположение</translation></message>
     <message><source>devices.drop.send_here</source><translation>Перетащите сюда файлы для отправки</translation></message>
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n объект</numerusform><numerusform>%n объекта</numerusform><numerusform>%n объектов</numerusform></translation></message>

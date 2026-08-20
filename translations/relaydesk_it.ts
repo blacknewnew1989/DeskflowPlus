@@ -24,6 +24,7 @@
     <message><source>devices.revoke_trust.confirmation</source><translation>Rimuovere l'attendibilità di %1? La connessione per i file verrà chiusa e la riconnessione automatica verrà interrotta.</translation></message>
     <message><source>devices.action.more</source><translation>Altro</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Disponi automaticamente</translation></message>
+    <message><source>devices.action.configure_input</source><translation>Disponi input</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Ripristina disposizione</translation></message>
     <message><source>devices.drop.send_here</source><translation>Trascina qui i file da inviare</translation></message>
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n elemento</numerusform><numerusform>%n elementi</numerusform></translation></message>

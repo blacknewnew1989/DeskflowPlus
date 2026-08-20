@@ -27,6 +27,7 @@
 #include "gui/Messages.h"
 #include "gui/TlsUtility.h"
 #include "gui/config/RelayDeskInputLayout.h"
+#include "gui/config/RelayDeskInputTarget.h"
 #include "gui/core/CoreProcess.h"
 #include "gui/ipc/DaemonIpcClient.h"
 #include "gui/widgets/LogDock.h"
@@ -373,6 +374,15 @@ void MainWindow::setupRelayDeskDiscovery()
       }
   );
   connect(
+      m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::inputLayoutRequested, this,
+      [this](const deskflow::relaydesk::DeviceId &peerDeviceId) {
+        // This does not change the selected role. In client mode it refreshes only RelayDesk's managed target;
+        // in server mode the existing ScreenSetupView provides the drag-and-drop placement surface.
+        syncRelayDeskInputLayout(peerDeviceId);
+        if (m_coreProcess.mode() == CoreMode::Server) showConfigureServer({});
+      }
+  );
+  connect(
       m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::manualAddressesSaveRequested, this,
       [this](
           QList<deskflow::relaydesk::ManualAddress> addresses,
@@ -410,13 +420,44 @@ void MainWindow::setupRelayDeskDiscovery()
 
 void MainWindow::syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &peerDeviceId)
 {
-  if (m_relayDeskDeviceModel == nullptr) {
+  if (m_relayDeskDeviceModel == nullptr || m_relayDeskDiscovery == nullptr) {
     return;
   }
   const auto peer = m_relayDeskDeviceModel->snapshot(peerDeviceId);
   if (!peer.has_value()) {
     return;
   }
+
+  if (m_coreProcess.mode() == CoreMode::Client) {
+    const auto endpoint = m_relayDeskDiscovery->registry().deviceInfo(peerDeviceId);
+    if (!endpoint.has_value()) return;
+
+    QSettings settings(Settings::settingsFile(), QSettings::IniFormat);
+    deskflow::gui::RelayDeskInputTarget target;
+    const auto result = deskflow::gui::syncRelayDeskClientTarget(
+        settings, *peer, *endpoint, Settings::value(Settings::Client::RemoteHost).toString(),
+        static_cast<quint16>(Settings::value(Settings::Core::Port).toUInt()), &target
+    );
+    if (result != deskflow::gui::RelayDeskInputTargetResult::Updated) return;
+
+    settings.sync();
+    if (settings.status() != QSettings::NoError) {
+      qWarning().noquote() << "RelayDesk could not persist the managed client target";
+      return;
+    }
+    Settings::setValue(Settings::Client::RemoteHost, target.host);
+    Settings::setValue(Settings::Core::Port, target.port);
+    Settings::save();
+    m_coreProcess.setAddress(target.host);
+    const QSignalBlocker blocker(ui->lineHostname);
+    ui->lineHostname->setText(target.host);
+    toggleCanRunCore(true);
+    qInfo().noquote() << "RelayDesk selected trusted input peer for client mode:" << target.host << target.port;
+    if (m_coreProcess.isStarted()) m_coreProcess.restart();
+    return;
+  }
+
+  if (m_coreProcess.mode() != CoreMode::Server) return;
 
   using deskflow::gui::RelayDeskInputLayoutResult;
   const auto result = deskflow::gui::syncRelayDeskInputScreen(m_serverConfig, *peer);
@@ -1827,8 +1868,11 @@ void MainWindow::showConfigureServer(const QString &message)
 {
   ServerConfigDialog dialog(this, serverConfig());
   dialog.message(message);
-  if ((dialog.exec() == QDialog::Accepted) && m_coreProcess.isStarted()) {
-    m_coreProcess.restart();
+  if (dialog.exec() == QDialog::Accepted) {
+    // ScreenSetupView updates the dialog working copy. Commit here so a drag result is durable before restart.
+    m_serverConfig.commit();
+    Settings::save();
+    if (m_coreProcess.isStarted()) m_coreProcess.restart();
   }
 }
 

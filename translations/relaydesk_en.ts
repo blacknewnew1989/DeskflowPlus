@@ -24,6 +24,7 @@
     <message><source>devices.revoke_trust.confirmation</source><translation>Remove trust for %1? Its file connection will close and automatic reconnect will stop.</translation></message>
     <message><source>devices.action.more</source><translation>More</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Auto arrange</translation></message>
+    <message><source>devices.action.configure_input</source><translation>Arrange input</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Reset layout</translation></message>
     <message><source>devices.drop.send_here</source><translation>Drop files here to send</translation></message>
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n item</numerusform><numerusform>%n items</numerusform></translation></message>

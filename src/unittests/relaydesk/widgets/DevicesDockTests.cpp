@@ -119,6 +119,7 @@ private Q_SLOTS:
   void rendersEmptyAndPairableDeviceStates();
   void keepsLocalDeviceInFooterOnly();
   void emitsTypedPairingIntent();
+  void emitsInputLayoutIntentForTrustedInputPeer();
   void emitsTrustRevocationIntentForTrustedDevice();
   void rejectsTrustRevocationIntentForUntrustedDevice();
   void activatingCardRunsItsVisiblePrimaryAction();
@@ -465,6 +466,30 @@ void DevicesDockTests::emitsTypedPairingIntent()
   QVERIFY(storedPeer.has_value());
   QCOMPARE(storedPeer->id, peer.id);
   QCOMPARE(storedPeer->displayName, peer.displayName);
+}
+
+void DevicesDockTests::emitsInputLayoutIntentForTrustedInputPeer()
+{
+  qRegisterMetaType<DeviceId>();
+  Fixture fixture;
+  const auto peer = peerSnapshot(DevicePresence::Online, true);
+  fixture.devices.upsertRemoteDevice(peer);
+  fixture.dock.resize(520, 380);
+  fixture.dock.show();
+
+  auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *configure = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskConfigureInputButton"));
+  QVERIFY(list != nullptr);
+  QVERIFY(configure != nullptr);
+  list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
+  QTRY_VERIFY(configure->isVisible());
+  QVERIFY(configure->isEnabled());
+  QCOMPARE(configure->accessibleName(), QStringLiteral("Arrange input"));
+
+  QSignalSpy requested(&fixture.dock, &DevicesDock::inputLayoutRequested);
+  QTest::keyClick(configure, Qt::Key_Space);
+  QCOMPARE(requested.count(), 1);
+  QCOMPARE(*static_cast<const DeviceId *>(requested.takeFirst().at(0).constData()), peer.id);
 }
 
 void DevicesDockTests::emitsTrustRevocationIntentForTrustedDevice()

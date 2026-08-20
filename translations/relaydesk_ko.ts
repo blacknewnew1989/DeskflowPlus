@@ -24,6 +24,7 @@
     <message><source>devices.revoke_trust.confirmation</source><translation>%1의 신뢰를 해제할까요? 파일 연결이 닫히고 자동 재연결이 중지됩니다.</translation></message>
     <message><source>devices.action.more</source><translation>더 보기</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>자동 정렬</translation></message>
+    <message><source>devices.action.configure_input</source><translation>입력 배치</translation></message>
     <message><source>devices.action.reset_layout</source><translation>배치 초기화</translation></message>
     <message><source>devices.drop.send_here</source><translation>보낼 파일을 여기에 놓으세요</translation></message>
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>항목 %n개</numerusform></translation></message>

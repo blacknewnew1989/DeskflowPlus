@@ -42,6 +42,8 @@ add_library(${target} STATIC
   config/IServerConfig.h
   config/RelayDeskInputLayout.cpp
   config/RelayDeskInputLayout.h
+  config/RelayDeskInputTarget.cpp
+  config/RelayDeskInputTarget.h
   config/Screen.cpp
   config/Screen.h
   config/ScreenConfig.cpp
