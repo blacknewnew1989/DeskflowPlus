@@ -6,6 +6,7 @@
 
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
 
+#include "relaydesk/discovery/AddressCandidateProvider.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 
 #include <QDateTime>
@@ -28,12 +29,14 @@ DeviceDiscoveryRuntime::DeviceDiscoveryRuntime(
     DeviceInfo localDevice, model::DeviceHomeModel &deviceModel, DeviceDiscoveryRuntimeOptions options,
     QObject *parent
 )
-    : QObject(parent), m_deviceModel(deviceModel),
+    : QObject(parent), m_deviceModel(deviceModel), m_manualAddresses(std::move(options.manualAddresses)),
+      m_manualProbePort(options.manualProbePort),
       m_registry(new DiscoveryRegistry(localDevice.deviceId, options.registryTtl, {}, this)),
       m_service(new DiscoveryService(
           localDevice, options.serviceSettings, std::move(options.interfaceProvider),
-          std::move(options.datagramSender), this
-      ))
+       std::move(options.datagramSender), this
+      )),
+      m_manualCandidates(new AddressCandidateProvider(std::move(options.manualHostResolver), this))
 {
   m_deviceModel.setLocalDevice({
       .id = localDevice.deviceId,
@@ -60,6 +63,20 @@ DeviceDiscoveryRuntime::DeviceDiscoveryRuntime(
       &model::DeviceHomeModel::upsertRemoteDevice
   );
   connect(m_service, &DiscoveryService::errorOccurred, this, &DeviceDiscoveryRuntime::errorOccurred);
+  connect(
+      m_manualCandidates, &AddressCandidateProvider::candidatesResolved, this,
+      [this](const AddressCandidateResult &result) {
+        if (!isRunning()) {
+          return;
+        }
+        const auto probePort = m_manualProbePort == 0 ? m_service->destinationPort() : m_manualProbePort;
+        for (const auto &candidate : result.candidates) {
+          if (candidate.source == AddressCandidateSource::Manual) {
+            static_cast<void>(m_service->probePeer(candidate.address, probePort));
+          }
+        }
+      }
+  );
 }
 
 DeviceDiscoveryRuntime::~DeviceDiscoveryRuntime()
@@ -75,7 +92,11 @@ bool DeviceDiscoveryRuntime::start(QString *diagnostic)
   if (!onOwningThread(diagnostic)) {
     return false;
   }
-  return m_service->start(diagnostic);
+  const auto started = m_service->start(diagnostic);
+  if (started) {
+    refreshManualDiscovery();
+  }
+  return started;
 }
 
 void DeviceDiscoveryRuntime::stop()
@@ -91,6 +112,12 @@ bool DeviceDiscoveryRuntime::setFileEndpoint(FileEndpointAnnouncement announceme
     return false;
   }
   return m_service->setFileEndpoint(announcement, diagnostic);
+}
+
+void DeviceDiscoveryRuntime::setManualAddresses(QList<ManualAddress> addresses)
+{
+  m_manualAddresses = std::move(addresses);
+  refreshManualDiscovery();
 }
 
 bool DeviceDiscoveryRuntime::isRunning() const
@@ -116,6 +143,18 @@ bool DeviceDiscoveryRuntime::onOwningThread(QString *diagnostic) const
   }
   setDiagnostic(diagnostic, QStringLiteral("Discovery runtime must start on the device model's owning thread"));
   return false;
+}
+
+void DeviceDiscoveryRuntime::refreshManualDiscovery()
+{
+  if (!isRunning()) {
+    return;
+  }
+  m_manualCandidates->resolveCandidates({
+      .settings = {.manualAddresses = m_manualAddresses},
+      .inputPort = kDefaultManualInputPort,
+      .filePort = kDefaultManualFilePort,
+  });
 }
 
 } // namespace deskflow::relaydesk

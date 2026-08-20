@@ -135,6 +135,16 @@ QByteArray DiscoveryCodec::encodeAdvertisement(const DeviceInfo &device, QString
   return encoded;
 }
 
+QByteArray DiscoveryCodec::encodeProbe()
+{
+  return QCborValue(QCborMap{
+      {key(ProtocolKey), QCborValue(QString::fromLatin1(kDiscoveryProtocol))},
+      {key(VersionKey), QCborValue(kDiscoveryProtocolVersion)},
+      {key(MessageTypeKey), QCborValue(static_cast<qint64>(DiscoveryMessageType::Probe))},
+      {key(PayloadKey), QCborValue(QByteArray{})},
+  }).toCbor();
+}
+
 DiscoveryDecodeResult DiscoveryCodec::decode(QByteArrayView datagram)
 {
   if (datagram.isEmpty()) {
@@ -168,8 +178,11 @@ DiscoveryDecodeResult DiscoveryCodec::decode(QByteArrayView datagram)
   }
 
   const auto messageType = valueFor(envelope, MessageTypeKey);
-  if (!messageType.isInteger() ||
-      messageType.toInteger() != static_cast<qint64>(DiscoveryMessageType::Advertisement)) {
+  if (!messageType.isInteger()) {
+    return failure(DiscoveryCodecError::UnknownMessageType, QStringLiteral("Unknown discovery message type"));
+  }
+  const auto type = static_cast<DiscoveryMessageType>(messageType.toInteger());
+  if (type != DiscoveryMessageType::Advertisement && type != DiscoveryMessageType::Probe) {
     return failure(DiscoveryCodecError::UnknownMessageType, QStringLiteral("Unknown discovery message type"));
   }
 
@@ -178,8 +191,17 @@ DiscoveryDecodeResult DiscoveryCodec::decode(QByteArrayView datagram)
     return failure(DiscoveryCodecError::InvalidEnvelope, QStringLiteral("Discovery payload is not a byte string"));
   }
   const auto payload = encodedPayload.toByteArray();
-  if (payload.isEmpty() || payload.size() > kMaximumDiscoveryPayloadBytes) {
+  if (payload.size() > kMaximumDiscoveryPayloadBytes ||
+      (type == DiscoveryMessageType::Advertisement && payload.isEmpty()) ||
+      (type == DiscoveryMessageType::Probe && !payload.isEmpty())) {
     return failure(DiscoveryCodecError::PayloadTooLarge, QStringLiteral("Discovery payload is empty or too large"));
+  }
+  if (type == DiscoveryMessageType::Probe) {
+    return {
+        .datagram = DiscoveryDatagram{.type = DiscoveryMessageType::Probe},
+        .error = DiscoveryCodecError::None,
+        .diagnostic = {},
+    };
   }
 
   QCborParserError payloadParserError;

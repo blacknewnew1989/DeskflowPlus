@@ -74,6 +74,9 @@ public:
   [[nodiscard]] bool start(QString *errorMessage = nullptr);
   void stop();
   [[nodiscard]] bool announceNow(QString *errorMessage = nullptr);
+  [[nodiscard]] bool probePeer(
+      const QHostAddress &destination, quint16 port, QString *errorMessage = nullptr
+  );
   [[nodiscard]] qint64 sendPeerDatagram(
       const QByteArray &datagram, const QHostAddress &destination, quint16 port,
       QString *errorMessage = nullptr

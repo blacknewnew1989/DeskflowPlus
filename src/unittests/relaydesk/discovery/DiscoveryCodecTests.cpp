@@ -50,6 +50,7 @@ class DiscoveryCodecTests : public QObject
 
 private Q_SLOTS:
   void advertisementRoundTripsDeviceInfo();
+  void probeRoundTripsWithoutDeviceInfo();
   void invalidCborIsRejected_data();
   void invalidCborIsRejected();
   void protocolVersionAndMessageTypeAreStrict_data();
@@ -72,7 +73,16 @@ void DiscoveryCodecTests::advertisementRoundTripsDeviceInfo()
   QVERIFY2(decoded.isSuccess(), qPrintable(decoded.diagnostic));
   QCOMPARE(decoded.error, DiscoveryCodecError::None);
   QCOMPARE(decoded.datagram->type, DiscoveryMessageType::Advertisement);
-  QCOMPARE(decoded.datagram->device, device);
+  QVERIFY(decoded.datagram->device.has_value());
+  QCOMPARE(*decoded.datagram->device, device);
+}
+
+void DiscoveryCodecTests::probeRoundTripsWithoutDeviceInfo()
+{
+  const auto decoded = DiscoveryCodec::decode(DiscoveryCodec::encodeProbe());
+  QVERIFY2(decoded.isSuccess(), qPrintable(decoded.diagnostic));
+  QCOMPARE(decoded.datagram->type, DiscoveryMessageType::Probe);
+  QVERIFY(!decoded.datagram->device.has_value());
 }
 
 void DiscoveryCodecTests::invalidCborIsRejected_data()
