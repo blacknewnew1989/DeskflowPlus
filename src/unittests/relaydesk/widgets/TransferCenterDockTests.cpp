@@ -60,6 +60,8 @@ historyRecord(const QString &id, HistoryStatus status, quint64 fileCount = 1, in
       .finishedUtc = started.addSecs(75),
       .status = status,
       .errorCode = status == HistoryStatus::Failed ? TransferErrorCode::InternalError : TransferErrorCode::None,
+      .completedRelativePath = status == HistoryStatus::Completed ? QStringLiteral("Archive/report.txt") : QString{},
+      .topLevelTargetRelativePath = status == HistoryStatus::Completed ? QStringLiteral("Archive") : QString{},
   };
 }
 
@@ -132,8 +134,9 @@ void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents(
   TransferCenterModel model;
   const auto completed =
       historyRecord(QStringLiteral("11111111-1111-4111-8111-111111111111"), HistoryStatus::Completed);
-  const auto failed =
+  auto failed =
       historyRecord(QStringLiteral("22222222-2222-4222-8222-222222222222"), HistoryStatus::Failed, 3, 100);
+  failed.direction = HistoryDirection::Sending;
   model.setHistoryRecords({completed, failed});
 
   TransferCenterDock dock(model);
@@ -212,6 +215,7 @@ void TransferCenterDockTests::presentsHistoryDetailsAndEmitsSafeKeyboardIntents(
   QTest::keyClick(completedDialog, Qt::Key_Escape);
   QTRY_VERIFY(completedGuard.isNull());
 
+  model.setHistoryRetryAvailable(failed.transferId, true);
   list->setCurrentIndex(model.index(model.indexOf(failed.transferId), 0));
   QTRY_VERIFY(retry->isVisible());
   QVERIFY(!details->isVisible());
