@@ -72,7 +72,14 @@ DeviceDiscoveryRuntime::DeviceDiscoveryRuntime(
         const auto probePort = m_manualProbePort == 0 ? m_service->destinationPort() : m_manualProbePort;
         for (const auto &candidate : result.candidates) {
           if (candidate.source == AddressCandidateSource::Manual) {
-            static_cast<void>(m_service->probePeer(candidate.address, probePort));
+            QString diagnostic;
+            if (!m_service->probePeer(candidate.address, probePort, &diagnostic)) {
+              Q_EMIT errorOccurred(
+                  DiscoveryServiceError::SendFailed,
+                  QStringLiteral("Manual discovery probe for %1 failed: %2")
+                      .arg(candidate.originHost.isEmpty() ? candidate.address.toString() : candidate.originHost, diagnostic)
+              );
+            }
           }
         }
       }

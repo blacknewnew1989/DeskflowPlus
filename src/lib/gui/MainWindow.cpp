@@ -313,10 +313,16 @@ void MainWindow::setupRelayDeskDiscovery()
       .certificateFingerprintSha256 = m_fingerprint.data,
   };
 
-  m_relayDeskDiscovery =
-      new deskflow::relaydesk::DeviceDiscoveryRuntime(localDevice, *m_relayDeskDeviceModel, {}, this);
+  const auto savedDiscoverySettings =
+      discoverySettings.ok ? discoverySettings.settings : deskflow::relaydesk::DiscoverySettings{};
+  deskflow::relaydesk::DeviceDiscoveryRuntimeOptions discoveryOptions;
+  discoveryOptions.serviceSettings.broadcastsEnabled = savedDiscoverySettings.enabled;
+  discoveryOptions.manualAddresses = savedDiscoverySettings.manualAddresses;
+  m_relayDeskDiscovery = new deskflow::relaydesk::DeviceDiscoveryRuntime(
+      localDevice, *m_relayDeskDeviceModel, std::move(discoveryOptions), this
+  );
   m_relayDeskDiscovery->setManualAddresses(
-      discoverySettings.ok ? discoverySettings.settings.manualAddresses : QList<deskflow::relaydesk::ManualAddress>{}
+      savedDiscoverySettings.manualAddresses
   );
   connect(
       m_relayDeskDiscovery, &deskflow::relaydesk::DeviceDiscoveryRuntime::errorOccurred, this,
@@ -405,8 +411,8 @@ void MainWindow::setupRelayDeskDiscovery()
       }
   );
 
-  const auto enabled = discoverySettings.ok ? discoverySettings.settings.enabled : true;
-  if (enabled && !m_relayDeskDiscovery->start(&diagnostic)) {
+  if ((savedDiscoverySettings.enabled || !savedDiscoverySettings.manualAddresses.isEmpty()) &&
+      !m_relayDeskDiscovery->start(&diagnostic)) {
     qWarning().noquote() << "RelayDesk discovery could not start:" << diagnostic;
   }
   setupRelayDeskTransfer(*deviceId);

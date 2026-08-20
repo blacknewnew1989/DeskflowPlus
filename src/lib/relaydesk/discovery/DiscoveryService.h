@@ -43,6 +43,7 @@ struct DiscoveryServiceSettings
 {
   quint16 port = kDefaultDiscoveryPort;
   int announcementIntervalMs = kDefaultDiscoveryAnnouncementIntervalMs;
+  bool broadcastsEnabled = true;
 };
 
 enum class DiscoveryServiceError
