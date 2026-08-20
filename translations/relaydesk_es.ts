@@ -176,6 +176,7 @@
     <message><source>transfer.incoming.wants_to_send</source><translation>%1 quiere enviar</translation></message>
     <message><source>transfer.incoming.save_to</source><translation>Guardar en: %1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>Conflicto: cambiar nombre automáticamente</translation></message>
+    <message><source>transfer.incoming.ask</source><translation>Conflicto: preguntar si ya existe un archivo</translation></message>
     <message><source>transfer.incoming.always_accept</source><translation>Aceptar siempre archivos de este dispositivo</translation></message>
     <message><source>transfer.incoming.unknown_device</source><translation>Dispositivo desconocido</translation></message>
     <message><source>transfer.incoming.pair_first</source><translation>Empareja este dispositivo antes de recibir archivos</translation></message>

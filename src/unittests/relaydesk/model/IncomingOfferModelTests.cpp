@@ -64,6 +64,7 @@ private Q_SLOTS:
   void expiresOnceAndCanBeDismissed();
   void blocksUntrustedPeerAndMapsErrorsSafely();
   void settingsUpdateEmitsAndReevaluatesAvailability();
+  void preservesAskConflictPolicyOnAcceptance();
 };
 
 void IncomingOfferModelTests::presentsAndAcceptsValidatedOffer()
@@ -217,6 +218,20 @@ void IncomingOfferModelTests::settingsUpdateEmitsAndReevaluatesAvailability()
   QVERIFY(model.errorText().isEmpty());
   model.setSettings(settings());
   QCOMPARE(changed.count(), 1);
+}
+
+void IncomingOfferModelTests::preservesAskConflictPolicyOnAcceptance()
+{
+  auto askSettings = settings();
+  askSettings.defaultConflictPolicy = ConflictPolicy::Ask;
+  IncomingOfferModel model(askSettings);
+  QSignalSpy accepted(&model, &IncomingOfferModel::acceptRequested);
+
+  QVERIFY(model.receiveOffer(incomingOffer()));
+  QCOMPARE(model.conflictText(), QStringLiteral("Conflict: ask when a file already exists"));
+  QVERIFY(model.accept());
+  QCOMPARE(accepted.count(), 1);
+  QCOMPARE(accepted.constFirst().at(1).value<ReceiveOptions>().conflictPolicy, ConflictPolicy::Ask);
 }
 
 QTEST_MAIN(IncomingOfferModelTests)

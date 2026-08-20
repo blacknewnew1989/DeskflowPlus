@@ -176,6 +176,7 @@
     <message><source>transfer.incoming.wants_to_send</source><translation>%1 が送信しようとしています</translation></message>
     <message><source>transfer.incoming.save_to</source><translation>保存先: %1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>競合時: 自動的に名前を変更</translation></message>
+    <message><source>transfer.incoming.ask</source><translation>競合: 同名のファイルがある場合に確認</translation></message>
     <message><source>transfer.incoming.always_accept</source><translation>このデバイスからのファイルを常に受け入れる</translation></message>
     <message><source>transfer.incoming.unknown_device</source><translation>不明なデバイス</translation></message>
     <message><source>transfer.incoming.pair_first</source><translation>ファイルを受信する前にこのデバイスをペアリングしてください</translation></message>
