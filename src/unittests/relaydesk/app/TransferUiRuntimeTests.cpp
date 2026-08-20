@@ -99,6 +99,13 @@ TransferHistoryRecord historyRecord(
       .finishedUtc = kBaseUtc.addSecs(10),
       .status = status,
       .errorCode = status == HistoryStatus::Failed ? TransferErrorCode::SenderFailed : TransferErrorCode::None,
+      .completedRelativePath =
+          status == HistoryStatus::Completed && direction == HistoryDirection::Receiving
+              ? QStringLiteral("Archive/report.txt")
+              : QString{},
+      .topLevelTargetRelativePath =
+          status == HistoryStatus::Completed && direction == HistoryDirection::Receiving ? QStringLiteral("Archive")
+                                                                            : QString{},
   };
 }
 
@@ -274,6 +281,7 @@ void TransferUiRuntimeTests::composesTypedUiIntentsThroughOneServiceBoundary()
   Q_EMIT fixture.service.transferAdded(failed);
   QCOMPARE(inserted.count(), 3);
   fixture.transfers.setHistoryRecords({failedHistory});
+  fixture.transfers.setHistoryRetryAvailable(failedHistory.transferId, true);
   QVERIFY(fixture.transfers.requestPause(active.id));
   const TransferCancelOptions cancelOptions{
       .reason = TransferCancelReason::UserRequested,
@@ -408,7 +416,7 @@ void TransferUiRuntimeTests::rejectsUntrustedCompletionPathsBeforeCallingOpener(
   fixture.transfers.setHistoryRecords(
       {sending, outside, missing, invalidRoot, unresolved, openerFailure, directoryAsFile}
   );
-  QVERIFY(fixture.transfers.requestOpenFile(sending.transferId));
+  QVERIFY(!fixture.transfers.requestOpenFile(sending.transferId));
   QVERIFY(fixture.transfers.requestOpenFile(outside.transferId));
   QVERIFY(fixture.transfers.requestOpenFile(missing.transferId));
   QVERIFY(fixture.transfers.requestOpenFile(invalidRoot.transferId));
@@ -419,7 +427,6 @@ void TransferUiRuntimeTests::rejectsUntrustedCompletionPathsBeforeCallingOpener(
   QCOMPARE(openerCalls, 1);
   QCOMPARE(
       errors, QList<TransferUiRuntime::OpenError>({
-                  TransferUiRuntime::OpenError::NotCompletedReceive,
                   TransferUiRuntime::OpenError::CompletedPathOutsideReceiveRoot,
                   TransferUiRuntime::OpenError::CompletedPathMissing,
                   TransferUiRuntime::OpenError::InvalidReceiveRoot,

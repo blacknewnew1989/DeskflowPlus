@@ -108,6 +108,10 @@ void TransferHistoryRuntime::persistTerminal(const TransferSnapshot &snapshot)
     return;
   }
   m_persistedOrPending.insert(record->transferId);
+  m_transfers.setHistoryRetryAvailable(
+      record->transferId, snapshot.direction == TransferDirection::Sending && snapshot.state == TransferState::Failed &&
+                              snapshot.canRetry
+  );
   m_records.removeIf([&record](const auto &existing) { return existing.transferId == record->transferId; });
   m_records.prepend(*record);
   if (m_records.size() > 100) {
@@ -171,6 +175,14 @@ std::optional<TransferHistoryRecord> TransferHistoryRuntime::recordForSnapshot(c
       .finishedUtc = snapshot.finishedUtc,
       .status = status,
       .errorCode = status == HistoryStatus::Failed ? snapshot.errorCode : TransferErrorCode::None,
+      .completedRelativePath =
+          status == HistoryStatus::Completed && snapshot.direction == TransferDirection::Receiving
+              ? snapshot.currentRelativeDisplayPath
+              : QString{},
+      .topLevelTargetRelativePath =
+          status == HistoryStatus::Completed && snapshot.direction == TransferDirection::Receiving
+              ? snapshot.currentRelativeDisplayPath.section(u'/', 0, 0)
+              : QString{},
   };
 }
 

@@ -68,6 +68,8 @@ TransferHistoryRecord historyRecord(const QString &id, HistoryStatus status = Hi
       .finishedUtc = kBaseUtc.addSecs(-10),
       .status = status,
       .errorCode = status == HistoryStatus::Failed ? TransferErrorCode::SenderFailed : TransferErrorCode::None,
+      .completedRelativePath = status == HistoryStatus::Completed ? QStringLiteral("Archive/report.txt") : QString{},
+      .topLevelTargetRelativePath = status == HistoryStatus::Completed ? QStringLiteral("Archive") : QString{},
   };
 }
 
@@ -256,6 +258,9 @@ void TransferCenterModelTests::emitsValidatedHistoryOpenAndRetryIntents()
   QVERIFY(model.data(failedIndex, TransferCenterModel::HasHistoryDetailsRole).toBool());
   QVERIFY(!model.data(failedIndex, TransferCenterModel::CanOpenFolderRole).toBool());
   QVERIFY(!model.data(failedIndex, TransferCenterModel::CanOpenFileRole).toBool());
+  QVERIFY(!model.data(failedIndex, TransferCenterModel::CanRetryRole).toBool());
+  QVERIFY(!model.requestRetry(failed.transferId));
+  model.setHistoryRetryAvailable(failed.transferId, true);
   QVERIFY(model.data(failedIndex, TransferCenterModel::CanRetryRole).toBool());
 
   std::optional<TransferHistoryRecord> folderIntent;

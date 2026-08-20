@@ -198,6 +198,7 @@ void TransferRuntimeCompositionTests::loadsAndPersistsHistoryOffTheUiContract()
       .direction = TransferDirection::Receiving,
       .state = TransferState::Completed,
       .progress = {.completedBytes = 1024, .totalBytes = 1024, .completedFiles = 1, .totalFiles = 1},
+      .currentRelativeDisplayPath = QStringLiteral("Project/report.txt"),
       .createdUtc = now.addSecs(-2),
       .finishedUtc = now,
   };
@@ -216,6 +217,8 @@ void TransferRuntimeCompositionTests::loadsAndPersistsHistoryOffTheUiContract()
   QVERIFY2(page.ok(), qPrintable(page.diagnostic));
   QCOMPARE(page.page.records.size(), 1);
   QCOMPARE(page.page.records.first().transferId, completed.id);
+  QCOMPARE(page.page.records.first().completedRelativePath, QStringLiteral("Project/report.txt"));
+  QCOMPARE(page.page.records.first().topLevelTargetRelativePath, QStringLiteral("Project"));
 }
 
 QTEST_MAIN(TransferRuntimeCompositionTests)
