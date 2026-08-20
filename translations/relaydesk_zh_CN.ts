@@ -24,6 +24,7 @@
     <message><source>devices.revoke_trust.confirmation</source><translation>要撤销对 %1 的信任吗？其文件连接将关闭，自动重连将停止。</translation></message>
     <message><source>devices.action.more</source><translation>更多</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>自动排列</translation></message>
+    <message><source>devices.action.configure_input</source><translation>配置输入布局</translation></message>
     <message><source>devices.action.reset_layout</source><translation>恢复默认布局</translation></message>
     <message><source>devices.drop.send_here</source><translation>把文件拖到这里发送</translation></message>
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n 个项目</numerusform></translation></message>

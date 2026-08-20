@@ -24,6 +24,7 @@
     <message><source>devices.revoke_trust.confirmation</source><translation>¿Quitar la confianza de %1? Se cerrará su conexión de archivos y se detendrá la reconexión automática.</translation></message>
     <message><source>devices.action.more</source><translation>Más</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Organizar automáticamente</translation></message>
+    <message><source>devices.action.configure_input</source><translation>Organizar entrada</translation></message>
     <message><source>devices.action.reset_layout</source><translation>Restablecer disposición</translation></message>
     <message><source>devices.drop.send_here</source><translation>Suelta aquí los archivos para enviarlos</translation></message>
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n elemento</numerusform><numerusform>%n elementos</numerusform></translation></message>

@@ -24,6 +24,7 @@
     <message><source>devices.revoke_trust.confirmation</source><translation>%1 の信頼を削除しますか? ファイル接続は閉じられ、自動再接続は停止します。</translation></message>
     <message><source>devices.action.more</source><translation>その他</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>自動配置</translation></message>
+    <message><source>devices.action.configure_input</source><translation>入力配置</translation></message>
     <message><source>devices.action.reset_layout</source><translation>配置をリセット</translation></message>
     <message><source>devices.drop.send_here</source><translation>送信するファイルをここにドロップ</translation></message>
     <message numerus="yes"><source>devices.drop.items</source><translation><numerusform>%n 個の項目</numerusform></translation></message>

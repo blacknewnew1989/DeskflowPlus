@@ -308,6 +308,9 @@ DevicesDock::DevicesDock(
   m_pairButton = new QPushButton(body);
   m_pairButton->setObjectName(QStringLiteral("relaydeskPairSelectedButton"));
   deviceActions->addWidget(m_pairButton);
+  m_configureInputButton = new QPushButton(body);
+  m_configureInputButton->setObjectName(QStringLiteral("relaydeskConfigureInputButton"));
+  deviceActions->addWidget(m_configureInputButton);
   m_manageManualAddressesButton = new QPushButton(body);
   m_manageManualAddressesButton->setObjectName(QStringLiteral("relaydeskManageManualAddressesButton"));
   deviceActions->addWidget(m_manageManualAddressesButton);
@@ -509,6 +512,12 @@ DevicesDock::DevicesDock(
   connect(m_deviceList->selectionModel(), &QItemSelectionModel::selectionChanged, this, &DevicesDock::updateSelection);
   connect(m_deviceList, &QListView::activated, this, &DevicesDock::activateDevice);
   connect(m_pairButton, &QPushButton::clicked, this, [this]() { requestPairing(m_deviceList->currentIndex()); });
+  connect(m_configureInputButton, &QPushButton::clicked, this, [this]() {
+    const auto index = m_deviceList->currentIndex();
+    if (!index.isValid()) return;
+    const auto deviceId = DeviceId::fromString(index.data(model::DeviceHomeModel::DeviceIdRole).toString());
+    if (deviceId.has_value()) Q_EMIT inputLayoutRequested(*deviceId);
+  });
   connect(m_manageManualAddressesButton, &QPushButton::clicked, this, &DevicesDock::manageManualAddresses);
   connect(m_revokeTrustAction, &QAction::triggered, this, [this]() {
     requestTrustRevocation(m_deviceList->currentIndex());
@@ -749,6 +758,8 @@ void DevicesDock::updateText()
   m_sendFolderButton->setAccessibleName(i18n::translate(Text::DevicesActionSendFolder));
   m_manageManualAddressesButton->setText(i18n::translate(Text::DevicesManualAddressManage));
   m_manageManualAddressesButton->setAccessibleName(i18n::translate(Text::DevicesManualAddressManage));
+  m_configureInputButton->setText(i18n::translate(Text::DevicesActionConfigureInput));
+  m_configureInputButton->setAccessibleName(i18n::translate(Text::DevicesActionConfigureInput));
   m_moreButton->setToolTip(i18n::translate(Text::DevicesActionMore));
   m_moreButton->setAccessibleName(i18n::translate(Text::DevicesActionMore));
   m_revokeTrustAction->setText(i18n::translate(Text::DevicesActionRevokeTrust));
@@ -792,6 +803,11 @@ void DevicesDock::updateSelection()
                      : i18n::translate(Text::PairingActionStart)
   );
   const auto sendable = index.isValid() && index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
+  const auto inputConfigurable = index.isValid() && index.data(model::DeviceHomeModel::IsTrustedRole).toBool() &&
+                               index.data(model::DeviceHomeModel::InputCapabilityRole).toBool() &&
+                               !index.data(model::DeviceHomeModel::IsLocalRole).toBool();
+  m_configureInputButton->setVisible(inputConfigurable);
+  m_configureInputButton->setEnabled(inputConfigurable);
   const auto revocable = index.isValid() && index.data(model::DeviceHomeModel::IsTrustedRole).toBool();
   m_revokeTrustAction->setVisible(revocable);
   m_revokeTrustAction->setEnabled(revocable);

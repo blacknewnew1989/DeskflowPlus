@@ -34,6 +34,7 @@ enum class Text
   DevicesRevokeTrustConfirmation,
   DevicesActionMore,
   DevicesActionAutoArrange,
+  DevicesActionConfigureInput,
   DevicesActionResetLayout,
   DevicesDropSendHere,
   DevicesDropItems,

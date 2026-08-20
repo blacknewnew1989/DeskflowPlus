@@ -14,3 +14,10 @@ create_test(
   SOURCE RelayDeskInputLayoutTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/gui"
 )
+
+create_test(
+  NAME RelayDeskInputTargetTests
+  DEPENDS gui
+  SOURCE RelayDeskInputTargetTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/gui"
+)

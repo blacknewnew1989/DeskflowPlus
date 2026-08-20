@@ -55,6 +55,8 @@ constexpr std::array<Entry, static_cast<std::size_t>(Text::Count)> kEntries{{
      "Remove trust for %1? Its file connection will close and automatic reconnect will stop."},
     {Text::DevicesActionMore, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.more"), "More"},
     {Text::DevicesActionAutoArrange, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.auto_arrange"), "Auto arrange"},
+    {Text::DevicesActionConfigureInput, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.configure_input"),
+     "Arrange input"},
     {Text::DevicesActionResetLayout, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.reset_layout"), "Reset layout"},
     {Text::DevicesDropSendHere, QT_TRANSLATE_NOOP("RelayDesk", "devices.drop.send_here"), "Drop files here to send"},
     {Text::DevicesDropItems, QT_TRANSLATE_N_NOOP("RelayDesk", "devices.drop.items"), "%n item", "%n items"},

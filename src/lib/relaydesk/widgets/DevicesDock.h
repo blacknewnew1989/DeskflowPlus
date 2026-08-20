@@ -72,6 +72,7 @@ Q_SIGNALS:
   void sendItemsRequested(DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options);
   void sendItemsRejected(QString message);
   void incomingOfferSettingsRequested();
+  void inputLayoutRequested(DeviceId peerDeviceId);
   void manualAddressesSaveRequested(QList<ManualAddress> addresses, ManualAddressesSaveReceipt receipt);
 
 protected:
@@ -122,6 +123,7 @@ private:
   QListView *m_deviceList = nullptr;
   QLabel *m_emptyLabel = nullptr;
   QPushButton *m_pairButton = nullptr;
+  QPushButton *m_configureInputButton = nullptr;
   QPushButton *m_manageManualAddressesButton = nullptr;
   QToolButton *m_moreButton = nullptr;
   QMenu *m_moreMenu = nullptr;
