@@ -48,6 +48,7 @@ private Q_SLOTS:
   void inspectsRealCurrentProcessListener();
   void skipsFirewallInspectionWhenNoListenersAreExpected();
   void excludesStoppedInputCorePortFromActiveFileListenerProbe();
+  void keepsCoreAndGuiListenerOwnersSeparate();
   void collectsOnlyNonZeroListeningPorts_data();
   void collectsOnlyNonZeroListeningPorts();
 };
@@ -293,6 +294,22 @@ void WindowsFirewallProbeTests::excludesStoppedInputCorePortFromActiveFileListen
       QStringLiteral("C:/RelayDesk/RelayDesk.exe"), 24800, true, 24801, 4242
   );
   QCOMPARE(activeInputRequest.expectedTcpPorts, QList<quint16>({24800, 24801}));
+}
+
+void WindowsFirewallProbeTests::keepsCoreAndGuiListenerOwnersSeparate()
+{
+  const auto request = WindowsFirewallProbe::requestForListeningServices(
+      QStringLiteral("C:/RelayDesk/deskflow-core.exe"), 24800, true, 9001,
+      QStringLiteral("C:/RelayDesk/deskflow.exe"), 24801, 4242
+  );
+
+  QCOMPARE(request.listeners.size(), 2);
+  QCOMPARE(request.listeners.at(0).executablePath, QStringLiteral("C:/RelayDesk/deskflow-core.exe"));
+  QCOMPARE(request.listeners.at(0).tcpPort, quint16{24800});
+  QCOMPARE(request.listeners.at(0).processId, quint32{9001});
+  QCOMPARE(request.listeners.at(1).executablePath, QStringLiteral("C:/RelayDesk/deskflow.exe"));
+  QCOMPARE(request.listeners.at(1).tcpPort, quint16{24801});
+  QCOMPARE(request.listeners.at(1).processId, quint32{4242});
 }
 
 void WindowsFirewallProbeTests::collectsOnlyNonZeroListeningPorts_data()

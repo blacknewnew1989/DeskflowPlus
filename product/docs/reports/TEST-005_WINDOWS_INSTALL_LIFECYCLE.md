@@ -9,7 +9,9 @@ CTest 98/98、主窗口/托盘定向回归、`product/tests` 26/26、`product/sc
 `product/working/script-tests-a624a9e40.log` 和
 `product/working/package-validation-a624a9e40-rerun.log`。
 
-当前候选 TEST-005 的 Windows 安装、修复、升级、卸载和残留验证为 `PASS`。本地 Release
+当前候选此前 TEST-005 的 Windows 安装、修复、升级、卸载和残留验证为 `PASS`。本次修复将
+两条规则分别绑定到实际的 core 与 GUI 入站拥有者，并在脚本中逐条断言；该变更尚未生成新 MSI，
+因此新版 TEST-005 为 `NOT_RUN`。本地 Release
 打包因缺少原生 Strawberry Perl 回退至精确标签 GitHub Actions，并由 hosted Windows runner
 完成；下列历史 `PASS` 仍只属于其原始候选，不与当前候选混用。
 
@@ -21,7 +23,7 @@ CTest 98/98、主窗口/托盘定向回归、`product/tests` 26/26、`product/sc
 | Workflow/run | `relaydesk-build.yml` / `32335399442` `SUCCESS` |
 | Windows job | `96323889159` `SUCCESS` |
 | Windows CTest | 98/98 PASS，28.75 s |
-| TEST-005 | 19/19 PASS；MSI 安装、修复、主版本升级、两次卸载、服务、防火墙、残留和数据保留均 PASS |
+| TEST-005 | `NOT_RUN`；新版规则需在新 MSI 上复跑 19 项安装、修复、主版本升级、两次卸载、服务、防火墙、残留和数据保留验证 |
 | Windows artifact | `9394732713`，36,184,775 bytes，API digest `bae031f6a0725b3794be093ad57f53852cf98ba39c93391e1067c253a5d635e2` |
 | MSI | 16,285,394 bytes，SHA-256 `e9ea742466b6432d7c1a2e55b88c4ff7ac3a32d7bf613d3264487766d941601b` |
 | portable 7Z | 13,306,405 bytes，SHA-256 `ec0a840613c1472afdac32aeca3e47d256d9ec7c370a1a5a876a5f7579a9d44e` |

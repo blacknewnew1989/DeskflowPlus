@@ -357,6 +357,10 @@ function Assert-FirewallInstalled {
     param([string]$ProductName, [string]$InstallRoot)
     $Rules = @(Get-RelayDeskFirewallRules -ProductName $ProductName)
     if ($Rules.Count -ne 2) { throw "TEST005_FIREWALL_RULE_COUNT: $($Rules.Count)" }
+    $ExpectedPrograms = @{
+        "$ProductName Server" = Join-Path $InstallRoot "deskflow-core.exe"
+        "$ProductName Client" = Join-Path $InstallRoot "deskflow.exe"
+    }
     foreach ($Rule in $Rules) {
         if ([string]$Rule.Enabled -ne "True") {
             throw "TEST005_FIREWALL_RULE_DISABLED: $($Rule.DisplayName)"
@@ -368,8 +372,11 @@ function Assert-FirewallInstalled {
             throw "TEST005_FIREWALL_PROFILE_MISMATCH: $($Rule.DisplayName)"
         }
         $Application = Get-NetFirewallApplicationFilter -AssociatedNetFirewallRule $Rule
-        $ExpectedCore = Join-Path $InstallRoot "deskflow-core.exe"
-        if (-not ([string]$Application.Program).Equals($ExpectedCore, [StringComparison]::OrdinalIgnoreCase)) {
+        $ExpectedProgram = $ExpectedPrograms[[string]$Rule.DisplayName]
+        if ([string]::IsNullOrWhiteSpace($ExpectedProgram)) {
+            throw "TEST005_FIREWALL_RULE_NAME_MISMATCH: $($Rule.DisplayName)"
+        }
+        if (-not ([string]$Application.Program).Equals($ExpectedProgram, [StringComparison]::OrdinalIgnoreCase)) {
             throw "TEST005_FIREWALL_PROGRAM_MISMATCH: $($Application.Program)"
         }
     }
@@ -735,7 +742,7 @@ try {
     $Result.serviceRegistration = "PASS"
     $Result.serviceRegistrationEvidence = "name=$ExpectedServiceName status=Running start=Auto"
     $Result.firewallRegistration = "PASS"
-    $Result.firewallRegistrationEvidence = "private inbound server/client rules target installed core"
+    $Result.firewallRegistrationEvidence = "private inbound server rule targets core and client file listener rule targets GUI"
 
     Invoke-MsiExec -Arguments @(
         "/i", (Quote-ProcessArgument $MsiPath), "REINSTALL=ALL", "REINSTALLMODE=vomus"

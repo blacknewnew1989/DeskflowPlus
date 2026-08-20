@@ -580,9 +580,9 @@ void MainWindow::refreshWindowsPermissionStatus()
                             m_relayDeskTransfer->service()
                         ).listeningPort();
   m_windowsFirewallProbe->refresh(deskflow::relaydesk::WindowsFirewallProbe::requestForListeningServices(
-      QCoreApplication::applicationFilePath(), inputPort,
-      m_coreProcess.connectionState() == CoreConnectionState::Listening, filePort,
-      static_cast<quint32>(QCoreApplication::applicationPid())
+      m_coreProcess.executablePath(), inputPort,
+      m_coreProcess.connectionState() == CoreConnectionState::Listening, m_coreProcess.processId(),
+      QCoreApplication::applicationFilePath(), filePort, static_cast<quint32>(QCoreApplication::applicationPid())
   ));
 }
 #endif

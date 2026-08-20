@@ -86,6 +86,14 @@ public:
   {
     return m_connectionState;
   }
+  QString executablePath() const
+  {
+    return m_appPath;
+  }
+  quint32 processId() const
+  {
+    return m_process == nullptr ? 0 : static_cast<quint32>(m_process->processId());
+  }
 
   // setters
   void setAddress(const QString &address)

@@ -230,6 +230,21 @@ bool portsCover(const QString &specification, const QList<quint16> &ports)
   return true;
 }
 
+QList<WindowsListeningService> requestedListeners(const WindowsFirewallProbeRequest &request)
+{
+  if (!request.listeners.isEmpty()) {
+    return request.listeners;
+  }
+
+  QList<WindowsListeningService> listeners;
+  for (const auto port : request.expectedTcpPorts) {
+    if (port != 0) {
+      listeners.append({.executablePath = request.executablePath, .tcpPort = port, .processId = request.processId});
+    }
+  }
+  return listeners;
+}
+
 WindowsFirewallRuleStatus inspectFirewallRules(
     const WindowsFirewallProbeRequest &request, QString *diagnostic
 )
@@ -364,7 +379,33 @@ WindowsFirewallRuleStatus inspectFirewallRules(
   return WindowsFirewallRuleStatus::MissingAllowRule;
 }
 
-bool appendListeningPorts(int addressFamily, quint32 processId, QList<quint16> *ports, QString *diagnostic)
+QString executablePathForProcess(quint32 processId, QString *diagnostic)
+{
+  const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+  if (process == nullptr) {
+    *diagnostic = QStringLiteral("could not inspect listener process %1: Win32 error %2")
+                      .arg(processId)
+                      .arg(GetLastError());
+    return {};
+  }
+  std::wstring path(32768, L'\0');
+  DWORD length = DWORD(path.size());
+  const bool queried = QueryFullProcessImageNameW(process, 0, path.data(), &length) != FALSE;
+  const DWORD error = queried ? NO_ERROR : GetLastError();
+  CloseHandle(process);
+  if (!queried) {
+    *diagnostic = QStringLiteral("could not read listener process %1 image: Win32 error %2")
+                      .arg(processId)
+                      .arg(error);
+    return {};
+  }
+  return expandedWindowsPath(QString::fromWCharArray(path.data(), int(length)));
+}
+
+bool appendMatchingListeningPorts(
+    int addressFamily, const WindowsListeningService &service, QList<quint32> *owners,
+    QString *diagnostic
+)
 {
   ULONG size = 0;
   DWORD result = GetExtendedTcpTable(
@@ -383,21 +424,38 @@ bool appendListeningPorts(int addressFamily, quint32 processId, QList<quint16> *
     return false;
   }
 
+  const auto expectedPath = expandedWindowsPath(service.executablePath);
+  const auto consider = [&](DWORD ownerPid, DWORD state, DWORD localPort) {
+    if (state != MIB_TCP_STATE_LISTEN || ntohs(u_short(localPort)) != service.tcpPort ||
+        (service.processId != 0 && ownerPid != service.processId)) {
+      return;
+    }
+    QString pathDiagnostic;
+    const auto actualPath = executablePathForProcess(ownerPid, &pathDiagnostic);
+    if (actualPath.isEmpty()) {
+      if (diagnostic->isEmpty()) {
+        *diagnostic = pathDiagnostic;
+      }
+      return;
+    }
+    if (!expectedPath.isEmpty() && actualPath != expectedPath) {
+      return;
+    }
+    if (!owners->contains(ownerPid)) {
+      owners->append(ownerPid);
+    }
+  };
   if (addressFamily == AF_INET) {
     const auto *table = reinterpret_cast<const MIB_TCPTABLE_OWNER_PID *>(storage.constData());
     for (DWORD index = 0; index < table->dwNumEntries; ++index) {
       const auto &row = table->table[index];
-      if (row.dwOwningPid == processId && row.dwState == MIB_TCP_STATE_LISTEN) {
-        ports->append(ntohs(u_short(row.dwLocalPort)));
-      }
+      consider(row.dwOwningPid, row.dwState, row.dwLocalPort);
     }
   } else {
     const auto *table = reinterpret_cast<const MIB_TCP6TABLE_OWNER_PID *>(storage.constData());
     for (DWORD index = 0; index < table->dwNumEntries; ++index) {
       const auto &row = table->table[index];
-      if (row.dwOwningPid == processId && row.dwState == MIB_TCP_STATE_LISTEN) {
-        ports->append(ntohs(u_short(row.dwLocalPort)));
-      }
+      consider(row.dwOwningPid, row.dwState, row.dwLocalPort);
     }
   }
   return true;
@@ -407,38 +465,31 @@ WindowsListeningPortStatus inspectListeningPorts(
     const WindowsFirewallProbeRequest &request, QString *diagnostic
 )
 {
-  if (request.expectedTcpPorts.isEmpty()) {
+  const auto listeners = requestedListeners(request);
+  if (listeners.isEmpty()) {
     *diagnostic = QStringLiteral("no TCP listener ports were requested");
     return WindowsListeningPortStatus::NotRequired;
   }
-  const quint32 processId = request.processId == 0 ? GetCurrentProcessId() : request.processId;
-  QList<quint16> listeningPorts;
-  QString ipv4Diagnostic;
-  QString ipv6Diagnostic;
-  const bool ipv4Ok = appendListeningPorts(AF_INET, processId, &listeningPorts, &ipv4Diagnostic);
-  const bool ipv6Ok = appendListeningPorts(AF_INET6, processId, &listeningPorts, &ipv6Diagnostic);
-  if (!ipv4Ok && !ipv6Ok) {
-    *diagnostic = QStringLiteral("IPv4: %1; IPv6: %2").arg(ipv4Diagnostic, ipv6Diagnostic);
-    return WindowsListeningPortStatus::Unavailable;
-  }
-
-  QList<quint16> missing;
-  for (const auto port : request.expectedTcpPorts) {
-    if (!listeningPorts.contains(port) && !missing.contains(port)) {
-      missing.append(port);
+  QStringList missing;
+  for (const auto &listener : listeners) {
+    QList<quint32> owners;
+    QString ipv4Diagnostic;
+    QString ipv6Diagnostic;
+    const bool ipv4Ok = appendMatchingListeningPorts(AF_INET, listener, &owners, &ipv4Diagnostic);
+    const bool ipv6Ok = appendMatchingListeningPorts(AF_INET6, listener, &owners, &ipv6Diagnostic);
+    if (!ipv4Ok && !ipv6Ok) {
+      *diagnostic = QStringLiteral("IPv4: %1; IPv6: %2").arg(ipv4Diagnostic, ipv6Diagnostic);
+      return WindowsListeningPortStatus::Unavailable;
+    }
+    if (owners.isEmpty()) {
+      missing.append(QStringLiteral("%1 (%2)").arg(listener.tcpPort).arg(listener.executablePath));
     }
   }
   if (!missing.isEmpty()) {
-    QStringList text;
-    for (const auto port : std::as_const(missing)) {
-      text.append(QString::number(port));
-    }
-    *diagnostic = QStringLiteral("process %1 is not listening on TCP port(s): %2")
-                      .arg(processId)
-                      .arg(text.join(QStringLiteral(", ")));
+    *diagnostic = QStringLiteral("no requested listener owner matched: %1").arg(missing.join(QStringLiteral(", ")));
     return WindowsListeningPortStatus::NotListening;
   }
-  *diagnostic = QStringLiteral("process %1 owns all requested TCP listeners").arg(processId);
+  *diagnostic = QStringLiteral("all requested TCP listeners match their executable and process owners");
   return WindowsListeningPortStatus::Listening;
 }
 
@@ -502,6 +553,34 @@ WindowsFirewallProbeRequest WindowsFirewallProbe::requestForListeningServices(
   return request;
 }
 
+WindowsFirewallProbeRequest WindowsFirewallProbe::requestForListeningServices(
+    QString coreExecutablePath, quint16 inputPort, bool inputIsListening, quint32 coreProcessId,
+    QString guiExecutablePath, quint16 filePort, quint32 guiProcessId
+)
+{
+  WindowsFirewallProbeRequest request;
+  if (inputIsListening && inputPort != 0) {
+    request.listeners.append({
+        .executablePath = std::move(coreExecutablePath),
+        .tcpPort = inputPort,
+        .processId = coreProcessId,
+    });
+  }
+  if (filePort != 0) {
+    request.listeners.append({
+        .executablePath = std::move(guiExecutablePath),
+        .tcpPort = filePort,
+        .processId = guiProcessId,
+    });
+  }
+  for (const auto &listener : std::as_const(request.listeners)) {
+    if (!request.expectedTcpPorts.contains(listener.tcpPort)) {
+      request.expectedTcpPorts.append(listener.tcpPort);
+    }
+  }
+  return request;
+}
+
 void WindowsFirewallProbe::refresh(WindowsFirewallProbeRequest request)
 {
   request.executablePath = request.executablePath.trimmed();
@@ -513,6 +592,15 @@ void WindowsFirewallProbe::refresh(WindowsFirewallProbeRequest request)
   request.expectedTcpPorts.erase(
       std::unique(request.expectedTcpPorts.begin(), request.expectedTcpPorts.end()),
       request.expectedTcpPorts.end()
+  );
+  for (auto &listener : request.listeners) {
+    listener.executablePath = listener.executablePath.trimmed();
+  }
+  request.listeners.erase(
+      std::remove_if(request.listeners.begin(), request.listeners.end(), [](const auto &listener) {
+        return listener.tcpPort == 0;
+      }),
+      request.listeners.end()
   );
 
   const auto generation = ++m_generation;
@@ -575,7 +663,8 @@ PermissionOpenResult WindowsFirewallProbe::openSystemSettings(PermissionKind kin
 WindowsFirewallInspection WindowsFirewallProbe::inspectCurrentSystem(WindowsFirewallProbeRequest request)
 {
 #if defined(Q_OS_WIN)
-  if (request.expectedTcpPorts.isEmpty()) {
+  const auto listeners = requestedListeners(request);
+  if (listeners.isEmpty()) {
     return {
         .firewall = WindowsFirewallRuleStatus::NotRequired,
         .listeningPort = WindowsListeningPortStatus::NotRequired,
@@ -584,7 +673,35 @@ WindowsFirewallInspection WindowsFirewallProbe::inspectCurrentSystem(WindowsFire
     };
   }
   WindowsFirewallInspection result;
-  result.firewall = inspectFirewallRules(request, &result.firewallDiagnostic);
+  QStringList firewallDiagnostics;
+  result.firewall = WindowsFirewallRuleStatus::Allowed;
+  for (const auto &listener : listeners) {
+    WindowsFirewallProbeRequest listenerRequest{
+        .executablePath = listener.executablePath,
+        .expectedTcpPorts = {listener.tcpPort},
+        .processId = listener.processId,
+    };
+    QString diagnostic;
+    const auto status = inspectFirewallRules(listenerRequest, &diagnostic);
+    firewallDiagnostics.append(QStringLiteral("%1 (%2): %3")
+                                   .arg(listener.tcpPort)
+                                   .arg(listener.executablePath, diagnostic));
+    if (status == WindowsFirewallRuleStatus::Blocked) {
+      result.firewall = status;
+      break;
+    }
+    if (status == WindowsFirewallRuleStatus::Unavailable) {
+      result.firewall = status;
+      break;
+    }
+    if (status == WindowsFirewallRuleStatus::MissingAllowRule) {
+      result.firewall = status;
+    } else if (status == WindowsFirewallRuleStatus::NotRequired &&
+               result.firewall == WindowsFirewallRuleStatus::Allowed) {
+      result.firewall = status;
+    }
+  }
+  result.firewallDiagnostic = firewallDiagnostics.join(QStringLiteral("; "));
   result.listeningPort = inspectListeningPorts(request, &result.listeningPortDiagnostic);
   return result;
 #else

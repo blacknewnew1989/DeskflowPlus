@@ -41,6 +41,8 @@ class WindowsPackagingTests(unittest.TestCase):
         for rule in firewall_rules:
             self.assertIn('Profile="private"', rule)
             self.assertIn('@CMAKE_PROJECT_PROPER_NAME@', rule)
+        self.assertIn('Program="[INSTALL_ROOT]deskflow-core.exe"', firewall_rules[0])
+        self.assertIn('Program="[INSTALL_ROOT]deskflow.exe"', firewall_rules[1])
         self.assertNotIn('Name="Deskflow', WIX)
         self.assertNotIn('Value="Run Deskflow', WIX)
 

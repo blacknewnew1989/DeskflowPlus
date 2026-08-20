@@ -22,7 +22,7 @@
 
   <CPackWiXFragment Id="CM_CP_deskflow_core.exe">
     <firewall:FirewallException Id="ServerFirewallException" Name="@CMAKE_PROJECT_PROPER_NAME@ Server" Program="[INSTALL_ROOT]deskflow-core.exe" Profile="private" Scope="any"/>
-    <firewall:FirewallException Id="ClientFirewallException" Name="@CMAKE_PROJECT_PROPER_NAME@ Client" Program="[INSTALL_ROOT]deskflow-core.exe" Profile="private" Scope="any"/>
+    <firewall:FirewallException Id="ClientFirewallException" Name="@CMAKE_PROJECT_PROPER_NAME@ Client" Program="[INSTALL_ROOT]deskflow.exe" Profile="private" Scope="any"/>
   </CPackWiXFragment>
 
   <CPackWiXFragment Id="#PRODUCT">

@@ -18,11 +18,19 @@
 
 namespace deskflow::relaydesk {
 
+struct WindowsListeningService
+{
+  QString executablePath;
+  quint16 tcpPort = 0;
+  quint32 processId = 0;
+};
+
 struct WindowsFirewallProbeRequest
 {
   QString executablePath;
   QList<quint16> expectedTcpPorts;
   quint32 processId = 0;
+  QList<WindowsListeningService> listeners;
 };
 
 enum class WindowsFirewallRuleStatus
@@ -73,6 +81,10 @@ public:
   [[nodiscard]] static WindowsFirewallInspection inspectCurrentSystem(WindowsFirewallProbeRequest request);
   [[nodiscard]] static WindowsFirewallProbeRequest requestForListeningServices(
       QString executablePath, quint16 inputPort, bool inputIsListening, quint16 filePort, quint32 processId
+  );
+  [[nodiscard]] static WindowsFirewallProbeRequest requestForListeningServices(
+      QString coreExecutablePath, quint16 inputPort, bool inputIsListening, quint32 coreProcessId,
+      QString guiExecutablePath, quint16 filePort, quint32 guiProcessId
   );
 
 Q_SIGNALS:
