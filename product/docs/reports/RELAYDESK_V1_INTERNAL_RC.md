@@ -10,44 +10,39 @@ RelayDesk 基于 Deskflow v1.26.0，包含冻结的 RDFT v1 协议、发现/配�
 
 ## 当前候选（2026-08-20）
 
-- 产品实现提交：`a624a9e40f027c4165dd8838b61cbe98af68d7f2`；阶段文档/标签目标：
-  `eb84e668e8a8b8e960b7636ebacb2db5edf28b30`。
-- 本地 Debug 增量构建：`PASS`。
-- 原生串行 CTest：98/98 `PASS`，47.41 s；日志为
-  `product/working/windows-debug-ctest-20260820-131000.log`。
+- 产品实现提交及当前阶段/标签目标：`c134126b95977ca6b97036be18dcfc33a4a3a09a`。
+- 本机 `RelayDeskTransferSettingsTests`：`PASS`；排除当前桌面外部剪贴板占用导致的
+  `MSWindowsClipboardTests` 后，CTest 98/98 `PASS`。
 - 主窗口/托盘定向回归：offscreen 各连续 10 次、native 各 1 次均 `PASS`。
 - `product/tests`：26/26 `PASS`；`product/scripts/tests`：37/37 `PASS`；日志分别为
   `product/working/product-tests-a624a9e40.log` 和
   `product/working/script-tests-a624a9e40.log`。
-- `validate-package.py`：`PASS`（49 个必需文件、10 个 JSON、60 个协议向量）；日志为
-  `product/working/package-validation-a624a9e40-rerun.log`。
-- 注释标签：`relaydesk-phase4-20260820-01`（tag object
-  `459043ebf10d1f353e91a3625d9bb7bc726eda2d`）。
-- GitHub Actions run `32335399442` 为 `SUCCESS`；Windows job `96323889159`、macOS job
-  `96323889254`、materials job `96323889286`、draft release job `96326301658` 和 macOS
-  lifecycle job `96326301670` 均 `SUCCESS`。
-- Windows：CTest 98/98 PASS（28.75 s）；TEST-005 19/19 PASS，MSI 安装、修复、主版本
+- `validate-package.py`：`PASS`（49 个必需文件、12 个 JSON、60 个协议向量）。
+- 注释标签：`relaydesk-phase4-20260820-02`（tag object
+  `9398524f927f33ed58890a0f52cc9bdf20bd3075`）。
+- GitHub Actions run `32362194153` 为 `SUCCESS`；materials job `96403950792`、Windows job
+  `96403951016`、macOS job `96403950941`、draft release job `96407573119` 和 macOS
+  lifecycle job `96407573193` 均 `SUCCESS`。
+- Windows：CTest 99/99 PASS（31.59 s）；TEST-005 19/19 PASS，MSI 安装、修复、主版本
   升级、两次卸载、服务、防火墙、残留和数据保留均 PASS。
-- macOS：CTest 99/99 PASS（28.54 s）；生命周期 19/19 PASS，严格 ad-hoc codesign、App ZIP
+- macOS：CTest 100/100 PASS（34.36 s）；生命周期 19/19 PASS，严格 ad-hoc codesign、App ZIP
   symlink、DMG 校验/挂载、隔离启动/替换/卸载和用户数据保留均 PASS。
-- Windows artifact `9394732713`（36,184,775 bytes，API digest
-  `bae031f6a0725b3794be093ad57f53852cf98ba39c93391e1067c253a5d635e2`）；macOS artifact
-  `9394568263`（65,692,021 bytes，API digest
-  `5b39a2e57979a3012226ff063e3adc14bb68541399ed6d007981be8bcec14d53`）；macOS lifecycle
-  artifact `9394740898`（12,566 bytes，API digest
-  `4e97297436ccdfc02c5d7c1a734da72d00ecd5b99085de0c0dc095bf2eb8eb2`）。
-- Windows MSI：16,285,394 bytes，`e9ea742466b6432d7c1a2e55b88c4ff7ac3a32d7bf613d3264487766d941601b`；
-  portable 7Z：13,306,405 bytes，`ec0a840613c1472afdac32aeca3e47d256d9ec7c370a1a5a876a5f7579a9d44e`。
-- macOS App ZIP：28,807,799 bytes，`c60478f9323f989de141a518228e2dcdb1b409922a19ac8eda5128cf5bac9a39`；
-  DMG：28,901,947 bytes，`2cb50cdacfe8b460e4a71933c243118b03c1d650bbd3a383e86bacd55a440b1a`。
-- 草稿 Release：`RelayDesk internal relaydesk-phase4-20260820-01`，
-  <https://github.com/blacknewnew1989/DeskflowPlus/releases/tag/untagged-2f0a5148b8dda7484ccd>，`draft=true`。
-- 包取证：
-  `dist/actions/32335399442`、`dist/releases/relaydesk-phase4-20260820-01`、manifest、
-  `SHA256SUMS`、本地 `Get-FileHash` 和 Release API digest 四方一致。
-- 取证索引为 `product/working/actions/32335399442.json`。证据回填后的资料校验为
-  49 个必需文件、11 个 JSON、60 个协议向量 `PASS`；日志为
-  `product/working/package-validation-phase4-evidence-20260820.log`。
+- Windows artifact `9404344378`（36,250,178 bytes，API digest
+  `b1ec6712fb9b2341b5205b20009acb9d66605f3987908b8c487fead603fee188`）；macOS artifact
+  `9404129846`（65,770,515 bytes，API digest
+  `e47b85e61bf8e3e882e08c27dbcaf2ea7b04a15fb17722d632199df89c03106a`）；macOS lifecycle
+  artifact `9404365531`（12,568 bytes，API digest
+  `4b0d1a54f05fecda535569481ec0d5b5d8f22cd186774a297ef3b4c8fab5bd80`）。
+- Windows MSI：16,309,970 bytes，`2d81741175e3ca7a69be0d30c37811ec8419236b27aac5e12e577852f054677d`；
+  portable 7Z：13,320,217 bytes，`66f08d9cd90094c4009ae2dd98aefa2d13f3ae819f964bb31b3f76651d057647`。
+- macOS App ZIP：28,830,111 bytes，`af35a8abacc5bf455ec7c74036a26417d8d9e8cf16d1ada36f8ffbe5b7f1b8d9`；
+  DMG：28,919,663 bytes，`24ca64893fa1f41af0fe3921e715452aaccafdba45ed4a518a6c36370eca3297`。
+- 草稿 Release：`RelayDesk internal relaydesk-phase4-20260820-02`，`draft=true`；以标签
+  `relaydesk-phase4-20260820-02` 的 Release 页面或 run `32362194153` 定位，避免引用不稳定
+  的 untagged URL。
+- 包取证：`dist/actions/32362194153`、manifest、`SHA256SUMS`、本地 `Get-FileHash` 与
+  Release API digest 一致。分支 run `32356352794` 在同目标提交上验证 Windows 99/99、
+  macOS 100/100；其 Windows 单机 GUI 取证包含七语言和托盘/关闭恢复 PASS。
 
 以下操作系统和物理设备项目仍为 `NOT_RUN`：macOS Local Network、Accessibility、
 Input Monitoring 与 menu bar 交互；Windows/macOS 双机配对、双向键鼠/滚轮/文本和图片

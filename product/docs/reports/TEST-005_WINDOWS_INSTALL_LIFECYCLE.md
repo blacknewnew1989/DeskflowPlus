@@ -2,40 +2,34 @@
 
 ## 当前候选（2026-08-20）
 
-当前候选为 `a624a9e40f027c4165dd8838b61cbe98af68d7f2`。其本地 Debug 增量构建、原生串行
-CTest 98/98、主窗口/托盘定向回归、`product/tests` 26/26、`product/scripts/tests` 37/37
-和 `validate-package.py`（49 个必需文件、10 个 JSON、60 个协议向量）均为 `PASS`。后三项
-日志依次为 `product/working/product-tests-a624a9e40.log`、
-`product/working/script-tests-a624a9e40.log` 和
-`product/working/package-validation-a624a9e40-rerun.log`。
-
-当前候选此前 TEST-005 的 Windows 安装、修复、升级、卸载和残留验证为 `PASS`。本次修复将
-两条规则分别绑定到实际的 core 与 GUI 入站拥有者，并在脚本中逐条断言；该变更尚未生成新 MSI，
-因此新版 TEST-005 为 `NOT_RUN`。本地 Release
-打包因缺少原生 Strawberry Perl 回退至精确标签 GitHub Actions，并由 hosted Windows runner
-完成；下列历史 `PASS` 仍只属于其原始候选，不与当前候选混用。
+当前候选为 `c134126b95977ca6b97036be18dcfc33a4a3a09a`。本机
+`RelayDeskTransferSettingsTests` 通过；排除当前桌面外部剪贴板占用导致的
+`MSWindowsClipboardTests` 后，CTest 98/98 `PASS`。精确标签 GitHub Actions 已重新生成
+unsigned MSI/portable，并由 hosted Windows runner 完成 99/99 CTest 与 TEST-005 19/19
+安装生命周期。分支 run `32356352794` 还在 Windows 单机桌面完成七语言、托盘最小化、
+关闭、两次恢复和真退出 GUI 自动化。
 
 | 字段 | 当前候选事实 |
 |---|---|
-| 产品实现提交 | `a624a9e40f027c4165dd8838b61cbe98af68d7f2` |
-| 阶段文档/标签目标 | `eb84e668e8a8b8e960b7636ebacb2db5edf28b30` |
-| 注释标签 | `relaydesk-phase4-20260820-01`，tag object `459043ebf10d1f353e91a3625d9bb7bc726eda2d` |
-| Workflow/run | `relaydesk-build.yml` / `32335399442` `SUCCESS` |
-| Windows job | `96323889159` `SUCCESS` |
-| Windows CTest | 98/98 PASS，28.75 s |
-| TEST-005 | `NOT_RUN`；新版规则需在新 MSI 上复跑 19 项安装、修复、主版本升级、两次卸载、服务、防火墙、残留和数据保留验证 |
-| Windows artifact | `9394732713`，36,184,775 bytes，API digest `bae031f6a0725b3794be093ad57f53852cf98ba39c93391e1067c253a5d635e2` |
-| MSI | 16,285,394 bytes，SHA-256 `e9ea742466b6432d7c1a2e55b88c4ff7ac3a32d7bf613d3264487766d941601b` |
-| portable 7Z | 13,306,405 bytes，SHA-256 `ec0a840613c1472afdac32aeca3e47d256d9ec7c370a1a5a876a5f7579a9d44e` |
-| 包取证 | `dist/actions/32335399442`、`dist/releases/relaydesk-phase4-20260820-01`、manifest、`SHA256SUMS`、本地 `Get-FileHash` 和 Release API digest 四方一致 |
+| 产品实现提交 | `c134126b95977ca6b97036be18dcfc33a4a3a09a` |
+| 当前阶段/标签目标 | `c134126b95977ca6b97036be18dcfc33a4a3a09a` |
+| 注释标签 | `relaydesk-phase4-20260820-02`，tag object `9398524f927f33ed58890a0f52cc9bdf20bd3075` |
+| Workflow/run | `relaydesk-build.yml` / `32362194153` `SUCCESS` |
+| Windows job | `96403951016` `SUCCESS` |
+| Windows CTest | 99/99 PASS，31.59 s |
+| TEST-005 | 19/19 PASS；安装、修复、主版本升级、两次卸载、服务、防火墙、残留和数据保留均通过 |
+| Windows artifact | `9404344378`，36,250,178 bytes，API digest `b1ec6712fb9b2341b5205b20009acb9d66605f3987908b8c487fead603fee188` |
+| MSI | 16,309,970 bytes，SHA-256 `2d81741175e3ca7a69be0d30c37811ec8419236b27aac5e12e577852f054677d` |
+| portable 7Z | 13,320,217 bytes，SHA-256 `66f08d9cd90094c4009ae2dd98aefa2d13f3ae819f964bb31b3f76651d057647` |
+| 包取证 | `dist/actions/32362194153`、manifest、`SHA256SUMS`、本地 `Get-FileHash` 与 Release API digest 一致；分支 run `32356352794` 同目标 Win 99/99 且 Windows 单机 GUI 七语言/托盘/关闭恢复 PASS |
 
-unsigned SmartScreen/UAC 的交互提示、真实桌面/托盘操作仍为 `NOT_RUN`，需在最终实际安装
-验收中观察。
+unsigned SmartScreen/UAC 的人工交互提示仍为 `NOT_RUN`，需在最终实际安装验收中观察；
+这不否定已经完成的 Windows 单机 GUI 自动化。
 
 ## 历史候选（2026-08-13）
 
 以下结果仅属于提交 `f1f4bed433846048149eed0fc3cfd98b7784c5db` 的历史候选。其自动化
-Windows 安装生命周期为 `PASS`；不得用于证明 `a624a9e40` 的安装行为。
+Windows 安装生命周期为 `PASS`；不得用于证明当前 `c134126b9` 候选的安装行为。
 
 | 字段 | 历史事实 |
 |---|---|

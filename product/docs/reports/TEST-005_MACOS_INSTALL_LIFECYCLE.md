@@ -5,36 +5,35 @@
 | 字段 | 当前事实 |
 |---|---|
 | 结果 | **PASS**（hosted 构建、打包和自动生命周期） |
-| 产品实现提交 | `a624a9e40f027c4165dd8838b61cbe98af68d7f2` |
-| 阶段文档/标签目标 | `eb84e668e8a8b8e960b7636ebacb2db5edf28b30` |
-| 注释标签 | `relaydesk-phase4-20260820-01`，tag object `459043ebf10d1f353e91a3625d9bb7bc726eda2d` |
+| 产品实现提交 | `c134126b95977ca6b97036be18dcfc33a4a3a09a` |
+| 当前阶段/标签目标 | `c134126b95977ca6b97036be18dcfc33a4a3a09a` |
+| 注释标签 | `relaydesk-phase4-20260820-02`，tag object `9398524f927f33ed58890a0f52cc9bdf20bd3075` |
 | 唯一工作流 | `relaydesk-build.yml` |
-| Workflow run | [32335399442](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/32335399442)，`SUCCESS` |
-| macOS 打包 job | `96323889254`，`SUCCESS` |
-| macOS 生命周期 job | `96326301670`，`SUCCESS` |
+| Workflow run | [32362194153](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/32362194153)，`SUCCESS` |
+| macOS 打包 job | `96403950941`，`SUCCESS` |
+| macOS 生命周期 job | `96407573193`，`SUCCESS` |
 | Runner | GitHub-hosted `macos-14`，Apple Silicon（`ARM64`） |
 | 打包边界 | ad-hoc App 签名；unsigned 内部 DMG 容器 |
-| CTest | 99/99 PASS，28.54 s |
+| CTest | 100/100 PASS，34.36 s |
 | 生命周期 | 19/19 PASS：严格 ad-hoc codesign、App ZIP symlink、DMG 校验/挂载、隔离启动/替换/卸载和用户数据保留 |
 
 ### 当前 artifact 与包
 
 | artifact | GitHub artifact ID | API digest | 大小 |
 |---|---:|---|---:|
-| macOS 包 | `9394568263` | `5b39a2e57979a3012226ff063e3adc14bb68541399ed6d007981be8bcec14d53` | 65,692,021 bytes |
-| macOS 生命周期证据 | `9394740898` | `4e97297436ccdfc02c5d7c1a734da72d00ecd5b99085de0c0dc095bf2eb8eb2` | 12,566 bytes |
+| macOS 包 | `9404129846` | `e47b85e61bf8e3e882e08c27dbcaf2ea7b04a15fb17722d632199df89c03106a` | 65,770,515 bytes |
+| macOS 生命周期证据 | `9404365531` | `4b0d1a54f05fecda535569481ec0d5b5d8f22cd186774a297ef3b4c8fab5bd80` | 12,568 bytes |
 
 | 文件 | 大小 | SHA-256 |
 |---|---:|---|
-| App ZIP | 28,807,799 bytes | `c60478f9323f989de141a518228e2dcdb1b409922a19ac8eda5128cf5bac9a39` |
-| DMG | 28,901,947 bytes | `2cb50cdacfe8b460e4a71933c243118b03c1d650bbd3a383e86bacd55a440b1a` |
+| App ZIP | 28,830,111 bytes | `af35a8abacc5bf455ec7c74036a26417d8d9e8cf16d1ada36f8ffbe5b7f1b8d9` |
+| DMG | 28,919,663 bytes | `24ca64893fa1f41af0fe3921e715452aaccafdba45ed4a518a6c36370eca3297` |
 
-下载目录为 `dist/actions/32335399442`，本地发布目录为
-`dist/releases/relaydesk-phase4-20260820-01`。manifest、`SHA256SUMS`、本地
-`Get-FileHash` 与 Release API digest 四方一致。草稿 Release 名为
-`RelayDesk internal relaydesk-phase4-20260820-01`，地址为
-<https://github.com/blacknewnew1989/DeskflowPlus/releases/tag/untagged-2f0a5148b8dda7484ccd>，
-`draft=true`。
+下载目录为 `dist/actions/32362194153`。manifest、`SHA256SUMS`、本地 `Get-FileHash` 与
+Release API digest 一致。草稿 Release 名为 `RelayDesk internal relaydesk-phase4-20260820-02`，
+`draft=true`；以标签 `relaydesk-phase4-20260820-02` 的 Release 页面或 run 定位，避免引用
+不稳定的 untagged URL。分支 run `32356352794` 在同目标提交上同时完成 Windows 99/99、
+macOS 100/100 与同目标包摘要；其 GUI 证据仍仅限 Windows 单机。
 
 ## 当前自动生命周期证据
 

@@ -6,12 +6,13 @@
 `8aba552b89a6a8a4600df3c5d4270e711de07416` 和
 `relaydesk-phase4-20260813-03` 均为历史候选，不能作为当前交付证据。
 
-当前实现提交为 `a624a9e40f027c4165dd8838b61cbe98af68d7f2`，阶段文档/标签目标为
-`eb84e668e8a8b8e960b7636ebacb2db5edf28b30`。主窗口/托盘定向回归（offscreen 各连续
+当前实现提交及阶段文档/标签目标为 `c134126b95977ca6b97036be18dcfc33a4a3a09a`。
+主窗口/托盘定向回归（offscreen 各连续
 10 次、native 各 1 次）以及本地原生串行 CTest 98/98 均为 `PASS`。精确标签
-`relaydesk-phase4-20260820-01` 的 run `32335399442` 亦为 `SUCCESS`：Windows 98/98、
-macOS 99/99、双平台打包和自动生命周期均 `PASS`。真实桌面/托盘交互、macOS TCC/menu
-bar 与物理 Win↔Mac 仍为 `NOT_RUN`，不得由 hosted CI 替代。
+`relaydesk-phase4-20260820-02` 的 run `32362194153` 为 `SUCCESS`：Windows 99/99、
+macOS 100/100、双平台打包、草稿 Release 和自动生命周期均 `PASS`。分支 run `32356352794`
+另记录七语言与托盘/关闭恢复 Windows 单机 GUI `PASS`。Windows unsigned 提示人工确认、
+macOS TCC/menu bar 与物理 Win↔Mac 仍为 `NOT_RUN`，不得由 hosted CI 替代。
 
 ## 已确认设计输入
 
@@ -66,7 +67,7 @@ bar 与物理 Win↔Mac 仍为 `NOT_RUN`，不得由 hosted CI 替代。
 | 产品 Python contracts | `product/tests` 26/26 PASS；`product/scripts/tests` 37/37 PASS；日志为 `product/working/product-tests-a624a9e40.log`、`product/working/script-tests-a624a9e40.log` |
 | 品牌校验 | macOS 生成往返、Windows 生成、集中品牌配置均 PASS |
 | macOS 权限前台刷新 | `ApplicationActive` 自动复检与 150 ms 合并回归 PASS；最终 App 系统设置往返待实测 |
-| 包校验 | `validate-package.py` PASS：49 个必需文件、10 个 JSON、60 个协议向量；日志为 `product/working/package-validation-a624a9e40-rerun.log` |
+| 包校验 | `validate-package.py` PASS：49 个必需文件、12 个 JSON、60 个协议向量 |
 | 工作流定义 | YAML 解析、Windows staged install 与翻译报告路径契约 PASS |
 | XML / `git diff --check` | PASS |
 
@@ -85,16 +86,15 @@ Clang/arm64 + Qt 结果为准。
 
 ## 双平台构建（当前候选）
 
-- 当前产品提交：`a624a9e40f027c4165dd8838b61cbe98af68d7f2`；阶段文档/标签目标：
-  `eb84e668e8a8b8e960b7636ebacb2db5edf28b30`。
-- 注释标签：`relaydesk-phase4-20260820-01`，tag object
-  `459043ebf10d1f353e91a3625d9bb7bc726eda2d`。
-- Actions run：`32335399442` `SUCCESS`；Windows `96323889159`、macOS `96323889254`、
-  materials `96323889286`、draft release `96326301658`、macOS lifecycle `96326301670` 均 `SUCCESS`。
+- 当前产品提交及阶段/标签目标：`c134126b95977ca6b97036be18dcfc33a4a3a09a`。
+- 注释标签：`relaydesk-phase4-20260820-02`，tag object
+  `9398524f927f33ed58890a0f52cc9bdf20bd3075`。
+- Actions run：`32362194153` `SUCCESS`；Windows `96403951016`、macOS `96403950941`、
+  materials `96403950792`、draft release `96407573119`、macOS lifecycle `96407573193` 均 `SUCCESS`。
 - Windows MSI/portable 与 macOS App/DMG 的 manifest、`SHA256SUMS`、本地 `Get-FileHash`、
-  Release API digest 四方一致；下载目录 `dist/actions/32335399442`，本地发布目录
-  `dist/releases/relaydesk-phase4-20260820-01`。
-- Windows CTest 98/98（28.75 s）及 TEST-005 19/19 PASS；macOS CTest 99/99（28.54 s）及
+  Release API digest 一致；下载目录 `dist/actions/32362194153`。分支 run `32356352794`
+  的 `evidence-windows-gui-runtime/result.json` 另记录 Windows 单机七语言和托盘/关闭恢复 PASS。
+- Windows CTest 99/99 及 TEST-005 19/19 PASS；macOS CTest 100/100 及
   生命周期 19/19 PASS。
 
 ## 明确保留的 NOT_RUN
@@ -104,8 +104,9 @@ Clang/arm64 + Qt 结果为准。
 1. macOS Local Network、Accessibility、Input Monitoring 三项真实授权、撤销和升级复检；
 2. macOS 最终 App 的按能力门控、系统设置往返，以及真实 menu bar 最小化、恢复、设置、
    暂停/继续和退出交互；
-3. Windows 与 macOS 物理双机的键鼠、滚轮、剪贴板和文件传输联调；
-4. Developer ID、Apple notarization 与 Windows Authenticode（无真实签名凭据）。
+3. Windows unsigned SmartScreen/UAC 提示的人工视觉确认；
+4. Windows 与 macOS 物理双机的键鼠、滚轮、剪贴板和文件传输联调；
+5. Developer ID、Apple notarization 与 Windows Authenticode（无真实签名凭据）。
 
 `MAC-037` 保持 `IN_PROGRESS`。当前实现已经复用共享 Qt 界面和同一
 `PermissionSnapshot`，并按三项能力分别门控；只有最终 App 的真实系统权限与前台交互
