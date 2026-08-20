@@ -106,8 +106,8 @@ SettingsDialog::SettingsDialog(QWidget *parent, const IServerConfig &serverConfi
 
   loadFromConfig();
 
-  resizeToContents();
   setWindowFlags((windowFlags() | Qt::CustomizeWindowHint) & ~Qt::WindowMinMaxButtonsHint);
+  resizeToContents();
 
   initConnections();
 }
