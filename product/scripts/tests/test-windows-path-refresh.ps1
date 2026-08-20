@@ -37,4 +37,26 @@ if (@($first -split ";" | Where-Object { $_ -ieq $windowsPowerShell }).Count -ne
     throw "WIN006_POWERSHELL_PATH_LOST_OR_DUPLICATED"
 }
 
+$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("relaydesk-vcpkg-" + [guid]::NewGuid().ToString("N"))
+try {
+    New-Item -ItemType Directory -Path $testRoot | Out-Null
+    $fakeVcpkg = Join-Path $testRoot "vcpkg.cmd"
+    Set-Content -LiteralPath $fakeVcpkg -Encoding ASCII `
+        -Value "@echo vcpkg package management program version 2026-07-27-test"
+    if (-not (Test-VcpkgTool $fakeVcpkg "2026-07-27")) {
+        throw "WIN006_VCPKG_MATCH_NOT_REUSED"
+    }
+    if (Test-VcpkgTool $fakeVcpkg "2026-08-01") {
+        throw "WIN006_VCPKG_MISMATCH_REUSED"
+    }
+    if (Test-VcpkgTool (Join-Path $testRoot "missing.exe") "2026-07-27") {
+        throw "WIN006_MISSING_VCPKG_REUSED"
+    }
+}
+finally {
+    if (Test-Path -LiteralPath $testRoot) {
+        [System.IO.Directory]::Delete($testRoot, $true)
+    }
+}
+
 Write-Output "WIN006_PATH_REFRESH_TEST=PASS"

@@ -88,6 +88,18 @@ function Test-GitObjectLocally([string]$Repository, [string]$Object) {
     }
 }
 
+function Test-VcpkgTool([string]$Executable, [string]$ExpectedReleaseTag) {
+    if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { return $false }
+    try {
+        $versionOutput = @(& $Executable version --disable-metrics 2>$null)
+        if ($LASTEXITCODE -ne 0) { return $false }
+        return ($versionOutput -join "`n").Contains($ExpectedReleaseTag, [StringComparison]::Ordinal)
+    }
+    catch {
+        return $false
+    }
+}
+
 if ($PathContractTest) { return }
 
 New-Item -ItemType Directory -Force -Path $ToolsRoot, $Working | Out-Null
@@ -243,6 +255,10 @@ if (-not (Test-QtPrefix $QtPrefix)) {
 
 $VcpkgRoot = Join-Path $ToolsRoot "vcpkg"
 $BootstrapVcpkg = Join-Path $VcpkgRoot "bootstrap-vcpkg.bat"
+$VcpkgExecutable = Join-Path $VcpkgRoot "vcpkg.exe"
+$VcpkgToolMetadata = Get-Content -LiteralPath (Join-Path $VcpkgRoot "scripts\vcpkg-tool-metadata.txt") `
+    -Raw | ConvertFrom-StringData
+$VcpkgToolReleaseTag = [string]$VcpkgToolMetadata.VCPKG_TOOL_RELEASE_TAG
 $VcpkgManifest = Get-Content -LiteralPath (Join-Path $RepoRoot "vcpkg.json") -Raw | ConvertFrom-Json
 $VcpkgBaseline = [string]$VcpkgManifest.'builtin-baseline'
 if ($VcpkgBaseline -notmatch '^[0-9a-fA-F]{40}$') {
@@ -296,9 +312,14 @@ if ((Has-Command "git") -and (Test-Path (Join-Path $VcpkgRoot ".git")) -and
         $ActionsFallback = $true
     }
 }
-if (Test-Path $BootstrapVcpkg) {
+if (Test-VcpkgTool $VcpkgExecutable $VcpkgToolReleaseTag) {
+    Write-Host "VCPKG_BOOTSTRAP=skipped"
+}
+elseif (Test-Path $BootstrapVcpkg) {
     & $BootstrapVcpkg -disableMetrics
-    if ($LASTEXITCODE -ne 0) { $ActionsFallback = $true }
+    if ($LASTEXITCODE -ne 0 -or -not (Test-VcpkgTool $VcpkgExecutable $VcpkgToolReleaseTag)) {
+        $ActionsFallback = $true
+    }
 }
 else {
     $ActionsFallback = $true
