@@ -71,6 +71,23 @@ function Refresh-ProcessPath {
     $env:Path = $merged
 }
 
+function Test-GitObjectLocally([string]$Repository, [string]$Object) {
+    $previousLazyFetch = $env:GIT_NO_LAZY_FETCH
+    try {
+        $env:GIT_NO_LAZY_FETCH = "1"
+        & git -C $Repository cat-file -e $Object 2>$null
+        return ($LASTEXITCODE -eq 0)
+    }
+    finally {
+        if ($null -eq $previousLazyFetch) {
+            Remove-Item Env:GIT_NO_LAZY_FETCH -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GIT_NO_LAZY_FETCH = $previousLazyFetch
+        }
+    }
+}
+
 if ($PathContractTest) { return }
 
 New-Item -ItemType Directory -Force -Path $ToolsRoot, $Working | Out-Null
@@ -226,6 +243,12 @@ if (-not (Test-QtPrefix $QtPrefix)) {
 
 $VcpkgRoot = Join-Path $ToolsRoot "vcpkg"
 $BootstrapVcpkg = Join-Path $VcpkgRoot "bootstrap-vcpkg.bat"
+$VcpkgManifest = Get-Content -LiteralPath (Join-Path $RepoRoot "vcpkg.json") -Raw | ConvertFrom-Json
+$VcpkgBaseline = [string]$VcpkgManifest.'builtin-baseline'
+if ($VcpkgBaseline -notmatch '^[0-9a-fA-F]{40}$') {
+    throw "VCPKG_BASELINE_INVALID"
+}
+$VcpkgBaselineObject = "$VcpkgBaseline^{commit}"
 if (-not (Test-Path $BootstrapVcpkg)) {
     if ((Has-Command "git") -and (-not (Test-Path (Join-Path $VcpkgRoot ".git")))) {
         for ($attempt = 1; $attempt -le 4; $attempt++) {
@@ -247,6 +270,25 @@ if (-not (Test-Path $BootstrapVcpkg)) {
             }
             Start-Sleep -Seconds (3 * $attempt)
         }
+    }
+}
+if ((Has-Command "git") -and (Test-Path (Join-Path $VcpkgRoot ".git")) -and
+    (-not (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineObject))) {
+    $BaselineRef = "refs/relaydesk/vcpkg-baselines/$VcpkgBaseline"
+    for ($attempt = 1; $attempt -le 4; $attempt++) {
+        & git -C $VcpkgRoot -c http.sslBackend=openssl -c http.version=HTTP/1.1 `
+            -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 `
+            fetch --depth=1 --no-filter origin $VcpkgBaseline
+        if ($LASTEXITCODE -eq 0) {
+            & git -C $VcpkgRoot update-ref $BaselineRef FETCH_HEAD
+            if (($LASTEXITCODE -eq 0) -and (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineObject)) {
+                break
+            }
+        }
+        Start-Sleep -Seconds (3 * $attempt)
+    }
+    if (-not (Test-GitObjectLocally $VcpkgRoot $VcpkgBaselineObject)) {
+        $ActionsFallback = $true
     }
 }
 if (Test-Path $BootstrapVcpkg) {

@@ -27,6 +27,16 @@ class WindowsToolchainSetupTests(unittest.TestCase):
         )
         self.assertIn(r'"bin\qmlimportscanner.exe"', SETUP)
 
+    def test_vcpkg_setup_fetches_the_manifest_baseline_for_shallow_clones(self) -> None:
+        self.assertIn("ConvertFrom-Json", SETUP)
+        self.assertIn("'builtin-baseline'", SETUP)
+        self.assertIn("GIT_NO_LAZY_FETCH", SETUP)
+        self.assertRegex(
+            SETUP,
+            r"fetch --depth=1 --no-filter origin \$VcpkgBaseline",
+        )
+        self.assertIn("refs/relaydesk/vcpkg-baselines", SETUP)
+
     def test_windows_build_uses_stable_msvc_dependency_output(self) -> None:
         self.assertIn('$env:VSLANG = "1033"', BUILD)
         self.assertIn("TextInfo.OEMCodePage", BUILD)
