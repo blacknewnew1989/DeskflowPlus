@@ -50,6 +50,7 @@ private Q_SLOTS:
   void migratesLegacySchemaWithoutTrustingMessageKeys();
   void replacesDuplicateTransferAtomically();
   void prunesByAgeAndCount();
+  void compactsPersistentlyAtAgeBoundaryAndRemovesCorruptRows();
   void isolatesCorruptAndOversizedRows();
   void rejectsInvalidRecordsAndLimits();
   void persistsOnlySafeRelativeCompletionTargets();
@@ -156,6 +157,45 @@ void TransferHistoryStoreTests::prunesByAgeAndCount()
   QVERIFY(page.ok());
   QCOMPARE(page.page.totalValidEntries, 3);
   QCOMPARE(page.page.records, QList<TransferHistoryRecord>({fourth, third, second}));
+}
+
+void TransferHistoryStoreTests::compactsPersistentlyAtAgeBoundaryAndRemovesCorruptRows()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const QString path = temporary.filePath(QStringLiteral("history.jsonl"));
+  TransferHistoryLimits seedLimits;
+  seedLimits.maximumEntries = 8;
+  seedLimits.maximumAge = std::chrono::days{100};
+  TransferHistoryStore seed(path, seedLimits, [] { return kNow; });
+  const auto expired = record(QStringLiteral("10000000-0000-4000-8000-000000000001"), 2 * 24 * 60 * 60 + 1);
+  const auto boundary = record(QStringLiteral("20000000-0000-4000-8000-000000000002"), 2 * 24 * 60 * 60);
+  const auto newest = record(QStringLiteral("30000000-0000-4000-8000-000000000003"), 1);
+  const auto excess = record(QStringLiteral("40000000-0000-4000-8000-000000000004"), 2);
+  QVERIFY(seed.append(expired).ok());
+  QVERIFY(seed.append(boundary).ok());
+  QVERIFY(seed.append(newest).ok());
+  QVERIFY(seed.append(excess).ok());
+  appendBytes(path, QByteArrayLiteral("not-json\n"));
+
+  TransferHistoryLimits limits;
+  limits.maximumEntries = 3;
+  limits.maximumAge = std::chrono::days{2};
+  TransferHistoryStore store(path, limits, [] { return kNow; });
+  QVERIFY(store.compact().ok());
+
+  const auto page = store.page(0, 3);
+  QVERIFY(page.ok());
+  QCOMPARE(page.page.issues.size(), 0);
+  QCOMPARE(page.page.records, QList<TransferHistoryRecord>({newest, excess, boundary}));
+  QCOMPARE(page.page.totalValidEntries, 3);
+  QFile raw(path);
+  QVERIFY(raw.open(QIODevice::ReadOnly));
+  const QByteArray contents = raw.readAll();
+  QVERIFY(!contents.contains("not-json"));
+  QCOMPARE(contents.count('\n'), 3);
+  QDir directory(temporary.path());
+  QCOMPARE(directory.entryList(QDir::Files | QDir::Hidden), QStringList{QStringLiteral("history.jsonl")});
 }
 
 void TransferHistoryStoreTests::isolatesCorruptAndOversizedRows()

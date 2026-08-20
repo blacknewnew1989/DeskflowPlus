@@ -26,6 +26,7 @@ using namespace ::relaydesk::transfer;
 
 struct TransferHistoryRuntime::StartupSnapshot
 {
+  TransferHistoryOperationResult maintenance;
   TransferHistoryPageResult history;
   quint64 availableBytes = 0;
 };
@@ -59,7 +60,9 @@ void TransferHistoryRuntime::loadSnapshotAsync()
   connect(watcher, &QFutureWatcher<StartupSnapshot>::finished, this, [this, watcher]() {
     const auto snapshot = watcher->result();
     watcher->deleteLater();
-    if (!snapshot.history.ok()) {
+    if (!snapshot.maintenance.ok()) {
+      Q_EMIT historyError(snapshot.maintenance.error, snapshot.maintenance.diagnostic);
+    } else if (!snapshot.history.ok()) {
       Q_EMIT historyError(snapshot.history.error, snapshot.history.diagnostic);
     } else {
       for (const auto &record : snapshot.history.page.records) {
@@ -88,7 +91,10 @@ void TransferHistoryRuntime::loadSnapshotAsync()
     StartupSnapshot snapshot;
     {
       const QMutexLocker lock(mutex.get());
-      snapshot.history = store.page(0, 100);
+      snapshot.maintenance = store.compact();
+      if (snapshot.maintenance.ok()) {
+        snapshot.history = store.page(0, kDefaultMaximumHistoryEntries);
+      }
     }
     QStorageInfo storage(receiveRoot);
     if (!storage.isValid() || !storage.isReady()) {
@@ -114,8 +120,16 @@ void TransferHistoryRuntime::persistTerminal(const TransferSnapshot &snapshot)
   );
   m_records.removeIf([&record](const auto &existing) { return existing.transferId == record->transferId; });
   m_records.prepend(*record);
-  if (m_records.size() > 100) {
-    m_records.erase(m_records.begin() + 100, m_records.end());
+  const QDateTime cutoff = QDateTime::currentDateTimeUtc().addDays(-kDefaultMaximumHistoryAge.count());
+  m_records.removeIf([&cutoff](const auto &existing) { return existing.finishedUtc < cutoff; });
+  std::sort(m_records.begin(), m_records.end(), [](const auto &left, const auto &right) {
+    if (left.finishedUtc != right.finishedUtc) {
+      return left.finishedUtc > right.finishedUtc;
+    }
+    return left.transferId.toBytes() < right.transferId.toBytes();
+  });
+  if (m_records.size() > kDefaultMaximumHistoryEntries) {
+    m_records.erase(m_records.begin() + kDefaultMaximumHistoryEntries, m_records.end());
   }
   (void)m_transfers.removeTransfer(record->transferId);
   m_transfers.setHistoryRecords(m_records);

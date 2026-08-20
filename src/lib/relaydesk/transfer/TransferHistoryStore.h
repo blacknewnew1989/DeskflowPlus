@@ -20,6 +20,7 @@ namespace relaydesk::transfer {
 
 inline constexpr quint64 kTransferHistorySchemaVersion = 3;
 inline constexpr qsizetype kDefaultMaximumHistoryEntries = 1'000;
+inline constexpr std::chrono::days kDefaultMaximumHistoryAge{90};
 inline constexpr quint64 kDefaultMaximumHistoryBytes = 16U * 1024U * 1024U;
 inline constexpr qsizetype kDefaultMaximumHistoryLineBytes = 64U * 1024U;
 
@@ -61,7 +62,7 @@ struct TransferHistoryRecord
 struct TransferHistoryLimits
 {
   qsizetype maximumEntries = kDefaultMaximumHistoryEntries;
-  std::chrono::days maximumAge{90};
+  std::chrono::days maximumAge = kDefaultMaximumHistoryAge;
   quint64 maximumFileBytes = kDefaultMaximumHistoryBytes;
   qsizetype maximumLineBytes = kDefaultMaximumHistoryLineBytes;
 };
@@ -130,6 +131,10 @@ public:
   // than maximumAge and keeps only the newest maximumEntries rows. The whole
   // JSONL file is committed atomically.
   [[nodiscard]] TransferHistoryOperationResult append(const TransferHistoryRecord &record) const;
+  // Removes expired, excess, duplicate, and invalid rows by atomically
+  // rewriting the existing file. This is intended for background startup
+  // maintenance before a UI snapshot is read.
+  [[nodiscard]] TransferHistoryOperationResult compact() const;
   [[nodiscard]] TransferHistoryPageResult page(qsizetype offset = 0, qsizetype limit = 100) const;
   [[nodiscard]] TransferHistoryOperationResult clear() const;
 

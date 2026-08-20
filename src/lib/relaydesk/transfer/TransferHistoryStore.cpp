@@ -259,6 +259,31 @@ bool newestFirst(const TransferHistoryRecord &left, const TransferHistoryRecord 
   return left.transferId.toBytes() < right.transferId.toBytes();
 }
 
+void pruneRecords(QList<TransferHistoryRecord> &records, const TransferHistoryLimits &limits, const QDateTime &now)
+{
+  const QDateTime cutoff = now.isValid() ? now.toUTC().addDays(-limits.maximumAge.count()) : QDateTime{};
+  if (cutoff.isValid()) {
+    records.erase(
+        std::remove_if(
+            records.begin(), records.end(), [&cutoff](const TransferHistoryRecord &record) {
+              return record.finishedUtc < cutoff;
+            }
+        ),
+        records.end()
+    );
+  }
+  std::sort(records.begin(), records.end(), newestFirst);
+  records.erase(
+      std::unique(records.begin(), records.end(), [](const TransferHistoryRecord &left, const TransferHistoryRecord &right) {
+        return left.transferId == right.transferId;
+      }),
+      records.end()
+  );
+  if (records.size() > limits.maximumEntries) {
+    records.erase(records.begin() + limits.maximumEntries, records.end());
+  }
+}
+
 } // namespace
 
 struct TransferHistoryStore::LoadAllResult
@@ -301,21 +326,26 @@ TransferHistoryOperationResult TransferHistoryStore::append(const TransferHistor
   );
   loaded.records.append(record);
 
-  const QDateTime now = m_clock().toUTC();
-  const QDateTime cutoff = now.isValid() ? now.addDays(-m_limits.maximumAge.count()) : QDateTime{};
-  if (cutoff.isValid()) {
-    loaded.records.erase(
-        std::remove_if(
-            loaded.records.begin(), loaded.records.end(),
-            [&cutoff](const TransferHistoryRecord &existing) { return existing.finishedUtc < cutoff; }
-        ),
-        loaded.records.end()
-    );
+  pruneRecords(loaded.records, m_limits, m_clock());
+  return writeAll(loaded.records);
+}
+
+TransferHistoryOperationResult TransferHistoryStore::compact() const
+{
+  if (!QFileInfo(m_historyPath).isAbsolute()) {
+    return operationFailure(TransferHistoryError::InvalidStorePath, QStringLiteral("history path must be absolute"));
   }
-  std::sort(loaded.records.begin(), loaded.records.end(), newestFirst);
-  if (loaded.records.size() > m_limits.maximumEntries) {
-    loaded.records.erase(loaded.records.begin() + m_limits.maximumEntries, loaded.records.end());
+  if (!validLimits(m_limits)) {
+    return operationFailure(TransferHistoryError::InvalidLimits, QStringLiteral("history limits are invalid"));
   }
+  if (!QFileInfo::exists(m_historyPath)) {
+    return {};
+  }
+  LoadAllResult loaded = loadAll();
+  if (loaded.error != TransferHistoryError::None) {
+    return operationFailure(loaded.error, std::move(loaded.diagnostic));
+  }
+  pruneRecords(loaded.records, m_limits, m_clock());
   return writeAll(loaded.records);
 }
 
@@ -338,18 +368,7 @@ TransferHistoryPageResult TransferHistoryStore::page(qsizetype offset, qsizetype
     return {.error = loaded.error, .diagnostic = std::move(loaded.diagnostic)};
   }
 
-  const QDateTime now = m_clock().toUTC();
-  const QDateTime cutoff = now.isValid() ? now.addDays(-m_limits.maximumAge.count()) : QDateTime{};
-  if (cutoff.isValid()) {
-    loaded.records.erase(
-        std::remove_if(
-            loaded.records.begin(), loaded.records.end(),
-            [&cutoff](const TransferHistoryRecord &existing) { return existing.finishedUtc < cutoff; }
-        ),
-        loaded.records.end()
-    );
-  }
-  std::sort(loaded.records.begin(), loaded.records.end(), newestFirst);
+  pruneRecords(loaded.records, m_limits, m_clock());
   const qsizetype total = loaded.records.size();
   const qsizetype begin = std::min(offset, total);
   const qsizetype end = std::min(total, begin + limit);

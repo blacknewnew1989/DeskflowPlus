@@ -88,6 +88,7 @@ private Q_SLOTS:
   void ownsTypedServiceBindingAndLifecycle();
   void reportsUnavailableOrFailedStartupWithoutStopping();
   void loadsAndPersistsHistoryOffTheUiContract();
+  void loadsMoreThanOneHundredHistoryRecordsAtStartup();
 };
 
 void TransferRuntimeCompositionTests::ownsTypedServiceBindingAndLifecycle()
@@ -219,6 +220,40 @@ void TransferRuntimeCompositionTests::loadsAndPersistsHistoryOffTheUiContract()
   QCOMPARE(page.page.records.first().transferId, completed.id);
   QCOMPARE(page.page.records.first().completedRelativePath, QStringLiteral("Project/report.txt"));
   QCOMPARE(page.page.records.first().topLevelTargetRelativePath, QStringLiteral("Project"));
+}
+
+void TransferRuntimeCompositionTests::loadsMoreThanOneHundredHistoryRecordsAtStartup()
+{
+  Fixture fixture;
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const auto historyPath = temporary.filePath(QStringLiteral("history/transfers.jsonl"));
+  TransferHistoryStore store(historyPath);
+  const auto now = QDateTime::currentDateTimeUtc();
+  for (int index = 0; index < 101; ++index) {
+    const TransferSnapshot completed{
+        .id = TransferId::generate(),
+        .peerId = DeviceId::generate(),
+        .peerDisplayName = QStringLiteral("Studio Mac"),
+        .displayName = QStringLiteral("Project"),
+        .direction = TransferDirection::Receiving,
+        .state = TransferState::Completed,
+        .progress = {.completedBytes = 1024, .totalBytes = 1024, .completedFiles = 1, .totalFiles = 1},
+        .createdUtc = now.addSecs(-index - 1),
+        .finishedUtc = now.addSecs(-index),
+    };
+    const auto record = TransferHistoryRuntime::recordForSnapshot(completed);
+    QVERIFY(record.has_value());
+    QVERIFY(store.append(*record).ok());
+  }
+
+  TransferRuntimeComposition composition(
+      std::make_unique<FakeFileTransferService>(),
+      {.start = [](QString *) { return true; }, .stop = [] {}}, fixture.devicesDock, fixture.transferDock,
+      {.destinationRoot = temporary.path(), .availableBytes = 0}, historyPath
+  );
+  QVERIFY(composition.start());
+  QTRY_COMPARE_WITH_TIMEOUT(fixture.transfers.rowCount(), 101, 5000);
 }
 
 QTEST_MAIN(TransferRuntimeCompositionTests)
