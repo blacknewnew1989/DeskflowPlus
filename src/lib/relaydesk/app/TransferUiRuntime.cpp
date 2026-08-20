@@ -9,6 +9,7 @@
 #include "relaydesk/model/IncomingOfferModel.h"
 #include "relaydesk/model/TransferCenterModel.h"
 #include "relaydesk/transfer/IFileTransferService.h"
+#include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 
@@ -99,6 +100,13 @@ TransferUiRuntime::TransferUiRuntime(
       &service, &IFileTransferService::transferChanged, &transfers,
       [&transfers](const ::relaydesk::transfer::TransferSnapshot &snapshot) {
         (void)transfers.upsertTransfer(snapshot);
+      }
+  );
+  connect(
+      &service, &IFileTransferService::transferChanged, &devicesDock,
+      [&devicesDock](const ::relaydesk::transfer::TransferSnapshot &snapshot) {
+        if (::relaydesk::transfer::TransferControlStateMachine::isTerminal(snapshot.state))
+          devicesDock.clearIncomingConflictPrompts(snapshot.id);
       }
   );
   connect(

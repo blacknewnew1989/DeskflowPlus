@@ -19,6 +19,8 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFrame>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -349,6 +351,14 @@ void TransferUiRuntimeTests::bridgesIncomingConflictDecisionsThroughTypedUiInten
       fixture.service.resolvedConflictDecision,
       std::optional<IncomingConflictDecision>{IncomingConflictDecision::CancelTransfer}
   );
+  auto terminal = transferSnapshot(
+      QStringLiteral("55555555-5555-4555-8555-555555555555"), TransferState::Canceled
+  );
+  terminal.id = prompt.transferId;
+  Q_EMIT fixture.service.transferChanged(terminal);
+  auto *panel = fixture.devicesDock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingConflictPanel"));
+  QVERIFY(panel != nullptr);
+  QVERIFY(!panel->isVisible());
 }
 
 void TransferUiRuntimeTests::opensResolvedCompletionOnlyInsideExistingReceiveRoot()
