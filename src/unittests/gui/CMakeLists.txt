@@ -17,6 +17,9 @@ create_test(
   SOURCE MainWindowLayoutTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/gui"
 )
+target_sources(MainWindowLayoutTests PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/apps/res/deskflow.qrc
+)
 add_dependencies(MainWindowLayoutTests app_translations)
 set(main_window_layout_translations_dir "$<TARGET_FILE_DIR:MainWindowLayoutTests>/translations")
 add_custom_target(
@@ -40,6 +43,10 @@ set_tests_properties(
 
 add_executable(MainWindowQuitRegression MainWindowQuitRegression.cpp)
 target_link_libraries(MainWindowQuitRegression gui Qt::Test)
+set_target_properties(
+  MainWindowQuitRegression
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
 if(CMAKE_CXX_BYTE_ORDER STREQUAL "BIG_ENDIAN")
   target_compile_definitions(MainWindowQuitRegression PUBLIC WORDS_BIGENDIAN=1)
 endif()
