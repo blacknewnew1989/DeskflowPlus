@@ -2,11 +2,14 @@
 
 ## 结论
 
-2026-08-14 用户确认的界面稿已经落实到共享 Qt 界面。UI-011 收口实现已推送到
-`agent/a0/ui011-final-closeout` 的 `8aba552b89a6a8a4600df3c5d4270e711de07416`，本地针对性
-回归为 `PASS`；精确产品 SHA 的 Windows x64 与 Apple Silicon macOS 构建、安装包核验
-仍为 `IN_PROGRESS`。旧标签 `relaydesk-phase4-20260813-03` 早于本次改版，不能作为本次
-交付证据。
+2026-08-14 用户确认的界面稿已经落实到共享 Qt 界面。8 月 13 日的 UI-011 收口提交
+`8aba552b89a6a8a4600df3c5d4270e711de07416` 和
+`relaydesk-phase4-20260813-03` 均为历史候选，不能作为当前交付证据。
+
+当前候选为 `a624a9e40f027c4165dd8838b61cbe98af68d7f2`。主窗口/托盘定向回归（offscreen
+各连续 10 次、native 各 1 次）以及原生串行 CTest 98/98 均为 `PASS`。精确标签的
+Windows x64 与 Apple Silicon macOS 构建、安装包和生命周期仍为 `NOT_RUN`，不得由本地
+组件测试替代。
 
 ## 已确认设计输入
 
@@ -47,23 +50,27 @@
 | `75b61df99` | 在 Windows 安装树中校验七语言 QM 闭包与可加载性 |
 | `56568584f` | 以独立进程验证菜单和托盘退出确实终止应用 |
 | `8aba552b8` | 补齐七语言权限语义并统一为 178/178 个完整键 |
+| `998d18929`、`24c8777f` | 补齐输入目标布局、共享端口和紧凑操作区同步 |
+| `20f68ee18`、`3f7ddd30` | 修复 Windows 托盘资源和主窗口回归运行资源 |
 
 ## 本地自动验证
 
 | 范围 | 结果 |
 |---|---|
-| UI-011 定向 Qt 回归 | 7/7 PASS：布局、菜单/托盘 true-quit、七语言、权限探针、权限状态与后台生命周期 |
-| 菜单/托盘 true-quit | 2/2 PASS；保留 close/minimize-to-tray 设置时，两个独立进程均在 3 秒 watchdog 前退出 |
-| Qt 翻译 | 七个 `relaydesk_*.ts` 均为 178/178 个唯一、完整键；七个 QM 实际加载 PASS |
+| 当前候选原生串行 CTest | 98/98 PASS，47.41 s；日志 `product/working/windows-debug-ctest-20260820-131000.log` |
+| 主窗口/托盘定向回归 | offscreen 各连续 10 次及 native 各 1 次 PASS |
+| Qt 翻译 | 七个 `relaydesk_*.ts` 均为 182/182 个唯一、完整键；七个 QM 实际加载 PASS |
 | Windows 安装树翻译闭包 | 七个 QM 文件集合、magic、大小、摘要及 `lconvert` 实际加载 PASS |
-| 产品 Python contracts | 29/29 PASS：macOS/Windows 翻译与打包契约 |
+| 产品 Python contracts | `product/tests` 26/26 PASS；`product/scripts/tests` 37/37 PASS；日志为 `product/working/product-tests-a624a9e40.log`、`product/working/script-tests-a624a9e40.log` |
 | 品牌校验 | macOS 生成往返、Windows 生成、集中品牌配置均 PASS |
 | macOS 权限前台刷新 | `ApplicationActive` 自动复检与 150 ms 合并回归 PASS；最终 App 系统设置往返待实测 |
+| 包校验 | `validate-package.py` PASS：49 个必需文件、10 个 JSON、60 个协议向量；日志为 `product/working/package-validation-a624a9e40-rerun.log` |
 | 工作流定义 | YAML 解析、Windows staged install 与翻译报告路径契约 PASS |
 | XML / `git diff --check` | PASS |
 
-Windows 本地针对性编译使用 MinGW/Qt；权威平台编译仍以精确标签 Actions 的
-MSVC 2022 + Qt 与 macOS Clang/arm64 + Qt 结果为准。
+当前 Debug 增量构建为 PASS。Windows 本地 Release 打包因缺少原生 Strawberry Perl 未执行，
+已回退到精确标签 Actions；权威平台编译仍以 Actions 的 MSVC 2022 + Qt 与 macOS
+Clang/arm64 + Qt 结果为准。
 
 ## 品牌资源摘要
 
@@ -74,12 +81,13 @@ MSVC 2022 + Qt 与 macOS Clang/arm64 + Qt 结果为准。
 | `src/apps/res/RelayDesk.icns` | 107,265 | `eaa77c7fe6d7773c32c79cdb8bfdd50c645188460f2489832c1a405270da5218` |
 | `deploy/mac/dmg-background.tiff` | 963,472 | `77b1dd2a0ff9dea1a15a14d81387b624c57fcef836249fed4c68613fa1f2e5de` |
 
-## 双平台构建（待回填）
+## 双平台构建（当前候选待执行）
 
-- 计划标签：`relaydesk-phase4-20260814-01`
-- 精确产品提交、tag object、Actions run/jobs：`IN_PROGRESS`
-- Windows MSI/portable 与 macOS App/DMG 摘要：`IN_PROGRESS`
-- Windows 安装生命周期与 macOS App/DMG 生命周期：`IN_PROGRESS`
+- 当前产品提交：`a624a9e40f027c4165dd8838b61cbe98af68d7f2`。
+- 计划标签：`relaydesk-phase4-20260820-01`（尚未创建）。
+- tag object、Actions run/jobs：`NOT_RUN`。
+- Windows MSI/portable 与 macOS App/DMG：`NOT_RUN`，不得预填摘要。
+- Windows 安装生命周期与 macOS App/DMG 生命周期：`NOT_RUN`。
 
 ## 明确保留的 NOT_RUN
 

@@ -1,4 +1,4 @@
-# PROJECT STATE
+# 项目状态
 
 > A0 每次阶段推送后更新；远程仓库是唯一状态真相。
 
@@ -10,32 +10,32 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 4 最终收口（撤销信任链与本地六目标回归 `PASS`；接收方传输控制、手动地址入口、`Ask` 用户决策及精确标签双平台构建待完成）
+- Current phase: Phase 4 当前候选收口（手动地址入口、`Ask` 决策、接收方控制和主窗口/托盘回归已集成并通过组件测试；精确标签双平台构建、安装包和物理验收待执行）
 - Last updated: 2026-08-20
 - User action required during development: none
 
 ## Git 状态
 
 - Repository root: `F:\github\DeskflowPlus`
-- Active source worktree: `F:\github\DeskflowPlus-relaydesk`
+- Active source worktree: `F:\github\DeskflowPlus\working\relaydesk-product`
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Last pushed integration tip: `939bbb3a02d9d7062a6a5cff4363cea95f1abd11`
-- Current local implementation tip: `088702900731a167c0efb1a3c7114f99be75b2cc`（尚未推送）
+- Last pushed integration tip: `d040b84392d7adf83235ae7b5a47ceab93fa65b5`
+- Current local implementation tip: `a624a9e40f027c4165dd8838b61cbe98af68d7f2`（领先 `origin/product/relaydesk-v1` 23 个提交，尚未推送）
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
-- Current implementation: v1 内部发布主链已组合。共享 Qt 外壳包含紧凑首页、权限分项、设备/传输区域、集中品牌资源、托盘后台生命周期、输入角色设置和可信设备撤销。撤销后既有文件 TLS 连接关闭，主动连接与自动重连均拒绝该设备。接收方直接暂停/继续/取消的发送端同步仍有取消收尾红测；RelayDesk 手动地址录入和冲突策略 `Ask` 的逐文件用户决策尚无 GUI 入口。macOS TCC/menu bar 与 Win↔Mac 物理双机验收仍为 `NOT_RUN`。
-- Last verified stage tag: `relaydesk-phase4-20260813-03` (`05f92a1ab721f7fd8b893e47e05643d5988e1719`)
+- Current implementation: v1 内部发布主链已组合。共享 Qt 外壳包含紧凑首页、权限分项、设备/传输区域、集中品牌资源、托盘后台生命周期、输入角色设置、可信设备撤销、手动地址管理和 `Ask` 冲突逐文件决策。接收方直接暂停/继续/取消已接入运行时；当前组件测试通过。macOS TCC/menu bar、物理 Win↔Mac 双机和 unsigned 提示交互仍为 `NOT_RUN`。
+- Last verified stage tag: `relaydesk-phase4-20260813-03` (`05f92a1ab721f7fd8b893e47e05643d5988e1719`，历史候选；不得作为当前 2026-08-20 候选的构建或安装证据）
 
 ## 2026-08-20 收口复验
 
 | ID | 状态 | Owner | 当前证据 / 下一步 |
 |---|---|---|---|
 | PAIR-006 | PASS | A2/A3/A0 | `dc4b7efed`、`19e5ab583`、`3f6efb6d1`、`d4d312e88`、`088702900`；撤销确认、TLS 断开、重连拒绝与 520×380 更多菜单已接通；MSVC/Qt 6.10.1 六目标 CTest 6/6 PASS |
-| CTRL-002 | FAIL | A6/A0 | 接收方直接 pause/resume 已越过，直接 cancel 后双端未在 15 秒内同时进入 `Cancelled`；修复前不得集成 A6 控制帧提交 |
-| DISC-005 | NOT_STARTED | A2/A3/A0 | `DiscoverySettings.manualAddresses` 与候选解析已存在，但 RelayDesk GUI 尚无录入/管理入口 |
-| CONFLICT-003 | NOT_STARTED | A6/A3/A0 | 底层策略组合已存在，但 Incoming Offer 仍固定 AutoRename，`Ask` 尚无逐文件决策入口 |
-| WIN-019 | IN_PROGRESS | A4/A7/A0 | 最新代码的 Windows unsigned 安装包、安装后桌面/托盘/参数/生命周期验收待上述红项收口后执行 |
+| CTRL-002 | PASS | A6/A0 | 接收方直接 pause/continue/cancel 已集成；原生串行 CTest 98/98 PASS。真实双机控制链路仍为 `NOT_RUN`。 |
+| DISC-005 | PASS | A2/A3/A0 | 手动地址录入、保存和定向探测已集成；原生串行 CTest 98/98 PASS。真实局域网发现链路仍为 `NOT_RUN`。 |
+| CONFLICT-003 | PASS | A6/A3/A0 | `Ask` 的逐文件用户决策和运行时链路已集成；原生串行 CTest 98/98 PASS。真实双机传输决策链路仍为 `NOT_RUN`。 |
+| WIN-019 | IN_PROGRESS | A4/A7/A0 | 当前 SHA 的 Windows unsigned 包、安装后桌面/托盘/参数/生命周期验收待精确标签 Actions 构建；本地 Release 打包因缺少原生 Strawberry Perl 已回退到 Actions。 |
 | MAC-038 | NOT_RUN | A5/A7/A0 | 最新 App 的 TCC/menu bar 与 Win↔Mac 物理双机仍需真实 macOS 对端；不以本地或 Actions 测试替代 |
 
 ## 2026-08-14 紧凑界面变更
@@ -50,10 +50,10 @@
 
 | ID | 状态 | Owner | 当前证据 / 下一步 |
 |---|---|---|---|
-| UI-010 | IN_PROGRESS | A3/A0 | 当前树已补齐七语言 182/182；Qt/UI 与脚本回归 PASS，待精确标签 Windows/macOS 构建 |
-| UI-012 | IN_PROGRESS | A3/A0 | 高级页恢复输入角色与 Client 远端主机配置；TLS 控件按当前角色即时更新，远端主机行往返尺寸可恢复；MSVC + Qt 6.10.1 `MainWindowLayoutTests` 8/8 PASS，待安装包平台运行验证 |
-| BRAND-002 | IN_PROGRESS | A3/A4/A5 | SVG 单源、主题资源、ICO/ICNS/DMG 与 CMake 接线已完成；macOS/Windows 品牌校验 PASS，待平台包核验 |
-| TRAY-001 | IN_PROGRESS | A3/A4/A5 | 最小化/关闭到 tray 独立设置及安全停机已实现；菜单/托盘独立进程真实退出回归 2/2 PASS，待平台包与真机交互 |
+| UI-010 | PASS | A3/A0 | 七语言、主窗口布局与托盘回归均已通过；当前原生串行 CTest 98/98 PASS，待精确标签 Windows/macOS 构建 |
+| UI-012 | PASS | A3/A0 | 高级页输入角色和 Client 远端主机配置已接通；定向 offscreen 各连续 10 次与 native 各 1 次 PASS，待安装包平台运行验证 |
+| BRAND-002 | PASS | A3/A4/A5 | SVG 单源、主题资源、ICO/ICNS/DMG 与 CMake 接线及本地品牌校验 PASS，待平台包核验 |
+| TRAY-001 | PASS | A3/A4/A5 | 最小化/关闭到 tray 独立设置及安全停机已实现；定向 offscreen 各连续 10 次与 native 各 1 次 PASS，待平台包与真机交互 |
 | MAC-037 | IN_PROGRESS | A5/A3/A0 | 三项权限能力门控、ApplicationActive 自动复检与 150 ms 合并回归 PASS；待最终 App 的系统设置往返前台实测 |
 
 ## 自动执行状态
@@ -83,7 +83,7 @@
 | UI-011 local closeout | PASS | product branch reached `939bbb3a0`; 7 Qt regressions, 29 Python contracts, Windows staged-QM loader and brand checks PASS |
 | Current seven-language catalogs | PASS | `088702900`; en/es/it/ja/ko/ru/zh_CN are each 182/182; Qt catalog load and 14 translation contracts PASS |
 | Current revoke-trust composition | PASS | `dc4b7efed` through `088702900`; clean MSVC/Qt 6.10.1 targeted CTest 6/6 PASS |
-| Current exact-SHA dual-platform Actions | NOT_RUN | run only after CTRL-002, DISC-005 and CONFLICT-003 are closed on one final product SHA |
+| Current exact-SHA dual-platform Actions | NOT_RUN | `a624a9e40` 的 Actions、标签、artifact 和安装生命周期尚未触发；本地 Release 打包已因缺少原生 Strawberry Perl 回退至 Actions |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -95,12 +95,12 @@
 | 1 产品基础 | PASS | A2/A3/A0 | tag `relaydesk-phase1-20260813-04`; run `31623677270`; local Release asset SHA verification PASS |
 | 2 文件传输 | PASS | A2/A6/A0 | tag `relaydesk-phase2-20260813-04`; run `31655013105`; Win 74/74, Mac 75/75; four assets triple-digest verified |
 | 3 可靠性/UI | PASS | A3/A6/A7 | tag `relaydesk-phase3-20260813-01`; run `31691378517` SUCCESS; Win 88/88, Mac 89/89; physical Win↔Mac remains final acceptance |
-| 4 平台/发布 | PASS | A4/A5/A7 | tag `relaydesk-phase4-20260813-03`; run `31706167585`; layout fix + exact-tag unsigned MSI/7Z/App ZIP/DMG downloaded and SHA-256 verified |
+| 4 平台/发布 | IN_PROGRESS | A4/A5/A7 | `relaydesk-phase4-20260813-03` 是历史候选；当前 `a624a9e40` 待推送、创建精确标签、触发双平台 Actions 并产生 unsigned 包 |
 | 5 增强 | NOT_STARTED | A3/A4/A5 | 按价值推进 |
 
 ## 最终 artifact
 
-### Windows（Phase 4 最终内部候选）
+### Windows（历史 Phase 4 内部候选，2026-08-13）
 
 - Commit: `05f92a1ab721f7fd8b893e47e05643d5988e1719`
 - Tag / workflow run: `relaydesk-phase4-20260813-03` / `31706167585`
@@ -113,7 +113,7 @@
   firewall, residue and user-data preservation)
 - Physical Win↔Mac runtime result: NOT_RUN; final user acceptance required
 
-### macOS（Phase 4 最终内部候选）
+### macOS（历史 Phase 4 内部候选，2026-08-13）
 
 - Commit: `05f92a1ab721f7fd8b893e47e05643d5988e1719`
 - Tag / workflow run: `relaydesk-phase4-20260813-03` / `31706167585`
@@ -125,6 +125,21 @@
 - Lifecycle result: PASS (strict ad-hoc codesign, ZIP symlinks, DMG verify/mount, isolated launch,
   replace, App-only uninstall and user-data preservation)
 - Physical Win↔Mac runtime and OS permission result: NOT_RUN; final user acceptance required
+
+### 2026-08-20 当前候选
+
+- Commit: `a624a9e40f027c4165dd8838b61cbe98af68d7f2`。
+- 本地 Debug 增量构建：PASS；原生串行 CTest 98/98 PASS（47.41 s），日志
+  `product/working/windows-debug-ctest-20260820-131000.log`。
+- 定向主窗口/托盘回归：offscreen 各连续 10 次及 native 各 1 次均 PASS。
+- `product/tests`：26/26 PASS；`product/scripts/tests`：37/37 PASS；日志分别为
+  `product/working/product-tests-a624a9e40.log` 和
+  `product/working/script-tests-a624a9e40.log`。
+- `validate-package.py`：PASS（49 个必需文件、10 个 JSON、60 个协议向量）；日志为
+  `product/working/package-validation-a624a9e40-rerun.log`。
+- Windows Release 本地打包：因缺少原生 Strawberry Perl 未执行，已回退到 Actions。
+- 标签、Actions run、artifact、MSI/portable/App/DMG、安装生命周期：`NOT_RUN`，不得以本地组件测试替代。
+- 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 提示交互：`NOT_RUN`。
 
 ## 最终用户验收
 
