@@ -9,12 +9,26 @@ CTest 98/98、主窗口/托盘定向回归、`product/tests` 26/26、`product/sc
 `product/working/script-tests-a624a9e40.log` 和
 `product/working/package-validation-a624a9e40-rerun.log`。
 
-TEST-005 的当前候选 Windows 安装、修复、升级、卸载和残留验证仍为 `NOT_RUN`。本地
-Release 打包因缺少原生 Strawberry Perl 未执行，已回退至精确标签 GitHub Actions；因此
-当前候选尚无标签、Actions run、artifact、MSI、portable 7Z、包摘要或安装日志，本文不得
-将下列历史 `PASS` 解释为当前候选结果。
+当前候选 TEST-005 的 Windows 安装、修复、升级、卸载和残留验证为 `PASS`。本地 Release
+打包因缺少原生 Strawberry Perl 回退至精确标签 GitHub Actions，并由 hosted Windows runner
+完成；下列历史 `PASS` 仍只属于其原始候选，不与当前候选混用。
 
-unsigned SmartScreen/UAC 的交互提示也仍为 `NOT_RUN`，需在最终实际安装验收中观察。
+| 字段 | 当前候选事实 |
+|---|---|
+| 产品实现提交 | `a624a9e40f027c4165dd8838b61cbe98af68d7f2` |
+| 阶段文档/标签目标 | `eb84e668e8a8b8e960b7636ebacb2db5edf28b30` |
+| 注释标签 | `relaydesk-phase4-20260820-01`，tag object `459043ebf10d1f353e91a3625d9bb7bc726eda2d` |
+| Workflow/run | `relaydesk-build.yml` / `32335399442` `SUCCESS` |
+| Windows job | `96323889159` `SUCCESS` |
+| Windows CTest | 98/98 PASS，28.75 s |
+| TEST-005 | 19/19 PASS；MSI 安装、修复、主版本升级、两次卸载、服务、防火墙、残留和数据保留均 PASS |
+| Windows artifact | `9394732713`，36,184,775 bytes，API digest `bae031f6a0725b3794be093ad57f53852cf98ba39c93391e1067c253a5d635e2` |
+| MSI | 16,285,394 bytes，SHA-256 `e9ea742466b6432d7c1a2e55b88c4ff7ac3a32d7bf613d3264487766d941601b` |
+| portable 7Z | 13,306,405 bytes，SHA-256 `ec0a840613c1472afdac32aeca3e47d256d9ec7c370a1a5a876a5f7579a9d44e` |
+| 包取证 | `dist/actions/32335399442`、`dist/releases/relaydesk-phase4-20260820-01`、manifest、`SHA256SUMS`、本地 `Get-FileHash` 和 Release API digest 四方一致 |
+
+unsigned SmartScreen/UAC 的交互提示、真实桌面/托盘操作仍为 `NOT_RUN`，需在最终实际安装
+验收中观察。
 
 ## 历史候选（2026-08-13）
 

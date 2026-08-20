@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "repository": "blacknewnew1989/DeskflowPlus",
+  "workflow": ".github/workflows/relaydesk-build.yml",
+  "runId": 32335399442,
+  "runUrl": "https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/32335399442",
+  "event": "push",
+  "tag": "relaydesk-phase4-20260820-01",
+  "tagObject": "459043ebf10d1f353e91a3625d9bb7bc726eda2d",
+  "tagTargetCommit": "eb84e668e8a8b8e960b7636ebacb2db5edf28b30",
+  "productImplementationCommit": "a624a9e40f027c4165dd8838b61cbe98af68d7f2",
+  "completedAt": "2026-08-20T05:36:59Z",
+  "jobs": [
+    {
+      "id": 96323889286,
+      "name": "Development materials diagnostic",
+      "conclusion": "success"
+    },
+    {
+      "id": 96323889159,
+      "name": "windows-x64",
+      "runner": "GitHub-hosted Windows X64",
+      "conclusion": "success",
+      "tests": {
+        "status": "PASS",
+        "passed": 98,
+        "failed": 0,
+        "total": 98,
+        "seconds": 28.75
+      },
+      "installLifecycle": {
+        "status": "PASS",
+        "passedChecks": 19,
+        "interactiveUnsignedWarning": "NOT_RUN"
+      }
+    },
+    {
+      "id": 96323889254,
+      "name": "macos-arm64",
+      "runner": "GitHub-hosted macOS ARM64",
+      "conclusion": "success",
+      "tests": {
+        "status": "PASS",
+        "passed": 99,
+        "failed": 0,
+        "total": 99,
+        "seconds": 28.54
+      }
+    },
+    {
+      "id": 96326301670,
+      "name": "macOS install lifecycle regression",
+      "conclusion": "success",
+      "installLifecycle": {
+        "status": "PASS",
+        "passedChecks": 19,
+        "signatureVariant": "adhoc",
+        "notarized": false
+      }
+    },
+    {
+      "id": 96326301658,
+      "name": "Publish unsigned draft release",
+      "conclusion": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 9394732713,
+      "name": "relaydesk-windows-x64-eb84e668e8a8b8e960b7636ebacb2db5edf28b30",
+      "size": 36184775,
+      "apiZipSha256": "bae031f6a0725b3794be093ad57f53852cf98ba39c93391e1067c253a5d635e2"
+    },
+    {
+      "id": 9394568263,
+      "name": "relaydesk-macos-arm64-eb84e668e8a8b8e960b7636ebacb2db5edf28b30",
+      "size": 65692021,
+      "apiZipSha256": "5b39a2e57979a3012226ff063e3adc14bb68541399ed6d007981be8bcec14d53"
+    },
+    {
+      "id": 9394740898,
+      "name": "relaydesk-macos-install-regression-eb84e668e8a8b8e960b7636ebacb2db5edf28b30",
+      "size": 12566,
+      "apiZipSha256": "4e97297436ccdfc02c5d7c1a734da72d00ecd5b99085de0c0dc095bf2eb8eb2d"
+    }
+  ],
+  "release": {
+    "draft": true,
+    "name": "RelayDesk internal relaydesk-phase4-20260820-01",
+    "url": "https://github.com/blacknewnew1989/DeskflowPlus/releases/tag/untagged-2f0a5148b8dda7484ccd",
+    "actionsDirectory": "dist/actions/32335399442",
+    "localDeliveryDirectory": "dist/releases/relaydesk-phase4-20260820-01",
+    "deliveryAssets": [
+      {
+        "name": "relaydesk-eb84e668e8a8b8e960b7636ebacb2db5edf28b30-win-x64-unsigned.msi",
+        "size": 16285394,
+        "sha256": "e9ea742466b6432d7c1a2e55b88c4ff7ac3a32d7bf613d3264487766d941601b"
+      },
+      {
+        "name": "relaydesk-eb84e668e8a8b8e960b7636ebacb2db5edf28b30-win-x64-unsigned-portable.7z",
+        "size": 13306405,
+        "sha256": "ec0a840613c1472afdac32aeca3e47d256d9ec7c370a1a5a876a5f7579a9d44e"
+      },
+      {
+        "name": "RelayDesk-macos-arm64-adhoc-eb84e668.app.zip",
+        "size": 28807799,
+        "sha256": "c60478f9323f989de141a518228e2dcdb1b409922a19ac8eda5128cf5bac9a39"
+      },
+      {
+        "name": "relaydesk-eb84e668e8a8b8e960b7636ebacb2db5edf28b30-macos-arm64-adhoc.dmg",
+        "size": 28901947,
+        "sha256": "2cb50cdacfe8b460e4a71933c243118b03c1d650bbd3a383e86bacd55a440b1a"
+      }
+    ],
+    "digestVerification": "PASS：artifact manifest、平台 SHA256SUMS、本地 Get-FileHash 与 GitHub Release API digest 一致",
+    "localDeliverySource": "已下载的 Actions artifacts；本地发布目录中的四个交付文件与 Release API digest 一致"
+  },
+  "collection": {
+    "artifactFileCount": 28,
+    "downloadChecksums": "dist/actions/32335399442/DOWNLOAD_SHA256SUMS.txt",
+    "note": "run-github-actions.py 完成监控后批量下载连接停滞；保留已下载证据，并使用 gh 按 artifact 名称逐项重试成功",
+    "finalMaterialsValidation": {
+      "status": "PASS",
+      "requiredFiles": 49,
+      "jsonFiles": 11,
+      "protocolVectors": 60,
+      "log": "product/working/package-validation-phase4-evidence-20260820.log"
+    }
+  },
+  "notRun": [
+    "Windows SmartScreen/UAC 交互提示与真实桌面/托盘操作",
+    "macOS Local Network、Accessibility、Input Monitoring 与 menu bar 真实交互",
+    "Windows 与 macOS 物理双机键鼠、滚轮、剪贴板和文件传输",
+    "Developer ID、Apple notarization 与 Windows Authenticode"
+  ]
+}

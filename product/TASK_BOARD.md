@@ -16,17 +16,16 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 当前范围与完成证据 |
 |---|---|---|---|
-| UI-010 | 按已确认设计图实现共享 Qt 紧凑单栏首页 | A3/A0 | 当前产品树默认 560×420、最小 520×380；主窗口/托盘定向回归和原生串行 CTest 98/98 PASS；待精确标签双平台构建 |
-| UI-012 | 在高级设置页恢复输入角色与 Client 远端主机配置 | A3/A0 | Server/Client 保存后同步 CoreProcess，TLS 控件按当前 radio 即时更新，远端主机行显示与尺寸恢复回归已覆盖；offscreen 各连续 10 次与 native 各 1 次 PASS，待安装包平台运行验证 |
-| BRAND-002 | 实现原创“双设备 + 中继点”临时 Logo | A3/A4/A5 | `5c2092203`；SVG 单源、ICO/ICNS/DMG 同步及 macOS/Windows 品牌校验 PASS；待精确标签平台包核验 |
-| TRAY-001 | 完成最小化/关闭到托盘与后台生命周期 | A3/A4/A5 | `56568584f`；独立设置与同步安全停机已实现，主窗口/托盘定向回归与原生串行 CTest 98/98 PASS；待双平台构建和真机交互 |
+| UI-010 | 按已确认设计图实现共享 Qt 紧凑单栏首页 | A3/A0 | 当前产品树默认 560×420、最小 520×380；主窗口/托盘定向回归、精确标签 Windows 98/98、macOS 99/99 与双平台打包/自动生命周期均 PASS |
+| UI-012 | 在高级设置页恢复输入角色与 Client 远端主机配置 | A3/A0 | Server/Client 保存后同步 CoreProcess，TLS 控件按当前 radio 即时更新，远端主机行显示与尺寸恢复回归已覆盖；offscreen 各连续 10 次与 native 各 1 次 PASS，实机平台交互待验证 |
+| BRAND-002 | 实现原创“双设备 + 中继点”临时 Logo | A3/A4/A5 | `5c2092203`；SVG 单源、ICO/ICNS/DMG 同步及 macOS/Windows 品牌校验 PASS；精确标签平台包已生成并四方摘要一致 |
+| TRAY-001 | 完成最小化/关闭到托盘与后台生命周期 | A3/A4/A5 | `56568584f`；独立设置与同步安全停机已实现，定向回归、精确标签双平台构建和自动生命周期 PASS；真机交互仍 `NOT_RUN` |
 | MAC-037 | 适配紧凑首页、权限能力门控和 macOS menu bar | A5/A3/A0 | `9ac7f0d79`；同一 PermissionSnapshot、三项能力门控、激活复检、template 图标与定向回归 PASS；待最终 App 系统权限前台往返实测 |
 | CTRL-002 | 支持接收方直接暂停、继续和取消传输 | A6/A0 | 已集成接收方直接 pause/continue/cancel；原生串行 CTest 98/98 PASS，真实双机控制链路 `NOT_RUN` |
-| WIN-019 | 构建并运行验收最新 Windows unsigned 包 | A4/A7/A0 | 业务收口完成；当前 SHA 的本地 Release 打包因缺少原生 Strawberry Perl 回退至 Actions，待精确标签后执行安装、桌面/托盘、参数、生命周期和摘要验收 |
+| WIN-019 | 构建并运行验收最新 Windows unsigned 包 | A4/A7/A0 | 标签 `relaydesk-phase4-20260820-01` 的 hosted Windows 包、CTest 98/98 和 TEST-005 19/19 自动生命周期均 PASS；桌面/托盘实机与 unsigned SmartScreen/UAC 交互仍 `NOT_RUN` |
 
-除 WIN-019、MAC-037 和真实物理验收外，上述实现及组件测试均为 `PASS`。设计图于
-2026-08-14 经用户确认；精确标签双平台 CI、平台产物及最终 App 的 macOS 前台权限
-证据尚未齐备，不得移入 Done。详见
+除 WIN-019 的交互桌面/托盘/SmartScreen、MAC-037 的 TCC/menu bar 和真实物理验收外，
+上述实现、精确标签双平台 CI、平台产物及自动生命周期均为 `PASS`。详见
 `product/docs/reports/UI-010_COMPACT_UI_TRAY.md`。
 
 ## Blocked
@@ -47,7 +46,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | COMP-008 | authenticated reconnect and Windows permission product wiring | A3/A2/A4/A0 | `b251933dd` through `f79cc64dd`; selected-candidate TLS, async failure completion and firewall probe tests PASS |
 | MAC-036 | 配对设备自动同步到 Deskflow 键鼠屏幕布局 | A5/A0 | `05f92a1ab`; run `31706167585` SUCCESS; Windows 89/89, macOS 90/90; add/persist/idempotency/rejection tests PASS |
 | PHASE3-CI | Reliability/UI stage tag and dual-platform verification | A0/A7 | tag `relaydesk-phase3-20260813-01`; run `31691378517` SUCCESS; Win 88/88, Mac 89/89; macOS lifecycle and draft publication PASS |
-| REL-001/002 | Phase 4 release candidate, installation instructions and acceptance checklist | A0/A7 | `relaydesk-phase4-20260813-03` / run `31706167585` 是历史候选：Win 89/89、Mac 90/90、installer/lifecycle PASS；当前 `a624a9e40` 候选待精确标签、Actions 和包验证 |
+| REL-001/002 | Phase 4 release candidate, installation instructions and acceptance checklist | A0/A7 | `relaydesk-phase4-20260813-03` / run `31706167585` 为历史候选；当前 `relaydesk-phase4-20260820-01` / run `32335399442` SUCCESS，Win 98/98、Mac 99/99、双平台包及自动生命周期 PASS；真实系统交互和物理验收仍 NOT_RUN |
 | AUTO-001 | 识别当前 GitHub 仓库、origin、登录状态 | A0/A1 | GitHub admin/push 权限确认 |
 | AUTO-002 | 添加 upstream、fetch v1.26.0、验证 760e3b9 | A0/A1 | `760e3b99` |
 | AUTO-003 | 创建/恢复产品分支并安装资料/workflow | A0/A1 | bootstrap worktree and commit |

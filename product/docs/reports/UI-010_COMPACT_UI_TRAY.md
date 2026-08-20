@@ -6,10 +6,12 @@
 `8aba552b89a6a8a4600df3c5d4270e711de07416` 和
 `relaydesk-phase4-20260813-03` 均为历史候选，不能作为当前交付证据。
 
-当前候选为 `a624a9e40f027c4165dd8838b61cbe98af68d7f2`。主窗口/托盘定向回归（offscreen
-各连续 10 次、native 各 1 次）以及原生串行 CTest 98/98 均为 `PASS`。精确标签的
-Windows x64 与 Apple Silicon macOS 构建、安装包和生命周期仍为 `NOT_RUN`，不得由本地
-组件测试替代。
+当前实现提交为 `a624a9e40f027c4165dd8838b61cbe98af68d7f2`，阶段文档/标签目标为
+`eb84e668e8a8b8e960b7636ebacb2db5edf28b30`。主窗口/托盘定向回归（offscreen 各连续
+10 次、native 各 1 次）以及本地原生串行 CTest 98/98 均为 `PASS`。精确标签
+`relaydesk-phase4-20260820-01` 的 run `32335399442` 亦为 `SUCCESS`：Windows 98/98、
+macOS 99/99、双平台打包和自动生命周期均 `PASS`。真实桌面/托盘交互、macOS TCC/menu
+bar 与物理 Win↔Mac 仍为 `NOT_RUN`，不得由 hosted CI 替代。
 
 ## 已确认设计输入
 
@@ -81,13 +83,19 @@ Clang/arm64 + Qt 结果为准。
 | `src/apps/res/RelayDesk.icns` | 107,265 | `eaa77c7fe6d7773c32c79cdb8bfdd50c645188460f2489832c1a405270da5218` |
 | `deploy/mac/dmg-background.tiff` | 963,472 | `77b1dd2a0ff9dea1a15a14d81387b624c57fcef836249fed4c68613fa1f2e5de` |
 
-## 双平台构建（当前候选待执行）
+## 双平台构建（当前候选）
 
-- 当前产品提交：`a624a9e40f027c4165dd8838b61cbe98af68d7f2`。
-- 计划标签：`relaydesk-phase4-20260820-01`（尚未创建）。
-- tag object、Actions run/jobs：`NOT_RUN`。
-- Windows MSI/portable 与 macOS App/DMG：`NOT_RUN`，不得预填摘要。
-- Windows 安装生命周期与 macOS App/DMG 生命周期：`NOT_RUN`。
+- 当前产品提交：`a624a9e40f027c4165dd8838b61cbe98af68d7f2`；阶段文档/标签目标：
+  `eb84e668e8a8b8e960b7636ebacb2db5edf28b30`。
+- 注释标签：`relaydesk-phase4-20260820-01`，tag object
+  `459043ebf10d1f353e91a3625d9bb7bc726eda2d`。
+- Actions run：`32335399442` `SUCCESS`；Windows `96323889159`、macOS `96323889254`、
+  materials `96323889286`、draft release `96326301658`、macOS lifecycle `96326301670` 均 `SUCCESS`。
+- Windows MSI/portable 与 macOS App/DMG 的 manifest、`SHA256SUMS`、本地 `Get-FileHash`、
+  Release API digest 四方一致；下载目录 `dist/actions/32335399442`，本地发布目录
+  `dist/releases/relaydesk-phase4-20260820-01`。
+- Windows CTest 98/98（28.75 s）及 TEST-005 19/19 PASS；macOS CTest 99/99（28.54 s）及
+  生命周期 19/19 PASS。
 
 ## 明确保留的 NOT_RUN
 
