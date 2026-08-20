@@ -104,6 +104,7 @@ private Q_SLOTS:
   void settingsRoleImmediatelyUpdatesTlsControlsAndRemoteHostLayout();
   void hiddenWindowKeepsCurrentSessionGeometry();
   void restoredSmallGeometryIsClampedToMinimumSize();
+  void trayIconLoadsEmbeddedWindowsFallback();
   void chineseProductChromeUsesLocalizedText();
 
 private:
@@ -387,6 +388,14 @@ void MainWindowLayoutTests::hiddenWindowKeepsCurrentSessionGeometry()
   window.open(false);
   QTRY_VERIFY(window.isVisible());
   QCOMPARE(window.geometry(), currentSessionGeometry);
+}
+
+void MainWindowLayoutTests::trayIconLoadsEmbeddedWindowsFallback()
+{
+  MainWindow window;
+  auto *tray = window.findChild<QSystemTrayIcon *>();
+  QVERIFY(tray != nullptr);
+  QVERIFY(!tray->icon().isNull());
 }
 
 void MainWindowLayoutTests::chineseProductChromeUsesLocalizedText()

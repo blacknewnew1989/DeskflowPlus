@@ -1194,6 +1194,14 @@ void MainWindow::setupTrayIcon()
   m_trayIcon->setContextMenu(trayMenu);
 
   setTrayIcon();
+  if (m_trayIcon->icon().isNull()) {
+    qCritical() << "unable to load tray icon";
+    return;
+  }
+  if (!QSystemTrayIcon::isSystemTrayAvailable()) {
+    qWarning() << "system tray is unavailable; background window hiding is disabled";
+    return;
+  }
   updateSharingAction();
   m_trayIcon->show();
 }
@@ -1251,7 +1259,7 @@ void MainWindow::saveSettings() const
 
 void MainWindow::setTrayIcon()
 {
-  static const auto fallbackPath = QStringLiteral(":/icons/%1-%2/apps/64/%3");
+  static const auto fallbackPath = QStringLiteral(":/icons/%1-%2/apps/64/%3.svg");
 
   QString themeIcon = kRevFqdnName;
   if (deskflow::platform::isMac() || deskflow::platform::isWindows()) {
@@ -1571,7 +1579,8 @@ void MainWindow::checkFingerprint(const QString &line)
 void MainWindow::closeEvent(QCloseEvent *event)
 {
   const bool operatingSystemShutdown = qGuiApp != nullptr && qGuiApp->isSavingSession();
-  if (m_backgroundLifecycle.closeDisposition(event->spontaneous(), operatingSystemShutdown) ==
+  if (m_trayIcon->isVisible() &&
+      m_backgroundLifecycle.closeDisposition(event->spontaneous(), operatingSystemShutdown) ==
       deskflow::relaydesk::WindowCloseDisposition::HideToTray) {
     rememberWindowGeometry();
     Settings::setValue(Settings::Gui::WindowGeometry, m_lastVisibleGeometry);
@@ -1760,7 +1769,7 @@ void MainWindow::changeEvent(QEvent *e)
   QMainWindow::changeEvent(e);
   if (e->type() == QEvent::WindowStateChange && isMinimized()) {
     const bool operatingSystemShutdown = qGuiApp != nullptr && qGuiApp->isSavingSession();
-    if (m_backgroundLifecycle.shouldHideAfterMinimize(operatingSystemShutdown)) {
+    if (m_trayIcon->isVisible() && m_backgroundLifecycle.shouldHideAfterMinimize(operatingSystemShutdown)) {
       QTimer::singleShot(0, this, [this] {
         if (!m_shutdownStarted && isMinimized()) {
           hide();
