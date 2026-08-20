@@ -177,6 +177,7 @@
     <message><source>transfer.incoming.wants_to_send</source><translation>%1 想发送</translation></message>
     <message><source>transfer.incoming.save_to</source><translation>保存到：%1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>冲突：自动重命名</translation></message>
+    <message><source>transfer.incoming.ask</source><translation>冲突：遇到同名文件时询问</translation></message>
     <message><source>transfer.incoming.always_accept</source><translation>始终自动接收此设备的文件</translation></message>
     <message><source>transfer.incoming.unknown_device</source><translation>未知设备</translation></message>
     <message><source>transfer.incoming.pair_first</source><translation>请先配对此设备，再接收文件</translation></message>

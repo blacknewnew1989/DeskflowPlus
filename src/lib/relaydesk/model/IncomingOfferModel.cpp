@@ -104,7 +104,7 @@ bool IncomingOfferModel::acceptInternal(AcceptanceOrigin origin)
       m_offer->offer.transferId,
       {
           .destinationRoot = m_settings.destinationRoot,
-          .conflictPolicy = ConflictPolicy::AutoRename,
+          .conflictPolicy = m_settings.defaultConflictPolicy,
           .failurePartialDisposition = ::relaydesk::transfer::PartialDisposition::Keep,
           .acceptanceOrigin = origin,
       }
@@ -225,7 +225,9 @@ QString IncomingOfferModel::destinationText() const
 
 QString IncomingOfferModel::conflictText() const
 {
-  return i18n::translate(Text::TransferIncomingAutoRename);
+  return m_settings.defaultConflictPolicy == ConflictPolicy::Ask
+             ? i18n::translate(Text::TransferIncomingAsk)
+             : i18n::translate(Text::TransferIncomingAutoRename);
 }
 
 QString IncomingOfferModel::errorText() const

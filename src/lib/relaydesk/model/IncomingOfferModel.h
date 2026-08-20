@@ -22,6 +22,8 @@ struct IncomingOfferSettingsSnapshot
   quint64 availableBytes = 0;
   bool autoAcceptTrustedDevices = false;
   qint64 decisionTimeoutMs = 120'000;
+  ::relaydesk::transfer::ConflictPolicy defaultConflictPolicy =
+      ::relaydesk::transfer::ConflictPolicy::AutoRename;
 
   [[nodiscard]] bool operator==(const IncomingOfferSettingsSnapshot &) const = default;
 };

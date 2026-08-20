@@ -177,6 +177,7 @@
     <message><source>transfer.incoming.wants_to_send</source><translation>%1에서 보내려고 합니다</translation></message>
     <message><source>transfer.incoming.save_to</source><translation>저장 위치: %1</translation></message>
     <message><source>transfer.incoming.auto_rename</source><translation>충돌 시 자동으로 이름 변경</translation></message>
+    <message><source>transfer.incoming.ask</source><translation>충돌: 같은 이름의 파일이 있으면 묻기</translation></message>
     <message><source>transfer.incoming.always_accept</source><translation>이 기기의 파일을 항상 수락</translation></message>
     <message><source>transfer.incoming.unknown_device</source><translation>알 수 없는 기기</translation></message>
     <message><source>transfer.incoming.pair_first</source><translation>파일을 받기 전에 이 기기를 페어링하세요</translation></message>
