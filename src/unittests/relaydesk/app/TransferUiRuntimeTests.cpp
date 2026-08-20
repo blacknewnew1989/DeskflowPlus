@@ -291,6 +291,7 @@ void TransferUiRuntimeTests::composesTypedUiIntentsThroughOneServiceBoundary()
   QVERIFY(fixture.transfers.requestResume(pausedTransfer.id));
   QVERIFY(fixture.transfers.requestRetry(failed.id));
   QVERIFY(fixture.transfers.requestRetry(failedHistory.transferId));
+  QVERIFY(!fixture.transfers.requestRetry(failedHistory.transferId));
   QCOMPARE(fixture.service.pauseCalls, 1);
   QCOMPARE(fixture.service.pausedId, std::optional<TransferId>{active.id});
   QCOMPARE(fixture.service.cancelCalls, 1);
@@ -300,6 +301,14 @@ void TransferUiRuntimeTests::composesTypedUiIntentsThroughOneServiceBoundary()
   QCOMPARE(fixture.service.resumedId, std::optional<TransferId>{pausedTransfer.id});
   QCOMPARE(fixture.service.retryCalls, 2);
   QCOMPARE(fixture.service.retriedIds, QList<TransferId>({failed.id, failedHistory.transferId}));
+  Q_EMIT fixture.service.transferOperationFinished({
+      .transferId = failedHistory.transferId,
+      .operation = TransferOperation::Retry,
+      .outcome = TransferOperationOutcome::Rejected,
+      .error = TransferOperationError::StartFailed,
+  });
+  QVERIFY(fixture.transfers.requestRetry(failedHistory.transferId));
+  QCOMPARE(fixture.service.retryCalls, 3);
 
   auto changed = active;
   changed.displayName = QStringLiteral("Updated project");

@@ -283,6 +283,7 @@ void TransferCenterModelTests::emitsValidatedHistoryOpenAndRetryIntents()
   QVERIFY(model.requestOpenFolder(completed.transferId));
   QVERIFY(model.requestOpenFile(completed.transferId));
   QVERIFY(model.requestRetry(failed.transferId));
+  QVERIFY(!model.requestRetry(failed.transferId));
   QVERIFY(model.requestRetry(liveFailed.id));
   QVERIFY(folderIntent.has_value());
   QVERIFY(fileIntent.has_value());

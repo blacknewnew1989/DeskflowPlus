@@ -109,6 +109,9 @@ bool validRecord(const TransferHistoryRecord &record)
     if (record.completedRelativePath.isEmpty() && record.topLevelTargetRelativePath.isEmpty()) {
       return true;
     }
+    if (record.completedRelativePath.isEmpty() && record.topLevelTargetRelativePath == QStringLiteral(".")) {
+      return true;
+    }
     const auto completed = PathPolicy::validateRelative(record.completedRelativePath);
     const auto topLevel = PathPolicy::validateRelative(record.topLevelTargetRelativePath);
     return completed.ok && topLevel.ok && !record.topLevelTargetRelativePath.contains(u'/') &&

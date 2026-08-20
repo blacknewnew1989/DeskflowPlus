@@ -502,6 +502,7 @@ void IncomingTransferRuntimeTests::receivesPagedEmptyDirectoryManifest()
   );
   QCOMPARE(latest->progress.completedFiles, quint64{0});
   QCOMPARE(latest->progress.totalFiles, quint64{0});
+  QCOMPARE(latest->currentRelativeDisplayPath, QStringLiteral("folder"));
   QVERIFY(QDir(root.path()).exists(QStringLiteral("folder/empty")));
 }
 

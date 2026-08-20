@@ -376,6 +376,12 @@ private:
         fail(TransferErrorCode::InternalError, diagnostic);
       }
       if (m_manifestReady && m_offer.fileCount == 0) {
+        for (const auto &entry : m_entries) {
+          if (entry.type == ManifestEntryType::Directory) {
+            recordCompletedPath(entry.relativeProtocolPath);
+            break;
+          }
+        }
         const auto removed = m_resumeStore.remove(m_offer.transferId);
         if (!removed.ok()) {
           fail(TransferErrorCode::InternalError, removed.diagnostic);
@@ -521,7 +527,7 @@ private:
         sendFileResult(skipped);
         m_completedBytes += m_skippedEntry->size;
         ++m_completedFiles;
-        recordCompletedPath(m_skippedEntry->relativeProtocolPath);
+        m_completedAtReceiveRoot = true;
         publishProgress(m_completedBytes, m_completedFiles, m_skippedEntry->relativeProtocolPath);
         m_skippedBegin.reset();
         m_skippedEntry.reset();
@@ -546,7 +552,7 @@ private:
           sendFileResult(result);
           m_completedBytes += snapshot.expectedSize;
           ++m_completedFiles;
-          recordCompletedPath(snapshot.relativeProtocolPath);
+          m_completedAtReceiveRoot = true;
           publishProgress(m_completedBytes, m_completedFiles, snapshot.relativeProtocolPath);
           m_receiver.reset();
           if (m_completedFiles == m_offer.fileCount) {
@@ -845,7 +851,8 @@ private:
       snapshot.state = ::relaydesk::transfer::TransferState::Completed;
       snapshot.progress.completedBytes = snapshot.progress.totalBytes;
       snapshot.progress.completedFiles = snapshot.progress.totalFiles;
-      snapshot.currentRelativeDisplayPath = m_completedRelativePath;
+      snapshot.currentRelativeDisplayPath =
+          m_completedAtReceiveRoot ? QStringLiteral(".") : m_completedRelativePath;
       snapshot.canCancel = false;
       snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
       session->pipelineSnapshot = snapshot;
@@ -927,6 +934,7 @@ private:
   std::optional<::relaydesk::transfer::ResumeState> m_resumeState;
   quint64 m_generation = 0;
   QString m_completedRelativePath;
+  bool m_completedAtReceiveRoot = false;
   ::relaydesk::transfer::ManifestPageReassembler m_reassembler;
   QList<::relaydesk::transfer::ManifestEntry> m_entries;
   std::unique_ptr<IncomingFileReceiverWorker> m_receiver;
