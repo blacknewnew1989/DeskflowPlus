@@ -72,6 +72,7 @@ public:
 Q_SIGNALS:
   void pairingRequested(DeviceId peerDeviceId);
   void trustRevocationRequested(DeviceId peerDeviceId);
+  void autoAcceptFilesRequested(DeviceId peerDeviceId, bool enabled);
   void sendItemsRequested(DeviceId peerDeviceId, QList<QUrl> localItems, ::relaydesk::transfer::SendOptions options);
   void sendItemsRejected(QString message);
   void incomingOfferSettingsRequested();
@@ -136,6 +137,7 @@ private:
   QToolButton *m_moreButton = nullptr;
   QMenu *m_moreMenu = nullptr;
   QAction *m_revokeTrustAction = nullptr;
+  QAction *m_autoAcceptFilesAction = nullptr;
   QAction *m_configureInputAction = nullptr;
   QPushButton *m_sendFilesButton = nullptr;
   QPushButton *m_sendFolderButton = nullptr;

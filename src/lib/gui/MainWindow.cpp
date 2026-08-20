@@ -32,26 +32,29 @@
 #include "gui/ipc/DaemonIpcClient.h"
 #include "gui/widgets/LogDock.h"
 #include "net/FingerprintDatabase.h"
-#include "relaydesk/app/DeviceDiscoveryRuntime.h"
 #include "relaydesk/app/AutoReconnectRuntime.h"
-#include "relaydesk/app/PairingTrustRuntime.h"
+#include "relaydesk/app/DeviceDiscoveryRuntime.h"
 #include "relaydesk/app/FileTransferRuntime.h"
+#include "relaydesk/app/PairingTrustRuntime.h"
 #include "relaydesk/app/TransferRuntimeComposition.h"
 #include "relaydesk/device/DeviceIdentity.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
-#include "relaydesk/transfer/PathPolicy.h"
+#include "relaydesk/i18n/ProductStrings.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
 #include "relaydesk/model/TransferCenterModel.h"
 #include "relaydesk/platform/MacPermissionProbe.h"
 #include "relaydesk/platform/WindowsFirewallProbe.h"
+#include "relaydesk/transfer/PathPolicy.h"
+#include "relaydesk/transfer/TransferSettings.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/RelayDeskHomeWidget.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 #include "relaydesk/widgets/TransferMiniBar.h"
 
 #include <QCloseEvent>
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileDialog>
@@ -70,7 +73,6 @@
 #include <QSignalBlocker>
 #include <QStandardPaths>
 #include <QSysInfo>
-#include <QCoreApplication>
 #include <QTimer>
 
 #include <memory>
@@ -84,11 +86,12 @@ using namespace deskflow::gui;
 
 using CoreConnectionState = CoreProcess::ConnectionState;
 using CoreProcessState = CoreProcess::ProcessState;
+namespace relayDeskI18n = deskflow::relaydesk::i18n;
 
 namespace {
 const QSize kRelayDeskDefaultWindowSize{560, 420};
 const QSize kRelayDeskMinimumWindowSize{520, 380};
-}
+} // namespace
 
 MainWindow::MainWindow()
     : ui{std::make_unique<Ui::MainWindow>()},
@@ -135,37 +138,34 @@ MainWindow::MainWindow()
 
   m_relayDeskDeviceModel = new deskflow::relaydesk::model::DeviceHomeModel(this);
   m_relayDeskPairingModel = new deskflow::relaydesk::model::PairingWizardModel(this);
-  m_relayDeskPermissionModel = new deskflow::relaydesk::model::PermissionStatusModel(
-      deskflow::relaydesk::buildPermissionPlatform(), this
-  );
+  m_relayDeskPermissionModel =
+      new deskflow::relaydesk::model::PermissionStatusModel(deskflow::relaydesk::buildPermissionPlatform(), this);
 #if defined(Q_OS_WIN)
   m_windowsFirewallProbe = new deskflow::relaydesk::WindowsFirewallProbe({}, {}, {}, this);
   m_relayDeskPermissionModel->setSnapshot(m_windowsFirewallProbe->current());
   connect(
-      m_windowsFirewallProbe, &deskflow::relaydesk::WindowsFirewallProbe::snapshotChanged,
-      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
+      m_windowsFirewallProbe, &deskflow::relaydesk::WindowsFirewallProbe::snapshotChanged, m_relayDeskPermissionModel,
+      &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
   );
   connect(
       m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::openSettingsRequested,
-      m_windowsFirewallProbe, [this](deskflow::relaydesk::PermissionKind kind) {
-        (void)m_windowsFirewallProbe->openSystemSettings(kind);
-      }
+      m_windowsFirewallProbe,
+      [this](deskflow::relaydesk::PermissionKind kind) { (void)m_windowsFirewallProbe->openSystemSettings(kind); }
   );
   connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
     if (state == Qt::ApplicationActive)
       refreshWindowsPermissionStatus();
   });
-  connect(
-      &m_coreProcess, &CoreProcess::connectionStateChanged, this,
-      [this](CoreProcess::ConnectionState) { refreshWindowsPermissionStatus(); }
-  );
+  connect(&m_coreProcess, &CoreProcess::connectionStateChanged, this, [this](CoreProcess::ConnectionState) {
+    refreshWindowsPermissionStatus();
+  });
 #endif
 #if defined(Q_OS_MACOS)
   m_macPermissionProbe = new deskflow::relaydesk::MacPermissionProbe(this);
   m_relayDeskPermissionModel->setSnapshot(m_macPermissionProbe->current());
   connect(
-      m_macPermissionProbe, &deskflow::relaydesk::MacPermissionProbe::snapshotChanged,
-      m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
+      m_macPermissionProbe, &deskflow::relaydesk::MacPermissionProbe::snapshotChanged, m_relayDeskPermissionModel,
+      &deskflow::relaydesk::model::PermissionStatusModel::setSnapshot
   );
   connect(
       m_relayDeskPermissionModel, &deskflow::relaydesk::model::PermissionStatusModel::openSettingsRequested,
@@ -180,8 +180,7 @@ MainWindow::MainWindow()
       *m_relayDeskDeviceModel, *m_relayDeskPairingModel, *m_relayDeskPermissionModel, this
   );
   m_relayDeskTransferModel = new deskflow::relaydesk::model::TransferCenterModel(this);
-  m_transferCenterDock =
-      new deskflow::relaydesk::widgets::TransferCenterDock(*m_relayDeskTransferModel, this);
+  m_transferCenterDock = new deskflow::relaydesk::widgets::TransferCenterDock(*m_relayDeskTransferModel, this);
   m_transferMiniBar = new deskflow::relaydesk::widgets::TransferMiniBar(*m_relayDeskTransferModel, this);
   connect(
       m_relayDeskTransferModel, &deskflow::relaydesk::model::TransferCenterModel::notificationRequested, this,
@@ -295,12 +294,12 @@ void MainWindow::setupRelayDeskDiscovery()
   if (!discoverySettings.ok) {
     qWarning().noquote() << "RelayDesk discovery settings ignored:" << discoverySettings.diagnostic;
   }
-  m_devicesDock->setManualAddresses(discoverySettings.ok ? discoverySettings.settings.manualAddresses
-                                                          : QList<deskflow::relaydesk::ManualAddress>{});
+  m_devicesDock->setManualAddresses(
+      discoverySettings.ok ? discoverySettings.settings.manualAddresses : QList<deskflow::relaydesk::ManualAddress>{}
+  );
 
   const auto inputPortValue = Settings::value(Settings::Core::Port).toInt();
-  const quint16 inputPort =
-      inputPortValue > 0 && inputPortValue <= 65535 ? static_cast<quint16>(inputPortValue) : 0;
+  const quint16 inputPort = inputPortValue > 0 && inputPortValue <= 65535 ? static_cast<quint16>(inputPortValue) : 0;
   deskflow::relaydesk::DeviceInfo localDevice{
       .deviceId = *deviceId,
       .displayName = Settings::value(Settings::Core::ComputerName).toString(),
@@ -308,11 +307,12 @@ void MainWindow::setupRelayDeskDiscovery()
       .architecture = QSysInfo::currentCpuArchitecture(),
       .appVersion = kVersion,
       .inputPort = inputPort,
-      .capabilities = {
-          .input = true,
-          .clipboardText = true,
-          .clipboardImage = true,
-      },
+      .capabilities =
+          {
+              .input = true,
+              .clipboardText = true,
+              .clipboardImage = true,
+          },
       .certificateFingerprintSha256 = m_fingerprint.data,
   };
 
@@ -343,8 +343,7 @@ void MainWindow::setupRelayDeskDiscovery()
   connect(
       m_relayDeskPairing, &deskflow::relaydesk::PairingTrustRuntime::operationFailed, this,
       [](const deskflow::relaydesk::PairingOperationResult &result) {
-        qWarning().noquote() << "RelayDesk pairing error" << static_cast<int>(result.error) << ':'
-                             << result.diagnostic;
+        qWarning().noquote() << "RelayDesk pairing error" << static_cast<int>(result.error) << ':' << result.diagnostic;
       }
   );
   connect(
@@ -382,12 +381,30 @@ void MainWindow::setupRelayDeskDiscovery()
       }
   );
   connect(
+      m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::autoAcceptFilesRequested, this,
+      [this](const deskflow::relaydesk::DeviceId &peerDeviceId, bool enabled) {
+        const auto result = m_relayDeskPairing->setAutoAcceptFiles(peerDeviceId, enabled);
+        if (!result.ok()) {
+          qWarning().noquote() << "RelayDesk trusted-device auto accept update failed:" << result.diagnostic;
+          QMessageBox::warning(
+              this, relayDeskI18n::translate(relayDeskI18n::Text::SettingsFileTransfer),
+              relayDeskI18n::translate(relayDeskI18n::Text::SettingsTransferSaveFailed).arg(result.diagnostic)
+          );
+        }
+      }
+  );
+  connect(
+      m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::incomingOfferSettingsRequested, this,
+      &MainWindow::openFileTransferSettings
+  );
+  connect(
       m_devicesDock, &deskflow::relaydesk::widgets::DevicesDock::inputLayoutRequested, this,
       [this](const deskflow::relaydesk::DeviceId &peerDeviceId) {
         // This does not change the selected role. In client mode it refreshes only RelayDesk's managed target;
         // in server mode the existing ScreenSetupView provides the drag-and-drop placement surface.
         syncRelayDeskInputLayout(peerDeviceId, true);
-        if (m_coreProcess.mode() == CoreMode::Server) showConfigureServer({});
+        if (m_coreProcess.mode() == CoreMode::Server)
+          showConfigureServer({});
       }
   );
   connect(
@@ -427,9 +444,7 @@ void MainWindow::setupRelayDeskDiscovery()
   setupRelayDeskTransfer(*deviceId);
 }
 
-void MainWindow::syncRelayDeskInputLayout(
-    const deskflow::relaydesk::DeviceId &peerDeviceId, bool explicitSelection
-)
+void MainWindow::syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &peerDeviceId, bool explicitSelection)
 {
   if (m_relayDeskDeviceModel == nullptr || m_relayDeskDiscovery == nullptr) {
     return;
@@ -441,7 +456,8 @@ void MainWindow::syncRelayDeskInputLayout(
 
   if (m_coreProcess.mode() == CoreMode::Client) {
     const auto endpoint = m_relayDeskDiscovery->registry().deviceInfo(peerDeviceId);
-    if (!endpoint.has_value()) return;
+    if (!endpoint.has_value())
+      return;
 
     QSettings settings(Settings::settingsFile(), QSettings::IniFormat);
     deskflow::gui::RelayDeskInputTarget target;
@@ -454,7 +470,8 @@ void MainWindow::syncRelayDeskInputLayout(
                            << "from the configured shared port:" << endpoint->inputPort;
       return;
     }
-    if (result != deskflow::gui::RelayDeskInputTargetResult::Updated) return;
+    if (result != deskflow::gui::RelayDeskInputTargetResult::Updated)
+      return;
 
     settings.sync();
     if (settings.status() != QSettings::NoError) {
@@ -468,11 +485,13 @@ void MainWindow::syncRelayDeskInputLayout(
     ui->lineHostname->setText(target.host);
     toggleCanRunCore(true);
     qInfo().noquote() << "RelayDesk selected trusted input peer for client mode:" << target.host << target.port;
-    if (m_coreProcess.isStarted()) m_coreProcess.restart();
+    if (m_coreProcess.isStarted())
+      m_coreProcess.restart();
     return;
   }
 
-  if (m_coreProcess.mode() != CoreMode::Server) return;
+  if (m_coreProcess.mode() != CoreMode::Server)
+    return;
 
   using deskflow::gui::RelayDeskInputLayoutResult;
   const auto result = deskflow::gui::syncRelayDeskInputScreen(m_serverConfig, *peer);
@@ -484,14 +503,12 @@ void MainWindow::syncRelayDeskInputLayout(
       m_coreProcess.restart();
     }
   } else if (result == RelayDeskInputLayoutResult::InvalidScreenName) {
-    qWarning().noquote() << "RelayDesk could not add paired input peer with invalid screen name:"
-                         << peer->displayName;
+    qWarning().noquote() << "RelayDesk could not add paired input peer with invalid screen name:" << peer->displayName;
   } else if (result == RelayDeskInputLayoutResult::ExternalConfigActive) {
     qWarning().noquote() << "RelayDesk did not modify the active external server configuration for:"
                          << peer->displayName;
   } else if (result == RelayDeskInputLayoutResult::LayoutFull) {
-    qWarning().noquote() << "RelayDesk screen layout is full; paired input peer was not added:"
-                         << peer->displayName;
+    qWarning().noquote() << "RelayDesk screen layout is full; paired input peer was not added:" << peer->displayName;
   }
 }
 
@@ -510,17 +527,26 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
   auto *runtimeObserver = runtime.get();
   connect(
       runtimeObserver, &deskflow::relaydesk::FileTransferRuntime::errorOccurred, this,
-      [](deskflow::relaydesk::FileTransferRuntimeError error,
-         deskflow::relaydesk::FileTlsError transportError, const QString &diagnostic) {
+      [](deskflow::relaydesk::FileTransferRuntimeError error, deskflow::relaydesk::FileTlsError transportError,
+         const QString &diagnostic) {
         qWarning().noquote() << "RelayDesk file transfer error" << static_cast<int>(error) << '/'
                              << static_cast<int>(transportError) << ':' << diagnostic;
       }
   );
 
-  const auto receiveRoot = QDir(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation))
-                               .filePath(QStringLiteral("RelayDesk"));
-  const auto historyPath =
-      QDir(Settings::settingsPath()).filePath(QStringLiteral("relaydesk/transfer-history.jsonl"));
+  QSettings relayDeskSettings(Settings::settingsFile(), QSettings::IniFormat);
+  ::relaydesk::transfer::TransferSettingsStore transferSettingsStore(relayDeskSettings);
+  const auto loadedTransferSettings = transferSettingsStore.load();
+  const auto transferSettings = loadedTransferSettings.ok
+                                    ? loadedTransferSettings.settings
+                                    : ::relaydesk::transfer::TransferSettings{
+                                          .receiveRoot = ::relaydesk::transfer::defaultReceiveRoot(),
+                                      };
+  if (!loadedTransferSettings.ok) {
+    qWarning().noquote() << "RelayDesk transfer settings ignored:" << loadedTransferSettings.diagnostic;
+  }
+  const auto receiveRoot = transferSettings.receiveRoot;
+  const auto historyPath = QDir(Settings::settingsPath()).filePath(QStringLiteral("relaydesk/transfer-history.jsonl"));
   m_relayDeskTransfer = new deskflow::relaydesk::TransferRuntimeComposition(
       std::move(runtime),
       {
@@ -531,20 +557,23 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
       {
           .destinationRoot = receiveRoot,
           .availableBytes = 0,
-          .autoAcceptTrustedDevices = false,
+          .autoAcceptTrustedDevices = transferSettings.autoAcceptTrusted(),
+          .defaultConflictPolicy = transferSettings.defaultConflictPolicy,
       },
       historyPath,
-      [receiveRoot](const ::relaydesk::transfer::TransferHistoryRecord &record)
+      [this](const ::relaydesk::transfer::TransferHistoryRecord &record)
           -> std::optional<deskflow::relaydesk::ResolvedTransferCompletion> {
-        const QString relativePath = record.fileCount == 1 ? record.completedRelativePath
-                                                           : record.topLevelTargetRelativePath;
+        if (m_relayDeskTransfer == nullptr)
+          return std::nullopt;
+        const auto receiveRoot = m_relayDeskTransfer->incomingOffers().settings().destinationRoot;
+        const QString relativePath =
+            record.fileCount == 1 ? record.completedRelativePath : record.topLevelTargetRelativePath;
         if (relativePath == QStringLiteral(".")) {
           return deskflow::relaydesk::ResolvedTransferCompletion{receiveRoot, receiveRoot};
         }
         QString completedPath;
-        const auto joined = ::relaydesk::transfer::PathPolicy::joinLexicallyUnderRoot(
-            receiveRoot, relativePath, completedPath
-        );
+        const auto joined =
+            ::relaydesk::transfer::PathPolicy::joinLexicallyUnderRoot(receiveRoot, relativePath, completedPath);
         if (!joined.ok) {
           return std::nullopt;
         }
@@ -559,8 +588,8 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
 #if defined(Q_OS_WIN)
   refreshWindowsPermissionStatus();
 #endif
-  QSettings relayDeskSettings(Settings::settingsFile(), QSettings::IniFormat);
-  const auto discoverySettings = deskflow::relaydesk::DiscoverySettingsStore(relayDeskSettings).load();
+  QSettings reconnectSettings(Settings::settingsFile(), QSettings::IniFormat);
+  const auto discoverySettings = deskflow::relaydesk::DiscoverySettingsStore(reconnectSettings).load();
   m_relayDeskReconnect = new deskflow::relaydesk::AutoReconnectRuntime(
       *m_relayDeskPairing, *m_relayDeskDiscovery, *runtimeObserver,
       discoverySettings.ok ? discoverySettings.settings : deskflow::relaydesk::DiscoverySettings{}, this
@@ -576,14 +605,15 @@ void MainWindow::refreshWindowsPermissionStatus()
 
   const auto inputPortValue = Settings::value(Settings::Core::Port).toInt();
   const auto inputPort = inputPortValue > 0 && inputPortValue <= 65535 ? static_cast<quint16>(inputPortValue) : 0;
-  const auto filePort = static_cast<deskflow::relaydesk::FileTransferRuntime &>(
-                            m_relayDeskTransfer->service()
-                        ).listeningPort();
-  m_windowsFirewallProbe->refresh(deskflow::relaydesk::WindowsFirewallProbe::requestForListeningServices(
-      m_coreProcess.executablePath(), inputPort,
-      m_coreProcess.connectionState() == CoreConnectionState::Listening, m_coreProcess.processId(),
-      QCoreApplication::applicationFilePath(), filePort, static_cast<quint32>(QCoreApplication::applicationPid())
-  ));
+  const auto filePort =
+      static_cast<deskflow::relaydesk::FileTransferRuntime &>(m_relayDeskTransfer->service()).listeningPort();
+  m_windowsFirewallProbe->refresh(
+      deskflow::relaydesk::WindowsFirewallProbe::requestForListeningServices(
+          m_coreProcess.executablePath(), inputPort, m_coreProcess.connectionState() == CoreConnectionState::Listening,
+          m_coreProcess.processId(), QCoreApplication::applicationFilePath(), filePort,
+          static_cast<quint32>(QCoreApplication::applicationPid())
+      )
+  );
 }
 #endif
 
@@ -632,8 +662,7 @@ void MainWindow::setupRelayDeskHome()
   hiddenTitleBar->setFixedHeight(0);
   m_devicesDock->setTitleBarWidget(hiddenTitleBar);
 
-  m_relayDeskHome =
-      new deskflow::relaydesk::widgets::RelayDeskHomeWidget(m_devicesDock, m_transferMiniBar, this);
+  m_relayDeskHome = new deskflow::relaydesk::widgets::RelayDeskHomeWidget(m_devicesDock, m_transferMiniBar, this);
   m_relayDeskHome->setProductName(kAppName);
   m_relayDeskHome->setProductIcon(QIcon::fromTheme(kRevFqdnName));
   m_relayDeskHome->setStatusText(tr("%1 is not running").arg(kAppName));
@@ -641,19 +670,14 @@ void MainWindow::setupRelayDeskHome()
       m_relayDeskHome, &deskflow::relaydesk::widgets::RelayDeskHomeWidget::settingsRequested, m_actionSettings,
       &QAction::trigger
   );
-  connect(
-      m_relayDeskHome, &deskflow::relaydesk::widgets::RelayDeskHomeWidget::transferHistoryRequested, this,
-      [this] {
-        m_transferCenterDock->show();
-        m_transferCenterDock->raise();
-      }
-  );
-  connect(
-      m_transferMiniBar, &deskflow::relaydesk::widgets::TransferMiniBar::detailsRequested, this, [this] {
-        m_transferCenterDock->show();
-        m_transferCenterDock->raise();
-      }
-  );
+  connect(m_relayDeskHome, &deskflow::relaydesk::widgets::RelayDeskHomeWidget::transferHistoryRequested, this, [this] {
+    m_transferCenterDock->show();
+    m_transferCenterDock->raise();
+  });
+  connect(m_transferMiniBar, &deskflow::relaydesk::widgets::TransferMiniBar::detailsRequested, this, [this] {
+    m_transferCenterDock->show();
+    m_transferCenterDock->raise();
+  });
   setCentralWidget(m_relayDeskHome);
   ui->statusBar->hide();
 }
@@ -1038,6 +1062,18 @@ void MainWindow::openSettings()
     return;
 
   auto dialog = SettingsDialog(this, m_serverConfig, m_coreProcess);
+  connect(
+      &dialog, &SettingsDialog::transferSettingsSaved, this,
+      [this](const ::relaydesk::transfer::TransferSettings &settings) {
+        if (m_relayDeskTransfer == nullptr)
+          return;
+        auto incomingSettings = m_relayDeskTransfer->incomingOffers().settings();
+        incomingSettings.destinationRoot = settings.receiveRoot;
+        incomingSettings.autoAcceptTrustedDevices = settings.autoAcceptTrusted();
+        incomingSettings.defaultConflictPolicy = settings.defaultConflictPolicy;
+        m_relayDeskTransfer->setIncomingOfferSettings(std::move(incomingSettings));
+      }
+  );
 
   if (dialog.exec() == QDialog::Accepted) {
     Settings::save();
@@ -1048,6 +1084,28 @@ void MainWindow::openSettings()
       m_coreProcess.restart();
     }
   }
+}
+
+void MainWindow::openFileTransferSettings()
+{
+  if (m_shutdownStarted)
+    return;
+
+  auto dialog = SettingsDialog(this, m_serverConfig, m_coreProcess);
+  dialog.focusFileTransferSettings();
+  connect(
+      &dialog, &SettingsDialog::transferSettingsSaved, this,
+      [this](const ::relaydesk::transfer::TransferSettings &settings) {
+        if (m_relayDeskTransfer == nullptr)
+          return;
+        auto incomingSettings = m_relayDeskTransfer->incomingOffers().settings();
+        incomingSettings.destinationRoot = settings.receiveRoot;
+        incomingSettings.autoAcceptTrustedDevices = settings.autoAcceptTrusted();
+        incomingSettings.defaultConflictPolicy = settings.defaultConflictPolicy;
+        m_relayDeskTransfer->setIncomingOfferSettings(std::move(incomingSettings));
+      }
+  );
+  (void)dialog.exec();
 }
 
 void MainWindow::resetCore()
@@ -1297,7 +1355,6 @@ void MainWindow::applyConfig()
     m_serverStartIPs = {ip};
     m_serverStartSuggestedIP = ip;
   }
-
 }
 
 void MainWindow::syncInputRoleConfiguration()
@@ -1395,8 +1452,7 @@ bool MainWindow::inputSharingAllowed() const
 bool MainWindow::coreConfigurationReady() const
 {
   const auto mode = m_coreProcess.mode();
-  return mode == CoreMode::Server ||
-         (mode == CoreMode::Client && !ui->lineHostname->text().trimmed().isEmpty());
+  return mode == CoreMode::Server || (mode == CoreMode::Client && !ui->lineHostname->text().trimmed().isEmpty());
 }
 
 QString MainWindow::inputPermissionReason() const
@@ -1414,11 +1470,10 @@ QString MainWindow::inputPermissionReason() const
         static_cast<int>(requiredKind)) {
       continue;
     }
-    return QStringLiteral("%1 — %2")
-        .arg(
-            index.data(deskflow::relaydesk::model::PermissionStatusModel::TitleRole).toString(),
-            index.data(deskflow::relaydesk::model::PermissionStatusModel::AffectedCapabilityTextRole).toString()
-        );
+    return QStringLiteral("%1 — %2").arg(
+        index.data(deskflow::relaydesk::model::PermissionStatusModel::TitleRole).toString(),
+        index.data(deskflow::relaydesk::model::PermissionStatusModel::AffectedCapabilityTextRole).toString()
+    );
   }
   return {};
 }
@@ -1520,55 +1575,60 @@ void MainWindow::requestApplicationQuit()
 void MainWindow::beginShutdown()
 {
   const auto began = m_backgroundLifecycle.beginShutdown({
-      .stopAcceptingOperations = [this] {
-        m_shutdownStarted = true;
-        m_actionPauseSharing->setEnabled(false);
-        m_actionRestore->setEnabled(false);
-        m_actionMinimize->setEnabled(false);
-        m_actionSettings->setEnabled(false);
-        m_actionStartCore->setEnabled(false);
-        m_actionRestartCore->setEnabled(false);
-        m_actionStopCore->setEnabled(false);
-        m_devicesDock->setEnabled(false);
-        m_transferCenterDock->setEnabled(false);
-        centralWidget()->setEnabled(false);
-        if (m_saveOnExit) {
-          rememberWindowGeometry();
-          Settings::setValue(Settings::Gui::WindowGeometry, m_lastVisibleGeometry);
-          Settings::setValue(Settings::Gui::AutoStartCore, m_coreProcess.isStarted());
-          saveSettings();
-        }
-        if (m_relayDeskReconnect != nullptr) {
-          m_relayDeskReconnect->stop();
-        }
-      },
-      .stopInputSharing = [this] {
-        if (m_coreProcess.processState() != CoreProcessState::Stopped) {
-          m_coreProcess.stop();
-        }
-        m_coreProcess.cleanup();
-      },
-      .persistAndStopTransfers = [this] {
-        if (m_relayDeskTransfer != nullptr) {
-          m_relayDeskTransfer->stop();
-        }
-      },
-      .stopNetworkServices = [this] {
-        if (m_relayDeskDiscovery != nullptr) {
-          m_relayDeskDiscovery->stop();
-        }
-        if (m_networkMonitor != nullptr) {
-          m_networkMonitor->stopMonitoring();
-        }
-        if (m_guiDupeChecker != nullptr) {
-          m_guiDupeChecker->close();
-        }
-      },
-      .removeTrayIcon = [this] {
-        if (m_trayIcon != nullptr) {
-          m_trayIcon->hide();
-        }
-      },
+      .stopAcceptingOperations =
+          [this] {
+            m_shutdownStarted = true;
+            m_actionPauseSharing->setEnabled(false);
+            m_actionRestore->setEnabled(false);
+            m_actionMinimize->setEnabled(false);
+            m_actionSettings->setEnabled(false);
+            m_actionStartCore->setEnabled(false);
+            m_actionRestartCore->setEnabled(false);
+            m_actionStopCore->setEnabled(false);
+            m_devicesDock->setEnabled(false);
+            m_transferCenterDock->setEnabled(false);
+            centralWidget()->setEnabled(false);
+            if (m_saveOnExit) {
+              rememberWindowGeometry();
+              Settings::setValue(Settings::Gui::WindowGeometry, m_lastVisibleGeometry);
+              Settings::setValue(Settings::Gui::AutoStartCore, m_coreProcess.isStarted());
+              saveSettings();
+            }
+            if (m_relayDeskReconnect != nullptr) {
+              m_relayDeskReconnect->stop();
+            }
+          },
+      .stopInputSharing =
+          [this] {
+            if (m_coreProcess.processState() != CoreProcessState::Stopped) {
+              m_coreProcess.stop();
+            }
+            m_coreProcess.cleanup();
+          },
+      .persistAndStopTransfers =
+          [this] {
+            if (m_relayDeskTransfer != nullptr) {
+              m_relayDeskTransfer->stop();
+            }
+          },
+      .stopNetworkServices =
+          [this] {
+            if (m_relayDeskDiscovery != nullptr) {
+              m_relayDeskDiscovery->stop();
+            }
+            if (m_networkMonitor != nullptr) {
+              m_networkMonitor->stopMonitoring();
+            }
+            if (m_guiDupeChecker != nullptr) {
+              m_guiDupeChecker->close();
+            }
+          },
+      .removeTrayIcon =
+          [this] {
+            if (m_trayIcon != nullptr) {
+              m_trayIcon->hide();
+            }
+          },
   });
   if (!began) {
     return;
@@ -1654,7 +1714,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
   const bool operatingSystemShutdown = qGuiApp != nullptr && qGuiApp->isSavingSession();
   if (m_trayIcon->isVisible() &&
       m_backgroundLifecycle.closeDisposition(event->spontaneous(), operatingSystemShutdown) ==
-      deskflow::relaydesk::WindowCloseDisposition::HideToTray) {
+          deskflow::relaydesk::WindowCloseDisposition::HideToTray) {
     rememberWindowGeometry();
     Settings::setValue(Settings::Gui::WindowGeometry, m_lastVisibleGeometry);
     qDebug() << "hiding to tray";
@@ -1913,7 +1973,8 @@ void MainWindow::showConfigureServer(const QString &message)
     // ScreenSetupView updates the dialog working copy. Commit here so a drag result is durable before restart.
     m_serverConfig.commit();
     Settings::save();
-    if (m_coreProcess.isStarted()) m_coreProcess.restart();
+    if (m_coreProcess.isStarted())
+      m_coreProcess.restart();
   }
 }
 

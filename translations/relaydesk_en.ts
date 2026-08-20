@@ -196,6 +196,13 @@
     <message><source>settings.input</source><translation>Keyboard and mouse</translation></message>
     <message><source>settings.clipboard</source><translation>Clipboard</translation></message>
     <message><source>settings.file_transfer</source><translation>File transfer</translation></message>
+    <message><source>settings.transfer.receive_folder</source><translation>Receive folder</translation></message>
+    <message><source>settings.transfer.choose_folder</source><translation>Choose folder</translation></message>
+    <message><source>settings.transfer.incoming_policy</source><translation>Incoming files</translation></message>
+    <message><source>settings.transfer.ask_every_time</source><translation>Ask every time</translation></message>
+    <message><source>settings.transfer.auto_accept_trusted</source><translation>Automatically accept from trusted devices</translation></message>
+    <message><source>settings.transfer.conflict_policy</source><translation>When a file already exists</translation></message>
+    <message><source>settings.transfer.save_failed</source><translation>Could not save file-transfer settings: %1</translation></message>
     <message><source>settings.network</source><translation>Discovery and network</translation></message>
     <message><source>settings.trusted_devices</source><translation>Trusted devices</translation></message>
     <message><source>settings.startup</source><translation>Start with system</translation></message>

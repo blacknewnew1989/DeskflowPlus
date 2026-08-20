@@ -196,6 +196,13 @@
     <message><source>settings.input</source><translation>Клавиатура и мышь</translation></message>
     <message><source>settings.clipboard</source><translation>Буфер обмена</translation></message>
     <message><source>settings.file_transfer</source><translation>Передача файлов</translation></message>
+    <message><source>settings.transfer.receive_folder</source><translation>Папка приема</translation></message>
+    <message><source>settings.transfer.choose_folder</source><translation>Выбрать папку</translation></message>
+    <message><source>settings.transfer.incoming_policy</source><translation>Входящие файлы</translation></message>
+    <message><source>settings.transfer.ask_every_time</source><translation>Спрашивать каждый раз</translation></message>
+    <message><source>settings.transfer.auto_accept_trusted</source><translation>Автоматически принимать от доверенных устройств</translation></message>
+    <message><source>settings.transfer.conflict_policy</source><translation>Если файл уже существует</translation></message>
+    <message><source>settings.transfer.save_failed</source><translation>Не удалось сохранить настройки передачи: %1</translation></message>
     <message><source>settings.network</source><translation>Обнаружение и сеть</translation></message>
     <message><source>settings.trusted_devices</source><translation>Доверенные устройства</translation></message>
     <message><source>settings.startup</source><translation>Запускать вместе с системой</translation></message>

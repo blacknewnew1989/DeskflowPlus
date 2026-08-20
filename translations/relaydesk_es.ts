@@ -196,6 +196,13 @@
     <message><source>settings.input</source><translation>Teclado y ratón</translation></message>
     <message><source>settings.clipboard</source><translation>Portapapeles</translation></message>
     <message><source>settings.file_transfer</source><translation>Transferencia de archivos</translation></message>
+    <message><source>settings.transfer.receive_folder</source><translation>Carpeta de recepción</translation></message>
+    <message><source>settings.transfer.choose_folder</source><translation>Elegir carpeta</translation></message>
+    <message><source>settings.transfer.incoming_policy</source><translation>Archivos entrantes</translation></message>
+    <message><source>settings.transfer.ask_every_time</source><translation>Preguntar cada vez</translation></message>
+    <message><source>settings.transfer.auto_accept_trusted</source><translation>Aceptar automáticamente de dispositivos de confianza</translation></message>
+    <message><source>settings.transfer.conflict_policy</source><translation>Cuando ya existe un archivo</translation></message>
+    <message><source>settings.transfer.save_failed</source><translation>No se pudo guardar la configuración de transferencia: %1</translation></message>
     <message><source>settings.network</source><translation>Detección y red</translation></message>
     <message><source>settings.trusted_devices</source><translation>Dispositivos de confianza</translation></message>
     <message><source>settings.startup</source><translation>Iniciar con el sistema</translation></message>

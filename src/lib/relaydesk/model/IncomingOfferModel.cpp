@@ -37,16 +37,12 @@ QString formattedBytes(quint64 bytes)
 
 } // namespace
 
-IncomingOfferModel::IncomingOfferModel(
-    IncomingOfferSettingsSnapshot settings, QObject *parent
-)
+IncomingOfferModel::IncomingOfferModel(IncomingOfferSettingsSnapshot settings, QObject *parent)
     : IncomingOfferModel(std::move(settings), systemClockMs, parent)
 {
 }
 
-IncomingOfferModel::IncomingOfferModel(
-    IncomingOfferSettingsSnapshot settings, Clock clock, QObject *parent
-)
+IncomingOfferModel::IncomingOfferModel(IncomingOfferSettingsSnapshot settings, Clock clock, QObject *parent)
     : QObject(parent),
       m_settings(std::move(settings)),
       m_clock(clock ? std::move(clock) : Clock(systemClockMs))
@@ -214,8 +210,8 @@ QString IncomingOfferModel::summaryText() const
   if (!m_offer.has_value())
     return {};
   const auto itemCount = m_offer->offer.fileCount + m_offer->offer.directoryCount;
-  return i18n::translatePlural(Text::DevicesDropItems, static_cast<int>(itemCount)) + QStringLiteral(" · ")
-         + formattedBytes(m_offer->offer.totalBytes);
+  return i18n::translatePlural(Text::DevicesDropItems, static_cast<int>(itemCount)) + QStringLiteral(" · ") +
+         formattedBytes(m_offer->offer.totalBytes);
 }
 
 QString IncomingOfferModel::destinationText() const
@@ -225,9 +221,17 @@ QString IncomingOfferModel::destinationText() const
 
 QString IncomingOfferModel::conflictText() const
 {
-  return m_settings.defaultConflictPolicy == ConflictPolicy::Ask
-             ? i18n::translate(Text::TransferIncomingAsk)
-             : i18n::translate(Text::TransferIncomingAutoRename);
+  switch (m_settings.defaultConflictPolicy) {
+  case ConflictPolicy::AutoRename:
+    return i18n::translate(Text::TransferIncomingAutoRename);
+  case ConflictPolicy::Ask:
+    return i18n::translate(Text::TransferIncomingAsk);
+  case ConflictPolicy::Overwrite:
+    return i18n::translate(Text::TransferConflictOverwrite);
+  case ConflictPolicy::Skip:
+    return i18n::translate(Text::TransferConflictSkip);
+  }
+  return {};
 }
 
 QString IncomingOfferModel::errorText() const

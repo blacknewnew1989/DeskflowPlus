@@ -196,6 +196,13 @@
     <message><source>settings.input</source><translation>键盘与鼠标</translation></message>
     <message><source>settings.clipboard</source><translation>剪贴板</translation></message>
     <message><source>settings.file_transfer</source><translation>文件传输</translation></message>
+    <message><source>settings.transfer.receive_folder</source><translation>接收目录</translation></message>
+    <message><source>settings.transfer.choose_folder</source><translation>选择目录</translation></message>
+    <message><source>settings.transfer.incoming_policy</source><translation>接收策略</translation></message>
+    <message><source>settings.transfer.ask_every_time</source><translation>每次询问</translation></message>
+    <message><source>settings.transfer.auto_accept_trusted</source><translation>自动接收来自受信任设备的文件</translation></message>
+    <message><source>settings.transfer.conflict_policy</source><translation>同名文件处理</translation></message>
+    <message><source>settings.transfer.save_failed</source><translation>无法保存文件传输设置：%1</translation></message>
     <message><source>settings.network</source><translation>发现与网络</translation></message>
     <message><source>settings.trusted_devices</source><translation>信任设备</translation></message>
     <message><source>settings.startup</source><translation>开机启动</translation></message>

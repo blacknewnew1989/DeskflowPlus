@@ -144,6 +144,7 @@ private:
   void openHelpUrl() const;
   void openGetNewVersionUrl() const;
   void openSettings();
+  void openFileTransferSettings();
   void startCore();
   void stopCore();
   bool saveServerConfig();

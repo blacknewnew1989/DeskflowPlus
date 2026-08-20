@@ -13,8 +13,8 @@
 
 #include "../FakePairingService.h"
 
-#include <QCoreApplication>
 #include <QAction>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDialog>
 #include <QDragEnterEvent>
@@ -32,8 +32,8 @@
 #include <QSpinBox>
 #include <QTemporaryDir>
 #include <QTest>
-#include <QToolButton>
 #include <QTimer>
+#include <QToolButton>
 
 #include <chrono>
 #include <utility>
@@ -122,6 +122,7 @@ private Q_SLOTS:
   void emitsTypedPairingIntent();
   void emitsInputLayoutIntentForTrustedInputPeer();
   void emitsTrustRevocationIntentForTrustedDevice();
+  void emitsAutoAcceptFilesIntentForTrustedDevice();
   void rejectsTrustRevocationIntentForUntrustedDevice();
   void activatingCardRunsItsVisiblePrimaryAction();
   void rendersAndDrivesSharedPairingModel();
@@ -197,9 +198,8 @@ void DevicesDockTests::managesManualAddressesAtCompactSize()
   QList<ManualAddress> savedAddresses;
   connect(
       &fixture.dock, &DevicesDock::manualAddressesSaveRequested, this,
-      [&saveRequests, &savedAddresses](
-          QList<ManualAddress> addresses, const DevicesDock::ManualAddressesSaveReceipt &receipt
-      ) {
+      [&saveRequests,
+       &savedAddresses](QList<ManualAddress> addresses, const DevicesDock::ManualAddressesSaveReceipt &receipt) {
         ++saveRequests;
         savedAddresses = std::move(addresses);
         receipt(true);
@@ -207,8 +207,10 @@ void DevicesDockTests::managesManualAddressesAtCompactSize()
   );
   QTimer::singleShot(0, [&fixture]() {
     auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
-    if (dialog == nullptr) return;
-    dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"))->setText(QStringLiteral("192.168.1.20"));
+    if (dialog == nullptr)
+      return;
+    dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"))
+        ->setText(QStringLiteral("192.168.1.20"));
     dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressAddButton"))->click();
     dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressSaveButton"))->click();
   });
@@ -238,7 +240,8 @@ void DevicesDockTests::retriesManualAddressSaveAfterFailure()
   QTimer::singleShot(0, [&fixture]() {
     auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
     QVERIFY(dialog != nullptr);
-    dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"))->setText(QStringLiteral("retry.local"));
+    dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"))
+        ->setText(QStringLiteral("retry.local"));
     dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressAddButton"))->click();
     dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressSaveButton"))->click();
     QVERIFY(dialog->isVisible());
@@ -270,7 +273,8 @@ void DevicesDockTests::cancellingManualAddressChangesDoesNotSaveOrCommit()
   QTimer::singleShot(0, [&fixture]() {
     auto *dialog = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskManualAddressesDialog"));
     QVERIFY(dialog != nullptr);
-    dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"))->setText(QStringLiteral("discarded.local"));
+    dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"))
+        ->setText(QStringLiteral("discarded.local"));
     dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressAddButton"))->click();
     dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressCancelButton"))->click();
   });
@@ -301,9 +305,8 @@ void DevicesDockTests::removingManualAddressEditsWorkingCopyUntilSaved()
   QList<ManualAddress> savedAddresses;
   connect(
       &fixture.dock, &DevicesDock::manualAddressesSaveRequested, this,
-      [&saveRequests, &savedAddresses](
-          QList<ManualAddress> addresses, const DevicesDock::ManualAddressesSaveReceipt &receipt
-      ) {
+      [&saveRequests,
+       &savedAddresses](QList<ManualAddress> addresses, const DevicesDock::ManualAddressesSaveReceipt &receipt) {
         ++saveRequests;
         savedAddresses = std::move(addresses);
         receipt(true);
@@ -403,12 +406,12 @@ void DevicesDockTests::labelsManualAddressInputsAtCompactSize()
         QStringLiteral("Host")
     );
     labeledControl(
-        QStringLiteral("relaydeskManualAddressInputPortLabel"),
-        QStringLiteral("relaydeskManualAddressInputPort"), QStringLiteral("Input port")
+        QStringLiteral("relaydeskManualAddressInputPortLabel"), QStringLiteral("relaydeskManualAddressInputPort"),
+        QStringLiteral("Input port")
     );
     labeledControl(
-        QStringLiteral("relaydeskManualAddressFilePortLabel"),
-        QStringLiteral("relaydeskManualAddressFilePort"), QStringLiteral("File port")
+        QStringLiteral("relaydeskManualAddressFilePortLabel"), QStringLiteral("relaydeskManualAddressFilePort"),
+        QStringLiteral("File port")
     );
     auto *host = dialog->findChild<QWidget *>(QStringLiteral("relaydeskManualAddressHost"));
     auto *inputPort = dialog->findChild<QWidget *>(QStringLiteral("relaydeskManualAddressInputPort"));
@@ -530,8 +533,8 @@ void DevicesDockTests::emitsTrustRevocationIntentForTrustedDevice()
     auto *confirmation = fixture.dock.findChild<QDialog *>(QStringLiteral("relaydeskRevokeTrustConfirmation"));
     if (confirmation == nullptr)
       return;
-    confirmationSeen = confirmation
-                           ->findChild<QLabel *>(QStringLiteral("relaydeskRevokeTrustConfirmationMessage")) != nullptr;
+    confirmationSeen =
+        confirmation->findChild<QLabel *>(QStringLiteral("relaydeskRevokeTrustConfirmationMessage")) != nullptr;
     confirmation->reject();
   });
   revoke->trigger();
@@ -549,6 +552,39 @@ void DevicesDockTests::emitsTrustRevocationIntentForTrustedDevice()
   revoke->trigger();
   QCOMPARE(requested.count(), 1);
   QCOMPARE(*static_cast<const DeviceId *>(requested.first().at(0).constData()), peer.id);
+}
+
+void DevicesDockTests::emitsAutoAcceptFilesIntentForTrustedDevice()
+{
+  qRegisterMetaType<DeviceId>();
+  Fixture fixture;
+  auto peer = peerSnapshot(DevicePresence::Online, true);
+  fixture.devices.upsertRemoteDevice(peer);
+  fixture.dock.show();
+
+  auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *action = fixture.dock.findChild<QAction *>(QStringLiteral("relaydeskAutoAcceptFilesMenuAction"));
+  QVERIFY(list != nullptr);
+  QVERIFY(action != nullptr);
+  list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
+  QTRY_VERIFY(action->isVisible());
+  QVERIFY(action->isCheckable());
+  QVERIFY(!action->isChecked());
+
+  QSignalSpy requested(&fixture.dock, &DevicesDock::autoAcceptFilesRequested);
+  action->trigger();
+  QCOMPARE(requested.count(), 1);
+  QVERIFY(!action->isChecked());
+  const auto first = requested.takeFirst();
+  QCOMPARE(*static_cast<const DeviceId *>(first.at(0).constData()), peer.id);
+  QVERIFY(first.at(1).toBool());
+
+  peer.autoAcceptFiles = true;
+  fixture.devices.upsertRemoteDevice(peer);
+  QTRY_VERIFY(action->isChecked());
+  action->trigger();
+  QCOMPARE(requested.count(), 1);
+  QVERIFY(!requested.takeFirst().at(1).toBool());
 }
 
 void DevicesDockTests::rejectsTrustRevocationIntentForUntrustedDevice()
@@ -815,8 +851,9 @@ void DevicesDockTests::rendersMacPermissionDetailsAndIndependentActions()
   QTest::mouseClick(summary, Qt::LeftButton);
   QTRY_VERIFY(detailsPanel->isVisible());
 
-  const QStringList titles{QStringLiteral("Local Network"), QStringLiteral("Accessibility"),
-                           QStringLiteral("Input Monitoring")};
+  const QStringList titles{
+      QStringLiteral("Local Network"), QStringLiteral("Accessibility"), QStringLiteral("Input Monitoring")
+  };
   const QStringList purposes{
       QStringLiteral("Find and connect to nearby devices on your local network."),
       QStringLiteral("Control keyboard and pointer input on this Mac."),
@@ -946,7 +983,7 @@ void DevicesDockTests::gatesPairingOnMacLocalNetworkPermission()
                 .kind = PermissionKind::MacLocalNetwork,
                 .state = state,
                 .errorCode = state == PermissionState::Denied ? PermissionErrorCode::MacLocalNetworkDenied
-                                                               : PermissionErrorCode::None,
+                                                              : PermissionErrorCode::None,
                 .canOpenSettings = true,
             },
             {.kind = PermissionKind::MacAccessibility, .state = PermissionState::Granted},
@@ -1268,7 +1305,9 @@ void DevicesDockTests::rendersAndResolvesQueuedIncomingConflicts()
   const auto queuedTransfer = TransferId::generate();
   for (int index = 0; index < 3; ++index) {
     fixture.dock.showIncomingConflictPrompt(
-        {.transferId = queuedTransfer, .conflictId = QUuid::createUuid(), .relativeProtocolPath = QStringLiteral("next.txt")}
+        {.transferId = queuedTransfer,
+         .conflictId = QUuid::createUuid(),
+         .relativeProtocolPath = QStringLiteral("next.txt")}
     );
   }
   QTRY_VERIFY(panel->isVisible());
@@ -1276,13 +1315,12 @@ void DevicesDockTests::rendersAndResolvesQueuedIncomingConflicts()
   QTest::mouseClick(skipButton, Qt::LeftButton);
   QTest::mouseClick(cancelButton, Qt::LeftButton);
   QCOMPARE(
-      decisions,
-      QList<IncomingConflictDecision>({
-          IncomingConflictDecision::Overwrite,
-          IncomingConflictDecision::AutoRename,
-          IncomingConflictDecision::Skip,
-          IncomingConflictDecision::CancelTransfer,
-      })
+      decisions, QList<IncomingConflictDecision>({
+                     IncomingConflictDecision::Overwrite,
+                     IncomingConflictDecision::AutoRename,
+                     IncomingConflictDecision::Skip,
+                     IncomingConflictDecision::CancelTransfer,
+                 })
   );
   QVERIFY(panel->isVisible());
   QTest::mouseClick(cancelButton, Qt::LeftButton);

@@ -20,7 +20,7 @@
 namespace deskflow::relaydesk::model {
 class DeviceHomeModel;
 class PairingWizardModel;
-}
+} // namespace deskflow::relaydesk::model
 
 namespace deskflow::relaydesk {
 
@@ -56,11 +56,10 @@ public:
 
   [[nodiscard]] PairingOperationResult startPairing(const DeviceId &deviceId) override;
   [[nodiscard]] PairingOperationResult confirmMatchingSas(const QUuid &sessionId) override;
-  [[nodiscard]] PairingOperationResult submitDisplayedSas(
-      const QUuid &sessionId, const QString &sixDigits
-  ) override;
+  [[nodiscard]] PairingOperationResult submitDisplayedSas(const QUuid &sessionId, const QString &sixDigits) override;
   [[nodiscard]] PairingOperationResult cancel(const QUuid &sessionId) override;
   [[nodiscard]] PairingOperationResult revoke(const DeviceId &deviceId) override;
+  [[nodiscard]] PairingOperationResult setAutoAcceptFiles(const DeviceId &deviceId, bool enabled);
   [[nodiscard]] std::optional<PairingSnapshot> snapshot() const override;
   [[nodiscard]] std::optional<QByteArray> pendingFingerprint(const QUuid &sessionId) const override;
   [[nodiscard]] bool expireIfNeeded();
@@ -71,9 +70,7 @@ Q_SIGNALS:
 private:
   friend class AutoReconnectRuntime;
   [[nodiscard]] PairingOperationResult reportPreflightFailure(PairingOperationResult result);
-  [[nodiscard]] std::optional<std::pair<QHostAddress, quint16>> endpointFor(
-      const DeviceSnapshot &peer
-  ) const;
+  [[nodiscard]] std::optional<std::pair<QHostAddress, quint16>> endpointFor(const DeviceSnapshot &peer) const;
   void updateDevice(const PairingSnapshot &snapshot);
   void syncDiscoveredDevice(DeviceSnapshot snapshot);
   void applyTrust(DeviceSnapshot &snapshot) const;

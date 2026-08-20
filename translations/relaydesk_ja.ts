@@ -196,6 +196,13 @@
     <message><source>settings.input</source><translation>キーボードとマウス</translation></message>
     <message><source>settings.clipboard</source><translation>クリップボード</translation></message>
     <message><source>settings.file_transfer</source><translation>ファイル転送</translation></message>
+    <message><source>settings.transfer.receive_folder</source><translation>受信フォルダー</translation></message>
+    <message><source>settings.transfer.choose_folder</source><translation>フォルダーを選択</translation></message>
+    <message><source>settings.transfer.incoming_policy</source><translation>受信ファイル</translation></message>
+    <message><source>settings.transfer.ask_every_time</source><translation>毎回確認する</translation></message>
+    <message><source>settings.transfer.auto_accept_trusted</source><translation>信頼済みデバイスから自動的に受け入れる</translation></message>
+    <message><source>settings.transfer.conflict_policy</source><translation>同名のファイルがある場合</translation></message>
+    <message><source>settings.transfer.save_failed</source><translation>ファイル転送設定を保存できませんでした: %1</translation></message>
     <message><source>settings.network</source><translation>検出とネットワーク</translation></message>
     <message><source>settings.trusted_devices</source><translation>信頼済みデバイス</translation></message>
     <message><source>settings.startup</source><translation>システム起動時に開始</translation></message>

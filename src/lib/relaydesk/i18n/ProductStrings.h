@@ -213,6 +213,13 @@ enum class Text
   AboutTitle,
   AboutDescription,
   AboutDiagnostics,
+  SettingsTransferReceiveFolder,
+  SettingsTransferChooseFolder,
+  SettingsTransferIncomingPolicy,
+  SettingsTransferAskEveryTime,
+  SettingsTransferAutoAcceptTrusted,
+  SettingsTransferConflictPolicy,
+  SettingsTransferSaveFailed,
   Count
 };
 

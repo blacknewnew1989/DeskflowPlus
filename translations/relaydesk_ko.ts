@@ -196,6 +196,13 @@
     <message><source>settings.input</source><translation>키보드 및 마우스</translation></message>
     <message><source>settings.clipboard</source><translation>클립보드</translation></message>
     <message><source>settings.file_transfer</source><translation>파일 전송</translation></message>
+    <message><source>settings.transfer.receive_folder</source><translation>수신 폴더</translation></message>
+    <message><source>settings.transfer.choose_folder</source><translation>폴더 선택</translation></message>
+    <message><source>settings.transfer.incoming_policy</source><translation>수신 파일</translation></message>
+    <message><source>settings.transfer.ask_every_time</source><translation>매번 묻기</translation></message>
+    <message><source>settings.transfer.auto_accept_trusted</source><translation>신뢰할 수 있는 기기에서 자동 수락</translation></message>
+    <message><source>settings.transfer.conflict_policy</source><translation>같은 이름의 파일이 있을 때</translation></message>
+    <message><source>settings.transfer.save_failed</source><translation>파일 전송 설정을 저장할 수 없습니다: %1</translation></message>
     <message><source>settings.network</source><translation>검색 및 네트워크</translation></message>
     <message><source>settings.trusted_devices</source><translation>신뢰할 수 있는 기기</translation></message>
     <message><source>settings.startup</source><translation>시스템 시작 시 실행</translation></message>

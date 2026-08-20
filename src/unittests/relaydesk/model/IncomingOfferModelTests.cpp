@@ -65,6 +65,7 @@ private Q_SLOTS:
   void blocksUntrustedPeerAndMapsErrorsSafely();
   void settingsUpdateEmitsAndReevaluatesAvailability();
   void preservesAskConflictPolicyOnAcceptance();
+  void presentsEveryConfiguredConflictPolicy();
 };
 
 void IncomingOfferModelTests::presentsAndAcceptsValidatedOffer()
@@ -150,12 +151,10 @@ void IncomingOfferModelTests::autoAcceptRequiresAllExplicitConditions()
     QCOMPARE(accepted.count(), testCase.expectedAccepted ? 1 : 0);
     if (testCase.expectedAccepted) {
       QCOMPARE(
-          *static_cast<const TransferId *>(accepted.constFirst().at(0).constData()),
-          model.offer()->offer.transferId
+          *static_cast<const TransferId *>(accepted.constFirst().at(0).constData()), model.offer()->offer.transferId
       );
       QCOMPARE(
-          accepted.constFirst().at(1).value<ReceiveOptions>().acceptanceOrigin,
-          AcceptanceOrigin::TrustedDevicePolicy
+          accepted.constFirst().at(1).value<ReceiveOptions>().acceptanceOrigin, AcceptanceOrigin::TrustedDevicePolicy
       );
     }
   }
@@ -199,7 +198,6 @@ void IncomingOfferModelTests::blocksUntrustedPeerAndMapsErrorsSafely()
   QVERIFY(!model.accept());
   QCOMPARE(model.errorText(), QStringLiteral("Pair this device before receiving files"));
   QVERIFY(model.reject());
-
 }
 
 void IncomingOfferModelTests::settingsUpdateEmitsAndReevaluatesAvailability()
@@ -232,6 +230,27 @@ void IncomingOfferModelTests::preservesAskConflictPolicyOnAcceptance()
   QVERIFY(model.accept());
   QCOMPARE(accepted.count(), 1);
   QCOMPARE(accepted.constFirst().at(1).value<ReceiveOptions>().conflictPolicy, ConflictPolicy::Ask);
+}
+
+void IncomingOfferModelTests::presentsEveryConfiguredConflictPolicy()
+{
+  struct Case
+  {
+    ConflictPolicy policy;
+    QString expected;
+  };
+  const QList<Case> cases{
+      {ConflictPolicy::AutoRename, QStringLiteral("Conflict: auto rename")},
+      {ConflictPolicy::Ask, QStringLiteral("Conflict: ask when a file already exists")},
+      {ConflictPolicy::Overwrite, QStringLiteral("Replace")},
+      {ConflictPolicy::Skip, QStringLiteral("Skip")},
+  };
+  for (const auto &testCase : cases) {
+    auto incomingSettings = settings();
+    incomingSettings.defaultConflictPolicy = testCase.policy;
+    IncomingOfferModel model(incomingSettings);
+    QCOMPARE(model.conflictText(), testCase.expected);
+  }
 }
 
 QTEST_MAIN(IncomingOfferModelTests)

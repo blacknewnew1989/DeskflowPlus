@@ -196,6 +196,13 @@
     <message><source>settings.input</source><translation>Tastiera e mouse</translation></message>
     <message><source>settings.clipboard</source><translation>Appunti</translation></message>
     <message><source>settings.file_transfer</source><translation>Trasferimento file</translation></message>
+    <message><source>settings.transfer.receive_folder</source><translation>Cartella di ricezione</translation></message>
+    <message><source>settings.transfer.choose_folder</source><translation>Scegli cartella</translation></message>
+    <message><source>settings.transfer.incoming_policy</source><translation>File in arrivo</translation></message>
+    <message><source>settings.transfer.ask_every_time</source><translation>Chiedi ogni volta</translation></message>
+    <message><source>settings.transfer.auto_accept_trusted</source><translation>Accetta automaticamente dai dispositivi attendibili</translation></message>
+    <message><source>settings.transfer.conflict_policy</source><translation>Quando esiste già un file</translation></message>
+    <message><source>settings.transfer.save_failed</source><translation>Impossibile salvare le impostazioni di trasferimento: %1</translation></message>
     <message><source>settings.network</source><translation>Rilevamento e rete</translation></message>
     <message><source>settings.trusted_devices</source><translation>Dispositivi attendibili</translation></message>
     <message><source>settings.startup</source><translation>Avvia con il sistema</translation></message>

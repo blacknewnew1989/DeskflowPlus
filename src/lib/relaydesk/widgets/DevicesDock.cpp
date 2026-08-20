@@ -12,8 +12,8 @@
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
 
-#include <QAction>
 #include <QAbstractItemModel>
+#include <QAction>
 #include <QApplication>
 #include <QDialog>
 #include <QDragEnterEvent>
@@ -32,16 +32,16 @@
 #include <QLineEdit>
 #include <QListView>
 #include <QListWidget>
-#include <QMenu>
 #include <QLocale>
+#include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
-#include <QSpinBox>
 #include <QSizePolicy>
+#include <QSpinBox>
 #include <QStyle>
 #include <QStyledItemDelegate>
 #include <QToolButton>
@@ -96,8 +96,9 @@ public:
         option.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
     const auto pairable = index.data(model::DeviceHomeModel::CanStartPairingRole).toBool();
     const auto sendable = index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
-    const auto actionText = pairable ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
-                                     : sendable ? i18n::translate(Text::DevicesActionSendFile) : QString();
+    const auto actionText = pairable   ? index.data(model::DeviceHomeModel::PairActionTextRole).toString()
+                            : sendable ? i18n::translate(Text::DevicesActionSendFile)
+                                       : QString();
     const QFontMetrics detailMetrics(option.font);
     const auto actionWidth = actionText.isEmpty() ? 0 : detailMetrics.horizontalAdvance(actionText) + 12;
 
@@ -329,6 +330,9 @@ DevicesDock::DevicesDock(
   m_moreButton->setMenu(m_moreMenu);
   m_revokeTrustAction = m_moreMenu->addAction(QString{});
   m_revokeTrustAction->setObjectName(QStringLiteral("relaydeskRevokeTrustMenuAction"));
+  m_autoAcceptFilesAction = m_moreMenu->addAction(QString{});
+  m_autoAcceptFilesAction->setObjectName(QStringLiteral("relaydeskAutoAcceptFilesMenuAction"));
+  m_autoAcceptFilesAction->setCheckable(true);
   m_configureInputAction = m_moreMenu->addAction(QString{});
   m_configureInputAction->setObjectName(QStringLiteral("relaydeskConfigureInputMenuAction"));
   deviceActions->addWidget(m_moreButton);
@@ -554,13 +558,25 @@ DevicesDock::DevicesDock(
   connect(m_pairButton, &QPushButton::clicked, this, [this]() { requestPairing(m_deviceList->currentIndex()); });
   connect(m_configureInputAction, &QAction::triggered, this, [this]() {
     const auto index = m_deviceList->currentIndex();
-    if (!index.isValid()) return;
+    if (!index.isValid())
+      return;
     const auto deviceId = DeviceId::fromString(index.data(model::DeviceHomeModel::DeviceIdRole).toString());
-    if (deviceId.has_value()) Q_EMIT inputLayoutRequested(*deviceId);
+    if (deviceId.has_value())
+      Q_EMIT inputLayoutRequested(*deviceId);
   });
   connect(m_manageManualAddressesButton, &QPushButton::clicked, this, &DevicesDock::manageManualAddresses);
   connect(m_revokeTrustAction, &QAction::triggered, this, [this]() {
     requestTrustRevocation(m_deviceList->currentIndex());
+  });
+  connect(m_autoAcceptFilesAction, &QAction::triggered, this, [this](bool enabled) {
+    const auto index = m_deviceList->currentIndex();
+    if (!index.isValid())
+      return;
+    const auto current = index.data(model::DeviceHomeModel::AutoAcceptFilesRole).toBool();
+    m_autoAcceptFilesAction->setChecked(current);
+    const auto deviceId = DeviceId::fromString(index.data(model::DeviceHomeModel::DeviceIdRole).toString());
+    if (deviceId.has_value() && enabled != current)
+      Q_EMIT autoAcceptFilesRequested(*deviceId, enabled);
   });
   connect(m_sendFilesButton, &QPushButton::clicked, this, [this]() { chooseAndSend(false); });
   connect(m_sendFolderButton, &QPushButton::clicked, this, [this]() { chooseAndSend(true); });
@@ -693,8 +709,8 @@ void DevicesDock::showIncomingConflictCancelTransportFailure(const ::relaydesk::
 
 void DevicesDock::clearIncomingConflictPrompts(const ::relaydesk::transfer::TransferId &transferId)
 {
-  const auto clearsActive = !m_incomingConflictPrompts.isEmpty() &&
-                            m_incomingConflictPrompts.constFirst().transferId == transferId;
+  const auto clearsActive =
+      !m_incomingConflictPrompts.isEmpty() && m_incomingConflictPrompts.constFirst().transferId == transferId;
   const auto first = std::remove_if(
       m_incomingConflictPrompts.begin(), m_incomingConflictPrompts.end(),
       [&transferId](const ::relaydesk::transfer::IncomingConflictPrompt &prompt) {
@@ -730,8 +746,7 @@ void DevicesDock::changeEvent(QEvent *event)
 bool DevicesDock::eventFilter(QObject *watched, QEvent *event)
 {
   if (watched == m_permissionBanner || watched == m_permissionTitle || watched == m_permissionMessage) {
-    if (event->type() == QEvent::MouseButtonRelease &&
-        static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
+    if (event->type() == QEvent::MouseButtonRelease && static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
       m_permissionDetailsToggle->click();
       return true;
     }
@@ -858,6 +873,7 @@ void DevicesDock::updateText()
   m_moreButton->setToolTip(i18n::translate(Text::DevicesActionMore));
   m_moreButton->setAccessibleName(i18n::translate(Text::DevicesActionMore));
   m_revokeTrustAction->setText(i18n::translate(Text::DevicesActionRevokeTrust));
+  m_autoAcceptFilesAction->setText(i18n::translate(Text::TransferIncomingAlwaysAccept));
   m_sendFeedback->setAccessibleName(i18n::translate(Text::DevicesActionSendFile));
   m_acceptIncomingOfferButton->setText(i18n::translate(Text::TransferActionAccept));
   m_acceptIncomingOfferButton->setAccessibleName(i18n::translate(Text::TransferActionAccept));
@@ -908,13 +924,16 @@ void DevicesDock::updateSelection()
   );
   const auto sendable = index.isValid() && index.data(model::DeviceHomeModel::CanSendItemsRole).toBool();
   const auto inputConfigurable = index.isValid() && index.data(model::DeviceHomeModel::IsTrustedRole).toBool() &&
-                               index.data(model::DeviceHomeModel::InputCapabilityRole).toBool() &&
-                               !index.data(model::DeviceHomeModel::IsLocalRole).toBool();
+                                 index.data(model::DeviceHomeModel::InputCapabilityRole).toBool() &&
+                                 !index.data(model::DeviceHomeModel::IsLocalRole).toBool();
   m_configureInputAction->setVisible(inputConfigurable);
   m_configureInputAction->setEnabled(inputConfigurable);
   const auto revocable = index.isValid() && index.data(model::DeviceHomeModel::IsTrustedRole).toBool();
   m_revokeTrustAction->setVisible(revocable);
   m_revokeTrustAction->setEnabled(revocable);
+  m_autoAcceptFilesAction->setVisible(revocable);
+  m_autoAcceptFilesAction->setEnabled(revocable);
+  m_autoAcceptFilesAction->setChecked(revocable && index.data(model::DeviceHomeModel::AutoAcceptFilesRole).toBool());
   m_moreButton->setVisible(revocable);
   m_moreButton->setEnabled(revocable);
   m_sendFilesButton->setVisible(sendable);
@@ -1241,9 +1260,8 @@ void DevicesDock::updateIncomingConflictPanel()
     m_incomingConflictError->setVisible(!m_incomingConflictErrorText.isEmpty());
     m_incomingConflictPanel->setAccessibleName(i18n::translate(Text::TransferConflictTitle));
     m_incomingConflictPanel->setAccessibleDescription(
-        prompt.relativeProtocolPath + (m_incomingConflictErrorText.isEmpty()
-                                           ? QString{}
-                                           : QStringLiteral(". ") + m_incomingConflictErrorText)
+        prompt.relativeProtocolPath +
+        (m_incomingConflictErrorText.isEmpty() ? QString{} : QStringLiteral(". ") + m_incomingConflictErrorText)
     );
   }
   updateActivityPanel();
@@ -1363,9 +1381,7 @@ void DevicesDock::updatePermissionDetails()
 
     auto *detailRow = m_permissionDetailTitles.at(row)->parentWidget();
     detailRow->setAccessibleName(title);
-    detailRow->setAccessibleDescription(
-        QStringList{purpose, status, capability}.join(QStringLiteral(" · "))
-    );
+    detailRow->setAccessibleDescription(QStringList{purpose, status, capability}.join(QStringLiteral(" · ")));
   }
 }
 

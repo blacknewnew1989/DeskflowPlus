@@ -11,10 +11,16 @@
 
 #include "gui/config/IServerConfig.h"
 #include "gui/core/CoreProcess.h"
+#include "relaydesk/transfer/TransferSettings.h"
 
 namespace Ui {
 class SettingsDialog;
 }
+class QComboBox;
+class QGroupBox;
+class QLabel;
+class QLineEdit;
+class QPushButton;
 
 class SettingsDialog : public QDialog
 {
@@ -27,9 +33,11 @@ public:
   void extracted();
   SettingsDialog(QWidget *parent, const IServerConfig &serverConfig, const CoreProcess &coreProcess);
   ~SettingsDialog() override;
+  void focusFileTransferSettings();
 
 Q_SIGNALS:
   void shown();
+  void transferSettingsSaved(::relaydesk::transfer::TransferSettings settings);
 
 protected:
   void changeEvent(QEvent *e) override;
@@ -39,6 +47,7 @@ private:
   void regenCertificates();
   void browseCertificatePath();
   void browseLogPath();
+  void browseReceiveFolder();
   void setLogToFile(bool logToFile);
   bool saveStartAtLogin();
   void loadStartAtLogin();
@@ -50,6 +59,9 @@ private:
   void updateInputRoleControls();
   void showReadOnlyMessage();
   void updateText();
+  void resizeToContents();
+  [[nodiscard]] ::relaydesk::transfer::TransferSettings transferSettingsFromControls() const;
+  bool saveTransferSettings();
 
   /// @brief Load all settings.
   void loadFromConfig();
@@ -70,4 +82,13 @@ private:
   const IServerConfig &m_serverConfig;
   const CoreProcess &m_coreProcess;
   bool m_startAtLoginAvailable = false;
+  bool m_fileTransferOnly = false;
+  QGroupBox *m_fileTransferGroup = nullptr;
+  QLabel *m_receiveFolderLabel = nullptr;
+  QLineEdit *m_receiveFolder = nullptr;
+  QPushButton *m_browseReceiveFolderButton = nullptr;
+  QLabel *m_incomingPolicyLabel = nullptr;
+  QComboBox *m_incomingPolicy = nullptr;
+  QLabel *m_conflictPolicyLabel = nullptr;
+  QComboBox *m_conflictPolicy = nullptr;
 };

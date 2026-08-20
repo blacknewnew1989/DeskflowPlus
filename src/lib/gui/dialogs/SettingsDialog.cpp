@@ -15,17 +15,26 @@
 #include "gui/Messages.h"
 #include "gui/TlsUtility.h"
 #include "gui/core/NetworkMonitor.h"
+#include "relaydesk/i18n/ProductStrings.h"
 #include "relaydesk/platform/WindowsStartAtLogin.h"
+#include "relaydesk/transfer/TransferSettings.h"
 
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileDialog>
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QMessageBox>
 #include <QRadioButton>
+#include <QSettings>
 #include <QTimer>
 
 using namespace deskflow::gui;
+namespace i18n = deskflow::relaydesk::i18n;
+using deskflow::relaydesk::i18n::Text;
 
 SettingsDialog::SettingsDialog(QWidget *parent, const IServerConfig &serverConfig, const CoreProcess &coreProcess)
     : QDialog(parent),
@@ -35,6 +44,37 @@ SettingsDialog::SettingsDialog(QWidget *parent, const IServerConfig &serverConfi
 {
 
   ui->setupUi(this);
+
+  m_fileTransferGroup = new QGroupBox(ui->tabRegular);
+  m_fileTransferGroup->setObjectName(QStringLiteral("relaydeskFileTransferSettingsGroup"));
+  auto *transferLayout = new QFormLayout(m_fileTransferGroup);
+  m_receiveFolderLabel = new QLabel(m_fileTransferGroup);
+  m_receiveFolder = new QLineEdit(m_fileTransferGroup);
+  m_receiveFolder->setObjectName(QStringLiteral("relaydeskReceiveFolder"));
+  m_browseReceiveFolderButton = new QPushButton(m_fileTransferGroup);
+  m_browseReceiveFolderButton->setObjectName(QStringLiteral("relaydeskBrowseReceiveFolderButton"));
+  auto *receiveFolderLayout = new QHBoxLayout();
+  receiveFolderLayout->setContentsMargins(0, 0, 0, 0);
+  receiveFolderLayout->addWidget(m_receiveFolder, 1);
+  receiveFolderLayout->addWidget(m_browseReceiveFolderButton);
+  transferLayout->addRow(m_receiveFolderLabel, receiveFolderLayout);
+  m_incomingPolicyLabel = new QLabel(m_fileTransferGroup);
+  m_incomingPolicy = new QComboBox(m_fileTransferGroup);
+  m_incomingPolicy->setObjectName(QStringLiteral("relaydeskIncomingTransferPolicy"));
+  m_incomingPolicy->addItem(QString{}, static_cast<int>(::relaydesk::transfer::IncomingTransferPolicy::Ask));
+  m_incomingPolicy->addItem(
+      QString{}, static_cast<int>(::relaydesk::transfer::IncomingTransferPolicy::AutoAcceptTrusted)
+  );
+  transferLayout->addRow(m_incomingPolicyLabel, m_incomingPolicy);
+  m_conflictPolicyLabel = new QLabel(m_fileTransferGroup);
+  m_conflictPolicy = new QComboBox(m_fileTransferGroup);
+  m_conflictPolicy->setObjectName(QStringLiteral("relaydeskDefaultConflictPolicy"));
+  m_conflictPolicy->addItem(QString{}, static_cast<int>(::relaydesk::transfer::ConflictPolicy::AutoRename));
+  m_conflictPolicy->addItem(QString{}, static_cast<int>(::relaydesk::transfer::ConflictPolicy::Ask));
+  m_conflictPolicy->addItem(QString{}, static_cast<int>(::relaydesk::transfer::ConflictPolicy::Overwrite));
+  m_conflictPolicy->addItem(QString{}, static_cast<int>(::relaydesk::transfer::ConflictPolicy::Skip));
+  transferLayout->addRow(m_conflictPolicyLabel, m_conflictPolicy);
+  ui->verticalLayout_3->insertWidget(1, m_fileTransferGroup);
 
   // set up the language combo
   I18N::reDetectLanguages();
@@ -66,9 +106,7 @@ SettingsDialog::SettingsDialog(QWidget *parent, const IServerConfig &serverConfi
 
   loadFromConfig();
 
-  adjustSize();
-  QApplication::processEvents();
-  setFixedHeight(height());
+  resizeToContents();
   setWindowFlags((windowFlags() | Qt::CustomizeWindowHint) & ~Qt::WindowMinMaxButtonsHint);
 
   initConnections();
@@ -80,6 +118,7 @@ void SettingsDialog::changeEvent(QEvent *e)
   if (e->type() == QEvent::LanguageChange) {
     ui->retranslateUi(this);
     updateText();
+    QTimer::singleShot(0, this, [this] { resizeToContents(); });
   }
 }
 
@@ -100,6 +139,7 @@ void SettingsDialog::initConnections() const
   connect(ui->comboTlsKeyLength, &QComboBox::currentIndexChanged, this, &SettingsDialog::updateRequestedKeySize);
   connect(ui->btnTlsCertPath, &QPushButton::clicked, this, &SettingsDialog::browseCertificatePath);
   connect(ui->btnBrowseLog, &QPushButton::clicked, this, &SettingsDialog::browseLogPath);
+  connect(m_browseReceiveFolderButton, &QPushButton::clicked, this, &SettingsDialog::browseReceiveFolder);
   connect(ui->cbLogToFile, &QCheckBox::toggled, this, &SettingsDialog::setLogToFile);
   connect(ui->comboLogLevel, &QComboBox::currentIndexChanged, this, &SettingsDialog::logLevelChanged);
   connect(ui->comboLanguage, &QComboBox::currentIndexChanged, this, [this](int index) {
@@ -144,6 +184,15 @@ void SettingsDialog::browseLogPath()
   }
 }
 
+void SettingsDialog::browseReceiveFolder()
+{
+  const auto folder = QFileDialog::getExistingDirectory(
+      this, i18n::translate(Text::SettingsTransferChooseFolder), m_receiveFolder->text()
+  );
+  if (!folder.isEmpty())
+    m_receiveFolder->setText(folder);
+}
+
 void SettingsDialog::setLogToFile(bool logToFile)
 {
   ui->widgetLogFilename->setEnabled(logToFile);
@@ -164,6 +213,23 @@ void SettingsDialog::showReadOnlyMessage()
 
 void SettingsDialog::updateText()
 {
+  if (m_fileTransferOnly)
+    setWindowTitle(i18n::translate(Text::SettingsFileTransfer));
+  m_fileTransferGroup->setTitle(i18n::translate(Text::SettingsFileTransfer));
+  m_receiveFolderLabel->setText(i18n::translate(Text::SettingsTransferReceiveFolder));
+  m_receiveFolderLabel->setBuddy(m_receiveFolder);
+  m_browseReceiveFolderButton->setText(i18n::translate(Text::SettingsTransferChooseFolder));
+  m_browseReceiveFolderButton->setAccessibleName(m_browseReceiveFolderButton->text());
+  m_incomingPolicyLabel->setText(i18n::translate(Text::SettingsTransferIncomingPolicy));
+  m_incomingPolicyLabel->setBuddy(m_incomingPolicy);
+  m_incomingPolicy->setItemText(0, i18n::translate(Text::SettingsTransferAskEveryTime));
+  m_incomingPolicy->setItemText(1, i18n::translate(Text::SettingsTransferAutoAcceptTrusted));
+  m_conflictPolicyLabel->setText(i18n::translate(Text::SettingsTransferConflictPolicy));
+  m_conflictPolicyLabel->setBuddy(m_conflictPolicy);
+  m_conflictPolicy->setItemText(0, i18n::translate(Text::TransferIncomingAutoRename));
+  m_conflictPolicy->setItemText(1, i18n::translate(Text::TransferIncomingAsk));
+  m_conflictPolicy->setItemText(2, i18n::translate(Text::TransferConflictOverwrite));
+  m_conflictPolicy->setItemText(3, i18n::translate(Text::TransferConflictSkip));
   // Set Tooltip for the logLevel Items
   ui->comboLogLevel->setItemData(0, tr("Required messages"), Qt::ToolTipRole);
   ui->comboLogLevel->setItemData(1, tr("Non-fatal errors"), Qt::ToolTipRole);
@@ -177,9 +243,16 @@ void SettingsDialog::updateText()
 
 void SettingsDialog::accept()
 {
+  if (m_fileTransferOnly) {
+    if (saveTransferSettings())
+      QDialog::accept();
+    return;
+  }
   if (!saveStartAtLogin()) {
     return;
   }
+  if (!saveTransferSettings())
+    return;
 
   Settings::setValue(Settings::Core::Port, ui->sbPort->value());
   Settings::setValue(Settings::Core::Interface, ui->comboInterface->currentData());
@@ -201,9 +274,9 @@ void SettingsDialog::accept()
   Settings::setValue(Settings::Core::UseWlClipboard, ui->cbUseWlClipboard->isChecked());
   Settings::setValue(Settings::Gui::ShowVersionInTitle, ui->cbShowVersion->isChecked());
 
-  const auto inputRole = ui->rbInputRoleServer->isChecked()
-                             ? Settings::CoreMode::Server
-                             : ui->rbInputRoleClient->isChecked() ? Settings::CoreMode::Client : Settings::CoreMode::None;
+  const auto inputRole = ui->rbInputRoleServer->isChecked()   ? Settings::CoreMode::Server
+                         : ui->rbInputRoleClient->isChecked() ? Settings::CoreMode::Client
+                                                              : Settings::CoreMode::None;
   Settings::setValue(Settings::Core::CoreMode, inputRole);
   Settings::setValue(Settings::Client::RemoteHost, ui->lineInputRoleRemoteHost->text().trimmed());
 
@@ -219,6 +292,21 @@ void SettingsDialog::accept()
 
 void SettingsDialog::loadFromConfig()
 {
+  QSettings settings(Settings::settingsFile(), QSettings::IniFormat);
+  ::relaydesk::transfer::TransferSettingsStore transferStore(settings);
+  const auto transferSettings = transferStore.load();
+  if (transferSettings.ok) {
+    m_receiveFolder->setText(transferSettings.settings.receiveRoot);
+    m_incomingPolicy->setCurrentIndex(
+        m_incomingPolicy->findData(static_cast<int>(transferSettings.settings.incomingPolicy))
+    );
+    m_conflictPolicy->setCurrentIndex(
+        m_conflictPolicy->findData(static_cast<int>(transferSettings.settings.defaultConflictPolicy))
+    );
+  } else {
+    m_fileTransferGroup->setEnabled(false);
+    m_fileTransferGroup->setToolTip(transferSettings.diagnostic);
+  }
   ui->sbPort->setValue(Settings::value(Settings::Core::Port).toInt());
   ui->comboLogLevel->setCurrentIndex(Settings::value(Settings::Log::Level).toInt());
   ui->cbLogToFile->setChecked(Settings::value(Settings::Log::ToFile).toBool());
@@ -411,6 +499,7 @@ void SettingsDialog::updateControls()
   ui->cbMinimizeToTray->setEnabled(writable);
   ui->comboTlsKeyLength->setEnabled(writable);
   ui->cbCloseToTray->setEnabled(writable);
+  m_fileTransferGroup->setEnabled(writable && m_fileTransferGroup->toolTip().isEmpty());
   if (ui->cbStartAtLogin->isVisible()) {
     ui->cbStartAtLogin->setEnabled(m_startAtLoginAvailable && writable);
   }
@@ -452,3 +541,65 @@ void SettingsDialog::logLevelChanged()
 }
 
 SettingsDialog::~SettingsDialog() = default;
+
+void SettingsDialog::focusFileTransferSettings()
+{
+  m_fileTransferOnly = true;
+  ui->tabWidget->setCurrentWidget(ui->tabRegular);
+  for (int index = 0; index < ui->tabWidget->count(); ++index)
+    ui->tabWidget->setTabVisible(index, ui->tabWidget->widget(index) == ui->tabRegular);
+  ui->groupApp->hide();
+  ui->groupSecurity->hide();
+  setWindowTitle(i18n::translate(Text::SettingsFileTransfer));
+  resizeToContents();
+  m_fileTransferGroup->setFocus(Qt::OtherFocusReason);
+  m_receiveFolder->setFocus(Qt::OtherFocusReason);
+}
+
+void SettingsDialog::resizeToContents()
+{
+  setMinimumHeight(0);
+  setMaximumHeight(QWIDGETSIZE_MAX);
+  adjustSize();
+  setFixedHeight(sizeHint().height());
+}
+
+::relaydesk::transfer::TransferSettings SettingsDialog::transferSettingsFromControls() const
+{
+  return {
+      .receiveRoot = m_receiveFolder->text(),
+      .incomingPolicy =
+          static_cast<::relaydesk::transfer::IncomingTransferPolicy>(m_incomingPolicy->currentData().toInt()),
+      .defaultConflictPolicy =
+          static_cast<::relaydesk::transfer::ConflictPolicy>(m_conflictPolicy->currentData().toInt()),
+  };
+}
+
+bool SettingsDialog::saveTransferSettings()
+{
+  if (!m_fileTransferGroup->isEnabled()) {
+    QMessageBox::warning(this, i18n::translate(Text::SettingsFileTransfer), m_fileTransferGroup->toolTip());
+    return false;
+  }
+  QSettings settings(Settings::settingsFile(), QSettings::IniFormat);
+  ::relaydesk::transfer::TransferSettingsStore store(settings);
+  auto transferSettings = transferSettingsFromControls();
+  QString diagnostic;
+  if (!store.save(transferSettings, &diagnostic)) {
+    QMessageBox::warning(
+        this, i18n::translate(Text::SettingsFileTransfer),
+        i18n::translate(Text::SettingsTransferSaveFailed).arg(diagnostic)
+    );
+    return false;
+  }
+  const auto loaded = store.load();
+  if (!loaded.ok) {
+    QMessageBox::warning(
+        this, i18n::translate(Text::SettingsFileTransfer),
+        i18n::translate(Text::SettingsTransferSaveFailed).arg(loaded.diagnostic)
+    );
+    return false;
+  }
+  Q_EMIT transferSettingsSaved(loaded.settings);
+  return true;
+}

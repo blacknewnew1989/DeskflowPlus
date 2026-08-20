@@ -14,7 +14,9 @@
 #include "gui/dialogs/AboutDialog.h"
 #include "gui/dialogs/SettingsDialog.h"
 #include "gui/widgets/LogDock.h"
+#include "relaydesk/app/TransferRuntimeComposition.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
+#include "relaydesk/transfer/TransferSettings.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/RelayDeskHomeWidget.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
@@ -23,18 +25,21 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDockWidget>
 #include <QEvent>
 #include <QFile>
+#include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSettings>
+#include <QSignalSpy>
 #include <QSystemTrayIcon>
 #include <QTabWidget>
 #include <QTemporaryDir>
@@ -102,6 +107,9 @@ private Q_SLOTS:
   void freshLaunchUsesCompactSingleHomeSurface();
   void settingsCanConfigureInputRoleAndRemoteHost();
   void settingsRoleImmediatelyUpdatesTlsControlsAndRemoteHostLayout();
+  void fileTransferSettingsFitWithinDialog();
+  void fileTransferSettingsPersistAndReopen();
+  void fileTransferSettingsEntryAppliesToRuntime();
   void hiddenWindowKeepsCurrentSessionGeometry();
   void restoredSmallGeometryIsClampedToMinimumSize();
   void trayIconLoadsEmbeddedWindowsFallback();
@@ -153,6 +161,13 @@ void MainWindowLayoutTests::init()
   Settings::setValue(Settings::Gui::WindowGeometry, {});
   Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::None);
   Settings::setValue(Settings::Client::RemoteHost);
+  QSettings transferSettings(Settings::settingsFile(), QSettings::IniFormat);
+  transferSettings.remove(::relaydesk::transfer::TransferSettingsStore::schemaVersionKey());
+  transferSettings.remove(::relaydesk::transfer::TransferSettingsStore::receiveRootKey());
+  transferSettings.remove(::relaydesk::transfer::TransferSettingsStore::incomingPolicyKey());
+  transferSettings.remove(::relaydesk::transfer::TransferSettingsStore::defaultConflictPolicyKey());
+  transferSettings.sync();
+  QCOMPARE(transferSettings.status(), QSettings::NoError);
 }
 
 void MainWindowLayoutTests::cleanupTestCase()
@@ -357,6 +372,161 @@ void MainWindowLayoutTests::settingsRoleImmediatelyUpdatesTlsControlsAndRemoteHo
   );
 }
 
+void MainWindowLayoutTests::fileTransferSettingsFitWithinDialog()
+{
+  ServerConfig config;
+  deskflow::gui::CoreProcess core(config);
+  SettingsDialog dialog(nullptr, config, core);
+  dialog.show();
+  QTRY_VERIFY(dialog.isVisible());
+
+  auto *group = dialog.findChild<QGroupBox *>(QStringLiteral("relaydeskFileTransferSettingsGroup"));
+  auto *folder = dialog.findChild<QLineEdit *>(QStringLiteral("relaydeskReceiveFolder"));
+  auto *incoming = dialog.findChild<QComboBox *>(QStringLiteral("relaydeskIncomingTransferPolicy"));
+  auto *conflict = dialog.findChild<QComboBox *>(QStringLiteral("relaydeskDefaultConflictPolicy"));
+  QVERIFY(group != nullptr);
+  QVERIFY(folder != nullptr);
+  QVERIFY(incoming != nullptr);
+  QVERIFY(conflict != nullptr);
+  QVERIFY(group->isVisible());
+  QCOMPARE(conflict->count(), 4);
+  for (const auto &language :
+       {QStringLiteral("en"), QStringLiteral("es"), QStringLiteral("it"), QStringLiteral("ja"), QStringLiteral("ko"),
+        QStringLiteral("ru"), QStringLiteral("zh_CN")}) {
+    I18N::setLanguage(language);
+    QCoreApplication::processEvents();
+    QTRY_VERIFY2_WITH_TIMEOUT(
+        dialog.sizeHint().height() <= dialog.height(),
+        qPrintable(QStringLiteral("language=%1 sizeHint=%2x%3 actual=%4x%5")
+                       .arg(language)
+                       .arg(dialog.sizeHint().width())
+                       .arg(dialog.sizeHint().height())
+                       .arg(dialog.width())
+                       .arg(dialog.height())),
+        1000
+    );
+    QTRY_VERIFY2_WITH_TIMEOUT(
+        dialog.sizeHint().width() <= dialog.width(),
+        qPrintable(QStringLiteral("language=%1 sizeHint=%2x%3 actual=%4x%5")
+                       .arg(language)
+                       .arg(dialog.sizeHint().width())
+                       .arg(dialog.sizeHint().height())
+                       .arg(dialog.width())
+                       .arg(dialog.height())),
+        1000
+    );
+    for (QWidget *widget :
+         {static_cast<QWidget *>(group), static_cast<QWidget *>(folder), static_cast<QWidget *>(incoming),
+          static_cast<QWidget *>(conflict)}) {
+      const QRect rect(dialog.mapFromGlobal(widget->mapToGlobal(QPoint{})), widget->size());
+      QVERIFY(dialog.contentsRect().contains(rect));
+    }
+  }
+  dialog.focusFileTransferSettings();
+  QCoreApplication::processEvents();
+  auto *tabs = dialog.findChild<QTabWidget *>();
+  QVERIFY(tabs != nullptr);
+  for (int index = 0; index < tabs->count(); ++index)
+    QCOMPARE(tabs->isTabVisible(index), tabs->widget(index)->objectName() == QStringLiteral("tabRegular"));
+  QVERIFY(!dialog.findChild<QGroupBox *>(QStringLiteral("groupApp"))->isVisible());
+  QVERIFY(!dialog.findChild<QGroupBox *>(QStringLiteral("groupSecurity"))->isVisible());
+  QVERIFY(group->isVisible());
+  QVERIFY(dialog.sizeHint().height() <= dialog.height());
+  I18N::setLanguage(QStringLiteral("en"));
+}
+
+void MainWindowLayoutTests::fileTransferSettingsPersistAndReopen()
+{
+  ServerConfig config;
+  deskflow::gui::CoreProcess core(config);
+  const auto receiveRoot = m_directory->filePath(QStringLiteral("incoming"));
+
+  SettingsDialog dialog(nullptr, config, core);
+  auto *folder = dialog.findChild<QLineEdit *>(QStringLiteral("relaydeskReceiveFolder"));
+  auto *incoming = dialog.findChild<QComboBox *>(QStringLiteral("relaydeskIncomingTransferPolicy"));
+  auto *conflict = dialog.findChild<QComboBox *>(QStringLiteral("relaydeskDefaultConflictPolicy"));
+  auto *buttons = dialog.findChild<QDialogButtonBox *>();
+  QVERIFY(folder != nullptr);
+  QVERIFY(incoming != nullptr);
+  QVERIFY(conflict != nullptr);
+  QVERIFY(buttons != nullptr);
+  folder->setText(receiveRoot);
+  incoming->setCurrentIndex(
+      incoming->findData(static_cast<int>(::relaydesk::transfer::IncomingTransferPolicy::AutoAcceptTrusted))
+  );
+  conflict->setCurrentIndex(conflict->findData(static_cast<int>(::relaydesk::transfer::ConflictPolicy::Skip)));
+  QSignalSpy saved(&dialog, &SettingsDialog::transferSettingsSaved);
+  buttons->button(QDialogButtonBox::Save)->click();
+  QCOMPARE(dialog.result(), QDialog::Accepted);
+  QCOMPARE(saved.count(), 1);
+  const auto emitted = saved.constFirst().constFirst().value<::relaydesk::transfer::TransferSettings>();
+  QCOMPARE(emitted.receiveRoot, QDir::cleanPath(receiveRoot));
+  QCOMPARE(emitted.incomingPolicy, ::relaydesk::transfer::IncomingTransferPolicy::AutoAcceptTrusted);
+  QCOMPARE(emitted.defaultConflictPolicy, ::relaydesk::transfer::ConflictPolicy::Skip);
+
+  SettingsDialog reopened(nullptr, config, core);
+  QCOMPARE(
+      reopened.findChild<QLineEdit *>(QStringLiteral("relaydeskReceiveFolder"))->text(), QDir::cleanPath(receiveRoot)
+  );
+  QCOMPARE(
+      reopened.findChild<QComboBox *>(QStringLiteral("relaydeskIncomingTransferPolicy"))->currentData().toInt(),
+      static_cast<int>(::relaydesk::transfer::IncomingTransferPolicy::AutoAcceptTrusted)
+  );
+  QCOMPARE(
+      reopened.findChild<QComboBox *>(QStringLiteral("relaydeskDefaultConflictPolicy"))->currentData().toInt(),
+      static_cast<int>(::relaydesk::transfer::ConflictPolicy::Skip)
+  );
+}
+
+void MainWindowLayoutTests::fileTransferSettingsEntryAppliesToRuntime()
+{
+  MainWindow window;
+  auto *runtime = window.findChild<deskflow::relaydesk::TransferRuntimeComposition *>();
+  QVERIFY(runtime != nullptr);
+  const auto receiveRoot = m_directory->filePath(QStringLiteral("runtime-incoming"));
+  bool dedicatedDialog = false;
+  bool accepted = false;
+
+  NextDialogInteractor fileSettings(window, [&](QDialog *dialog) {
+    auto *folder = dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskReceiveFolder"));
+    auto *incoming = dialog->findChild<QComboBox *>(QStringLiteral("relaydeskIncomingTransferPolicy"));
+    auto *conflict = dialog->findChild<QComboBox *>(QStringLiteral("relaydeskDefaultConflictPolicy"));
+    auto *buttons = dialog->findChild<QDialogButtonBox *>();
+    auto *app = dialog->findChild<QGroupBox *>(QStringLiteral("groupApp"));
+    auto *security = dialog->findChild<QGroupBox *>(QStringLiteral("groupSecurity"));
+    dedicatedDialog = folder != nullptr && incoming != nullptr && conflict != nullptr && buttons != nullptr &&
+                      app != nullptr && security != nullptr && !app->isVisible() && !security->isVisible();
+    if (!dedicatedDialog) {
+      dialog->reject();
+      return;
+    }
+    folder->setText(receiveRoot);
+    incoming->setCurrentIndex(
+        incoming->findData(static_cast<int>(::relaydesk::transfer::IncomingTransferPolicy::AutoAcceptTrusted))
+    );
+    conflict->setCurrentIndex(conflict->findData(static_cast<int>(::relaydesk::transfer::ConflictPolicy::Overwrite)));
+    buttons->button(QDialogButtonBox::Save)->click();
+    accepted = dialog->result() == QDialog::Accepted;
+    if (!accepted)
+      dialog->reject();
+  });
+  Q_EMIT window.relayDeskDevicesDock().incomingOfferSettingsRequested();
+
+  QVERIFY(dedicatedDialog);
+  QVERIFY(accepted);
+  const auto applied = runtime->incomingOffers().settings();
+  QCOMPARE(applied.destinationRoot, QDir::cleanPath(receiveRoot));
+  QVERIFY(applied.autoAcceptTrustedDevices);
+  QCOMPARE(applied.defaultConflictPolicy, ::relaydesk::transfer::ConflictPolicy::Overwrite);
+
+  QSettings settings(Settings::settingsFile(), QSettings::IniFormat);
+  const auto persisted = ::relaydesk::transfer::TransferSettingsStore(settings).load();
+  QVERIFY2(persisted.ok, qPrintable(persisted.diagnostic));
+  QCOMPARE(persisted.settings.receiveRoot, QDir::cleanPath(receiveRoot));
+  QCOMPARE(persisted.settings.incomingPolicy, ::relaydesk::transfer::IncomingTransferPolicy::AutoAcceptTrusted);
+  QCOMPARE(persisted.settings.defaultConflictPolicy, ::relaydesk::transfer::ConflictPolicy::Overwrite);
+}
+
 void MainWindowLayoutTests::restoredSmallGeometryIsClampedToMinimumSize()
 {
   Settings::setValue(Settings::Gui::WindowGeometry, QRect(80, 80, 320, 240));
@@ -414,7 +584,8 @@ void MainWindowLayoutTests::chineseProductChromeUsesLocalizedText()
   QCOMPARE(tray->contextMenu()->actions().constFirst()->text(), QStringLiteral("打开 RelayDesk(&O)"));
 
   bool inspected = false;
-  bool localized = false;
+  QString actualTitle;
+  QString actualDescription;
   NextDialogInteractor aboutDialog(window, [&](QDialog *baseDialog) {
     auto *dialog = qobject_cast<AboutDialog *>(baseDialog);
     if (dialog == nullptr) {
@@ -423,13 +594,14 @@ void MainWindowLayoutTests::chineseProductChromeUsesLocalizedText()
     }
     auto *description = dialog->findChild<QLabel *>(QStringLiteral("lblDescription"));
     inspected = description != nullptr;
-    localized = inspected && dialog->windowTitle() == QStringLiteral("关于 RelayDesk") &&
-                description->text() == QStringLiteral("局域网键盘、鼠标、剪贴板和文件共享");
+    actualTitle = dialog->windowTitle();
+    actualDescription = description == nullptr ? QString{} : description->text();
     baseDialog->reject();
   });
   aboutAction->trigger();
   QVERIFY(inspected);
-  QVERIFY(localized);
+  QCOMPARE(actualTitle, QStringLiteral("关于 RelayDesk"));
+  QCOMPARE(actualDescription, QStringLiteral("局域网键盘、鼠标、剪贴板和文件共享"));
 
   I18N::setLanguage(QStringLiteral("en"));
 }
