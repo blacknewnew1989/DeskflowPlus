@@ -134,6 +134,7 @@ private Q_SLOTS:
   void rejectsInvalidOrIneligibleSendItems();
   void acceptsLocalUrlDropOnlyForEligiblePeer();
   void rendersNonBlockingIncomingOfferAndKeyboardDecisions();
+  void rendersAndResolvesQueuedIncomingConflicts();
   void rendersUntrustedAndExpiredOfferSafely();
   void managesManualAddressesAtCompactSize();
   void retriesManualAddressSaveAfterFailure();
@@ -1194,6 +1195,93 @@ void DevicesDockTests::rendersNonBlockingIncomingOfferAndKeyboardDecisions()
       *static_cast<const ::relaydesk::transfer::TransferId *>(accepted.constFirst().at(0).constData()),
       incomingModel.offer()->offer.transferId
   );
+}
+
+void DevicesDockTests::rendersAndResolvesQueuedIncomingConflicts()
+{
+  using ::relaydesk::transfer::IncomingConflictDecision;
+  using ::relaydesk::transfer::IncomingConflictPrompt;
+
+  Fixture fixture;
+  fixture.dock.resize(520, 380);
+  fixture.dock.show();
+  const auto firstTransfer = TransferId::generate();
+  const auto secondTransfer = TransferId::generate();
+  const IncomingConflictPrompt stale{
+      .transferId = firstTransfer,
+      .conflictId = QUuid::createUuid(),
+      .relativeProtocolPath = QStringLiteral("stale/private.txt"),
+  };
+  const IncomingConflictPrompt overwrite{
+      .transferId = secondTransfer,
+      .conflictId = QUuid::createUuid(),
+      .relativeProtocolPath = QStringLiteral("Project/conflict.txt"),
+  };
+  fixture.dock.showIncomingConflictPrompt(stale);
+  fixture.dock.showIncomingConflictPrompt(overwrite);
+  fixture.dock.clearIncomingConflictPrompts(firstTransfer);
+
+  auto *panel = fixture.dock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingConflictPanel"));
+  auto *path = fixture.dock.findChild<QLabel *>(QStringLiteral("relaydeskIncomingConflictPath"));
+  auto *overwriteButton =
+      fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskIncomingConflictOverwriteButton"));
+  auto *renameButton =
+      fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskIncomingConflictAutoRenameButton"));
+  auto *skipButton = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskIncomingConflictSkipButton"));
+  auto *cancelButton = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskIncomingConflictCancelButton"));
+  QVERIFY(panel != nullptr);
+  QVERIFY(path != nullptr);
+  QVERIFY(overwriteButton != nullptr);
+  QVERIFY(renameButton != nullptr);
+  QVERIFY(skipButton != nullptr);
+  QVERIFY(cancelButton != nullptr);
+  QTRY_VERIFY(panel->isVisible());
+  QCOMPARE(path->text(), overwrite.relativeProtocolPath);
+  QVERIFY(!path->text().contains(QStringLiteral("C:/")));
+  QCOMPARE(overwriteButton->accessibleName(), QStringLiteral("Replace"));
+  QVERIFY(overwriteButton->focusPolicy() != Qt::NoFocus);
+  QVERIFY(panel->geometry().right() <= fixture.dock.widget()->geometry().right());
+
+  QList<IncomingConflictDecision> decisions;
+  QList<TransferId> transferIds;
+  connect(
+      &fixture.dock, &DevicesDock::incomingConflictDecisionRequested, this,
+      [&decisions, &transferIds](TransferId transferId, QUuid, IncomingConflictDecision decision) {
+        transferIds.append(transferId);
+        decisions.append(decision);
+      }
+  );
+  overwriteButton->setFocus();
+  QTest::keyClick(overwriteButton, Qt::Key_Space);
+  QCOMPARE(transferIds, QList<TransferId>({secondTransfer}));
+  QCOMPARE(decisions, QList<IncomingConflictDecision>({IncomingConflictDecision::Overwrite}));
+  QVERIFY(!panel->isVisible());
+
+  const auto queuedTransfer = TransferId::generate();
+  for (int index = 0; index < 3; ++index) {
+    fixture.dock.showIncomingConflictPrompt(
+        {.transferId = queuedTransfer, .conflictId = QUuid::createUuid(), .relativeProtocolPath = QStringLiteral("next.txt")}
+    );
+  }
+  QTRY_VERIFY(panel->isVisible());
+  QTest::mouseClick(renameButton, Qt::LeftButton);
+  QTest::mouseClick(skipButton, Qt::LeftButton);
+  QTest::mouseClick(cancelButton, Qt::LeftButton);
+  QCOMPARE(
+      decisions,
+      QList<IncomingConflictDecision>({
+          IncomingConflictDecision::Overwrite,
+          IncomingConflictDecision::AutoRename,
+          IncomingConflictDecision::Skip,
+          IncomingConflictDecision::CancelTransfer,
+      })
+  );
+  QVERIFY(panel->isVisible());
+  QTest::mouseClick(cancelButton, Qt::LeftButton);
+  QCOMPARE(decisions.last(), IncomingConflictDecision::CancelTransfer);
+  QCOMPARE(decisions.size(), 5);
+  fixture.dock.clearIncomingConflictPrompts(queuedTransfer);
+  QVERIFY(!panel->isVisible());
 }
 
 void DevicesDockTests::rendersUntrustedAndExpiredOfferSafely()

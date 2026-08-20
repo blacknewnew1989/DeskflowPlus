@@ -186,6 +186,10 @@
     <message><source>transfer.incoming.invalid</source><translation>Входящий запрос на передачу недействителен</translation></message>
     <message><source>transfer.incoming.busy</source><translation>Другой запрос на передачу ожидает ответа</translation></message>
     <message><source>transfer.incoming.decision_unavailable</source><translation>Этот запрос на передачу сейчас нельзя принять</translation></message>
+    <message><source>transfer.conflict.title</source><translation>Файл уже существует</translation></message>
+    <message><source>transfer.conflict.overwrite</source><translation>Заменить</translation></message>
+    <message><source>transfer.conflict.auto_rename</source><translation>Сохранить оба</translation></message>
+    <message><source>transfer.conflict.skip</source><translation>Пропустить</translation></message>
     <message><source>settings.title</source><translation>Настройки</translation></message>
     <message><source>settings.general</source><translation>Основные</translation></message>
     <message><source>settings.input</source><translation>Клавиатура и мышь</translation></message>

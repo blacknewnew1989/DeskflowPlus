@@ -186,6 +186,10 @@
     <message><source>transfer.incoming.invalid</source><translation>La richiesta di trasferimento in arrivo non è valida</translation></message>
     <message><source>transfer.incoming.busy</source><translation>Un’altra richiesta di trasferimento è in attesa</translation></message>
     <message><source>transfer.incoming.decision_unavailable</source><translation>Questa richiesta di trasferimento non può essere accettata ora</translation></message>
+    <message><source>transfer.conflict.title</source><translation>Il file esiste già</translation></message>
+    <message><source>transfer.conflict.overwrite</source><translation>Sostituisci</translation></message>
+    <message><source>transfer.conflict.auto_rename</source><translation>Conserva entrambi</translation></message>
+    <message><source>transfer.conflict.skip</source><translation>Salta</translation></message>
     <message><source>settings.title</source><translation>Impostazioni</translation></message>
     <message><source>settings.general</source><translation>Generali</translation></message>
     <message><source>settings.input</source><translation>Tastiera e mouse</translation></message>

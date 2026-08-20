@@ -61,6 +61,19 @@ TransferUiRuntime::TransferUiRuntime(
       [&service](const ::relaydesk::transfer::TransferId &transferId,
                  ::relaydesk::transfer::RejectReason reason) { service.reject(transferId, reason); }
   );
+  connect(
+      &service, &IFileTransferService::incomingConflictDecisionRequired, &devicesDock,
+      [&devicesDock](const ::relaydesk::transfer::IncomingConflictPrompt &prompt) {
+        devicesDock.showIncomingConflictPrompt(prompt);
+      }
+  );
+  connect(
+      &devicesDock, &widgets::DevicesDock::incomingConflictDecisionRequested, &service,
+      [&service](const ::relaydesk::transfer::TransferId &transferId, const QUuid &conflictId,
+                 ::relaydesk::transfer::IncomingConflictDecision decision) {
+        service.resolveIncomingConflict(transferId, conflictId, decision);
+      }
+  );
 
   auto &transfers = transferCenterDock.transferModel();
   connect(&transfers, &model::TransferCenterModel::pauseRequested, &service, &IFileTransferService::pause);
@@ -99,6 +112,12 @@ TransferUiRuntime::TransferUiRuntime(
       &service, &IFileTransferService::transferRemoved, &transfers,
       [&transfers](const ::relaydesk::transfer::TransferId &transferId) {
         (void)transfers.removeTransfer(transferId);
+      }
+  );
+  connect(
+      &service, &IFileTransferService::transferRemoved, &devicesDock,
+      [&devicesDock](const ::relaydesk::transfer::TransferId &transferId) {
+        devicesDock.clearIncomingConflictPrompts(transferId);
       }
   );
   transfers.setTransfers(service.activeTransfers());

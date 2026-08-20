@@ -186,6 +186,10 @@
     <message><source>transfer.incoming.invalid</source><translation>收到的传输请求无效</translation></message>
     <message><source>transfer.incoming.busy</source><translation>另一个传输请求正在等待处理</translation></message>
     <message><source>transfer.incoming.decision_unavailable</source><translation>目前无法接收此传输请求</translation></message>
+    <message><source>transfer.conflict.title</source><translation>文件已存在</translation></message>
+    <message><source>transfer.conflict.overwrite</source><translation>替换</translation></message>
+    <message><source>transfer.conflict.auto_rename</source><translation>保留两个</translation></message>
+    <message><source>transfer.conflict.skip</source><translation>跳过</translation></message>
     <message><source>settings.title</source><translation>设置</translation></message>
     <message><source>settings.general</source><translation>常规</translation></message>
     <message><source>settings.input</source><translation>键盘与鼠标</translation></message>
