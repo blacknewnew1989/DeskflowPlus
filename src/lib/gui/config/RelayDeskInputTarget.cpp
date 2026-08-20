@@ -21,12 +21,13 @@ constexpr auto kPort = "port";
 
 RelayDeskInputTargetResult syncRelayDeskClientTarget(
     QSettings &settings, const relaydesk::DeviceSnapshot &peer, const relaydesk::DeviceInfo &endpoint,
-    QString currentHost, quint16 currentPort, RelayDeskInputTarget *target
+    QString currentHost, quint16 currentPort, bool allowManagedPeerSwitch, RelayDeskInputTarget *target
 )
 {
   if (!peer.trusted) return RelayDeskInputTargetResult::NotTrusted;
   if (!peer.capabilities.input) return RelayDeskInputTargetResult::InputUnsupported;
   if (endpoint.inputPort == 0 || peer.addresses.isEmpty()) return RelayDeskInputTargetResult::EndpointUnavailable;
+  if (endpoint.inputPort != currentPort) return RelayDeskInputTargetResult::PortMismatchPreserved;
 
   const auto nextHost = peer.addresses.constFirst().toString();
   if (nextHost.isEmpty()) return RelayDeskInputTargetResult::EndpointUnavailable;
@@ -39,7 +40,7 @@ RelayDeskInputTargetResult syncRelayDeskClientTarget(
 
   currentHost = currentHost.trimmed();
   const auto peerId = peer.id.toString();
-  if (!managedDevice.isEmpty() && managedDevice != peerId) {
+  if (!managedDevice.isEmpty() && managedDevice != peerId && !allowManagedPeerSwitch) {
     return RelayDeskInputTargetResult::AnotherManagedDevicePreserved;
   }
   if (!currentHost.isEmpty() && (currentHost != managedHost || currentPort != managedPort)) {

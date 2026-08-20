@@ -193,7 +193,7 @@ private:
   void setupRelayDeskDiscovery();
   void setupRelayDeskHome();
   void setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &localDeviceId);
-  void syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &peerDeviceId);
+  void syncRelayDeskInputLayout(const deskflow::relaydesk::DeviceId &peerDeviceId, bool explicitSelection = false);
   void refreshBackgroundLifecycleSettings();
   [[nodiscard]] bool inputSharingAllowed() const;
   [[nodiscard]] bool coreConfigurationReady() const;

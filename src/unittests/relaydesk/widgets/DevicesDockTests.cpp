@@ -185,7 +185,7 @@ void DevicesDockTests::managesManualAddressesAtCompactSize()
 {
   qRegisterMetaType<ManualAddress>();
   Fixture fixture;
-  fixture.dock.resize(520, 380);
+  fixture.dock.resize(280, 380);
   fixture.dock.show();
   auto *manage = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskManageManualAddressesButton"));
   QVERIFY(manage != nullptr);
@@ -478,16 +478,20 @@ void DevicesDockTests::emitsInputLayoutIntentForTrustedInputPeer()
   fixture.dock.show();
 
   auto *list = fixture.dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
-  auto *configure = fixture.dock.findChild<QPushButton *>(QStringLiteral("relaydeskConfigureInputButton"));
+  auto *configure = fixture.dock.findChild<QAction *>(QStringLiteral("relaydeskConfigureInputMenuAction"));
+  auto *more = fixture.dock.findChild<QToolButton *>(QStringLiteral("relaydeskDeviceMoreButton"));
   QVERIFY(list != nullptr);
   QVERIFY(configure != nullptr);
+  QVERIFY(more != nullptr);
   list->setCurrentIndex(fixture.devices.index(fixture.devices.indexOf(peer.id), 0));
   QTRY_VERIFY(configure->isVisible());
   QVERIFY(configure->isEnabled());
-  QCOMPARE(configure->accessibleName(), QStringLiteral("Arrange input"));
+  QVERIFY(more->isVisible());
+  QVERIFY(more->geometry().right() <= fixture.dock.contentsRect().right());
+  QCOMPARE(configure->text(), QStringLiteral("Arrange input"));
 
   QSignalSpy requested(&fixture.dock, &DevicesDock::inputLayoutRequested);
-  QTest::keyClick(configure, Qt::Key_Space);
+  configure->trigger();
   QCOMPARE(requested.count(), 1);
   QCOMPARE(*static_cast<const DeviceId *>(requested.takeFirst().at(0).constData()), peer.id);
 }

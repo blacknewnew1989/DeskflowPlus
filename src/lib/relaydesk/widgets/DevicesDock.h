@@ -123,11 +123,11 @@ private:
   QListView *m_deviceList = nullptr;
   QLabel *m_emptyLabel = nullptr;
   QPushButton *m_pairButton = nullptr;
-  QPushButton *m_configureInputButton = nullptr;
   QPushButton *m_manageManualAddressesButton = nullptr;
   QToolButton *m_moreButton = nullptr;
   QMenu *m_moreMenu = nullptr;
   QAction *m_revokeTrustAction = nullptr;
+  QAction *m_configureInputAction = nullptr;
   QPushButton *m_sendFilesButton = nullptr;
   QPushButton *m_sendFolderButton = nullptr;
   QLabel *m_sendFeedback = nullptr;

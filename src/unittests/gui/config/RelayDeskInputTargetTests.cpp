@@ -24,7 +24,9 @@ class RelayDeskInputTargetTests final : public QObject
 private Q_SLOTS:
   void trustedPeerClaimsEmptyClientTarget();
   void manualHostAndPortAreNeverOverwritten();
-  void onlyTheManagedPeerCanRefreshItsEndpoint();
+  void emptyHostWithCustomPortIsPreserved();
+  void endpointUpdateChangesHostOnceWithoutChangingPort();
+  void automaticDiscoveryDoesNotSwitchManagedPeerButExplicitSelectionCan();
 
 private:
   [[nodiscard]] DeviceSnapshot peer() const;
@@ -66,11 +68,11 @@ void RelayDeskInputTargetTests::trustedPeerClaimsEmptyClientTarget()
   const auto snapshot = peer();
   RelayDeskInputTarget target;
   QCOMPARE(
-      syncRelayDeskClientTarget(settings, snapshot, endpoint(snapshot, 24900), {}, 24800, &target),
+      syncRelayDeskClientTarget(settings, snapshot, endpoint(snapshot, 24800), {}, 24800, false, &target),
       RelayDeskInputTargetResult::Updated
   );
   QCOMPARE(target.host, QStringLiteral("192.168.1.20"));
-  QCOMPARE(target.port, quint16(24900));
+  QCOMPARE(target.port, quint16(24800));
 }
 
 void RelayDeskInputTargetTests::manualHostAndPortAreNeverOverwritten()
@@ -79,33 +81,77 @@ void RelayDeskInputTargetTests::manualHostAndPortAreNeverOverwritten()
   const auto snapshot = peer();
   QCOMPARE(
       syncRelayDeskClientTarget(
-          settings, snapshot, endpoint(snapshot, 24900), QStringLiteral("manual-host"), 25000, nullptr
+          settings, snapshot, endpoint(snapshot, 25000), QStringLiteral("manual-host"), 25000, false, nullptr
       ),
       RelayDeskInputTargetResult::ManualConfigurationPreserved
   );
 }
 
-void RelayDeskInputTargetTests::onlyTheManagedPeerCanRefreshItsEndpoint()
+void RelayDeskInputTargetTests::emptyHostWithCustomPortIsPreserved()
+{
+  QSettings settings(m_directory.filePath(QStringLiteral("custom-port.conf")), QSettings::IniFormat);
+  const auto snapshot = peer();
+  QCOMPARE(
+      syncRelayDeskClientTarget(settings, snapshot, endpoint(snapshot, 24900), {}, 25000, false, nullptr),
+      RelayDeskInputTargetResult::PortMismatchPreserved
+  );
+}
+
+void RelayDeskInputTargetTests::endpointUpdateChangesHostOnceWithoutChangingPort()
+{
+  QSettings settings(m_directory.filePath(QStringLiteral("endpoint-refresh.conf")), QSettings::IniFormat);
+  auto snapshot = peer();
+  RelayDeskInputTarget target;
+  QCOMPARE(
+      syncRelayDeskClientTarget(settings, snapshot, endpoint(snapshot, 24800), {}, 24800, false, &target),
+      RelayDeskInputTargetResult::Updated
+  );
+  QCOMPARE(
+      syncRelayDeskClientTarget(settings, snapshot, endpoint(snapshot, 24800), target.host, target.port, false, &target),
+      RelayDeskInputTargetResult::AlreadyCurrent
+  );
+  snapshot.addresses = {QHostAddress(QStringLiteral("192.168.1.21"))};
+  QCOMPARE(
+      syncRelayDeskClientTarget(settings, snapshot, endpoint(snapshot, 24800), target.host, target.port, false, &target),
+      RelayDeskInputTargetResult::Updated
+  );
+  QCOMPARE(target.host, QStringLiteral("192.168.1.21"));
+  QCOMPARE(target.port, quint16(24800));
+  QCOMPARE(
+      syncRelayDeskClientTarget(settings, snapshot, endpoint(snapshot, 24800), target.host, target.port, false, &target),
+      RelayDeskInputTargetResult::AlreadyCurrent
+  );
+}
+
+void RelayDeskInputTargetTests::automaticDiscoveryDoesNotSwitchManagedPeerButExplicitSelectionCan()
 {
   QSettings settings(m_directory.filePath(QStringLiteral("managed.conf")), QSettings::IniFormat);
   const auto first = peer();
   RelayDeskInputTarget target;
   QCOMPARE(
-      syncRelayDeskClientTarget(settings, first, endpoint(first, 24900), {}, 24800, &target),
+      syncRelayDeskClientTarget(settings, first, endpoint(first, 24800), {}, 24800, false, &target),
       RelayDeskInputTargetResult::Updated
   );
   const auto other = peer();
   QCOMPARE(
-      syncRelayDeskClientTarget(settings, other, endpoint(other, 24800), target.host, target.port, nullptr),
+      syncRelayDeskClientTarget(settings, other, endpoint(other, 24800), target.host, target.port, false, nullptr),
       RelayDeskInputTargetResult::AnotherManagedDevicePreserved
   );
-  first.addresses = {QHostAddress(QStringLiteral("192.168.1.21"))};
   QCOMPARE(
-      syncRelayDeskClientTarget(settings, first, endpoint(first, 24901), target.host, target.port, &target),
+      syncRelayDeskClientTarget(settings, other, endpoint(other, 24800), target.host, target.port, true, &target),
       RelayDeskInputTargetResult::Updated
   );
-  QCOMPARE(target.host, QStringLiteral("192.168.1.21"));
-  QCOMPARE(target.port, quint16(24901));
+  QCOMPARE(target.host, QStringLiteral("192.168.1.20"));
+  settings.beginGroup(QStringLiteral("relaydesk/inputTarget"));
+  QCOMPARE(settings.value(QStringLiteral("deviceId")).toString(), other.id.toString());
+  settings.endGroup();
+  first.addresses = {QHostAddress(QStringLiteral("192.168.1.21"))};
+  QCOMPARE(
+      syncRelayDeskClientTarget(settings, first, endpoint(first, 24800), target.host, target.port, false, &target),
+      RelayDeskInputTargetResult::AnotherManagedDevicePreserved
+  );
+  QCOMPARE(target.host, QStringLiteral("192.168.1.20"));
+  QCOMPARE(target.port, quint16(24800));
 }
 
 QTEST_MAIN(RelayDeskInputTargetTests)

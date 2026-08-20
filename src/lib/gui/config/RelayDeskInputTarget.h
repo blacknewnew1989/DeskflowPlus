@@ -24,6 +24,7 @@ enum class RelayDeskInputTargetResult
   NotTrusted,
   InputUnsupported,
   EndpointUnavailable,
+  PortMismatchPreserved,
   ManualConfigurationPreserved,
   AnotherManagedDevicePreserved,
 };
@@ -36,7 +37,7 @@ struct RelayDeskInputTarget
 
 [[nodiscard]] RelayDeskInputTargetResult syncRelayDeskClientTarget(
     QSettings &settings, const relaydesk::DeviceSnapshot &peer, const relaydesk::DeviceInfo &endpoint,
-    QString currentHost, quint16 currentPort, RelayDeskInputTarget *target
+    QString currentHost, quint16 currentPort, bool allowManagedPeerSwitch, RelayDeskInputTarget *target
 );
 
 } // namespace deskflow::gui
