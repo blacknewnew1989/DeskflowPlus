@@ -22,7 +22,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | TRAY-001 | 完成最小化/关闭到托盘与后台生命周期 | A3/A4/A5 | `56568584f`；独立设置与同步安全停机已实现，Windows 单机 GUI 自动化、精确标签双平台构建和自动生命周期 PASS；macOS menu bar 与物理双机仍 `NOT_RUN` |
 | MAC-037 | 适配紧凑首页、权限能力门控和 macOS menu bar | A5/A3/A0 | `9ac7f0d79`；同一 PermissionSnapshot、三项能力门控、激活复检、template 图标与定向回归 PASS；待最终 App 系统权限前台往返实测 |
 | CTRL-002 | 支持接收方直接暂停、继续和取消传输 | A6/A0 | 已集成接收方直接 pause/continue/cancel；原生串行 CTest 98/98 PASS，真实双机控制链路 `NOT_RUN` |
-| WIN-019 | 构建并运行验收最新 Windows unsigned 包 | A4/A7/A0 | 标签 `relaydesk-phase4-20260820-02` 的 hosted Windows 包、CTest 99/99、TEST-005 19/19 自动生命周期均 PASS；分支 run `32356352794` 的七语言与托盘/关闭恢复单机 GUI PASS；unsigned SmartScreen/UAC 人工交互仍 `NOT_RUN` |
+| WIN-019 | 构建并运行验收最新 Windows unsigned 包 | A4/A7/A0 | 标签 `relaydesk-phase4-20260820-02` 的 hosted Windows 包、CTest 99/99、TEST-005 19/19 自动生命周期均 PASS；WIN-020 已补精确 portable 单机真实运行；unsigned SmartScreen/UAC 人工交互仍 `NOT_RUN` |
 
 除 WIN-019 的 unsigned SmartScreen/UAC 人工交互、MAC-037 的 TCC/menu bar 和真实物理验收外，
 上述实现、精确标签双平台 CI、平台产物及自动生命周期均为 `PASS`。详见
@@ -36,6 +36,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 任务 | Owner | 证据 |
 |---|---|---|---|
+| WIN-020 | Windows 精确 portable 单机真实运行 | A0 | 七语言、托盘、手动地址、输入核心 24800 启停、UDP 24802、动态文件监听、传输中心、传输设置和 HKCU 登录启动退出/重启持久化 PASS；配置与注册表已回滚；双机/macOS 保持 `NOT_RUN` |
 | PROTO-FREEZE-001 | RelayDesk v1 wire protocol / shared interface freeze | A6/A2/A0 | tag `relaydesk-protocol-v1-20260813-01`; run `31672497950` SUCCESS; Win 84/84, Mac 85/85; artifacts `9170492840` / `9170386546` |
 | WIN-018 | Windows file safety adapter | A4/A0 | `bc0b9ffc9`; real NTFS junction/atomic commit tests; run `31678206041` Windows 87/87 PASS |
 | MAC-013..018 | macOS file safety adapter and race hardening | A5/A0 | `b5e91d54e` through `e6f5fe519`; run `31678206041` macOS 88/88 PASS |

@@ -11,7 +11,8 @@
 10 次、native 各 1 次）以及本地原生串行 CTest 98/98 均为 `PASS`。精确标签
 `relaydesk-phase4-20260820-02` 的 run `32362194153` 为 `SUCCESS`：Windows 99/99、
 macOS 100/100、双平台打包、草稿 Release 和自动生命周期均 `PASS`。分支 run `32356352794`
-另记录七语言与托盘/关闭恢复 Windows 单机 GUI `PASS`。Windows unsigned 提示人工确认、
+另记录七语言与托盘/关闭恢复 Windows 单机 GUI `PASS`。WIN-020 又以精确 portable 实际完成
+输入核心启停、发现/文件监听、传输中心和设置持久化。Windows unsigned 提示人工确认、
 macOS TCC/menu bar 与物理 Win↔Mac 仍为 `NOT_RUN`，不得由 hosted CI 替代。
 
 ## 已确认设计输入
@@ -64,6 +65,7 @@ macOS TCC/menu bar 与物理 Win↔Mac 仍为 `NOT_RUN`，不得由 hosted CI �
 | 主窗口/托盘定向回归 | offscreen 各连续 10 次及 native 各 1 次 PASS |
 | Qt 翻译 | 七个 `relaydesk_*.ts` 均为 182/182 个唯一、完整键；七个 QM 实际加载 PASS |
 | Windows 安装树翻译闭包 | 七个 QM 文件集合、magic、大小、摘要及 `lconvert` 实际加载 PASS |
+| Windows 单机真实运行 | WIN-020：七语言、托盘、手动地址、Server 核心 24800 启停、UDP 24802、动态文件监听、传输中心和传输设置/登录启动重启持久化 PASS |
 | 产品 Python contracts | `product/tests` 26/26 PASS；`product/scripts/tests` 37/37 PASS；日志为 `product/working/product-tests-a624a9e40.log`、`product/working/script-tests-a624a9e40.log` |
 | 品牌校验 | macOS 生成往返、Windows 生成、集中品牌配置均 PASS |
 | macOS 权限前台刷新 | `ApplicationActive` 自动复检与 150 ms 合并回归 PASS；最终 App 系统设置往返待实测 |

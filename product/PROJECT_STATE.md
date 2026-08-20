@@ -24,7 +24,7 @@
 - Current product implementation tip: `c134126b95977ca6b97036be18dcfc33a4a3a09a`
 - Current verified tag target: `c134126b95977ca6b97036be18dcfc33a4a3a09a`
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
-- Current implementation: v1 内部发布主链已组合。共享 Qt 外壳包含紧凑首页、权限分项、设备/传输区域、集中品牌资源、托盘后台生命周期、输入角色设置、可信设备撤销、手动地址管理和 `Ask` 冲突逐文件决策。接收方直接暂停/继续/取消已接入运行时；当前组件测试通过。macOS TCC/menu bar、物理 Win↔Mac 双机和 unsigned 提示交互仍为 `NOT_RUN`。
+- Current implementation: v1 内部发布主链已组合。共享 Qt 外壳包含紧凑首页、权限分项、设备/传输区域、集中品牌资源、托盘后台生命周期、输入角色设置、可信设备撤销、手动地址管理和 `Ask` 冲突逐文件决策。接收方直接暂停/继续/取消已接入运行时；Windows 单机 GUI、输入核心、发现/文件监听和设置持久化已真实运行。macOS TCC/menu bar、物理 Win↔Mac 双机和 unsigned 提示交互仍为 `NOT_RUN`。
 - Last verified stage tag: `relaydesk-phase4-20260820-02`（目标
   `c134126b95977ca6b97036be18dcfc33a4a3a09a`；run `32362194153` `SUCCESS`）
 
@@ -37,6 +37,7 @@
 | DISC-005 | PASS | A2/A3/A0 | 手动地址录入、保存和定向探测已集成；原生串行 CTest 98/98 PASS。真实局域网发现链路仍为 `NOT_RUN`。 |
 | CONFLICT-003 | PASS | A6/A3/A0 | `Ask` 的逐文件用户决策和运行时链路已集成；原生串行 CTest 98/98 PASS。真实双机传输决策链路仍为 `NOT_RUN`。 |
 | WIN-019 | IN_PROGRESS | A4/A7/A0 | 精确标签 Windows 包与自动安装生命周期、Windows 单机七语言和托盘/关闭恢复 GUI 自动化均已 PASS；unsigned SmartScreen/UAC 人工交互仍为 `NOT_RUN`。 |
+| WIN-020 | PASS | A0 | 精确 portable 的七语言、托盘、手动地址、输入核心 24800、发现 24802、动态文件监听、传输中心、传输设置及 HKCU 登录启动均已真实操作并回滚；见 `product/docs/reports/WIN-020_WINDOWS_SINGLE_HOST_RUNTIME.md`。 |
 | MAC-038 | NOT_RUN | A5/A7/A0 | 精确标签 macOS App/DMG 与自动生命周期已 PASS；TCC/menu bar 与 Win↔Mac 物理双机仍需真实 macOS 对端。 |
 
 ## 2026-08-14 紧凑界面变更
@@ -85,6 +86,7 @@
 | Current seven-language catalogs | PASS | `088702900`; en/es/it/ja/ko/ru/zh_CN are each 182/182; Qt catalog load and 14 translation contracts PASS |
 | Current revoke-trust composition | PASS | `dc4b7efed` through `088702900`; clean MSVC/Qt 6.10.1 targeted CTest 6/6 PASS |
 | Current exact-SHA dual-platform Actions | PASS | 标签 `relaydesk-phase4-20260820-02`（目标 `c134126b95977ca6b97036be18dcfc33a4a3a09a`），run `32362194153` SUCCESS；Windows/macOS 打包、草稿 Release 与 macOS 生命周期均 PASS |
+| Windows single-host runtime | PASS | 精确 portable 实际完成七语言、托盘、手动地址、`deskflow-core.exe server` 及 24800 启停、UDP 24802、动态文件监听、传输中心和设置/登录启动重启持久化；见 WIN-020 |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -165,6 +167,9 @@
 - 分支 run `32356352794` 同样完成 Windows 99/99、macOS 100/100 与同目标包摘要；
   `dist/actions/32356352794/evidence-windows-gui-runtime/result.json` 记录七语言完整循环、
   托盘最小化/关闭/恢复与真退出均 PASS。该证据仅限 Windows 单机 GUI，不替代物理 Win↔Mac。
+- 2026-08-20 当前桌面再次使用精确 portable 完成 WIN-020：输入 Server 核心真实监听
+  `0.0.0.0:24800` 并可停止；GUI 发现监听 `0.0.0.0:24802`，文件通道动态 TCP 同时监听
+  IPv4/IPv6；手动地址、传输中心、传输设置及 HKCU 登录启动均经退出/重启验证并回滚。
 - 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned SmartScreen/Gatekeeper/签名交互：`NOT_RUN`。
 
 ## 最终用户验收

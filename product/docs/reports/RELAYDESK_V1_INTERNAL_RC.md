@@ -43,6 +43,10 @@ RelayDesk 基于 Deskflow v1.26.0，包含冻结的 RDFT v1 协议、发现/配�
 - 包取证：`dist/actions/32362194153`、manifest、`SHA256SUMS`、本地 `Get-FileHash` 与
   Release API digest 一致。分支 run `32356352794` 在同目标提交上验证 Windows 99/99、
   macOS 100/100；其 Windows 单机 GUI 取证包含七语言和托盘/关闭恢复 PASS。
+- WIN-020 使用上述精确 portable 在当前 Windows 桌面完成真实运行：七语言与托盘、手动地址、
+  `deskflow-core.exe server` 的 TCP 24800 启停、GUI UDP 24802、动态文件 TLS 监听、传输中心、
+  接收目录/来件/冲突策略及 HKCU 登录启动均经完全退出和重启复验；验收后已回滚运行配置。
+  详见 `WIN-020_WINDOWS_SINGLE_HOST_RUNTIME.md`。
 
 以下操作系统和物理设备项目仍为 `NOT_RUN`：macOS Local Network、Accessibility、
 Input Monitoring 与 menu bar 交互；Windows/macOS 双机配对、双向键鼠/滚轮/文本和图片
