@@ -839,7 +839,10 @@ private:
 
   void publishCompleted()
   {
-    invoke([id = m_offer.transferId, generation = m_generation](IncomingTransferRuntime &runtime) {
+    const auto completedRelativePath =
+        m_completedAtReceiveRoot ? QStringLiteral(".") : m_completedRelativePath;
+    invoke([id = m_offer.transferId, generation = m_generation,
+            completedRelativePath](IncomingTransferRuntime &runtime) {
       auto *session = runtime.m_sessions.value(id, nullptr);
       if (session == nullptr || session->pipelineGeneration != generation) {
         return;
@@ -851,8 +854,7 @@ private:
       snapshot.state = ::relaydesk::transfer::TransferState::Completed;
       snapshot.progress.completedBytes = snapshot.progress.totalBytes;
       snapshot.progress.completedFiles = snapshot.progress.totalFiles;
-      snapshot.currentRelativeDisplayPath =
-          m_completedAtReceiveRoot ? QStringLiteral(".") : m_completedRelativePath;
+      snapshot.currentRelativeDisplayPath = completedRelativePath;
       snapshot.canCancel = false;
       snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
       session->pipelineSnapshot = snapshot;
