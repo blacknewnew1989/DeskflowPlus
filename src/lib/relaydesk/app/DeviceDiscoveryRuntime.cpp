@@ -10,6 +10,7 @@
 #include "relaydesk/model/DeviceHomeModel.h"
 
 #include <QDateTime>
+#include <QSet>
 #include <QThread>
 
 #include <utility>
@@ -70,8 +71,19 @@ DeviceDiscoveryRuntime::DeviceDiscoveryRuntime(
           return;
         }
         const auto probePort = m_manualProbePort == 0 ? m_service->destinationPort() : m_manualProbePort;
+        QSet<QString> manualIpv4Origins;
+        for (const auto &candidate : result.candidates) {
+          if (candidate.source == AddressCandidateSource::Manual &&
+              candidate.address.protocol() == QAbstractSocket::IPv4Protocol) {
+            manualIpv4Origins.insert(candidate.originHost);
+          }
+        }
         for (const auto &candidate : result.candidates) {
           if (candidate.source == AddressCandidateSource::Manual) {
+            if (candidate.address.protocol() != QAbstractSocket::IPv4Protocol &&
+                manualIpv4Origins.contains(candidate.originHost)) {
+              continue;
+            }
             QString diagnostic;
             if (!m_service->probePeer(candidate.address, probePort, &diagnostic)) {
               Q_EMIT errorOccurred(
@@ -124,6 +136,12 @@ bool DeviceDiscoveryRuntime::setFileEndpoint(FileEndpointAnnouncement announceme
 void DeviceDiscoveryRuntime::setManualAddresses(QList<ManualAddress> addresses)
 {
   m_manualAddresses = std::move(addresses);
+  if (!isRunning()) {
+    if (!m_manualAddresses.isEmpty()) {
+      static_cast<void>(start());
+    }
+    return;
+  }
   refreshManualDiscovery();
 }
 
