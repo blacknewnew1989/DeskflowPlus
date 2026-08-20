@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,6 +13,8 @@ DEPLOY = (ROOT / "deploy/windows/deploy.cmake").read_text(encoding="utf-8")
 PORTABLE = (ROOT / "deploy/windows/pre-cpack.cmake.in").read_text(encoding="utf-8")
 WIX = (ROOT / "deploy/windows/wix-patch.xml.in").read_text(encoding="utf-8")
 WIX_CUSTOM = (ROOT / "deploy/windows/wix-custom.cpp").read_text(encoding="utf-8")
+ROOT_CMAKE = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+WINDOWS_RUNTIME_REQUIREMENT = (ROOT / "cmake/WindowsRuntimeRequirement.cmake").read_text(encoding="utf-8")
 ROOT_CPACK = (ROOT / "deploy/CMakeLists.txt").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github/workflows/relaydesk-build.yml").read_text(encoding="utf-8")
 WINDOWS_TRANSLATION_VERIFIER = (
@@ -50,6 +54,35 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn('PREFIX ""', DEPLOY)
         self.assertIn('message __VA_OPT__(, ) __VA_ARGS__', WIX_CUSTOM)
         self.assertIn('target_compile_options(wix-custom PRIVATE /Zc:preprocessor)', DEPLOY)
+
+    def test_runtime_requirement_comes_from_the_compiler_not_the_build_host_registry(self) -> None:
+        self.assertNotIn("cmake_host_system_information(", ROOT_CMAKE)
+        self.assertIn('relaydesk_windows_runtime_minor("${CMAKE_CXX_COMPILER_VERSION}"', ROOT_CMAKE)
+        self.assertNotIn("WINDOWS_REGISTRY", WINDOWS_RUNTIME_REQUIREMENT)
+
+        script = (
+            f'include("{(ROOT / "cmake/WindowsRuntimeRequirement.cmake").as_posix()}")\n'
+            'relaydesk_windows_runtime_minor("19.44.35207.1" runtime_minor)\n'
+            'if (NOT runtime_minor STREQUAL "44")\n'
+            '  message(FATAL_ERROR "expected runtime minor 44, got ${runtime_minor}")\n'
+            'endif()\n'
+        )
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".cmake", encoding="utf-8", delete=False
+        ) as script_file:
+            script_file.write(script)
+            script_file.flush()
+            script_path = Path(script_file.name)
+        try:
+            result = subprocess.run(
+                ["cmake", "-P", str(script_path)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        finally:
+            script_path.unlink(missing_ok=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_installer_documents_preserved_external_data(self) -> None:
         self.assertIn('retained when this package is upgraded or uninstalled', DEPLOY)

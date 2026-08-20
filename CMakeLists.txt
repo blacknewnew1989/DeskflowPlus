@@ -125,19 +125,12 @@ else()
 endif()
 
 if (MSVC)
-  # On Windows, require that the same MSVC runtime is used as on the host.
-  # Mitigates things like access violations caused by accidental ABI-compatibility breakage.
+  # Require the runtime matching the compiler used for this package. The build
+  # host's installed redistributable can be newer and is not a package input.
   set(REQUIRED_MSVC_RUNTIME_MAJOR 14)
-  cmake_host_system_information(
-    RESULT REQUIRED_MSVC_RUNTIME_MINOR
-    QUERY WINDOWS_REGISTRY
-    "HKLM/SOFTWARE/Microsoft/VisualStudio/${REQUIRED_MSVC_RUNTIME_MAJOR}.0/VC/Runtimes/${BUILD_ARCHITECTURE}"
-    VALUE "Minor")
-  if (REQUIRED_MSVC_RUNTIME_MINOR)
-    message(STATUS "MSVC runtime: ${REQUIRED_MSVC_RUNTIME_MAJOR}.${REQUIRED_MSVC_RUNTIME_MINOR}")
-  else()
-    message(FATAL_ERROR "MSVC runtime registry entry not found")
-  endif()
+  include(cmake/WindowsRuntimeRequirement.cmake)
+  relaydesk_windows_runtime_minor("${CMAKE_CXX_COMPILER_VERSION}" REQUIRED_MSVC_RUNTIME_MINOR)
+  message(STATUS "MSVC runtime: ${REQUIRED_MSVC_RUNTIME_MAJOR}.${REQUIRED_MSVC_RUNTIME_MINOR}")
 endif()
 
 # Control debug item visibility
