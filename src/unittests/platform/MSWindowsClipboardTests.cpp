@@ -17,12 +17,16 @@ void MSWindowsClipboardTests::initTestCase()
   MSWindowsClipboard clipboard(NULL);
 
   QVERIFY(clipboard.open(0));
+  m_suiteClipboardOpen = true;
   QVERIFY(clipboard.empty());
 }
 
 void MSWindowsClipboardTests::cleanupTestCase()
 {
-  initTestCase();
+  if (m_suiteClipboardOpen) {
+    CloseClipboard();
+    m_suiteClipboardOpen = false;
+  }
 }
 
 void MSWindowsClipboardTests::emptyUnusedClipboard()
@@ -77,13 +81,6 @@ void MSWindowsClipboardTests::openTimeIsOne()
   QVERIFY(clipboard.open(1));
 }
 
-void MSWindowsClipboardTests::closeIsOpen()
-{
-  MSWindowsClipboard clipboard(NULL);
-  QVERIFY(clipboard.open(1));
-  clipboard.close();
-}
-
 void MSWindowsClipboardTests::getTimeOpenWithNoEmpty()
 {
   MSWindowsClipboard clipboard(NULL);
@@ -134,6 +131,14 @@ void MSWindowsClipboardTests::isOwnedByDeskflow()
   MSWindowsClipboard clipboard(NULL);
   QVERIFY(clipboard.open(0));
   QVERIFY(clipboard.isOwnedByDeskflow());
+}
+
+void MSWindowsClipboardTests::closeIsOpen()
+{
+  MSWindowsClipboard clipboard(NULL);
+  QVERIFY(clipboard.open(1));
+  clipboard.close();
+  m_suiteClipboardOpen = false;
 }
 
 QTEST_MAIN(MSWindowsClipboardTests)

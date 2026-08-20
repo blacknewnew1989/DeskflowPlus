@@ -21,16 +21,17 @@ private Q_SLOTS:
   void addValue();
   void replaceValue();
   void openTimeIsOne();
-  void closeIsOpen();
   void getTimeOpenWithNoEmpty();
   void getTimeOpenAndEmpty();
   void has_withFormatAdded();
   void has_withNoFormatAdded();
   void getNonEmptyText();
   void isOwnedByDeskflow();
+  void closeIsOpen();
 
 private:
   Log m_log;
+  bool m_suiteClipboardOpen = false;
   const std::string m_testString = "deskflow test string";
   const std::string m_testString2 = "Another String";
 };
