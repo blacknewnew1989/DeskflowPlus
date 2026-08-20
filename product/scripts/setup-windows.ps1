@@ -1,6 +1,7 @@
 param(
     [string]$RepoRoot = "",
-    [string]$QtVersion = "6.10.1"
+    [string]$QtVersion = "6.10.1",
+    [switch]$PathContractTest
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,24 +12,68 @@ if (-not $RepoRoot) { throw "Not inside a Git repository." }
 $RepoRoot = (Resolve-Path $RepoRoot).Path
 $ToolsRoot = Join-Path $RepoRoot ".tools"
 $Working = Join-Path $RepoRoot "product\working\toolchains"
-New-Item -ItemType Directory -Force -Path $ToolsRoot, $Working | Out-Null
 
 function Has-Command([string]$Name) {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+function Join-PathEntries([string[]]$Candidates) {
+    $entries = [System.Collections.Generic.List[string]]::new()
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($candidate in $Candidates) {
+        foreach ($entry in $candidate -split ";") {
+            $normalized = $entry.Trim()
+            if ([string]::IsNullOrWhiteSpace($normalized)) { continue }
+            $root = [System.IO.Path]::GetPathRoot($normalized)
+            if ([string]::IsNullOrWhiteSpace($root) -or $normalized.Length -gt $root.Length) {
+                $normalized = $normalized.TrimEnd([char[]]@('\', '/'))
+            }
+            if (-not [string]::IsNullOrWhiteSpace($normalized) -and $seen.Add($normalized)) {
+                $entries.Add($normalized)
+            }
+        }
+    }
+    return [string]::Join(";", $entries)
+}
+
 function Refresh-ProcessPath {
-    $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    $user = [Environment]::GetEnvironmentVariable("Path", "User")
-    $pythonUserScripts = $null
-    if (Get-Command python -ErrorAction SilentlyContinue) {
+    param(
+        [string]$MachinePath,
+        [string]$UserPath,
+        [string]$CurrentPath,
+        [string]$PythonUserScripts,
+        [string]$WindowsPowerShell,
+        [string]$DotNetTools,
+        [switch]$PassThru
+    )
+    if (-not $PSBoundParameters.ContainsKey("MachinePath")) {
+        $MachinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    }
+    if (-not $PSBoundParameters.ContainsKey("UserPath")) {
+        $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    }
+    if (-not $PSBoundParameters.ContainsKey("CurrentPath")) {
+        $CurrentPath = $env:Path
+    }
+    if (-not $PSBoundParameters.ContainsKey("PythonUserScripts") -and (Get-Command python -ErrorAction SilentlyContinue)) {
         $pythonUserScripts = (
             & python -c "import sysconfig; print(sysconfig.get_path('scripts', scheme='nt_user'))" 2>$null
         ).Trim()
     }
-    $windowsPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0"
-    $env:Path = "$machine;$user;$pythonUserScripts;$windowsPowerShell;$env:USERPROFILE\.dotnet\tools;$env:Path"
+    if (-not $PSBoundParameters.ContainsKey("WindowsPowerShell")) {
+        $WindowsPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0"
+    }
+    if (-not $PSBoundParameters.ContainsKey("DotNetTools")) {
+        $DotNetTools = Join-Path $env:USERPROFILE ".dotnet\tools"
+    }
+    $merged = Join-PathEntries @($CurrentPath, $MachinePath, $UserPath, $PythonUserScripts, $WindowsPowerShell, $DotNetTools)
+    if ($PassThru) { return $merged }
+    $env:Path = $merged
 }
+
+if ($PathContractTest) { return }
+
+New-Item -ItemType Directory -Force -Path $ToolsRoot, $Working | Out-Null
 
 function Get-VcToolsInstallPath([string]$VsWhere) {
     if (-not (Test-Path $VsWhere)) { return $null }
