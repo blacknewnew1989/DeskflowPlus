@@ -172,6 +172,12 @@ bool DiscoveryService::announceNow(QString *errorMessage)
   return allSent;
 }
 
+bool DiscoveryService::probePeer(const QHostAddress &destination, quint16 port, QString *errorMessage)
+{
+  const auto probe = DiscoveryCodec::encodeProbe();
+  return sendPeerDatagram(probe, destination, port, errorMessage) == probe.size();
+}
+
 qint64 DiscoveryService::sendPeerDatagram(
     const QByteArray &datagram, const QHostAddress &destination, quint16 port, QString *errorMessage
 )
@@ -303,7 +309,31 @@ void DiscoveryService::processPendingDatagrams()
       reportError(DiscoveryServiceError::InvalidDatagram, decoded.diagnostic);
       continue;
     }
-    Q_EMIT advertisementReceived(decoded.datagram->device, networkDatagram.senderAddress());
+    if (decoded.datagram->type == DiscoveryMessageType::Probe) {
+      const auto senderPort = networkDatagram.senderPort();
+      if (networkDatagram.senderAddress().isNull() || senderPort <= 0 || senderPort > 65535) {
+        reportError(DiscoveryServiceError::InvalidDatagram, QStringLiteral("Discovery probe has no valid return endpoint"));
+        continue;
+      }
+      QString encodeError;
+      const auto advertisement = DiscoveryCodec::encodeAdvertisement(m_localDevice, &encodeError);
+      if (advertisement.isEmpty()) {
+        reportError(
+            DiscoveryServiceError::EncodeFailed,
+            QStringLiteral("Unable to encode discovery probe reply: %1").arg(encodeError)
+        );
+        continue;
+      }
+      if (m_receiveSocket.writeDatagram(advertisement, networkDatagram.senderAddress(), senderPort) != advertisement.size()) {
+        reportError(
+            DiscoveryServiceError::SendFailed,
+            QStringLiteral("Unable to send discovery probe reply: %1").arg(m_receiveSocket.errorString())
+        );
+      }
+      continue;
+    }
+    Q_ASSERT(decoded.datagram->device.has_value());
+    Q_EMIT advertisementReceived(*decoded.datagram->device, networkDatagram.senderAddress());
   }
 
   if (m_receiveSocket.hasPendingDatagrams()) {

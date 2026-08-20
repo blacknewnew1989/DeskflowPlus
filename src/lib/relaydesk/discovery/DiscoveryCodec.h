@@ -26,6 +26,7 @@ inline constexpr qsizetype kMaximumDiscoveryPayloadBytes = 3584;
 enum class DiscoveryMessageType : qint64
 {
   Advertisement = 1,
+  Probe = 2,
 };
 
 enum class DiscoveryCodecError
@@ -45,7 +46,7 @@ enum class DiscoveryCodecError
 struct DiscoveryDatagram
 {
   DiscoveryMessageType type = DiscoveryMessageType::Advertisement;
-  DeviceInfo device;
+  std::optional<DeviceInfo> device;
 
   bool operator==(const DiscoveryDatagram &) const = default;
 };
@@ -66,6 +67,7 @@ class DiscoveryCodec final
 {
 public:
   [[nodiscard]] static QByteArray encodeAdvertisement(const DeviceInfo &device, QString *errorMessage = nullptr);
+  [[nodiscard]] static QByteArray encodeProbe();
   [[nodiscard]] static DiscoveryDecodeResult decode(QByteArrayView datagram);
 };
 

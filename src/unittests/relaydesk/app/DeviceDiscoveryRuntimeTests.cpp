@@ -51,6 +51,8 @@ private Q_SLOTS:
   void realLoopbackAdvertisementDrivesExistingDeviceModel();
   void updateAndExpiryFlowThroughSameModel();
   void publishesNamedFileEndpointAnnouncement();
+  void manualLoopbackProbeDiscoversUnpairedPeer();
+  void invalidAndStaleManualResolutionDoNotFabricatePeers();
   void destructionStopsListenerAndReleasesPort();
 };
 
@@ -133,6 +135,55 @@ void DeviceDiscoveryRuntimeTests::publishesNamedFileEndpointAnnouncement()
   QCOMPARE(runtime.service().localDevice().capabilities.fileV1, announcement.fileV1);
   QCOMPARE(runtime.service().localDevice().capabilities.folderV1, announcement.folderV1);
   QCOMPARE(runtime.service().localDevice().capabilities.resumeV1, announcement.resumeV1);
+}
+
+void DeviceDiscoveryRuntimeTests::manualLoopbackProbeDiscoversUnpairedPeer()
+{
+  DeviceHomeModel peerModel;
+  DeviceDiscoveryRuntime peer(device(QStringLiteral("Manual peer")), peerModel, loopbackOptions());
+  QVERIFY(peer.start());
+
+  DeviceHomeModel localModel;
+  auto options = loopbackOptions();
+  options.manualAddresses = {*parseManualAddress(QStringLiteral("127.0.0.1"))};
+  options.manualProbePort = peer.service().boundPort();
+  DeviceDiscoveryRuntime local(device(QStringLiteral("Manual source")), localModel, std::move(options));
+  QVERIFY(local.start());
+
+  QTRY_COMPARE_WITH_TIMEOUT(localModel.rowCount(), 2, 2000);
+  QVERIFY(localModel.snapshot(peer.service().localDevice().deviceId).has_value());
+}
+
+void DeviceDiscoveryRuntimeTests::invalidAndStaleManualResolutionDoNotFabricatePeers()
+{
+  DeviceHomeModel peerModel;
+  DeviceDiscoveryRuntime peer(device(QStringLiteral("Resolved peer")), peerModel, loopbackOptions());
+  QVERIFY(peer.start());
+
+  QList<AddressCandidateProvider::HostResolutionCallback> callbacks;
+  DeviceHomeModel localModel;
+  auto options = loopbackOptions();
+  options.manualProbePort = peer.service().boundPort();
+  options.manualHostResolver = [&callbacks](const QString &, AddressCandidateProvider::HostResolutionCallback callback) {
+    callbacks.append(std::move(callback));
+  };
+  DeviceDiscoveryRuntime local(device(QStringLiteral("Resolved source")), localModel, std::move(options));
+  QVERIFY(local.start());
+
+  local.setManualAddresses({ManualAddress{.host = QStringLiteral("first.invalid")}});
+  QTRY_COMPARE_WITH_TIMEOUT(callbacks.size(), 1, 1000);
+  local.setManualAddresses({ManualAddress{.host = QStringLiteral("second.invalid")}});
+  QTRY_COMPARE_WITH_TIMEOUT(callbacks.size(), 2, 1000);
+  callbacks.at(0)({QHostAddress::LocalHost}, {});
+  QTest::qWait(100);
+  QCOMPARE(localModel.rowCount(), 1);
+
+  callbacks.at(1)({QHostAddress::LocalHost}, {});
+  QTRY_COMPARE_WITH_TIMEOUT(localModel.rowCount(), 2, 2000);
+
+  local.setManualAddresses({ManualAddress{.host = QStringLiteral("not a valid host!")}});
+  QTest::qWait(100);
+  QCOMPARE(localModel.rowCount(), 2);
 }
 
 void DeviceDiscoveryRuntimeTests::destructionStopsListenerAndReleasesPort()
