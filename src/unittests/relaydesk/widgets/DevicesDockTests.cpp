@@ -42,6 +42,7 @@ using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
 using namespace deskflow::relaydesk::test;
 using namespace deskflow::relaydesk::widgets;
+using ::relaydesk::transfer::TransferId;
 
 namespace {
 

@@ -223,7 +223,7 @@ void TransferHistoryStoreTests::persistsOnlySafeRelativeCompletionTargets()
   QVERIFY(temporary.isValid());
   const QString path = temporary.filePath(QStringLiteral("history.jsonl"));
   TransferHistoryStore store(path, {}, [] { return kNow; });
-  auto completed = record(QStringLiteral("10000000-0000-4000-8000-000000000001"));
+  auto completed = record(QStringLiteral("10000000-0000-4000-8000-000000000001"), 0);
   completed.direction = HistoryDirection::Receiving;
   completed.completedRelativePath = QStringLiteral("Project/report.txt");
   completed.topLevelTargetRelativePath = QStringLiteral("Project");

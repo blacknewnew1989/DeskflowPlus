@@ -20,6 +20,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFrame>
+#include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -390,7 +391,7 @@ void TransferUiRuntimeTests::bridgesIncomingConflictDecisionsThroughTypedUiInten
 
   Q_EMIT fixture.service.incomingConflictDecisionRequired(prompt);
   auto terminal = transferSnapshot(
-      QStringLiteral("55555555-5555-4555-8555-555555555555"), TransferState::Canceled
+      QStringLiteral("55555555-5555-4555-8555-555555555555"), TransferState::Cancelled
   );
   terminal.id = prompt.transferId;
   Q_EMIT fixture.service.transferChanged(terminal);

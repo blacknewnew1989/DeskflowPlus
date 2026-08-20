@@ -126,7 +126,7 @@ void RelayDeskInputTargetTests::endpointUpdateChangesHostOnceWithoutChangingPort
 void RelayDeskInputTargetTests::automaticDiscoveryDoesNotSwitchManagedPeerButExplicitSelectionCan()
 {
   QSettings settings(m_directory.filePath(QStringLiteral("managed.conf")), QSettings::IniFormat);
-  const auto first = peer();
+  auto first = peer();
   RelayDeskInputTarget target;
   QCOMPARE(
       syncRelayDeskClientTarget(settings, first, endpoint(first, 24800), {}, 24800, false, &target),
