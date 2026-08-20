@@ -40,6 +40,20 @@ public:
     runtime.m_peerConnections.remove(peerDeviceId);
   }
 
+  static FileTlsConnection *takePeerChannel(
+      FileTransferRuntime &runtime, const DeviceId &peerDeviceId
+  )
+  {
+    return runtime.m_peerConnections.take(peerDeviceId);
+  }
+
+  static void restorePeerChannel(
+      FileTransferRuntime &runtime, const DeviceId &peerDeviceId, FileTlsConnection *connection
+  )
+  {
+    runtime.m_peerConnections.insert(peerDeviceId, connection);
+  }
+
   static bool hasPendingIncomingConflict(
       const FileTransferRuntime &runtime, const ::relaydesk::transfer::TransferId &transferId,
       const QUuid &conflictId
@@ -838,6 +852,7 @@ void FileTransferRuntimeTests::incomingConflictPolicies()
   bool promptPathIsPrivateAndRelative = true;
   bool wrongConflictIdsIgnored = true;
   bool pausedDecisionDeferredDiskWork = !pauseBeforeDecision;
+  FileTlsConnection *detachedPeerChannel = nullptr;
   connect(&receiver, &IFileTransferService::incomingConflictDecisionRequired, this,
           [&](const IncomingConflictPrompt &prompt) {
             conflictPrompt = prompt;
@@ -858,7 +873,8 @@ void FileTransferRuntimeTests::incomingConflictPolicies()
               receiver.pause(prompt.transferId);
             }
             if (breakCancelTransport) {
-              FileTransferRuntimeTestAccess::removePeerChannel(receiver, senderId);
+              detachedPeerChannel =
+                  FileTransferRuntimeTestAccess::takePeerChannel(receiver, senderId);
             }
             receiver.resolveIncomingConflict(prompt.transferId, prompt.conflictId, askDecision);
             if (!breakCancelTransport) {
@@ -912,7 +928,9 @@ void FileTransferRuntimeTests::incomingConflictPolicies()
   QVERIFY2(started.ok(), qPrintable(started.diagnostic));
 
   if (breakCancelTransport) {
-    QTRY_VERIFY_WITH_TIMEOUT(conflictPrompt.has_value(), 15'000);
+    QTRY_VERIFY2_WITH_TIMEOUT(
+        conflictPrompt.has_value(), qPrintable(errors.join(QStringLiteral("; "))), 15'000
+    );
     QTRY_VERIFY_WITH_TIMEOUT(receiverOperations.count() >= 2, 5'000);
     const auto *cancelResult = static_cast<const TransferOperationResult *>(
         receiverOperations.last().constFirst().constData()
@@ -933,16 +951,33 @@ void FileTransferRuntimeTests::incomingConflictPolicies()
         QDirIterator::Subdirectories
     );
     QVERIFY(!partFiles.hasNext());
-    QElapsedTimer stopTimer;
-    stopTimer.start();
-    receiver.stop();
-    QVERIFY2(stopTimer.elapsed() < 5'000, "stopping a pending conflict pipeline timed out");
+    QFile preservedBeforeRecovery(QDir(receiveRoot).filePath(QStringLiteral("conflict.bin")));
+    QVERIFY(preservedBeforeRecovery.open(QIODevice::ReadOnly));
+    QCOMPARE(preservedBeforeRecovery.readAll(), originalBytes);
+    QVERIFY(detachedPeerChannel != nullptr);
+    FileTransferRuntimeTestAccess::restorePeerChannel(
+        receiver, senderId, detachedPeerChannel
+    );
+    receiver.resolveIncomingConflict(
+        conflictPrompt->transferId, conflictPrompt->conflictId,
+        IncomingConflictDecision::AutoRename
+    );
+    QTRY_VERIFY_WITH_TIMEOUT(
+        senderLatest.has_value() && senderLatest->state == TransferState::Completed, 15'000
+    );
+    QTRY_VERIFY_WITH_TIMEOUT(
+        receiverLatest.has_value() && receiverLatest->state == TransferState::Completed, 15'000
+    );
     QVERIFY(!FileTransferRuntimeTestAccess::hasPendingIncomingConflict(
         receiver, conflictPrompt->transferId, conflictPrompt->conflictId
     ));
     QFile preserved(QDir(receiveRoot).filePath(QStringLiteral("conflict.bin")));
     QVERIFY(preserved.open(QIODevice::ReadOnly));
     QCOMPARE(preserved.readAll(), originalBytes);
+    QFile committed(QDir(receiveRoot).filePath(QStringLiteral("conflict (1).bin")));
+    QVERIFY2(committed.open(QIODevice::ReadOnly), qPrintable(committed.errorString()));
+    QCOMPARE(committed.readAll(), sourceBytes);
+    QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
     QCOMPARE(prompts.count(), 1);
     return;
   }
