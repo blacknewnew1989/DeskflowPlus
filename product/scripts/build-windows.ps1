@@ -29,7 +29,6 @@ $EnvFile = Join-Path $RepoRoot ".relaydesk-toolchain-windows.ps1"
 if (-not $SkipAutoSetup -and -not (Test-Path $EnvFile)) {
     & (Join-Path $ScriptRoot "setup-windows.ps1") -RepoRoot $RepoRoot
 }
-if (Test-Path $EnvFile) { . $EnvFile }
 
 if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
     $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -49,6 +48,7 @@ if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
         }
     }
 }
+if (Test-Path $EnvFile) { . $EnvFile }
 $env:VSLANG = "1033"
 
 foreach ($command in @("cmake", "ninja", "cl.exe")) {
