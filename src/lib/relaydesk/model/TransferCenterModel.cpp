@@ -312,7 +312,9 @@ QVariant TransferCenterModel::data(const QModelIndex &index, int role) const
   case CanCancelRole:
     return !entry.history.has_value() && snapshot.canCancel;
   case CanRetryRole:
-    return entry.history.has_value() ? entry.history->status == HistoryStatus::Failed : snapshot.canRetry;
+    return entry.history.has_value()
+               ? entry.history->status == HistoryStatus::Failed && m_historyRetryAvailable.contains(snapshot.id)
+               : snapshot.canRetry;
   case IsTerminalRole:
     return TransferControlStateMachine::isTerminal(snapshot.state);
   case IsHistoricalRole:
@@ -328,10 +330,13 @@ QVariant TransferCenterModel::data(const QModelIndex &index, int role) const
   case HasHistoryDetailsRole:
     return entry.history.has_value();
   case CanOpenFolderRole:
-    return entry.history.has_value() && entry.history->status == HistoryStatus::Completed;
+    return entry.history.has_value() && entry.history->status == HistoryStatus::Completed &&
+           entry.history->direction == HistoryDirection::Receiving &&
+           !entry.history->topLevelTargetRelativePath.isEmpty();
   case CanOpenFileRole:
     return entry.history.has_value() && entry.history->status == HistoryStatus::Completed &&
-           entry.history->fileCount == 1;
+           entry.history->direction == HistoryDirection::Receiving && entry.history->fileCount == 1 &&
+           !entry.history->completedRelativePath.isEmpty();
   default:
     return {};
   }
@@ -551,6 +556,20 @@ bool TransferCenterModel::requestOpenFolder(const TransferId &transferId)
 bool TransferCenterModel::requestOpenFile(const TransferId &transferId)
 {
   return requestHistoryAction(transferId, CanOpenFileRole, &TransferCenterModel::openFileRequested);
+}
+
+void TransferCenterModel::setHistoryRetryAvailable(const TransferId &transferId, bool available)
+{
+  if (available) {
+    m_historyRetryAvailable.insert(transferId);
+  } else {
+    m_historyRetryAvailable.remove(transferId);
+  }
+  const auto row = indexOf(transferId);
+  if (row >= 0 && m_entries.at(row).history.has_value()) {
+    const auto changed = index(row, 0);
+    Q_EMIT dataChanged(changed, changed, {CanRetryRole});
+  }
 }
 
 void TransferCenterModel::flushDueUpdates()

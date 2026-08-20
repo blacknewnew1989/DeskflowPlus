@@ -521,6 +521,7 @@ private:
         sendFileResult(skipped);
         m_completedBytes += m_skippedEntry->size;
         ++m_completedFiles;
+        recordCompletedPath(m_skippedEntry->relativeProtocolPath);
         publishProgress(m_completedBytes, m_completedFiles, m_skippedEntry->relativeProtocolPath);
         m_skippedBegin.reset();
         m_skippedEntry.reset();
@@ -545,6 +546,7 @@ private:
           sendFileResult(result);
           m_completedBytes += snapshot.expectedSize;
           ++m_completedFiles;
+          recordCompletedPath(snapshot.relativeProtocolPath);
           publishProgress(m_completedBytes, m_completedFiles, snapshot.relativeProtocolPath);
           m_receiver.reset();
           if (m_completedFiles == m_offer.fileCount) {
@@ -565,6 +567,7 @@ private:
       sendFileResult(result);
       m_completedBytes += snapshot.expectedSize;
       ++m_completedFiles;
+      recordCompletedPath(snapshot.committedPath);
       publishProgress(m_completedBytes, m_completedFiles, snapshot.relativeProtocolPath);
       m_receiver.reset();
       if (m_completedFiles == m_offer.fileCount) {
@@ -601,6 +604,20 @@ private:
       }
     }
     return true;
+  }
+
+  void recordCompletedPath(const QString &absoluteOrRelativePath)
+  {
+    QString relativePath = absoluteOrRelativePath;
+    if (QDir::isAbsolutePath(relativePath)) {
+      relativePath = QDir(m_options.destinationRoot).relativeFilePath(relativePath);
+    }
+    relativePath.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    const auto validated = ::relaydesk::transfer::PathPolicy::validateRelative(relativePath);
+    if (!validated.ok) {
+      return;
+    }
+    m_completedRelativePath = validated.normalized;
   }
 
   [[nodiscard]] std::optional<::relaydesk::transfer::ManifestEntry>
@@ -828,6 +845,7 @@ private:
       snapshot.state = ::relaydesk::transfer::TransferState::Completed;
       snapshot.progress.completedBytes = snapshot.progress.totalBytes;
       snapshot.progress.completedFiles = snapshot.progress.totalFiles;
+      snapshot.currentRelativeDisplayPath = m_completedRelativePath;
       snapshot.canCancel = false;
       snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
       session->pipelineSnapshot = snapshot;
@@ -908,6 +926,7 @@ private:
   ::relaydesk::transfer::ResumeStore m_resumeStore;
   std::optional<::relaydesk::transfer::ResumeState> m_resumeState;
   quint64 m_generation = 0;
+  QString m_completedRelativePath;
   ::relaydesk::transfer::ManifestPageReassembler m_reassembler;
   QList<::relaydesk::transfer::ManifestEntry> m_entries;
   std::unique_ptr<IncomingFileReceiverWorker> m_receiver;

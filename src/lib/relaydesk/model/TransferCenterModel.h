@@ -91,6 +91,9 @@ public:
   bool requestRetry(const ::relaydesk::transfer::TransferId &transferId);
   bool requestOpenFolder(const ::relaydesk::transfer::TransferId &transferId);
   bool requestOpenFile(const ::relaydesk::transfer::TransferId &transferId);
+  // Durable history intentionally has no source recipe. This flag is scoped
+  // to an outgoing session that still exists in the current process.
+  void setHistoryRetryAvailable(const ::relaydesk::transfer::TransferId &transferId, bool available);
   void flushDueUpdates();
 
 Q_SIGNALS:
@@ -152,6 +155,7 @@ private:
   QHash<::relaydesk::transfer::TransferId, Entry> m_pendingEntries;
   QHash<::relaydesk::transfer::TransferId, qint64> m_lastPublishedMs;
   QSet<::relaydesk::transfer::TransferId> m_notifiedTerminalIds;
+  QSet<::relaydesk::transfer::TransferId> m_historyRetryAvailable;
   QList<Notification> m_pendingNotifications;
   std::optional<qint64> m_lastNotificationMs;
 };

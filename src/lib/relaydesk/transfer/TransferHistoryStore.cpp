@@ -3,6 +3,8 @@
 
 #include "relaydesk/transfer/TransferHistoryStore.h"
 
+#include "relaydesk/transfer/PathPolicy.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -101,7 +103,16 @@ bool validRecord(const TransferHistoryRecord &record)
     return false;
   }
   if (record.status == HistoryStatus::Completed) {
-    return record.errorCode == TransferErrorCode::None;
+    if (record.errorCode != TransferErrorCode::None) {
+      return false;
+    }
+    if (record.completedRelativePath.isEmpty() && record.topLevelTargetRelativePath.isEmpty()) {
+      return true;
+    }
+    const auto completed = PathPolicy::validateRelative(record.completedRelativePath);
+    const auto topLevel = PathPolicy::validateRelative(record.topLevelTargetRelativePath);
+    return completed.ok && topLevel.ok && !record.topLevelTargetRelativePath.contains(u'/') &&
+           record.completedRelativePath.section(u'/', 0, 0) == record.topLevelTargetRelativePath;
   }
   if (record.status == HistoryStatus::Failed) {
     return isKnownTransferErrorCode(record.errorCode);
@@ -124,6 +135,8 @@ QByteArray encodeRecord(const TransferHistoryRecord &record)
       {QStringLiteral("finishedAtMs"), record.finishedUtc.toMSecsSinceEpoch()},
       {QStringLiteral("status"), statusName(record.status)},
       {QStringLiteral("errorCode"), static_cast<qint64>(record.errorCode)},
+      {QStringLiteral("completedRelativePath"), record.completedRelativePath},
+      {QStringLiteral("topLevelTargetRelativePath"), record.topLevelTargetRelativePath},
   };
   return QJsonDocument(object).toJson(QJsonDocument::Compact);
 }
@@ -151,7 +164,7 @@ std::optional<TransferHistoryRecord> decodeRecord(QByteArrayView line)
   }
   const QJsonObject object = document.object();
   const auto schemaVersion = integerField(object, QStringLiteral("schemaVersion"));
-  if (!schemaVersion.has_value() || (*schemaVersion != 1 && *schemaVersion != 2)) {
+  if (!schemaVersion.has_value() || (*schemaVersion != 1 && *schemaVersion != 2 && *schemaVersion != 3)) {
     return std::nullopt;
   }
   QSet<QString> required{
@@ -163,6 +176,10 @@ std::optional<TransferHistoryRecord> decodeRecord(QByteArrayView line)
   if (*schemaVersion == 1) {
     required.insert(QStringLiteral("errorMessageKey"));
   }
+  if (*schemaVersion == 3) {
+    required.insert(QStringLiteral("completedRelativePath"));
+    required.insert(QStringLiteral("topLevelTargetRelativePath"));
+  }
   if (object.keys().size() != required.size()) {
     return std::nullopt;
   }
@@ -170,6 +187,11 @@ std::optional<TransferHistoryRecord> decodeRecord(QByteArrayView line)
     if (!object.contains(name)) {
       return std::nullopt;
     }
+  }
+  if (*schemaVersion == 3 &&
+      (!object.value(QStringLiteral("completedRelativePath")).isString() ||
+       !object.value(QStringLiteral("topLevelTargetRelativePath")).isString())) {
+    return std::nullopt;
   }
 
   const auto fileCount = integerField(object, QStringLiteral("fileCount"));
@@ -220,6 +242,8 @@ std::optional<TransferHistoryRecord> decodeRecord(QByteArrayView line)
       .finishedUtc = QDateTime::fromMSecsSinceEpoch(*finishedAt, Qt::UTC),
       .status = *status,
       .errorCode = stableError,
+      .completedRelativePath = object.value(QStringLiteral("completedRelativePath")).toString(),
+      .topLevelTargetRelativePath = object.value(QStringLiteral("topLevelTargetRelativePath")).toString(),
   };
   return validRecord(record) ? std::optional<TransferHistoryRecord>{std::move(record)} : std::nullopt;
 }

@@ -38,6 +38,7 @@
 #include "relaydesk/app/TransferRuntimeComposition.h"
 #include "relaydesk/device/DeviceIdentity.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
+#include "relaydesk/transfer/PathPolicy.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
@@ -72,6 +73,7 @@
 #include <QTimer>
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #if defined(Q_OS_MACOS)
@@ -477,7 +479,21 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
           .availableBytes = 0,
           .autoAcceptTrustedDevices = false,
       },
-      historyPath, {}, {}, this
+      historyPath,
+      [receiveRoot](const ::relaydesk::transfer::TransferHistoryRecord &record)
+          -> std::optional<deskflow::relaydesk::ResolvedTransferCompletion> {
+        const QString relativePath = record.fileCount == 1 ? record.completedRelativePath
+                                                           : record.topLevelTargetRelativePath;
+        QString completedPath;
+        const auto joined = ::relaydesk::transfer::PathPolicy::joinLexicallyUnderRoot(
+            receiveRoot, relativePath, completedPath
+        );
+        if (!joined.ok) {
+          return std::nullopt;
+        }
+        return deskflow::relaydesk::ResolvedTransferCompletion{receiveRoot, completedPath};
+      },
+      [](const QUrl &url) { return QDesktopServices::openUrl(url); }, this
   );
   QString diagnostic;
   if (!m_relayDeskTransfer->start(&diagnostic)) {

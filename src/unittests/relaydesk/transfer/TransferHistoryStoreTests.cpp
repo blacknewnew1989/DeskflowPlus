@@ -52,6 +52,7 @@ private Q_SLOTS:
   void prunesByAgeAndCount();
   void isolatesCorruptAndOversizedRows();
   void rejectsInvalidRecordsAndLimits();
+  void persistsOnlySafeRelativeCompletionTargets();
   void boundsWholeFileAndClearsIdempotently();
 };
 
@@ -73,7 +74,7 @@ void TransferHistoryStoreTests::migratesLegacySchemaWithoutTrustingMessageKeys()
   QFile rewritten(path);
   QVERIFY(rewritten.open(QIODevice::ReadOnly));
   const auto bytes = rewritten.readAll();
-  QVERIFY(bytes.contains("\"schemaVersion\":2"));
+  QVERIFY(bytes.contains("\"schemaVersion\":3"));
   QVERIFY(!bytes.contains("errorMessageKey"));
   QVERIFY(!bytes.contains("remote.private.key"));
 }
@@ -214,6 +215,34 @@ void TransferHistoryStoreTests::rejectsInvalidRecordsAndLimits()
 
   TransferHistoryStore relative(QStringLiteral("history.jsonl"));
   QCOMPARE(relative.page().error, TransferHistoryError::InvalidStorePath);
+}
+
+void TransferHistoryStoreTests::persistsOnlySafeRelativeCompletionTargets()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const QString path = temporary.filePath(QStringLiteral("history.jsonl"));
+  TransferHistoryStore store(path, {}, [] { return kNow; });
+  auto completed = record(QStringLiteral("10000000-0000-4000-8000-000000000001"));
+  completed.direction = HistoryDirection::Receiving;
+  completed.completedRelativePath = QStringLiteral("Project/report.txt");
+  completed.topLevelTargetRelativePath = QStringLiteral("Project");
+  QVERIFY(store.append(completed).ok());
+
+  const auto page = store.page();
+  QVERIFY(page.ok());
+  QCOMPARE(page.page.records, QList<TransferHistoryRecord>{completed});
+  QFile raw(path);
+  QVERIFY(raw.open(QIODevice::ReadOnly));
+  const auto bytes = raw.readAll();
+  QVERIFY(bytes.contains("\"completedRelativePath\":\"Project/report.txt\""));
+  QVERIFY(!bytes.contains(temporary.path().toUtf8()));
+
+  completed.completedRelativePath = QStringLiteral("../escape.txt");
+  QCOMPARE(store.append(completed).error, TransferHistoryError::InvalidRecord);
+  completed.completedRelativePath = QStringLiteral("Project/report.txt");
+  completed.topLevelTargetRelativePath = QStringLiteral("Other");
+  QCOMPARE(store.append(completed).error, TransferHistoryError::InvalidRecord);
 }
 
 void TransferHistoryStoreTests::boundsWholeFileAndClearsIdempotently()

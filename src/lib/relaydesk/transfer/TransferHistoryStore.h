@@ -18,7 +18,7 @@
 
 namespace relaydesk::transfer {
 
-inline constexpr quint64 kTransferHistorySchemaVersion = 2;
+inline constexpr quint64 kTransferHistorySchemaVersion = 3;
 inline constexpr qsizetype kDefaultMaximumHistoryEntries = 1'000;
 inline constexpr quint64 kDefaultMaximumHistoryBytes = 16U * 1024U * 1024U;
 inline constexpr qsizetype kDefaultMaximumHistoryLineBytes = 64U * 1024U;
@@ -50,6 +50,10 @@ struct TransferHistoryRecord
   QDateTime finishedUtc;
   HistoryStatus status = HistoryStatus::Completed;
   TransferErrorCode errorCode = TransferErrorCode::None;
+  // Relative to the private receive root. Never persist an absolute local
+  // path: the root is installation-specific and must remain private.
+  QString completedRelativePath;
+  QString topLevelTargetRelativePath;
 
   [[nodiscard]] bool operator==(const TransferHistoryRecord &) const = default;
 };
