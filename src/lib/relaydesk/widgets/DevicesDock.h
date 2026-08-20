@@ -65,6 +65,7 @@ public:
   void setFolderChooser(ItemChooser chooser);
   void setIncomingOfferModel(model::IncomingOfferModel *incomingOffers);
   void showIncomingConflictPrompt(::relaydesk::transfer::IncomingConflictPrompt prompt);
+  void showIncomingConflictCancelTransportFailure(const ::relaydesk::transfer::TransferId &transferId);
   void clearIncomingConflictPrompts(const ::relaydesk::transfer::TransferId &transferId);
   void setManualAddresses(QList<ManualAddress> addresses);
 
@@ -152,6 +153,7 @@ private:
   QFrame *m_incomingConflictPanel = nullptr;
   QLabel *m_incomingConflictTitle = nullptr;
   QLabel *m_incomingConflictPath = nullptr;
+  QLabel *m_incomingConflictError = nullptr;
   QPushButton *m_overwriteIncomingConflictButton = nullptr;
   QPushButton *m_autoRenameIncomingConflictButton = nullptr;
   QPushButton *m_skipIncomingConflictButton = nullptr;
@@ -175,6 +177,7 @@ private:
   QPersistentModelIndex m_dropTargetIndex;
   model::IncomingOfferModel *m_incomingOffers = nullptr;
   QList<::relaydesk::transfer::IncomingConflictPrompt> m_incomingConflictPrompts;
+  QString m_incomingConflictErrorText;
   QList<ManualAddress> m_manualAddresses;
 };
 

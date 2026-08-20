@@ -189,6 +189,7 @@
     <message><source>transfer.conflict.overwrite</source><translation>바꾸기</translation></message>
     <message><source>transfer.conflict.auto_rename</source><translation>둘 다 유지</translation></message>
     <message><source>transfer.conflict.skip</source><translation>건너뛰기</translation></message>
+    <message><source>transfer.conflict.cancel_transport_failed</source><translation>이 전송을 취소할 수 없습니다. 연결을 확인한 후 다시 시도하세요.</translation></message>
     <message><source>settings.title</source><translation>설정</translation></message>
     <message><source>settings.general</source><translation>일반</translation></message>
     <message><source>settings.input</source><translation>키보드 및 마우스</translation></message>

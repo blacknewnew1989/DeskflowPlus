@@ -189,6 +189,7 @@
     <message><source>transfer.conflict.overwrite</source><translation>Replace</translation></message>
     <message><source>transfer.conflict.auto_rename</source><translation>Keep both</translation></message>
     <message><source>transfer.conflict.skip</source><translation>Skip</translation></message>
+    <message><source>transfer.conflict.cancel_transport_failed</source><translation>Could not cancel this transfer. Check the connection and try again.</translation></message>
     <message><source>settings.title</source><translation>Settings</translation></message>
     <message><source>settings.general</source><translation>General</translation></message>
     <message><source>settings.input</source><translation>Keyboard and mouse</translation></message>
