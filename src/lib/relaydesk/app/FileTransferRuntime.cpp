@@ -26,7 +26,6 @@
 #endif
 
 #include <QAbstractSocket>
-#include <QDebug>
 #include <QFileInfo>
 #include <QFutureWatcher>
 #include <QMutex>
@@ -1086,7 +1085,6 @@ void FileTransferRuntime::attachConnection(
 
 void FileTransferRuntime::handleAuthenticated(FileTlsConnection &connection)
 {
-  qWarning() << "RelayDesk FileTransferRuntime authenticated enter" << &connection;
   auto context = m_connections.find(&connection);
   const auto peer = connection.peerDeviceId();
   if (context == m_connections.end() || !peer.has_value()) {
@@ -1128,14 +1126,11 @@ void FileTransferRuntime::handleAuthenticated(FileTlsConnection &connection)
     failConnection(
         connection, FileTransferRuntimeError::TransportFailed, result, std::move(sendDiagnostic)
     );
-    return;
   }
-  qWarning() << "RelayDesk FileTransferRuntime capabilities sent" << &connection;
 }
 
 void FileTransferRuntime::handleFrame(FileTlsConnection &connection, Frame frame)
 {
-  qWarning() << "RelayDesk FileTransferRuntime frame enter" << &connection << "type" << static_cast<int>(frame.type);
   auto context = m_connections.find(&connection);
   if (context == m_connections.end() || !context->peer.has_value()) {
     failConnection(
@@ -1173,12 +1168,8 @@ void FileTransferRuntime::handleFrame(FileTlsConnection &connection, Frame frame
       return;
     }
     context->negotiated = *negotiated.capabilities;
-    qWarning() << "RelayDesk FileTransferRuntime capabilities received" << &connection;
-    qWarning() << "RelayDesk FileTransferRuntime peerReady emit" << &connection;
     Q_EMIT peerReady(*context->peer, *context->negotiated);
-    qWarning() << "RelayDesk FileTransferRuntime peerReady returned" << &connection;
     offerPreparedTransfers(*context->peer);
-    qWarning() << "RelayDesk FileTransferRuntime capabilities handled" << &connection;
     return;
   }
 

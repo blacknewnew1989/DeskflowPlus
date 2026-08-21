@@ -174,46 +174,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/${{ matrix.target.name }}
-          if [[ "$RUNNER_OS" == "macOS" && "$GITHUB_REF" == "refs/heads/agent/a5/macos14-deployment-target" ]]; then
-            run_stall_sample() {
-              local name="$1"
-              local selector="$2"
-              local output_name="${3:-$name}"
-              local temporary_keychain="${4:-}"
-              local executable="build/src/unittests/relaydesk/app/$name"
-              local stdout_path="dist/macos-arm64/$output_name.stdout.txt"
-              local stderr_path="dist/macos-arm64/$output_name.stderr.txt"
-              local sample_path="dist/macos-arm64/$output_name.sample.txt"
-
-              if [[ ! -x "$executable" ]]; then
-                echo "Missing diagnostic executable: $executable" >&2
-                return 1
-              fi
-
-              if [[ -n "$temporary_keychain" ]]; then
-                QT_SSL_USE_TEMPORARY_KEYCHAIN=1 "$executable" "$selector" >"$stdout_path" 2>"$stderr_path" &
-              else
-                "$executable" "$selector" >"$stdout_path" 2>"$stderr_path" &
-              fi
-              local pid=$!
-              sleep 20
-              if kill -0 "$pid" 2>/dev/null; then
-                /usr/bin/sample "$pid" 5 1 -file "$sample_path" || true
-                kill "$pid" || true
-              fi
-              wait "$pid" || true
-            }
-
-            run_stall_sample RelayDeskFileTransferRuntimeTests \
-              stoppingBeforeStreamingPublishesRetryableFailure:waiting-for-acceptance
-            run_stall_sample RelayDeskAutoReconnectRuntimeTests \
-              trustRevocationStopsReconnectAndDisconnectsPeer
-            run_stall_sample RelayDeskAutoReconnectRuntimeTests \
-              trustRevocationStopsReconnectAndDisconnectsPeer \
-              RelayDeskAutoReconnectRuntimeTestsTemporaryKeychain enabled
-            echo "macOS A5 TLS stall diagnostics collected; skipping full CTest." >&2
-            exit 1
-          fi
           set -o pipefail
           ctest --test-dir build/src/unittests -C Release --output-on-failure 2>&1 | tee dist/${{ matrix.target.name }}/ctest.log
 
