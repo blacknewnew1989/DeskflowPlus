@@ -37,6 +37,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | ID | 任务 | Owner | 证据 |
 |---|---|---|---|
 | WIN-020 | Windows 精确 portable 单机真实运行 | A0 | 七语言、托盘、手动地址、输入核心 24800 启停、UDP 24802、动态文件监听、传输中心、传输设置和 HKCU 登录启动退出/重启持久化 PASS；配置与注册表已回滚；双机/macOS 保持 `NOT_RUN` |
+| WIN-021 | Windows MSI 最低运行库要求 | A4/A0 | v14.51 LaunchCondition 导致 v14.44.35211 主机两次 1603；云端 MSI 反编译确认修复为 v14.44；本机修复包安装/修复/卸载 exit 0、GUI、服务、两条防火墙规则、开始菜单和无残留 PASS |
 | PROTO-FREEZE-001 | RelayDesk v1 wire protocol / shared interface freeze | A6/A2/A0 | tag `relaydesk-protocol-v1-20260813-01`; run `31672497950` SUCCESS; Win 84/84, Mac 85/85; artifacts `9170492840` / `9170386546` |
 | WIN-018 | Windows file safety adapter | A4/A0 | `bc0b9ffc9`; real NTFS junction/atomic commit tests; run `31678206041` Windows 87/87 PASS |
 | MAC-013..018 | macOS file safety adapter and race hardening | A5/A0 | `b5e91d54e` through `e6f5fe519`; run `31678206041` macOS 88/88 PASS |

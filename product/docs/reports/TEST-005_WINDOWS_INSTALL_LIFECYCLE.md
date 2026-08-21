@@ -26,6 +26,15 @@ unsigned MSI/portable，并由 hosted Windows runner 完成 99/99 CTest 与 TEST
 unsigned SmartScreen/UAC 的人工交互提示仍为 `NOT_RUN`，需在最终实际安装验收中观察；
 这不否定已经完成的 Windows 单机 GUI 自动化。
 
+## 后标签 MSI 运行库修复（2026-08-21）
+
+旧 MSI 在主机 VC++ runtime `14.44.35211` 上两次安装均 exit `1603`，错误门槛为 v14.51。
+云端 MSI 反编译确认修复后要求 v14.44、已不包含 v14.51。修复后的本机 MSI SHA-256 为
+`1A2404AAD157F821DBC3ACA28B20A529EA1B1D986FB4D03FAE6A4ACF7B86FCD0`：安装、修复和卸载
+均 exit `0`；GUI 实际启动；安装后 RelayDesk 服务、两条防火墙规则和开始菜单存在；卸载后
+无残留，用户配置原 SHA-256 `F14E...` 恢复匹配。完整证据见
+`WIN-021_WINDOWS_MSI_RUNTIME_REQUIREMENT.md`。SmartScreen/UAC 视觉交互仍为 `NOT_RUN`。
+
 ## 历史候选（2026-08-13）
 
 以下结果仅属于提交 `f1f4bed433846048149eed0fc3cfd98b7784c5db` 的历史候选。其自动化

@@ -56,6 +56,23 @@ Monitoring（TCC）授权、撤销和前台复检；真实 menu bar 的最小化
 以及物理 macOS 对端与 Windows 的双向键鼠、剪贴板、文件传输和断线续传。hosted CI 不能
 替代这些系统交互或物理验收。
 
+## 后标签 macOS 自动回归（2026-08-21）
+
+产品实现 `1b1a24739dea3775d64fa7987d30e9b37372a5c1` 的分支 run `32433749495` 为 `SUCCESS`：
+macOS job `96630635945` 的 CTest 100/100（37.91 s），macOS lifecycle job `96633281248`
+为 19/19 PASS；artifact `9430175846`（65,777,695 bytes，API SHA-256
+`72f513ec5f04aa3e71755026c59410d8a71fd808b7cd2b8ba03be471b72a06d7`）和 lifecycle artifact
+`9430317569`（12,562 bytes，`2d6a1ad19ff5e9b730d114ea10e29ebd13122f69ac2d647e58cab17c9d6948af`）已上传。
+该分支未创建新标签，release job `96633282373` 按规则 skipped；TCC/menu bar、真实 macOS
+交互、Gatekeeper 和物理 Win↔Mac 仍为 `NOT_RUN`。
+
+## macOS 14 单变量实验（未合入）
+
+提交 `0b14ddfe4` 的 run `32435396307` 仅用于隔离 macOS 14 runner 变量：链接警告归零，
+构建和打包成功，但 CTest 为 98/100，两个测试超时。生命周期与 Release job 均按失败路径
+skipped。该实验不得合入或作为发布候选证据；物理 Mac、TCC/menu bar、Gatekeeper 与
+Win↔Mac 物理验收继续为 `NOT_RUN`。
+
 ## 历史候选执行记录（2026-08-13）
 
 下列 `4377afeed9816fc503c30705681532af274fa5a9` 结果为历史候选，保留用于故障演进和

@@ -53,6 +53,30 @@ Input Monitoring 与 menu bar 交互；Windows/macOS 双机配对、双向键鼠
 剪贴板、单双/多文件及文件夹传输、冲突决策、断线续传、睡眠唤醒重连；unsigned
 SmartScreen/UAC/Gatekeeper 交互；Developer ID、Windows Authenticode 与 notarization。
 
+## 后标签自动化修复回归（2026-08-21）
+
+该回归不创建新标签，不覆盖 `relaydesk-phase4-20260820-02` 的已验证身份。分支 tip 为
+`442aa79f2f5e06299fc6368bd46785f4ce003203`，仅包含自动化中文提交修复；产品实现提交为
+`1b1a24739dea3775d64fa7987d30e9b37372a5c1`。
+
+- run `32433749495`：`SUCCESS`。materials `96630635916`、Windows `96630636007`
+  （99/99，34.41 s）、macOS `96630635945`（100/100，37.91 s）和 macOS lifecycle
+  `96633281248`（19/19）均成功；release job `96633282373` 为分支运行预期 `skipped`。
+- Windows artifact `9430307996`：36,254,057 bytes，API SHA-256
+  `a60f9885a6da1e3aaee2a3a7a69b7ac374bfab8eba266b777daae49891392d52`；macOS artifact
+  `9430175846`：65,777,695 bytes，`72f513ec5f04aa3e71755026c59410d8a71fd808b7cd2b8ba03be471b72a06d7`；
+  macOS lifecycle artifact `9430317569`：12,562 bytes，
+  `2d6a1ad19ff5e9b730d114ea10e29ebd13122f69ac2d647e58cab17c9d6948af`。
+- 当前 Windows MSI/portable：16,305,874 bytes /
+  `a4a4bc07b677692cc424f5e82e9bf2f38e65bc52b38f6b61ef811c4e917ba8d9`，13,322,560 bytes /
+  `63487f414cfafdfa12d82cc15199d802393e59c5dc4cac9c9bed7639e27768da`；macOS App ZIP/DMG：
+  28,830,131 bytes / `4a361a003c0d8097cb949e4cf27191512f04a1b87e943724ad23bbe1ac60434f`，28,919,559 bytes /
+  `57a6eb1e73ffae0825451dfafb5a0ee3fd695032a8ebcc00ce34500569f7cb17`。
+- Windows MSI 的本机运行库修复和交互外部边界见 WIN-021；物理 Win↔Mac、TCC/menu bar、
+  SmartScreen/UAC/Gatekeeper/签名仍为 `NOT_RUN`。
+- macOS 14 单变量实验 `0b14ddfe4` / run `32435396307` 将链接警告降为零并完成构建打包，
+  但 CTest 98/100 有两项超时，生命周期/Release skipped；实验不得合入，也不是发布证据。
+
 ## 历史发布候选（2026-08-13）
 
 以下候选已经完成当时的自动化验证，作为可追溯历史证据保留：
