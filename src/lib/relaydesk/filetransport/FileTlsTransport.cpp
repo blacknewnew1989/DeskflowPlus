@@ -171,16 +171,20 @@ void FileTlsConnection::close()
 
 void FileTlsConnection::handleEncrypted()
 {
+  qInfo() << "RelayDesk FileTlsConnection encrypted enter" << this;
   if (m_failed || !m_peerFingerprint.isEmpty()) {
+    qInfo() << "RelayDesk FileTlsConnection encrypted ignored" << this;
     return;
   }
   const QSslCertificate certificate = m_socket->peerCertificate();
   if (certificate.isNull()) {
+    qInfo() << "RelayDesk FileTlsConnection encrypted missing certificate" << this;
     fail(FileTlsError::PeerCertificateMissing, QStringLiteral("file TLS peer did not present a certificate"));
     return;
   }
   m_peerFingerprint = certificate.digest(QCryptographicHash::Sha256);
   if (m_peerFingerprint.size() != 32) {
+    qInfo() << "RelayDesk FileTlsConnection encrypted invalid fingerprint" << this;
     fail(FileTlsError::PeerCertificateMissing, QStringLiteral("file TLS peer certificate has no SHA-256 digest"));
     return;
   }
@@ -206,8 +210,11 @@ void FileTlsConnection::handleEncrypted()
   }
   QByteArray encoded = FrameCodec::encode(hello, m_settings.protocolLimits, &encodeError);
   if (encoded.isEmpty() || !writeEncoded(std::move(encoded), &encodeError)) {
+    qInfo() << "RelayDesk FileTlsConnection encrypted hello send failed" << this;
     fail(FileTlsError::ProtocolError, QStringLiteral("could not send RDFT HELLO: %1").arg(encodeError));
+    return;
   }
+  qInfo() << "RelayDesk FileTlsConnection encrypted hello sent" << this;
 }
 
 void FileTlsConnection::handleReadyRead()
@@ -239,6 +246,8 @@ void FileTlsConnection::handleReadyRead()
 
 void FileTlsConnection::handleFrame(Frame frame)
 {
+  qInfo() << "RelayDesk FileTlsConnection frame enter" << this << "type" << static_cast<int>(frame.type)
+          << "authenticated" << m_authenticated;
   if (!m_authenticated) {
     if (!frame.payload.isEmpty() || frame.streamId != 0) {
       fail(FileTlsError::HelloInvalid, QStringLiteral("RDFT handshake frames must use stream zero without payload"));
@@ -259,6 +268,7 @@ void FileTlsConnection::handleFrame(Frame frame)
       }
       m_peerAccepted = true;
       maybeAuthenticate();
+      qInfo() << "RelayDesk FileTlsConnection auth-result handled" << this;
       return;
     }
     if (frame.type != MessageType::Hello || m_peerHelloVerified) {
@@ -281,6 +291,7 @@ void FileTlsConnection::handleFrame(Frame frame)
     }
     m_peerDeviceId = hello.message->deviceId;
     m_peerHelloVerified = true;
+    qInfo() << "RelayDesk FileTlsConnection hello verified" << this;
     QString encodeError;
     Frame resultFrame;
     resultFrame.type = MessageType::AuthResult;
@@ -288,27 +299,36 @@ void FileTlsConnection::handleFrame(Frame frame)
     resultFrame.metadata = SessionMessageCodec::encodeAuthResult(AuthResultMessage{.accepted = true}, &encodeError);
     QByteArray encoded = FrameCodec::encode(resultFrame, m_settings.protocolLimits, &encodeError);
     if (resultFrame.metadata.isEmpty() || encoded.isEmpty() || !writeEncoded(std::move(encoded), &encodeError)) {
+      qInfo() << "RelayDesk FileTlsConnection auth-result send failed" << this;
       fail(FileTlsError::ProtocolError, QStringLiteral("could not send RDFT AUTH_RESULT: %1").arg(encodeError));
       return;
     }
     maybeAuthenticate();
+    qInfo() << "RelayDesk FileTlsConnection hello handled" << this;
     return;
   }
   if (frame.type == MessageType::Hello || frame.type == MessageType::AuthResult) {
     fail(FileTlsError::HelloInvalid, QStringLiteral("duplicate RDFT session handshake message is not allowed"));
     return;
   }
+  qInfo() << "RelayDesk FileTlsConnection frame emit" << this << "type" << static_cast<int>(frame.type);
   Q_EMIT frameReceived(frame);
+  qInfo() << "RelayDesk FileTlsConnection frame returned" << this << "type" << static_cast<int>(frame.type);
 }
 
 void FileTlsConnection::maybeAuthenticate()
 {
+  qInfo() << "RelayDesk FileTlsConnection authenticate enter" << this << "hello" << m_peerHelloVerified
+          << "accepted" << m_peerAccepted << "already" << m_authenticated;
   if (m_authenticated || !m_peerHelloVerified || !m_peerAccepted) {
+    qInfo() << "RelayDesk FileTlsConnection authenticate deferred" << this;
     return;
   }
   m_authenticated = true;
   m_handshakeTimer->stop();
+  qInfo() << "RelayDesk FileTlsConnection authenticated emit" << this;
   Q_EMIT authenticated();
+  qInfo() << "RelayDesk FileTlsConnection authenticated returned" << this;
 }
 
 void FileTlsConnection::fail(FileTlsError error, QString diagnostic)
