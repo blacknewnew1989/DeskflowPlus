@@ -226,7 +226,7 @@ def commit_report_if_safe(repo: Path, report_path: Path, run_id: str) -> bool:
     if not staged:
         return False
 
-    git(repo, "commit", "-m", f"chore(actions): record run {run_id} [skip ci]")
+    git(repo, "commit", "-m", f"记录(Actions): 保存运行 {run_id} [skip ci]")
     git(repo, "push", "origin", branch)
     return True
 

@@ -15,6 +15,11 @@ SPEC.loader.exec_module(MODULE)
 
 
 class OriginRepositoryTests(unittest.TestCase):
+    def test_automatic_report_commit_message_is_simplified_chinese(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('f"记录(Actions): 保存运行 {run_id} [skip ci]"', source)
+        self.assertNotIn("chore(actions): record run", source)
+
     def test_resolves_https_origin_and_ignores_upstream(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
