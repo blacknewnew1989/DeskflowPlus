@@ -436,7 +436,7 @@ else:
     workflow_text = workflow_templates[0].read_text(encoding="utf-8")
     for required_workflow_phrase in [
         "windows-2022",
-        "macos-15",
+        "macos-14",
         "workflow_dispatch",
         "actions/upload-artifact",
         "collect-ci-artifacts.py",
