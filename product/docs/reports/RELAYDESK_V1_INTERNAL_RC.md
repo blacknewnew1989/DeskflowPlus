@@ -74,8 +74,13 @@ SmartScreen/UAC/Gatekeeper 交互；Developer ID、Windows Authenticode 与 nota
   `57a6eb1e73ffae0825451dfafb5a0ee3fd695032a8ebcc00ce34500569f7cb17`。
 - Windows MSI 的本机运行库修复和交互外部边界见 WIN-021；物理 Win↔Mac、TCC/menu bar、
   SmartScreen/UAC/Gatekeeper/签名仍为 `NOT_RUN`。
-- macOS 14 单变量实验 `0b14ddfe4` / run `32435396307` 将链接警告降为零并完成构建打包，
-  但 CTest 98/100 有两项超时，生命周期/Release skipped；实验不得合入，也不是发布证据。
+- macOS 14 失败实验 `0b14ddfe4` / run `32435396307` 的根因已由 A5 `6457d481` 修复并集成到
+  `32712c6b2` + `ea70650ff`。run `32444914659` SUCCESS：链接警告归零，macOS 100/100、
+  Windows 99/99（TEST-005 PASS）及 macOS lifecycle PASS；macOS/Windows/lifecycle artifacts
+  分别为 `9433863107` / `89c4341b04a93e15487de9021068892236a46debf368bdd2b6e36fdd7f13fe9c`、
+  `9434070187` / `cd80850ff5997d7785eab132b1efe42cb84445147518eb0b62fad28e19486622`、
+  `9434078894` / `cecbd4ceb7d2ec2c2d07302afc4045cb8781ec88f4884e57cc8cb2505312e9da`。该集成待产品
+  标签回归，不能替代 `relaydesk-phase4-20260820-02` 的发布身份。
 
 ## 历史发布候选（2026-08-13）
 

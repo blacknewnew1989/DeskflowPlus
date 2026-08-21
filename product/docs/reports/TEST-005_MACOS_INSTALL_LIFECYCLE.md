@@ -66,12 +66,16 @@ macOS job `96630635945` 的 CTest 100/100（37.91 s），macOS lifecycle job `96
 该分支未创建新标签，release job `96633282373` 按规则 skipped；TCC/menu bar、真实 macOS
 交互、Gatekeeper 和物理 Win↔Mac 仍为 `NOT_RUN`。
 
-## macOS 14 单变量实验（未合入）
+## macOS 14 单变量修复回归（已集成，未发布）
 
-提交 `0b14ddfe4` 的 run `32435396307` 仅用于隔离 macOS 14 runner 变量：链接警告归零，
-构建和打包成功，但 CTest 为 98/100，两个测试超时。生命周期与 Release job 均按失败路径
-skipped。该实验不得合入或作为发布候选证据；物理 Mac、TCC/menu bar、Gatekeeper 与
-Win↔Mac 物理验收继续为 `NOT_RUN`。
+失败实验 `0b14ddfe4` / run `32435396307` 的根因已由 A5 `6457d481` 修复并集成到
+`32712c6b2` + `ea70650ff`。修复分支 run `32444914659` 为 `SUCCESS`：链接警告归零，
+macOS job `96662753324` CTest 100/100（37.76 s），Windows job `96662753384` CTest 99/99
+且 TEST-005 PASS，macOS lifecycle `96665719559` PASS。macOS artifact `9433863107` 的
+API digest 为 `89c4341b04a93e15487de9021068892236a46debf368bdd2b6e36fdd7f13fe9c`，lifecycle
+artifact `9434078894` 为 `cecbd4ceb7d2ec2c2d07302afc4045cb8781ec88f4884e57cc8cb2505312e9da`。
+此集成待创建产品标签并执行精确标签回归；物理 Mac、TCC/menu bar、Gatekeeper 与 Win↔Mac 物理验收
+继续为 `NOT_RUN`。
 
 ## 历史候选执行记录（2026-08-13）
 

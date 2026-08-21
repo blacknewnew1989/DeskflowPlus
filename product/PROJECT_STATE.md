@@ -11,7 +11,7 @@
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
 - Current phase: Phase 4 hosted 构建、打包和自动生命周期已完成；系统交互与物理验收保留 `NOT_RUN`
-- Last updated: 2026-08-20
+- Last updated: 2026-08-21
 - User action required during development: none
 
 ## Git 状态
@@ -21,7 +21,7 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `product/relaydesk-v1`
-- Current product implementation tip: `1b1a24739dea3775d64fa7987d30e9b37372a5c1`
+- Current product implementation tip: `ea70650ffe7efcf4c8d89de8b7d66545d238b2a6`
 - Current verified tag target: `c134126b95977ca6b97036be18dcfc33a4a3a09a`
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
 - Current implementation: v1 内部发布主链已组合。共享 Qt 外壳包含紧凑首页、权限分项、设备/传输区域、集中品牌资源、托盘后台生命周期、输入角色设置、可信设备撤销、手动地址管理和 `Ask` 冲突逐文件决策。接收方直接暂停/继续/取消已接入运行时；Windows 单机 GUI、输入核心、发现/文件监听和设置持久化已真实运行。macOS TCC/menu bar、物理 Win↔Mac 双机和 unsigned 提示交互仍为 `NOT_RUN`。
@@ -89,7 +89,7 @@
 | Current exact-SHA dual-platform Actions | PASS | 标签 `relaydesk-phase4-20260820-02`（目标 `c134126b95977ca6b97036be18dcfc33a4a3a09a`），run `32362194153` SUCCESS；Windows/macOS 打包、草稿 Release 与 macOS 生命周期均 PASS |
 | Windows single-host runtime | PASS | 精确 portable 实际完成七语言、托盘、手动地址、`deskflow-core.exe server` 及 24800 启停、UDP 24802、动态文件监听、传输中心和设置/登录启动重启持久化；见 WIN-020 |
 | Current branch dual-platform CI | PASS | 产品实现 `1b1a24739`；run `32433749495` SUCCESS：Windows 99/99（34.41 s）、macOS 100/100（37.91 s）、macOS 生命周期 19/19；release job 按分支运行规则 skipped |
-| macOS 14 单变量实验 | FAIL | `0b14ddfe4` / run `32435396307`：链接警告归零、构建打包成功，但 CTest 98/100 两项超时；生命周期/Release skipped，实验不得合入 |
+| macOS 14 单变量修复回归 | PASS | A5 `6457d481` / run `32444914659` SUCCESS：链接警告归零，macOS 100/100（37.76 s）、Windows 99/99（62.32 s，TEST-005 PASS）和 macOS 生命周期 19/19 PASS；已集成于 `32712c6b2` + `ea70650ff`，待产品标签回归 |
 
 状态只允许：`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`PASS`、`FAIL`、`NOT_RUN`。
 
@@ -174,6 +174,17 @@
   `0.0.0.0:24800` 并可停止；GUI 发现监听 `0.0.0.0:24802`，文件通道动态 TCP 同时监听
   IPv4/IPv6；手动地址、传输中心、传输设置及 HKCU 登录启动均经退出/重启验证并回滚。
 - 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned SmartScreen/Gatekeeper/签名交互：`NOT_RUN`。
+
+### macOS 14 修复集成（待产品标签回归）
+
+- A5 `6457d481` 已修复先前 macOS 14 实验的两项超时并集成至 `32712c6b2` + `ea70650ff`。
+  run `32444914659` `SUCCESS`：materials `96662753134`、macOS `96662753324`（100/100，37.76 s）、
+  Windows `96662753384`（99/99，62.32 s，TEST-005 PASS）和 macOS lifecycle `96665719559` 均成功。
+- artifacts：macOS `9433863107` / `89c4341b04a93e15487de9021068892236a46debf368bdd2b6e36fdd7f13fe9c`；
+  Windows `9434070187` / `cd80850ff5997d7785eab132b1efe42cb84445147518eb0b62fad28e19486622`；
+  lifecycle `9434078894` / `cecbd4ceb7d2ec2c2d07302afc4045cb8781ec88f4884e57cc8cb2505312e9da`。
+- 最后已验证标签仍为 `relaydesk-phase4-20260820-02`；本次集成待创建新标签并执行精确标签回归。TCC/menu bar
+  和物理 Win↔Mac 继续为 `NOT_RUN`。
 
 ### 后标签回归（未创建新标签）
 

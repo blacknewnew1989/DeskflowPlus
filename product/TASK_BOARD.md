@@ -21,6 +21,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | BRAND-002 | 实现原创“双设备 + 中继点”临时 Logo | A3/A4/A5 | `5c2092203`；SVG 单源、ICO/ICNS/DMG 同步及 macOS/Windows 品牌校验 PASS；精确标签平台包已生成并四方摘要一致 |
 | TRAY-001 | 完成最小化/关闭到托盘与后台生命周期 | A3/A4/A5 | `56568584f`；独立设置与同步安全停机已实现，Windows 单机 GUI 自动化、精确标签双平台构建和自动生命周期 PASS；macOS menu bar 与物理双机仍 `NOT_RUN` |
 | MAC-037 | 适配紧凑首页、权限能力门控和 macOS menu bar | A5/A3/A0 | `9ac7f0d79`；同一 PermissionSnapshot、三项能力门控、激活复检、template 图标与定向回归 PASS；待最终 App 系统权限前台往返实测 |
+| MAC-039 | macOS 14 runner 链接警告与超时回归 | A5/A0 | `6457d481` / run `32444914659` SUCCESS；链接警告归零、macOS 100/100、Windows 99/99（TEST-005 PASS）及 macOS lifecycle 19/19 PASS；修复已集成，待产品标签回归；TCC/menu bar 与物理验收仍 `NOT_RUN` |
 | CTRL-002 | 支持接收方直接暂停、继续和取消传输 | A6/A0 | 已集成接收方直接 pause/continue/cancel；原生串行 CTest 98/98 PASS，真实双机控制链路 `NOT_RUN` |
 | WIN-019 | 构建并运行验收最新 Windows unsigned 包 | A4/A7/A0 | 标签 `relaydesk-phase4-20260820-02` 的 hosted Windows 包、CTest 99/99、TEST-005 19/19 自动生命周期均 PASS；WIN-020 已补精确 portable 单机真实运行；unsigned SmartScreen/UAC 人工交互仍 `NOT_RUN` |
 
