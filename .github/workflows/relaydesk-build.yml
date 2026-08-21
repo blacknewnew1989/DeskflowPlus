@@ -178,17 +178,23 @@ jobs:
             run_stall_sample() {
               local name="$1"
               local selector="$2"
+              local output_name="${3:-$name}"
+              local tls_backend="${4:-}"
               local executable="build/src/unittests/relaydesk/app/$name"
-              local stdout_path="dist/macos-arm64/$name.stdout.txt"
-              local stderr_path="dist/macos-arm64/$name.stderr.txt"
-              local sample_path="dist/macos-arm64/$name.sample.txt"
+              local stdout_path="dist/macos-arm64/$output_name.stdout.txt"
+              local stderr_path="dist/macos-arm64/$output_name.stderr.txt"
+              local sample_path="dist/macos-arm64/$output_name.sample.txt"
 
               if [[ ! -x "$executable" ]]; then
                 echo "Missing diagnostic executable: $executable" >&2
                 return 1
               fi
 
-              "$executable" "$selector" >"$stdout_path" 2>"$stderr_path" &
+              if [[ -n "$tls_backend" ]]; then
+                QT_TLS_BACKEND="$tls_backend" "$executable" "$selector" >"$stdout_path" 2>"$stderr_path" &
+              else
+                "$executable" "$selector" >"$stdout_path" 2>"$stderr_path" &
+              fi
               local pid=$!
               sleep 20
               if kill -0 "$pid" 2>/dev/null; then
@@ -202,6 +208,9 @@ jobs:
               stoppingBeforeStreamingPublishesRetryableFailure:waiting-for-acceptance
             run_stall_sample RelayDeskAutoReconnectRuntimeTests \
               trustRevocationStopsReconnectAndDisconnectsPeer
+            run_stall_sample RelayDeskAutoReconnectRuntimeTests \
+              trustRevocationStopsReconnectAndDisconnectsPeer \
+              RelayDeskAutoReconnectRuntimeTestsOpenSsl openssl
             echo "macOS A5 TLS stall diagnostics collected; skipping full CTest." >&2
             exit 1
           fi
