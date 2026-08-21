@@ -191,7 +191,7 @@ jobs:
               fi
 
               if [[ -n "$tls_backend" ]]; then
-                QT_TLS_BACKEND="$tls_backend" "$executable" "$selector" >"$stdout_path" 2>"$stderr_path" &
+                RELAYDESK_TEST_OPENSSL_TLS=1 "$executable" "$selector" >"$stdout_path" 2>"$stderr_path" &
               else
                 "$executable" "$selector" >"$stdout_path" 2>"$stderr_path" &
               fi

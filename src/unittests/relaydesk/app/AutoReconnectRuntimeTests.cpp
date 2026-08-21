@@ -18,6 +18,7 @@
 #include <QHostAddress>
 #include <QPointer>
 #include <QSignalSpy>
+#include <QSslSocket>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QTest>
@@ -74,6 +75,13 @@ private Q_SLOTS:
 
 void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer()
 {
+#if defined(Q_OS_MACOS)
+  if (qEnvironmentVariableIsSet("RELAYDESK_TEST_OPENSSL_TLS")) {
+    QVERIFY(QSslSocket::availableBackends().contains(QStringLiteral("openssl")));
+    QVERIFY(QSslSocket::setActiveBackend(QStringLiteral("openssl")));
+    QCOMPARE(QSslSocket::activeBackend(), QStringLiteral("openssl"));
+  }
+#endif
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
   const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
