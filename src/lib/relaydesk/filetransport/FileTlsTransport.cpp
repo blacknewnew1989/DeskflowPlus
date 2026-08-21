@@ -12,6 +12,7 @@
 #include "relaydesk/trust/TlsPeerPinningPolicy.h"
 
 #include <QDateTime>
+#include <QDebug>
 #include <QSslCertificate>
 #include <QSslConfiguration>
 #include <QSslError>
@@ -86,7 +87,10 @@ FileTlsConnection::FileTlsConnection(
   m_handshakeTimer->setSingleShot(true);
 }
 
-FileTlsConnection::~FileTlsConnection() = default;
+FileTlsConnection::~FileTlsConnection()
+{
+  qInfo() << "RelayDesk FileTlsConnection destroy" << this << "socket state" << m_socket->state();
+}
 
 void FileTlsConnection::begin()
 {
@@ -95,7 +99,10 @@ void FileTlsConnection::begin()
   connect(m_socket, &QSslSocket::bytesWritten, this, [this](qint64) {
     Q_EMIT writeCapacityAvailable(queuedWriteBytes());
   });
-  connect(m_socket, &QSslSocket::disconnected, this, &FileTlsConnection::disconnected);
+  connect(m_socket, &QSslSocket::disconnected, this, [this]() {
+    qInfo() << "RelayDesk FileTlsConnection disconnected" << this;
+    Q_EMIT disconnected();
+  });
   connect(m_handshakeTimer, &QTimer::timeout, this, [this]() {
     fail(FileTlsError::HandshakeTimeout, QStringLiteral("file TLS handshake timed out"));
   });
@@ -157,7 +164,9 @@ FileTlsError FileTlsConnection::sendFrame(const Frame &frame, QString *diagnosti
 void FileTlsConnection::close()
 {
   m_handshakeTimer->stop();
+  qInfo() << "RelayDesk FileTlsConnection close begin" << this << "socket state" << m_socket->state();
   m_socket->disconnectFromHost();
+  qInfo() << "RelayDesk FileTlsConnection close returned" << this << "socket state" << m_socket->state();
 }
 
 void FileTlsConnection::handleEncrypted()
