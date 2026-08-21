@@ -6,6 +6,7 @@
 
 #include "relaydesk/trust/TlsIdentityAdapter.h"
 
+#include <QByteArray>
 #include <QFile>
 #include <QFileInfo>
 #include <QList>
@@ -77,6 +78,10 @@ TlsIdentitySnapshot TlsIdentityAdapter::inspect(const QString &certificatePath, 
 std::optional<QSslConfiguration>
 TlsIdentityAdapter::loadConfiguration(const QString &certificatePath, QString *diagnostic)
 {
+#if defined(Q_OS_MACOS)
+  // Keep SecureTransport's PEM private key out of the login keychain and its interactive authorization path.
+  qputenv("QT_SSL_USE_TEMPORARY_KEYCHAIN", QByteArrayLiteral("1"));
+#endif
   if (diagnostic != nullptr) {
     diagnostic->clear();
   }
