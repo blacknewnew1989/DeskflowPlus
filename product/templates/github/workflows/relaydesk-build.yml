@@ -212,8 +212,13 @@ jobs:
         run: |
           crash_dir="$HOME/Library/Logs/DiagnosticReports"
           if [[ -d "$crash_dir" ]]; then
-            find "$crash_dir" -maxdepth 1 -type f \
-              \( -name '*RelayDeskAutoReconnectRuntimeTests*' -o -name '*deskflow*' \) \
+            for attempt in $(seq 1 20); do
+              if find "$crash_dir" -maxdepth 1 -type f -name '*.ips' -mmin -5 -print -quit | grep -q .; then
+                break
+              fi
+              sleep 0.5
+            done
+            find "$crash_dir" -maxdepth 1 -type f -name '*.ips' -mmin -5 \
               -exec cp {} dist/macos-arm64/ \;
           fi
 
