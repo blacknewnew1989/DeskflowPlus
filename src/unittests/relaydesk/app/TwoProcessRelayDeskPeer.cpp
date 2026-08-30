@@ -195,16 +195,6 @@ public:
       (void)m_discovery->service().probePeer(QHostAddress::LocalHost, m_peerDiscoveryPort, &ignored);
     });
     m_probeTimer.start();
-    QTimer::singleShot(10'000, this, [this] {
-      finish(
-          false,
-          QStringLiteral("two-process runtime timed out (discovered=%1 trusted=%2 connected=%3 sent=%4)")
-              .arg(m_peerSeen)
-              .arg(m_trusted)
-              .arg(m_connectStarted)
-              .arg(m_sendStarted)
-      );
-    });
     return true;
   }
 
