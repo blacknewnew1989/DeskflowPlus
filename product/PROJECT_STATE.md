@@ -23,7 +23,7 @@
 - Current branch: `agent/a0/redevelop-p0`
 - Current product branch tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
-- Current verified redevelopment implementation tip: `b6a8852d0f1892ce5d5d493f8ec8fd85251101a9`
+- Current verified redevelopment implementation tip: `346025db6142ac34d3dccce0d3194d7d87e811ab`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
 - Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
@@ -44,6 +44,15 @@
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互留最终验收 |
 | R0-007 | PASS | A5 已在 `coord/platform-sync` 推送 clean-run ACK `0661191ae` 和 lifecycle 终态附录 `a8eb7e7eb`；准确分列重开发 ref 与未合入产品 ref，R0-002 跨平台闭环 |
 | NET-001 | PASS | 普通 Git push 已恢复并推送 `30593b53e`、`72008201e` 和 coordination commits；保留间歇风险记录 |
+
+### R3 当前纵向切片
+
+| ID | 状态 | 当前证据 / 下一步 |
+|---|---|---|
+| R3-CTRL-001 | PASS | receiver 通过 queued production intent 直接 pause/resume/cancel；Windows Debug/Release 独立 10/10，run `33333471632` Win #98、Mac #99 PASS |
+| R3-FILETREE-001 | NOT_RUN | 下一步扩展薄 peer，验证多 source、嵌套文件夹与空目录；不得混入断线恢复 |
+| R3-LISTENER-RESUME-001 | NOT_RUN | 现有 production 支持同对象 listener 重启续传，尚缺双进程非零 offset 证据 |
+| R3-PROCESS-RECOVERY-001 | NOT_RUN | 真正进程退出后的 session/outgoing bootstrap 尚未实现，不能用同对象 stop/start 冒充 |
 
 ### R0-002 最终证据
 
@@ -74,7 +83,7 @@
 | ID | 状态 | Owner | 当前证据 / 下一步 |
 |---|---|---|---|
 | PAIR-006 | PASS | A2/A3/A0 | `dc4b7efed`、`19e5ab583`、`3f6efb6d1`、`d4d312e88`、`088702900`；撤销确认、TLS 断开、重连拒绝与 520×380 更多菜单已接通；MSVC/Qt 6.10.1 六目标 CTest 6/6 PASS |
-| CTRL-002 | PASS | A6/A0 | 接收方直接 pause/continue/cancel 已集成；原生串行 CTest 98/98 PASS。真实双机控制链路仍为 `NOT_RUN`。 |
+| CTRL-002 | PASS | A6/A7/A0 | 接收方 queued production intent 已在独立 receiver 进程执行；Windows Debug/Release 各 10/10，run `33333471632` Win/Mac TwoProcess PASS。物理 Win-Mac 仍为 `FINAL_ACCEPTANCE_REQUIRED`。 |
 | DISC-005 | PASS | A2/A3/A0 | 手动地址录入、保存和定向探测已集成；原生串行 CTest 98/98 PASS。真实局域网发现链路仍为 `NOT_RUN`。 |
 | CONFLICT-003 | PASS | A6/A3/A0 | `Ask` 的逐文件用户决策和运行时链路已集成；原生串行 CTest 98/98 PASS。真实双机传输决策链路仍为 `NOT_RUN`。 |
 | WIN-019 | IN_PROGRESS | A4/A7/A0 | 精确标签 Windows 包与自动安装生命周期、Windows 单机七语言和托盘/关闭恢复 GUI 自动化均已 PASS；WIN-021 已消除本机 MSI v14.51 运行库门槛，安装/修复/卸载、服务、防火墙、开始菜单和 GUI 启动 PASS；unsigned SmartScreen/UAC 人工交互仍为 `NOT_RUN`。 |

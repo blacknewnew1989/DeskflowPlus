@@ -22,10 +22,10 @@ R0 当前结论：
 | 上游标签 | `v1.26.0` tag object `82fd4b78e4c8271a77420937b829f21d1cbe623d` | GitHub API |
 | 上游目标提交 | `760e3b99b00053647a96b405276bf614bd860075` | 解引用上游 annotated tag |
 | 产品远端分支 | `origin/product/relaydesk-v1` = `c544dc76fb4f29aefb6ef30c8acc4475b6778e07` | GitHub API |
-| 重开发分支 | `origin/agent/a0/redevelop-p0` = `b6a8852d0f1892ce5d5d493f8ec8fd85251101a9` | GitHub API 与普通 `ls-remote` |
+| 重开发分支 | `origin/agent/a0/redevelop-p0` = `346025db6142ac34d3dccce0d3194d7d87e811ab` | GitHub API 与普通 push 后复读 |
 | 重开发前锚点 | `relaydesk-pre-redevelop-20260830-01` = `c544dc76fb4f29aefb6ef30c8acc4475b6778e07` | GitHub refs API 创建后复读 |
 | 本地重开发 worktree | `F:\github\DeskflowPlus\working\relaydesk-redevelop-p0` | `git worktree list` |
-| 本地重开发分支 | `agent/a0/redevelop-p0@b6a8852d0f1892ce5d5d493f8ec8fd85251101a9`，跟踪同 SHA 远端 ref | `git status --branch` |
+| 本地重开发分支 | `agent/a0/redevelop-p0@346025db6142ac34d3dccce0d3194d7d87e811ab`，跟踪同 SHA 远端 ref | `git status --branch` |
 
 本地 `v1.26.0` 与 API 解引用结果一致，且 `760e3b99` 是当前产品提交的祖先。实时远端结论以
 GitHub API 为准，不使用本地 ref 冒充远端状态。
@@ -208,3 +208,18 @@ R0 已发送：
 2. 增加多文件/文件夹与断线续传的独立 E4 切片；
 3. 重建 R0-005 精确阶段标签、artifact 和草稿 Release 证据；
 4. 逐项把源码分类从候选升级为本轮可复用证据。
+
+## 9. R3 接收端双进程控制进展
+
+- 测试 owner `c6fb1f541` 只修改既有双进程薄 peer/controller；receiver 是唯一 control actor，
+  pause/cancel 通过下一事件轮次调用 production runtime，sender 只观察远端状态；
+- 独立 Windows 验收：Debug/Release `-functions`、单轮和 repeat10 全部 PASS，并复读结构化 JSON、
+  最终 SHA-256、`.part`/resume 清理和进程退出；
+- A0 合入 `346025db6142ac34d3dccce0d3194d7d87e811ab` 后只触发一次正常双平台 run
+  `33333471632`：Windows 100/100、macOS 101/101、TwoProcess 目标和两平台包/生命周期 PASS；
+- A5 本机会话因不是 macOS、无 `xcodebuild` 标记 `BLOCKED`，hosted macOS Release 只作平台回退，
+  macOS Debug 与物理验收不外推；
+- 完整证据见 `product/docs/reports/R3_TWO_PROCESS_CONTROL_RUNTIME.md`。
+
+下一顺序保持单一切片：先做多 source/嵌套文件夹/空目录双进程，再做同进程 listener 非零 offset
+恢复。真正进程退出恢复缺少 production session bootstrap，继续 `NOT_RUN`，不得用 stop/start 冒充。
