@@ -191,9 +191,13 @@ void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
   qInfo("R0_RECONNECT settings: trust saved");
 
   DeviceHomeModel model;
+  qInfo("R0_RECONNECT settings: device model constructed");
   PairingWizardModel pairingModel;
+  qInfo("R0_RECONNECT settings: pairing model constructed");
   DeviceDiscoveryRuntime discovery(localInfo, model, loopbackDiscovery());
+  qInfo("R0_RECONNECT settings: discovery runtime constructed");
   QString diagnostic;
+  qInfo("R0_RECONNECT settings: discovery start begin");
   QVERIFY2(discovery.start(&diagnostic), qPrintable(diagnostic));
   qInfo("R0_RECONNECT settings: discovery started");
   PairingTrustRuntime pairing(localInfo, trustPath, discovery, model, pairingModel);

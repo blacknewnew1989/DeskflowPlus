@@ -205,6 +205,17 @@ jobs:
           fi
           ctest --test-dir build/src/unittests -C Release --output-on-failure 2>&1 | tee dist/${{ matrix.target.name }}/ctest.log
 
+      - name: Collect macOS crash diagnostics
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          crash_dir="$HOME/Library/Logs/DiagnosticReports"
+          if [[ -d "$crash_dir" ]]; then
+            find "$crash_dir" -maxdepth 1 -type f \
+              \( -name '*RelayDeskAutoReconnectRuntimeTests*' -o -name '*deskflow*' \) \
+              -exec cp {} dist/macos-arm64/ \;
+          fi
+
       - name: Collect packages and SHA-256
         if: always()
         continue-on-error: true
