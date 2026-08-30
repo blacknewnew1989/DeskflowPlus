@@ -10,12 +10,12 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | ID | 状态 | Owner | 当前范围与完成条件 |
 |---|---|---|---|
 | R0-001 | PASS | A0/A1/A7 | 基线 `30593b53e` 已普通推送，源码分类、P0 `NOT_RUN` 矩阵和网络限制均已记录 |
-| R0-002 | IN_PROGRESS | A2/A5/A0 | settings-only 50/50 PASS、ordered macOS SIGABRT；`.ips` 为 heap guard corruption，专用 ASan ref 正在定位首次非法写 |
+| R0-002 | PASS | A2/A5/A0 | ASan 确认并修复两处测试回调 `stack-use-after-scope`；settings-only/ordered 各 50/50，ASan 101/101；clean run `33330456697` Win 100/100、Mac 101/101 |
 | R0-003 | PASS | A6/A7/A0 | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS，旧 debug 卡住未复现且不定性源码 |
 | R0-004 | PASS | A2/A5/A6/A7/A0 | E4 单向同机双进程：真实 discovery/pair/trust/TLS 1 MiB+ 文件；Win Debug/Release 10/10，run `33326619207` 双平台目标 PASS |
 | R0-005 | NOT_RUN | A4/A5/A7/A0 | 重建同 SHA Windows/macOS 平台证据、精确阶段标签、artifact 和草稿 Release |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | A0/用户 | 最终包完成后执行物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互 |
-| R0-007 | IN_PROGRESS | A0/A5 | R0-004 ACK `d12afd4cc` 已闭环；继续跟踪 R0-002 ASan 非法写栈和修复 ACK |
+| R0-007 | PASS | A0/A5 | clean-run macOS ACK `0661191ae` 已普通推送；重开发 ref `b6a8852d0` 与未合入产品 ref `c544dc76f` 分列闭环 |
 
 ## 重开发前历史看板
 
