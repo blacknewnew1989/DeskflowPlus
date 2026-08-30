@@ -11,7 +11,7 @@
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
 - Current phase: P0 重新开发 R0；旧 PASS 已降为历史候选证据，当前功能矩阵初始化为 `NOT_RUN`
-- Last updated: 2026-08-30
+- Last updated: 2026-08-31
 - User action required during development: none
 
 ## Git 状态
@@ -23,7 +23,7 @@
 - Current branch: `agent/a0/redevelop-p0`
 - Current product branch tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
-- Current redevelopment tip: `72008201e9ff5eb89ba9f2baabba9479a46785a4`
+- Current verified redevelopment implementation tip: `c9d5dceb8e09a6485b1e4c8defca6c7f2bc42358`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
 - Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
@@ -37,12 +37,12 @@
 | ID | 状态 | 当前证据 / 下一步 |
 |---|---|---|
 | R0-001 | PASS | 基线报告提交 `30593b53e` 已普通推送；远端分支、产品基线和上游 tag 均已 API 复读 |
-| R0-002 | IN_PROGRESS | `72008201e` 仅改测试；Windows fresh Debug 改前 20/20、改后 50/50 PASS，等待 macOS 精确 SHA 复验 |
+| R0-002 | IN_PROGRESS | macOS settings-only 50/50 PASS、ordered 可复现 SIGABRT；`.ips` 显示 main-thread heap guard corruption，ASan 诊断 ref `9a4fa2061` 正在定位首次非法写 |
 | R0-003 | PASS | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS；旧 debug 目录卡住未复现，不认定源码缺陷 |
-| R0-004 | NOT_RUN | 两个真实应用进程的发现、配对、文件和 UI 控制纵向链路尚未建立 |
+| R0-004 | PASS | E4 限定：同机双进程 discovery/pair/trust/TLS 单向 1 MiB+ 文件；Windows Debug/Release 10/10，run `33326619207` Win #98、Mac #99 PASS |
 | R0-005 | NOT_RUN | Windows/macOS 同 SHA 的精确阶段标签、artifact 和 Release 尚未执行 |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互留最终验收 |
-| R0-007 | IN_PROGRESS | A5 基线 ACK `862688b63` 已收到；A0 测试请求 `d854d55cd` 已推送，等待 macOS 精确 SHA 结果 |
+| R0-007 | IN_PROGRESS | A5 已推送分列 ACK `d12afd4cc`；R0-004 跨平台闭环，R0-002 ASan 结果继续通过 `coord/platform-sync` 跟踪 |
 | NET-001 | PASS | 普通 Git push 已恢复并推送 `30593b53e`、`72008201e` 和 coordination commits；保留间歇风险记录 |
 
 以下 2026-08-20 及更早内容全部为重开发前历史证据，只能用于选择候选测试和复现缺陷，不构成

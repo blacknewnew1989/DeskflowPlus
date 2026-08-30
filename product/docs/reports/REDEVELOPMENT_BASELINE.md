@@ -85,8 +85,9 @@ A0 随后从重开发 worktree 配置 `build/windows/r0-debug-fresh`，只构建
 - 改后 `RelayDeskAutoReconnectRuntimeTests`：连续 50/50 `PASS`，约 0.6 秒/轮；
 - `RelayDeskConflictResolverTests`：连续 50/50 `PASS`，总计 5.40 秒。
 
-因此旧目录卡住未在 fresh build 复现，不认定为当前源码缺陷。历史 macOS abort 的生产根因仍未
-证明；`72008201e` 是测试确定性收口，不是生产修复。R0-002 仍等待 macOS 精确 SHA 复验。
+因此旧目录卡住未在 fresh build 复现，不认定为当前源码缺陷。`72008201e` 是测试确定性收口，
+不是生产修复；后续 macOS A/B 已证明 ordered 场景存在跨用例 heap corruption，R0-002 继续按
+本报告问题表和独立诊断 ref 跟踪。
 
 ## 5. 源码分类
 
@@ -138,11 +139,11 @@ A0 随后从重开发 worktree 配置 `build/windows/r0-debug-fresh`，只构建
 | ID | 级别 | 状态 | 内容 |
 |---|---|---|---|
 | R0-001 | P0 | `PASS` | 基线 `30593b53e` 已普通推送，新状态和任务板已清除旧 PASS 的当前效力。 |
-| R0-002 | P1 | `IN_PROGRESS` | Windows 确定性测试 50/50 PASS；等待 macOS 对 `72008201e` 的最小目标 ACK。 |
+| R0-002 | P1 | `IN_PROGRESS` | macOS settings-only 50/50 PASS、ordered SIGABRT；`.ips` 证实 main-thread heap guard corruption，ASan 定位首次非法写。 |
 | R0-003 | P1 | `PASS` | fresh build 的 conflict resolver 连续 50/50 PASS，旧目录卡住未复现。 |
-| R0-004 | P1 | `NOT_RUN` | 建立两个真实应用进程的发现、配对、文件和 UI 控制纵向用例。 |
+| R0-004 | P1 | `PASS` | E4 限定同机双进程单向 1 MiB+ 文件链路；详见 `R0-004_TWO_PROCESS_RUNTIME.md`。 |
 | R0-005 | P1 | `NOT_RUN` | 重新建立 Windows/macOS 同 SHA 的阶段标签和 Release 证据。 |
-| CI-001 | P1 | `IN_PROGRESS` | `materials-diagnostic` job 可 soft-fail 且不阻塞包；需决定是否让资料错误使 run 失败。 |
+| CI-001 | P1 | `PASS` | 已移除 materials job soft-fail；完整 run `33326619207` 的资料校验成功。 |
 | DOC-001 | P2 | `IN_PROGRESS` | `IPlatformFileSafety.h` 的 `FileReceiver NOT_WIRED` 注释与现有 runtime wiring 不一致。 |
 | NET-001 | P2 | `PASS` | 普通 Git 已恢复并推送产品与 coordination 新提交；保留间歇连接风险但不使用手工提交对象流程。 |
 
@@ -166,10 +167,15 @@ R0 已发送：
 
 聊天、本地状态报告或未推送文件不能替代 GitHub 留言。A0 持续跟踪到 ACK 或明确阻塞。
 
+当前跨平台闭环补充：
+
+- R0-004 完整 run `33326619207` 为双平台成功；
+- A5 分列 ACK commit `d12afd4cca56ae0d366d554bf35edc1b18fded3c`；
+- R0-002 诊断使用独立 ref，不用诊断失败覆盖 R0-004 完整成功。
+
 下一最小切片按顺序为：
 
-1. 提交并普通推送 R0 基线；
-2. 建立确定性 `AutoReconnectRuntime` 生命周期失败测试；
-3. 使用可证明 SHA 的新鲜 build 单独复现 conflict resolver；
-4. 只在根因证实后修改最小生产切片；
-5. 逐项把源码分类从候选升级为本轮可复用证据。
+1. 使用 ASan 定位 R0-002 首次非法写，先补失败测试再做最小修复；
+2. 删除临时诊断 workflow 差异/ref，恢复正常双平台资料校验；
+3. 在 R0-004 薄宿主上增加暂停/继续/取消的独立 E4 切片；
+4. 逐项把源码分类从候选升级为本轮可复用证据。
