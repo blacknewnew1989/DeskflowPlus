@@ -201,10 +201,12 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
   QVERIFY(QFile::exists(senderJson.value(QStringLiteral("settingsFile")).toString()));
   QVERIFY(QFile::exists(receiverJson.value(QStringLiteral("settingsFile")).toString()));
   if (scenario == QStringLiteral("pause-resume")) {
-    QVERIFY(senderJson.value(QStringLiteral("pauseBytesStable")).toBool());
+    QVERIFY(receiverJson.value(QStringLiteral("receiverControlled")).toBool());
     QVERIFY(receiverJson.value(QStringLiteral("pauseBytesStable")).toBool());
+    QVERIFY(senderJson.value(QStringLiteral("senderObservedPause")).toBool());
   }
   if (scenario == QStringLiteral("cancel")) {
+    QVERIFY(receiverJson.value(QStringLiteral("receiverControlled")).toBool());
     QVERIFY(senderJson.value(QStringLiteral("cancelled")).toBool());
     QVERIFY(receiverJson.value(QStringLiteral("cancelled")).toBool());
     QVERIFY(receiverJson.value(QStringLiteral("cancelCleanupValid")).toBool());
