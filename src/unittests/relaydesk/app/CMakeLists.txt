@@ -106,9 +106,17 @@ if(WIN32)
       "$<TARGET_FILE:Qt6::QTlsBackendOpenSSLPlugin>"
       "$<TARGET_FILE_DIR:RelayDeskTwoProcessPeer>/tls"
   )
+  set(relaydesk_two_process_ssl_runtime_dir
+    "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin"
+  )
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(relaydesk_two_process_ssl_runtime_dir
+      "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/bin"
+    )
+  endif()
   file(GLOB relaydesk_two_process_ssl_runtime
-    "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/libcrypto-*.dll"
-    "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/libssl-*.dll"
+    "${relaydesk_two_process_ssl_runtime_dir}/libcrypto-*.dll"
+    "${relaydesk_two_process_ssl_runtime_dir}/libssl-*.dll"
   )
   foreach(runtime_file ${relaydesk_two_process_ssl_runtime})
     add_custom_command(
