@@ -22,8 +22,8 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | ID | 状态 | Owner | 当前范围与完成条件 |
 |---|---|---|---|
 | R3-CTRL-001 | PASS | A6/A7/A0 | receiver 双进程 queued pause/resume/cancel；Windows 两配置独立 10/10，run `33333471632` Win 100/100、Mac 101/101；macOS 本机 Debug `BLOCKED` |
-| R3-FILETREE-001 | NOT_RUN | A6/A7/A0 | 多 source、嵌套文件夹、空目录的同机双进程完整树与摘要 |
-| R3-LISTENER-RESUME-001 | NOT_RUN | A6/A7/A0 | listener 中断后从非零 durable offset 恢复；限定同一 peer 进程 |
+| R3-FILETREE-001 | PASS | A6/A7/A0 | 同机双进程一次 send 完成独立文件、嵌套文件夹、空目录精确树与摘要；run `33341572421` 双平台目标 PASS |
+| R3-LISTENER-RESUME-001 | PASS | A6/A7/A0 | 同一 peer 对象 listener 中断后从非零 durable offset 恢复；完成态 sidecar 清理已修复，fresh Win/hosted Win+Mac PASS |
 | R3-PROCESS-RECOVERY-001 | NOT_RUN | A6/A0 | 真正进程重建的 outgoing/incoming session 持久化与恢复 bootstrap 尚未实现 |
 
 ## 重开发前历史看板

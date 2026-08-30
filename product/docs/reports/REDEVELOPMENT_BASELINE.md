@@ -22,10 +22,10 @@ R0 当前结论：
 | 上游标签 | `v1.26.0` tag object `82fd4b78e4c8271a77420937b829f21d1cbe623d` | GitHub API |
 | 上游目标提交 | `760e3b99b00053647a96b405276bf614bd860075` | 解引用上游 annotated tag |
 | 产品远端分支 | `origin/product/relaydesk-v1` = `c544dc76fb4f29aefb6ef30c8acc4475b6778e07` | GitHub API |
-| 重开发分支 | `origin/agent/a0/redevelop-p0` = `346025db6142ac34d3dccce0d3194d7d87e811ab` | GitHub API 与普通 push 后复读 |
+| 重开发分支 | `origin/agent/a0/redevelop-p0` = `200303da19cb8e10e613449bb3421e5bb0ca6c36` | GitHub API 与普通 push 后复读 |
 | 重开发前锚点 | `relaydesk-pre-redevelop-20260830-01` = `c544dc76fb4f29aefb6ef30c8acc4475b6778e07` | GitHub refs API 创建后复读 |
 | 本地重开发 worktree | `F:\github\DeskflowPlus\working\relaydesk-redevelop-p0` | `git worktree list` |
-| 本地重开发分支 | `agent/a0/redevelop-p0@346025db6142ac34d3dccce0d3194d7d87e811ab`，跟踪同 SHA 远端 ref | `git status --branch` |
+| 本地重开发分支 | `agent/a0/redevelop-p0@200303da19cb8e10e613449bb3421e5bb0ca6c36`，跟踪同 SHA 远端 ref | `git status --branch` |
 
 本地 `v1.26.0` 与 API 解引用结果一致，且 `760e3b99` 是当前产品提交的祖先。实时远端结论以
 GitHub API 为准，不使用本地 ref 冒充远端状态。
@@ -223,3 +223,19 @@ R0 已发送：
 
 下一顺序保持单一切片：先做多 source/嵌套文件夹/空目录双进程，再做同进程 listener 非零 offset
 恢复。真正进程退出恢复缺少 production session bootstrap，继续 `NOT_RUN`，不得用 stop/start 冒充。
+
+## 10. R3 文件树与 listener resume 进展
+
+- `R3-FILETREE-001`：一次 production send 传输独立文件与嵌套文件夹，精确树、空目录、bytes、
+  SHA-256、同 transferId 与无 `.part` 已通过独立 fresh Windows 两配置验收；
+- `aada14580`：红测证明恢复完成遗留 sidecar，production 修复统一在 publishCompleted 前删除；
+- `R3-LISTENER-RESUME-001`：同一 peer 对象 listener stop/start，从 durable 1 MiB 后非零恢复；sender/
+  receiver 首条恢复进度、状态顺序、SHA、sidecar/part 清理均有结构化证据；
+- `813f7fc94` 仅增加 failure-only scope guard；成功路径零 I/O，历史 `5258` 无上下文时序失败保留；
+- 唯一集成 run `33341572421@200303da1`：Windows 100/100、macOS 101/101，FileTransferRuntime、
+  TwoProcess、Windows TEST-005 和 macOS lifecycle 全部 PASS；
+- 完整证据见 `product/docs/reports/R3_FILETREE_LISTENER_RESUME_RUNTIME.md`。
+
+下一 production 缺口是 `R3-PROCESS-RECOVERY-001`：真正进程退出后恢复同一 transferId。现有
+ResumeStore 不含 outgoing canonical manifest/source bindings 或 receiver offer/options/session bootstrap，
+不得把已完成的 listener stop/start 外推为进程重建恢复。

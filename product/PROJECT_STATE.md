@@ -23,7 +23,7 @@
 - Current branch: `agent/a0/redevelop-p0`
 - Current product branch tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
-- Current verified redevelopment implementation tip: `346025db6142ac34d3dccce0d3194d7d87e811ab`
+- Current verified redevelopment implementation tip: `200303da19cb8e10e613449bb3421e5bb0ca6c36`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
 - Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
@@ -50,8 +50,8 @@
 | ID | 状态 | 当前证据 / 下一步 |
 |---|---|---|
 | R3-CTRL-001 | PASS | receiver 通过 queued production intent 直接 pause/resume/cancel；Windows Debug/Release 独立 10/10，run `33333471632` Win #98、Mac #99 PASS |
-| R3-FILETREE-001 | NOT_RUN | 下一步扩展薄 peer，验证多 source、嵌套文件夹与空目录；不得混入断线恢复 |
-| R3-LISTENER-RESUME-001 | NOT_RUN | 现有 production 支持同对象 listener 重启续传，尚缺双进程非零 offset 证据 |
+| R3-FILETREE-001 | PASS | 一次 production send 传输独立文件+嵌套文件夹+空目录；fresh Win 两配置 10/10，run `33341572421` Win #98、Mac #99 PASS |
+| R3-LISTENER-RESUME-001 | PASS | 同一 peer 对象 listener stop/start 后从非零 durable offset 恢复；sidecar production 清理已修复，fresh Win 两配置 10/10、hosted Win/Mac PASS |
 | R3-PROCESS-RECOVERY-001 | NOT_RUN | 真正进程退出后的 session/outgoing bootstrap 尚未实现，不能用同对象 stop/start 冒充 |
 
 ### R0-002 最终证据
