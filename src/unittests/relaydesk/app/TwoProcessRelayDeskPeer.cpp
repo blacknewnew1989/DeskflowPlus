@@ -36,6 +36,11 @@ using namespace ::relaydesk::transfer;
 namespace {
 
 enum class Role { Sender, Receiver };
+enum class Scenario { Complete, PauseResume, Cancel };
+
+constexpr quint64 kControlThresholdBytes = 1024U * 1024U;
+constexpr int kPauseObservationMs = 200;
+constexpr int kPauseResumeDelayMs = 500;
 
 QByteArray fileSha256(const QString &path)
 {
@@ -55,10 +60,11 @@ bool containsPartFile(const QString &root)
 class Peer final : public QObject
 {
 public:
-  Peer(Role role, QString root, quint16 discoveryPort, quint16 peerDiscoveryPort, QString sourcePath,
-       QByteArray expectedSha256, QString resultPath, QObject *parent = nullptr)
+  Peer(Role role, Scenario scenario, QString root, quint16 discoveryPort, quint16 peerDiscoveryPort,
+       QString sourcePath, QByteArray expectedSha256, QString resultPath, QObject *parent = nullptr)
       : QObject(parent),
         m_role(role),
+        m_scenario(scenario),
         m_root(std::move(root)),
         m_discoveryPort(discoveryPort),
         m_peerDiscoveryPort(peerDiscoveryPort),
@@ -125,6 +131,7 @@ public:
 
     FileTransferRuntimeOptions transferOptions;
     transferOptions.listenAddress = QHostAddress::LocalHost;
+    transferOptions.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
     m_files = std::make_unique<FileTransferRuntime>(
         m_local->deviceId, m_pairing->trustedDevices(), *m_discovery, m_pemPath, std::move(transferOptions), this
     );
@@ -154,6 +161,9 @@ public:
       if (m_role == Role::Receiver && peer == m_peerId) {
         m_senderDisconnected = true;
         finishReceiverIfComplete();
+      } else if (m_role == Role::Sender && m_scenario == Scenario::Cancel && peer == m_peerId &&
+                 m_senderCancelled) {
+        finish(true, {});
       }
     });
     connect(m_files.get(), &IFileTransferService::incomingOffer, this, [this](const IncomingOffer &offer) {
@@ -165,25 +175,10 @@ public:
       }
       m_files->accept(offer.offer.transferId, {.destinationRoot = destination});
     });
-    connect(m_files.get(), &IFileTransferService::transferChanged, this, [this](const TransferSnapshot &snapshot) {
-      if (snapshot.state == TransferState::Failed || snapshot.state == TransferState::Interrupted) {
-        finish(false, QStringLiteral("transfer did not complete"));
-        return;
-      }
-      if (snapshot.state != TransferState::Completed) return;
-      if (m_role == Role::Sender && snapshot.direction == TransferDirection::Sending) {
-        finish(true, {});
-      } else if (m_role == Role::Receiver && snapshot.direction == TransferDirection::Receiving) {
-        const auto received = QDir(m_root).filePath(QStringLiteral("receive/") + QFileInfo(m_sourcePath).fileName());
-        if (fileSha256(received) != m_expectedSha256 ||
-            containsPartFile(QDir(m_root).filePath(QStringLiteral("receive")))) {
-          finish(false, QStringLiteral("receiver completion integrity check failed"));
-        } else {
-          m_receiverTransferCompleted = true;
-          finishReceiverIfComplete();
-        }
-      }
-    });
+    connect(
+        m_files.get(), &IFileTransferService::transferChanged, this,
+        [this](const TransferSnapshot &snapshot) { transferChanged(snapshot); }
+    );
     connect(m_files.get(), &FileTransferRuntime::errorOccurred, this, [this](auto, auto, const QString &diagnostic) {
       if (!m_finished) finish(false, diagnostic);
     });
@@ -247,6 +242,92 @@ private:
     }
   }
 
+  void transferChanged(const TransferSnapshot &snapshot)
+  {
+    if (snapshot.state == TransferState::Failed || snapshot.state == TransferState::Interrupted) {
+      finish(false, QStringLiteral("transfer did not complete"));
+      return;
+    }
+    if (snapshot.direction == TransferDirection::Sending && m_role == Role::Sender) {
+      if (m_scenario == Scenario::PauseResume) {
+        if (!m_pauseRequested && snapshot.state == TransferState::Transferring &&
+            snapshot.progress.completedBytes >= kControlThresholdBytes) {
+          m_pauseRequested = true;
+          m_files->pause(snapshot.id);
+        }
+        if (m_pauseRequested && snapshot.state == TransferState::Paused) schedulePauseChecks(snapshot);
+        if (snapshot.state == TransferState::Completed) {
+          finish(m_pauseBytesStable, m_pauseBytesStable ? QString{} : QStringLiteral("pause bytes were not stable"));
+        }
+        return;
+      }
+      if (m_scenario == Scenario::Cancel) {
+        if (!m_cancelRequested && snapshot.state == TransferState::Transferring &&
+            snapshot.progress.completedBytes >= kControlThresholdBytes) {
+          m_cancelRequested = true;
+          m_files->cancel(snapshot.id, {.partialDisposition = PartialDisposition::Remove});
+        }
+        if (m_cancelRequested && snapshot.state == TransferState::Cancelled) m_senderCancelled = true;
+        return;
+      }
+      if (snapshot.state == TransferState::Completed) finish(true, {});
+      return;
+    }
+    if (snapshot.direction != TransferDirection::Receiving || m_role != Role::Receiver) return;
+    if (m_scenario == Scenario::PauseResume && snapshot.state == TransferState::Paused) {
+      schedulePauseChecks(snapshot);
+      return;
+    }
+    if (m_scenario == Scenario::Cancel && snapshot.state == TransferState::Cancelled) {
+      const auto receiveRoot = QDir(m_root).filePath(QStringLiteral("receive"));
+      const auto incomingRoot = QDir(receiveRoot).filePath(QStringLiteral(".incoming/%1").arg(snapshot.id.toString()));
+      const auto resumePath = QDir(receiveRoot).filePath(
+          QStringLiteral(".incoming/resume-active/%1.resume.cbor").arg(snapshot.id.toString())
+      );
+      m_cancelCleanupValid = !containsPartFile(receiveRoot) && !QFileInfo::exists(incomingRoot) &&
+                             !QFileInfo::exists(resumePath);
+      m_receiverCancelled = true;
+      finish(m_cancelCleanupValid, m_cancelCleanupValid ? QString{} : QStringLiteral("cancel cleanup failed"));
+      return;
+    }
+    if (snapshot.state == TransferState::Completed) {
+      const auto received = QDir(m_root).filePath(QStringLiteral("receive/") + QFileInfo(m_sourcePath).fileName());
+      const bool valid = fileSha256(received) == m_expectedSha256 &&
+                         !containsPartFile(QDir(m_root).filePath(QStringLiteral("receive")));
+      if (!valid) {
+        finish(false, QStringLiteral("receiver completion integrity check failed"));
+      } else if (m_scenario != Scenario::PauseResume || m_pauseBytesStable) {
+        m_receiverTransferCompleted = true;
+        finishReceiverIfComplete();
+      } else {
+        finish(false, QStringLiteral("pause bytes were not stable"));
+      }
+    }
+  }
+
+  void schedulePauseChecks(const TransferSnapshot &snapshot)
+  {
+    if (m_pauseCheckScheduled) return;
+    m_pauseCheckScheduled = true;
+    const auto transferId = snapshot.id;
+    const auto pausedBytes = snapshot.progress.completedBytes;
+    QTimer::singleShot(kPauseObservationMs, this, [this, transferId, pausedBytes] {
+      for (const auto &current : m_files->activeTransfers()) {
+        if (current.id == transferId) {
+          m_pauseBytesStable = current.state == TransferState::Paused && current.progress.completedBytes == pausedBytes;
+          if (!m_pauseBytesStable) finish(false, QStringLiteral("pause bytes advanced"));
+          return;
+        }
+      }
+      finish(false, QStringLiteral("paused transfer disappeared"));
+    });
+    if (m_role == Role::Sender) {
+      QTimer::singleShot(kPauseResumeDelayMs, this, [this, transferId] {
+        if (!m_finished) m_files->resume(transferId);
+      });
+    }
+  }
+
   void finish(bool passed, const QString &error)
   {
     if (m_finished || m_finishQueued) return;
@@ -268,6 +349,9 @@ private:
         {QStringLiteral("trusted"), m_trusted},
         {QStringLiteral("discovered"), m_peerSeen},
         {QStringLiteral("filePort"), static_cast<int>(m_files == nullptr ? 0 : m_files->listeningPort())},
+        {QStringLiteral("pauseBytesStable"), m_pauseBytesStable},
+        {QStringLiteral("cancelCleanupValid"), m_cancelCleanupValid},
+        {QStringLiteral("cancelled"), m_role == Role::Sender ? m_senderCancelled : m_receiverCancelled},
     };
     QSaveFile output(m_resultPath);
     if (output.open(QIODevice::WriteOnly)) {
@@ -285,6 +369,7 @@ private:
   }
 
   Role m_role;
+  Scenario m_scenario;
   QString m_root;
   quint16 m_discoveryPort;
   quint16 m_peerDiscoveryPort;
@@ -311,6 +396,13 @@ private:
   bool m_receiverTransferCompleted = false;
   bool m_senderDisconnected = false;
   bool m_trusted = false;
+  bool m_pauseRequested = false;
+  bool m_pauseCheckScheduled = false;
+  bool m_pauseBytesStable = false;
+  bool m_cancelRequested = false;
+  bool m_senderCancelled = false;
+  bool m_receiverCancelled = false;
+  bool m_cancelCleanupValid = false;
 };
 
 } // namespace
@@ -336,24 +428,35 @@ int main(int argc, char *argv[])
   QCommandLineOption resultOption(
       QStringLiteral("result"), QStringLiteral("terminal result JSON"), QStringLiteral("path")
   );
-  parser.addOptions({roleOption, rootOption, portOption, peerPortOption, sourceOption, shaOption, resultOption});
+  QCommandLineOption scenarioOption(
+      QStringLiteral("scenario"), QStringLiteral("complete, pause-resume, or cancel"), QStringLiteral("name")
+  );
+  parser.addOptions(
+      {roleOption, scenarioOption, rootOption, portOption, peerPortOption, sourceOption, shaOption, resultOption}
+  );
   parser.process(application);
 
   const auto roleText = parser.value(roleOption);
   const auto role = roleText == QStringLiteral("sender") ? Role::Sender
                   : roleText == QStringLiteral("receiver") ? Role::Receiver : Role::Sender;
+  const auto scenarioText = parser.value(scenarioOption);
+  const auto scenario = scenarioText == QStringLiteral("complete") ? Scenario::Complete
+                      : scenarioText == QStringLiteral("pause-resume") ? Scenario::PauseResume
+                      : scenarioText == QStringLiteral("cancel") ? Scenario::Cancel : Scenario::Complete;
   bool localPortOk = false;
   bool peerPortOk = false;
   const auto localPort = parser.value(portOption).toUShort(&localPortOk);
   const auto peerPort = parser.value(peerPortOption).toUShort(&peerPortOk);
   const auto expected = QByteArray::fromHex(parser.value(shaOption).toLatin1());
-  if ((roleText != QStringLiteral("sender") && roleText != QStringLiteral("receiver")) || !localPortOk || !peerPortOk ||
+  if ((roleText != QStringLiteral("sender") && roleText != QStringLiteral("receiver")) ||
+      (scenarioText != QStringLiteral("complete") && scenarioText != QStringLiteral("pause-resume") &&
+       scenarioText != QStringLiteral("cancel")) || !localPortOk || !peerPortOk ||
       localPort == 0 || peerPort == 0 || parser.value(rootOption).isEmpty() || parser.value(resultOption).isEmpty() ||
       parser.value(sourceOption).isEmpty() || expected.size() != 32) {
     return 2;
   }
   Peer peer(
-      role, parser.value(rootOption), localPort, peerPort, parser.value(sourceOption), expected,
+      role, scenario, parser.value(rootOption), localPort, peerPort, parser.value(sourceOption), expected,
       parser.value(resultOption)
   );
   QString error;
