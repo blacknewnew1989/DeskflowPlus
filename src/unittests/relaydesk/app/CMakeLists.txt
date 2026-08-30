@@ -85,27 +85,27 @@ create_test(
 add_executable(RelayDeskTwoProcessPeer TwoProcessRelayDeskPeer.cpp)
 target_link_libraries(RelayDeskTwoProcessPeer PRIVATE relaydesk_app net Qt6::Core)
 
-function(relaydesk_copy_qt_runtime target)
-  foreach(qt_target Qt6::Core Qt6::Gui Qt6::Network Qt6::Test Qt6::Widgets)
-    add_custom_command(
-      TARGET ${target}
-      POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:${qt_target}>"
-        "$<TARGET_FILE_DIR:${target}>"
-    )
-  endforeach()
-endfunction()
-relaydesk_copy_qt_runtime(RelayDeskTwoProcessPeer)
-add_custom_command(
-  TARGET RelayDeskTwoProcessPeer
-  POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RelayDeskTwoProcessPeer>/tls"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "$<TARGET_FILE:Qt6::QTlsBackendOpenSSLPlugin>"
-    "$<TARGET_FILE_DIR:RelayDeskTwoProcessPeer>/tls"
-)
 if(WIN32)
+  function(relaydesk_copy_qt_runtime target)
+    foreach(qt_target Qt6::Core Qt6::Gui Qt6::Network Qt6::Test Qt6::Widgets)
+      add_custom_command(
+        TARGET ${target}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "$<TARGET_FILE:${qt_target}>"
+          "$<TARGET_FILE_DIR:${target}>"
+      )
+    endforeach()
+  endfunction()
+  relaydesk_copy_qt_runtime(RelayDeskTwoProcessPeer)
+  add_custom_command(
+    TARGET RelayDeskTwoProcessPeer
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RelayDeskTwoProcessPeer>/tls"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "$<TARGET_FILE:Qt6::QTlsBackendOpenSSLPlugin>"
+      "$<TARGET_FILE_DIR:RelayDeskTwoProcessPeer>/tls"
+  )
   file(GLOB relaydesk_two_process_ssl_runtime
     "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/libcrypto-*.dll"
     "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/libssl-*.dll"
@@ -133,4 +133,6 @@ target_compile_definitions(
   RelayDeskTwoProcessRuntimeTests
   PRIVATE RELAYDESK_TWO_PROCESS_PEER_PATH="$<TARGET_FILE:RelayDeskTwoProcessPeer>"
 )
-relaydesk_copy_qt_runtime(RelayDeskTwoProcessRuntimeTests)
+if(WIN32)
+  relaydesk_copy_qt_runtime(RelayDeskTwoProcessRuntimeTests)
+endif()
