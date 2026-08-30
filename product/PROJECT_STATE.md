@@ -42,7 +42,7 @@
 | R0-004 | PASS | E4 限定：同机双进程 discovery/pair/trust/TLS 单向 1 MiB+ 文件；Windows Debug/Release 10/10，run `33326619207` Win #98、Mac #99 PASS |
 | R0-005 | NOT_RUN | Windows/macOS 同 SHA 的精确阶段标签、artifact 和 Release 尚未执行 |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互留最终验收 |
-| R0-007 | PASS | A5 已在 `coord/platform-sync` 推送 clean-run ACK `0661191ae`；准确分列重开发 ref 与未合入产品 ref，R0-002 跨平台闭环 |
+| R0-007 | PASS | A5 已在 `coord/platform-sync` 推送 clean-run ACK `0661191ae` 和 lifecycle 终态附录 `a8eb7e7eb`；准确分列重开发 ref 与未合入产品 ref，R0-002 跨平台闭环 |
 | NET-001 | PASS | 普通 Git push 已恢复并推送 `30593b53e`、`72008201e` 和 coordination commits；保留间歇风险记录 |
 
 ### R0-002 最终证据

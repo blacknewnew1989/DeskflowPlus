@@ -198,6 +198,9 @@ R0 已发送：
 - R0-002 clean-run ACK：`product/working/platform-sync/macos/20260830-192708Z-R0-002-macos-clean-final-run-ack.md`，
   coordination commit `0661191ae9e9883323ea0ee24cf011e30ce8ecee`；macOS 101/101、AutoReconnect #95、
   TwoProcess #99 和 artifact digest 已回传，未外推物理验收。
+- lifecycle 终态附录：`product/working/platform-sync/macos/20260830-193655Z-R0-002-macos-clean-final-lifecycle-addendum.md`，
+  coordination commit `a8eb7e7ebc8dc1d567ddd3fa3994313e06808e09`；job `99309748733` 与 evidence
+  artifact `9737670033` 为 `PASS`，仍只限 hosted isolated lifecycle。
 
 下一最小切片按顺序为：
 
