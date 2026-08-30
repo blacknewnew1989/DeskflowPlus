@@ -282,6 +282,10 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
   if (scenario == QStringLiteral("file-tree")) {
     QVERIFY(!senderJson.value(QStringLiteral("transferId")).toString().isEmpty());
     QVERIFY(!receiverJson.value(QStringLiteral("transferId")).toString().isEmpty());
+    QCOMPARE(
+        senderJson.value(QStringLiteral("transferId")).toString(),
+        receiverJson.value(QStringLiteral("transferId")).toString()
+    );
     QCOMPARE(senderJson.value(QStringLiteral("completedFiles")).toVariant().toULongLong(), expectedCompletedFiles);
     QCOMPARE(receiverJson.value(QStringLiteral("completedFiles")).toVariant().toULongLong(), expectedCompletedFiles);
     QCOMPARE(senderJson.value(QStringLiteral("completedBytes")).toVariant().toULongLong(), expectedCompletedBytes);
