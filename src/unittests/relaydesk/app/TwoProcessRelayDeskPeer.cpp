@@ -282,7 +282,9 @@ private:
       if (!m_receiverControlIssued && snapshot.state == TransferState::Transferring &&
           snapshot.progress.completedBytes >= kControlThresholdBytes) {
         m_receiverControlIssued = true;
-        m_files->pause(snapshot.id);
+        QTimer::singleShot(0, this, [this, transferId = snapshot.id] {
+          if (!m_finished) m_files->pause(transferId);
+        });
       }
       if (m_receiverControlIssued && snapshot.state == TransferState::Paused) scheduleReceiverResume(snapshot);
       if (snapshot.state == TransferState::Completed) {
@@ -303,7 +305,9 @@ private:
       if (!m_receiverControlIssued && snapshot.state == TransferState::Transferring &&
           snapshot.progress.completedBytes >= kControlThresholdBytes) {
         m_receiverControlIssued = true;
-        m_files->cancel(snapshot.id, {.partialDisposition = PartialDisposition::Remove});
+        QTimer::singleShot(0, this, [this, transferId = snapshot.id] {
+          if (!m_finished) m_files->cancel(transferId, {.partialDisposition = PartialDisposition::Remove});
+        });
       }
       if (snapshot.state != TransferState::Cancelled) return;
       const auto receiveRoot = QDir(m_root).filePath(QStringLiteral("receive"));
