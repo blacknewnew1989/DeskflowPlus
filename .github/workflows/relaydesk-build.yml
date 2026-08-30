@@ -22,7 +22,6 @@ jobs:
   materials-diagnostic:
     name: Development materials diagnostic
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
