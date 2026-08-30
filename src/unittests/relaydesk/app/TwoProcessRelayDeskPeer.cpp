@@ -319,7 +319,8 @@ private:
           }
         }
         if (snapshot.state == TransferState::Completed) {
-          finish(m_senderInterrupted && m_senderResuming, QStringLiteral("sender listener resume states missing"));
+          const bool resumed = m_senderInterrupted && m_senderResuming;
+          finish(resumed, resumed ? QString{} : QStringLiteral("sender listener resume states missing"));
         }
         return;
       }

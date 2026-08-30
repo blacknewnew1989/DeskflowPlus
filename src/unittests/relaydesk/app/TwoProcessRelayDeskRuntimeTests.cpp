@@ -271,6 +271,8 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
       receiverJson.value(QStringLiteral("passed")).toBool(),
       qPrintable(receiverJson.value(QStringLiteral("error")).toString())
   );
+  QCOMPARE(senderJson.value(QStringLiteral("error")).toString(), QString{});
+  QCOMPARE(receiverJson.value(QStringLiteral("error")).toString(), QString{});
   QVERIFY(senderJson.value(QStringLiteral("discovered")).toBool());
   QVERIFY(receiverJson.value(QStringLiteral("discovered")).toBool());
   QVERIFY(senderJson.value(QStringLiteral("trusted")).toBool());
