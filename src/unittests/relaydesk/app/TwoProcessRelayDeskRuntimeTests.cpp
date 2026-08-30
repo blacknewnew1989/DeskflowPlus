@@ -13,6 +13,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QUdpSocket>
 #include <QTest>
@@ -253,6 +254,17 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
 
   const auto senderJson = readResult(senderResult);
   const auto receiverJson = readResult(receiverResult);
+  const auto preserveValidationFailure = qScopeGuard([&] {
+    if (QTest::currentTestFailed()) {
+      temporary.setAutoRemove(false);
+      qCritical().noquote() << processEvidence(
+          scenario, temporary.path(), QStringLiteral("sender"), sender, senderResult
+      );
+      qCritical().noquote() << processEvidence(
+          scenario, temporary.path(), QStringLiteral("receiver"), receiver, receiverResult
+      );
+    }
+  });
   if (sender.exitCode() != 0 || senderJson.isEmpty()) {
     temporary.setAutoRemove(false);
     QFAIL(qPrintable(processEvidence(scenario, temporary.path(), QStringLiteral("sender"), sender, senderResult)));
