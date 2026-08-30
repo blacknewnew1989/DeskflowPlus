@@ -197,6 +197,7 @@ jobs:
             run_reconnect_case dist/${{ matrix.target.name }}/autoreconnect-settings-only.log \
               settingsRefreshReplaysExistingTrustedSnapshot || single_status=$?
             run_reconnect_case dist/${{ matrix.target.name }}/autoreconnect-ordered.log \
+              -nocrashhandler \
               trustRevocationStopsReconnectAndDisconnectsPeer \
               settingsRefreshReplaysExistingTrustedSnapshot || ordered_status=$?
             if [[ "$single_status" -ne 0 || "$ordered_status" -ne 0 ]]; then
