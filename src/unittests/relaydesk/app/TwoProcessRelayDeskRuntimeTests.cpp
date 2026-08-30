@@ -50,14 +50,36 @@ class TwoProcessRelayDeskRuntimeTests final : public QObject
 
 private Q_SLOTS:
   void discoveryPairingAndFileTransferUseTwoIndependentProcesses();
+  void pauseAndResumeUseTwoIndependentProcesses();
+  void cancelUsesTwoIndependentProcesses();
+
+private:
+  void runScenario(const QString &scenario);
 };
 
 void TwoProcessRelayDeskRuntimeTests::discoveryPairingAndFileTransferUseTwoIndependentProcesses()
 {
+  runScenario(QStringLiteral("complete"));
+}
+
+void TwoProcessRelayDeskRuntimeTests::pauseAndResumeUseTwoIndependentProcesses()
+{
+  runScenario(QStringLiteral("pause-resume"));
+}
+
+void TwoProcessRelayDeskRuntimeTests::cancelUsesTwoIndependentProcesses()
+{
+  runScenario(QStringLiteral("cancel"));
+}
+
+void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
+{
   QTemporaryDir temporary;
   QVERIFY(temporary.isValid());
   const auto sourcePath = temporary.filePath(QStringLiteral("payload.bin"));
-  const QByteArray sourceBytes(1024 * 1024 + 37, '\x6a');
+  const qsizetype sourceSize =
+      scenario == QStringLiteral("complete") ? 1024 * 1024 + 37 : 12 * 1024 * 1024 + 113;
+  const QByteArray sourceBytes(sourceSize, '\x6a');
   QFile source(sourcePath);
   QVERIFY(source.open(QIODevice::WriteOnly));
   QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
@@ -86,6 +108,7 @@ void TwoProcessRelayDeskRuntimeTests::discoveryPairingAndFileTransferUseTwoIndep
   receiver.setProgram(peer);
   receiver.setArguments({
       QStringLiteral("--role"), QStringLiteral("receiver"), QStringLiteral("--root"), receiverRoot,
+      QStringLiteral("--scenario"), scenario,
       QStringLiteral("--discovery-port"), QString::number(receiverPort), QStringLiteral("--peer-discovery-port"),
       QString::number(senderPort), QStringLiteral("--source"), sourcePath, QStringLiteral("--expected-sha256"),
       QString::fromLatin1(expectedSha), QStringLiteral("--result"), receiverResult,
@@ -94,6 +117,7 @@ void TwoProcessRelayDeskRuntimeTests::discoveryPairingAndFileTransferUseTwoIndep
   sender.setProgram(peer);
   sender.setArguments({
       QStringLiteral("--role"), QStringLiteral("sender"), QStringLiteral("--root"), senderRoot,
+      QStringLiteral("--scenario"), scenario,
       QStringLiteral("--discovery-port"), QString::number(senderPort), QStringLiteral("--peer-discovery-port"),
       QString::number(receiverPort), QStringLiteral("--source"), sourcePath, QStringLiteral("--expected-sha256"),
       QString::fromLatin1(expectedSha), QStringLiteral("--result"), senderResult,
@@ -176,6 +200,17 @@ void TwoProcessRelayDeskRuntimeTests::discoveryPairingAndFileTransferUseTwoIndep
   );
   QVERIFY(QFile::exists(senderJson.value(QStringLiteral("settingsFile")).toString()));
   QVERIFY(QFile::exists(receiverJson.value(QStringLiteral("settingsFile")).toString()));
+  if (scenario == QStringLiteral("pause-resume")) {
+    QVERIFY(receiverJson.value(QStringLiteral("receiverControlled")).toBool());
+    QVERIFY(receiverJson.value(QStringLiteral("pauseBytesStable")).toBool());
+    QVERIFY(senderJson.value(QStringLiteral("senderObservedPause")).toBool());
+  }
+  if (scenario == QStringLiteral("cancel")) {
+    QVERIFY(receiverJson.value(QStringLiteral("receiverControlled")).toBool());
+    QVERIFY(senderJson.value(QStringLiteral("cancelled")).toBool());
+    QVERIFY(receiverJson.value(QStringLiteral("cancelled")).toBool());
+    QVERIFY(receiverJson.value(QStringLiteral("cancelCleanupValid")).toBool());
+  }
 }
 
 QTEST_APPLESS_MAIN(TwoProcessRelayDeskRuntimeTests)
