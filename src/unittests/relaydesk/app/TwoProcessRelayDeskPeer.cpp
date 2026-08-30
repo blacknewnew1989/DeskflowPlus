@@ -249,7 +249,13 @@ private:
 
   void finish(bool passed, const QString &error)
   {
-    if (m_finished) return;
+    if (m_finished || m_finishQueued) return;
+    m_finishQueued = true;
+    QTimer::singleShot(0, this, [this, passed, error] { finishNow(passed, error); });
+  }
+
+  void finishNow(bool passed, const QString &error)
+  {
     m_finished = true;
     m_probeTimer.stop();
     QJsonObject result{
@@ -296,6 +302,7 @@ private:
   QTimer m_probeTimer;
   DeviceId m_peerId = DeviceId::generate();
   bool m_finished = false;
+  bool m_finishQueued = false;
   bool m_peerSeen = false;
   bool m_pairingStarted = false;
   bool m_pairingConfirmationQueued = false;
