@@ -1157,6 +1157,10 @@ void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoi
   QVERIFY2(committed.open(QIODevice::ReadOnly), qPrintable(committed.errorString()));
   QCOMPARE(committed.readAll(), sourceBytes);
   QVERIFY(QDir(partPath).entryList(QDir::Files | QDir::NoDotAndDotDot).isEmpty());
+  const QString resumeStatePath = QDir(receiveRoot).filePath(
+      QStringLiteral(".incoming/resume-active/%1.resume.cbor").arg(started.transferId->toString())
+  );
+  QVERIFY(!QFileInfo::exists(resumeStatePath));
   QVERIFY2(errors.isEmpty(), qPrintable(evidence));
 }
 

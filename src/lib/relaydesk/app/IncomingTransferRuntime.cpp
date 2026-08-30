@@ -383,11 +383,6 @@ private:
             break;
           }
         }
-        const auto removed = m_resumeStore.remove(m_offer.transferId);
-        if (!removed.ok()) {
-          fail(TransferErrorCode::InternalError, removed.diagnostic);
-          return false;
-        }
         publishCompleted();
         return false;
       }
@@ -840,6 +835,11 @@ private:
 
   void publishCompleted()
   {
+    const auto removed = m_resumeStore.remove(m_offer.transferId);
+    if (!removed.ok()) {
+      fail(::relaydesk::transfer::TransferErrorCode::InternalError, removed.diagnostic);
+      return;
+    }
     const auto completedRelativePath =
         m_completedAtReceiveRoot ? QStringLiteral(".") : m_completedRelativePath;
     invoke([id = m_offer.transferId, generation = m_generation,
