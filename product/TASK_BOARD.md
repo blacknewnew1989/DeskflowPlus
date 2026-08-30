@@ -17,6 +17,15 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | A0/用户 | 最终包完成后执行物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互 |
 | R0-007 | PASS | A0/A5 | clean-run macOS ACK `0661191ae` 已普通推送；重开发 ref `b6a8852d0` 与未合入产品 ref `c544dc76f` 分列闭环 |
 
+## R3 当前纵向切片
+
+| ID | 状态 | Owner | 当前范围与完成条件 |
+|---|---|---|---|
+| R3-CTRL-001 | PASS | A6/A7/A0 | receiver 双进程 queued pause/resume/cancel；Windows 两配置独立 10/10，run `33333471632` Win 100/100、Mac 101/101；macOS 本机 Debug `BLOCKED` |
+| R3-FILETREE-001 | NOT_RUN | A6/A7/A0 | 多 source、嵌套文件夹、空目录的同机双进程完整树与摘要 |
+| R3-LISTENER-RESUME-001 | NOT_RUN | A6/A7/A0 | listener 中断后从非零 durable offset 恢复；限定同一 peer 进程 |
+| R3-PROCESS-RECOVERY-001 | NOT_RUN | A6/A0 | 真正进程重建的 outgoing/incoming session 持久化与恢复 bootstrap 尚未实现 |
+
 ## 重开发前历史看板
 
 ## Ready
@@ -39,7 +48,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | TRAY-001 | 完成最小化/关闭到托盘与后台生命周期 | A3/A4/A5 | `56568584f`；独立设置与同步安全停机已实现，Windows 单机 GUI 自动化、精确标签双平台构建和自动生命周期 PASS；macOS menu bar 与物理双机仍 `NOT_RUN` |
 | MAC-037 | 适配紧凑首页、权限能力门控和 macOS menu bar | A5/A3/A0 | `9ac7f0d79`；同一 PermissionSnapshot、三项能力门控、激活复检、template 图标与定向回归 PASS；待最终 App 系统权限前台往返实测 |
 | MAC-039 | macOS 14 runner 链接警告与超时回归 | A5/A0 | `6457d481` / run `32444914659` SUCCESS；链接警告归零、macOS 100/100、Windows 99/99（TEST-005 PASS）及 macOS lifecycle 19/19 PASS；修复已集成，待产品标签回归；TCC/menu bar 与物理验收仍 `NOT_RUN` |
-| CTRL-002 | 支持接收方直接暂停、继续和取消传输 | A6/A0 | 已集成接收方直接 pause/continue/cancel；原生串行 CTest 98/98 PASS，真实双机控制链路 `NOT_RUN` |
+| CTRL-002 | 支持接收方直接暂停、继续和取消传输 | A6/A7/A0 | receiver queued production intent 已在同机双进程执行；Windows Debug/Release 与 hosted Win/Mac PASS，物理双机仍 `FINAL_ACCEPTANCE_REQUIRED` |
 | WIN-019 | 构建并运行验收最新 Windows unsigned 包 | A4/A7/A0 | 标签 `relaydesk-phase4-20260820-02` 的 hosted Windows 包、CTest 99/99、TEST-005 19/19 自动生命周期均 PASS；WIN-020 已补精确 portable 单机真实运行；unsigned SmartScreen/UAC 人工交互仍 `NOT_RUN` |
 
 除 WIN-019 的 unsigned SmartScreen/UAC 人工交互、MAC-037 的 TCC/menu bar 和真实物理验收外，
