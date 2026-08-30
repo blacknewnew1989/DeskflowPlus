@@ -17,6 +17,8 @@
 #include <QUdpSocket>
 #include <QTest>
 
+#include "relaydesk/transfer/TransferControlStateMachine.h"
+
 namespace {
 
 constexpr int kProcessDeadlineMs = 15'000;
@@ -37,13 +39,16 @@ QString processOutput(QProcess &process)
   return QString::fromUtf8(output);
 }
 
-QString processEvidence(const QString &scenario, const QString &role, QProcess &process, const QString &resultPath)
+QString processEvidence(
+    const QString &scenario, const QString &temporaryPath, const QString &role, QProcess &process,
+    const QString &resultPath
+)
 {
   QFile result(resultPath);
   const auto resultJson = result.open(QIODevice::ReadOnly) ? QString::fromUtf8(result.readAll()) : QStringLiteral("<missing>");
-  return QStringLiteral("scenario=%1 role=%2 error=%3 exitStatus=%4 exitCode=%5 result=%6 output=%7")
+  return QStringLiteral("scenario=%1 temp=%2 role=%3 error=%4 exitStatus=%5 exitCode=%6 result=%7 output=%8")
       .arg(
-          scenario, role, process.errorString(),
+          scenario, temporaryPath, role, process.errorString(),
           process.exitStatus() == QProcess::NormalExit ? QStringLiteral("normal") : QStringLiteral("crash"),
           QString::number(process.exitCode()), resultJson, processOutput(process)
       );
@@ -54,6 +59,15 @@ bool stopProcess(QProcess &process)
   if (process.state() == QProcess::NotRunning) return true;
   process.kill();
   return process.waitForFinished(kProcessKillWaitMs);
+}
+
+bool containsOrderedStates(const QJsonArray &states, std::initializer_list<int> expected)
+{
+  qsizetype index = 0;
+  for (const auto &value : states) {
+    if (index < static_cast<qsizetype>(expected.size()) && value.toInt() == *(expected.begin() + index)) ++index;
+  }
+  return index == static_cast<qsizetype>(expected.size());
 }
 
 } // namespace
@@ -67,6 +81,7 @@ private Q_SLOTS:
   void pauseAndResumeUseTwoIndependentProcesses();
   void cancelUsesTwoIndependentProcesses();
   void fileTreeUsesTwoIndependentProcesses();
+  void listenerResumeUsesTwoIndependentProcesses();
 
 private:
   void runScenario(const QString &scenario);
@@ -90,6 +105,11 @@ void TwoProcessRelayDeskRuntimeTests::cancelUsesTwoIndependentProcesses()
 void TwoProcessRelayDeskRuntimeTests::fileTreeUsesTwoIndependentProcesses()
 {
   runScenario(QStringLiteral("file-tree"));
+}
+
+void TwoProcessRelayDeskRuntimeTests::listenerResumeUsesTwoIndependentProcesses()
+{
+  runScenario(QStringLiteral("listener-resume"));
 }
 
 void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
@@ -143,8 +163,9 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
     QCOMPARE(expectedFile.write(expectedTreeBytes), qint64(expectedTreeBytes.size()));
     expectedFile.close();
   } else {
-    const qsizetype sourceSize =
-        scenario == QStringLiteral("complete") ? 1024 * 1024 + 37 : 12 * 1024 * 1024 + 113;
+    const qsizetype sourceSize = scenario == QStringLiteral("complete") ? 1024 * 1024 + 37
+                                : scenario == QStringLiteral("listener-resume") ? 20 * 1024 * 1024 + 113
+                                                                             : 12 * 1024 * 1024 + 113;
     const QByteArray sourceBytes(sourceSize, '\x6a');
     QFile source(sourcePath);
     QVERIFY(source.open(QIODevice::WriteOnly));
@@ -215,30 +236,30 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
   const auto receiverStopped = stopProcess(receiver);
   if (!senderStopped) {
     temporary.setAutoRemove(false);
-    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("sender"), sender, senderResult)));
+    QFAIL(qPrintable(processEvidence(scenario, temporary.path(), QStringLiteral("sender"), sender, senderResult)));
   }
   if (!receiverStopped) {
     temporary.setAutoRemove(false);
-    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("receiver"), receiver, receiverResult)));
+    QFAIL(qPrintable(processEvidence(scenario, temporary.path(), QStringLiteral("receiver"), receiver, receiverResult)));
   }
   if (!receiverStarted || !receiverFinished || receiver.exitStatus() != QProcess::NormalExit) {
     temporary.setAutoRemove(false);
-    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("receiver"), receiver, receiverResult)));
+    QFAIL(qPrintable(processEvidence(scenario, temporary.path(), QStringLiteral("receiver"), receiver, receiverResult)));
   }
   if (!senderStarted || !senderFinished || sender.exitStatus() != QProcess::NormalExit) {
     temporary.setAutoRemove(false);
-    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("sender"), sender, senderResult)));
+    QFAIL(qPrintable(processEvidence(scenario, temporary.path(), QStringLiteral("sender"), sender, senderResult)));
   }
 
   const auto senderJson = readResult(senderResult);
   const auto receiverJson = readResult(receiverResult);
   if (sender.exitCode() != 0 || senderJson.isEmpty()) {
     temporary.setAutoRemove(false);
-    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("sender"), sender, senderResult)));
+    QFAIL(qPrintable(processEvidence(scenario, temporary.path(), QStringLiteral("sender"), sender, senderResult)));
   }
   if (receiver.exitCode() != 0 || receiverJson.isEmpty()) {
     temporary.setAutoRemove(false);
-    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("receiver"), receiver, receiverResult)));
+    QFAIL(qPrintable(processEvidence(scenario, temporary.path(), QStringLiteral("receiver"), receiver, receiverResult)));
   }
   QVERIFY(!senderJson.isEmpty());
   QVERIFY(!receiverJson.isEmpty());
@@ -292,6 +313,37 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
     QCOMPARE(receiverJson.value(QStringLiteral("completedBytes")).toVariant().toULongLong(), expectedCompletedBytes);
     QVERIFY(receiverJson.value(QStringLiteral("tree")).toBool());
     QVERIFY(!receiverJson.value(QStringLiteral("partFilesRemaining")).toBool());
+  }
+  if (scenario == QStringLiteral("listener-resume")) {
+    QCOMPARE(senderJson.value(QStringLiteral("transferId")).toString(), receiverJson.value(QStringLiteral("transferId")).toString());
+    QVERIFY(senderJson.value(QStringLiteral("interrupted")).toBool());
+    QVERIFY(receiverJson.value(QStringLiteral("interrupted")).toBool());
+    QVERIFY(receiverJson.value(QStringLiteral("resumeStateExisted")).toBool());
+    QVERIFY(receiverJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong() > 0);
+    QVERIFY(receiverJson.value(QStringLiteral("partBytesBeforeRestart")).toVariant().toULongLong() >=
+            receiverJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong());
+    QVERIFY(receiverJson.value(QStringLiteral("resumedFromNonZero")).toBool());
+    QVERIFY(!receiverJson.value(QStringLiteral("partFilesRemaining")).toBool());
+    QCOMPARE(receiverJson.value(QStringLiteral("actualSha")).toString(), QString::fromLatin1(expectedSha));
+    QVERIFY(containsOrderedStates(
+        senderJson.value(QStringLiteral("states")).toArray(),
+        {static_cast<int>(::relaydesk::transfer::TransferState::Interrupted),
+         static_cast<int>(::relaydesk::transfer::TransferState::Resuming),
+         static_cast<int>(::relaydesk::transfer::TransferState::Completed)}
+    ));
+    QVERIFY(containsOrderedStates(
+        receiverJson.value(QStringLiteral("states")).toArray(),
+        {static_cast<int>(::relaydesk::transfer::TransferState::Interrupted),
+         static_cast<int>(::relaydesk::transfer::TransferState::Completed)}
+    ));
+    QVERIFY(senderJson.value(QStringLiteral("senderFirstResumingCaptured")).toBool());
+    QVERIFY(receiverJson.value(QStringLiteral("receiverFirstTransferringAfterInterruptCaptured")).toBool());
+    QVERIFY(senderJson.value(QStringLiteral("firstResumingBytes")).toVariant().toULongLong() >=
+            receiverJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong());
+    QVERIFY(receiverJson.value(QStringLiteral("firstReceiverResumingBytes")).toVariant().toULongLong() >=
+            receiverJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong());
+    QVERIFY(!receiverJson.value(QStringLiteral("resumeStateRemaining")).toBool());
+    QVERIFY(senderJson.value(QStringLiteral("expectedTransportErrorCount")).toInt() <= 1);
   }
 }
 
