@@ -175,10 +175,33 @@ jobs:
           mkdir -p dist/${{ matrix.target.name }}
           set -o pipefail
           if [[ "$RUNNER_OS" == "macOS" && "$GITHUB_REF" == "refs/heads/agent/a0/redevelop-p0" ]]; then
-            ctest --test-dir build/src/unittests -C Release \
-              -R '^RelayDeskAutoReconnectRuntimeTests$' \
-              --output-on-failure --repeat until-fail:50 2>&1 \
-              | tee dist/${{ matrix.target.name }}/autoreconnect-repeat.log
+            reconnect_test="build/src/unittests/relaydesk/app/RelayDeskAutoReconnectRuntimeTests"
+            run_reconnect_case() {
+              local log_path="$1"
+              shift
+              local status=0
+              for iteration in $(seq 1 50); do
+                echo "iteration=$iteration selectors=$*" | tee -a "$log_path"
+                set +e
+                "$reconnect_test" "$@" 2>&1 | tee -a "$log_path"
+                status=${PIPESTATUS[0]}
+                set -e
+                if [[ "$status" -ne 0 ]]; then
+                  break
+                fi
+              done
+              return "$status"
+            }
+            single_status=0
+            ordered_status=0
+            run_reconnect_case dist/${{ matrix.target.name }}/autoreconnect-settings-only.log \
+              settingsRefreshReplaysExistingTrustedSnapshot || single_status=$?
+            run_reconnect_case dist/${{ matrix.target.name }}/autoreconnect-ordered.log \
+              trustRevocationStopsReconnectAndDisconnectsPeer \
+              settingsRefreshReplaysExistingTrustedSnapshot || ordered_status=$?
+            if [[ "$single_status" -ne 0 || "$ordered_status" -ne 0 ]]; then
+              exit 1
+            fi
           fi
           ctest --test-dir build/src/unittests -C Release --output-on-failure 2>&1 | tee dist/${{ matrix.target.name }}/ctest.log
 
