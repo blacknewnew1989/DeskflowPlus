@@ -81,3 +81,19 @@ create_test(
   SOURCE SharedInterfaceFreezeTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
 )
+
+add_executable(RelayDeskTwoProcessPeer TwoProcessRelayDeskPeer.cpp)
+target_link_libraries(RelayDeskTwoProcessPeer PRIVATE relaydesk_app net Qt6::Core)
+
+create_test(
+  NAME RelayDeskTwoProcessRuntimeTests
+  DEPENDS relaydesk_app
+  LIBS Qt6::Network
+  SOURCE TwoProcessRelayDeskRuntimeTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+)
+add_dependencies(RelayDeskTwoProcessRuntimeTests RelayDeskTwoProcessPeer)
+target_compile_definitions(
+  RelayDeskTwoProcessRuntimeTests
+  PRIVATE RELAYDESK_TWO_PROCESS_PEER_PATH="$<TARGET_FILE:RelayDeskTwoProcessPeer>"
+)

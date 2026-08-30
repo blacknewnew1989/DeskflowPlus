@@ -1,0 +1,155 @@
+/*
+ * Deskflow -- mouse and keyboard sharing utility
+ * SPDX-FileCopyrightText: (C) 2026 RelayDesk Developers
+ * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+ */
+
+#include <QCryptographicHash>
+#include <QFile>
+#include <QHostAddress>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QProcess>
+#include <QTemporaryDir>
+#include <QUdpSocket>
+#include <QTest>
+
+namespace {
+
+QJsonObject readResult(const QString &path)
+{
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) return {};
+  const auto document = QJsonDocument::fromJson(file.readAll());
+  return document.isObject() ? document.object() : QJsonObject{};
+}
+
+QString processOutput(QProcess &process)
+{
+  auto output = process.readAllStandardOutput();
+  output += process.readAllStandardError();
+  return QString::fromUtf8(output);
+}
+
+} // namespace
+
+class TwoProcessRelayDeskRuntimeTests final : public QObject
+{
+  Q_OBJECT
+
+private Q_SLOTS:
+  void discoveryPairingAndFileTransferUseTwoIndependentProcesses();
+};
+
+void TwoProcessRelayDeskRuntimeTests::discoveryPairingAndFileTransferUseTwoIndependentProcesses()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const auto sourcePath = temporary.filePath(QStringLiteral("payload.bin"));
+  const QByteArray sourceBytes(1024 * 1024 + 37, '\x6a');
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+  source.close();
+  const auto expectedSha = QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256).toHex();
+
+  QUdpSocket senderReservation;
+  QUdpSocket receiverReservation;
+  QVERIFY(senderReservation.bind(QHostAddress::LocalHost, 0));
+  QVERIFY(receiverReservation.bind(QHostAddress::LocalHost, 0));
+  const auto senderPort = senderReservation.localPort();
+  const auto receiverPort = receiverReservation.localPort();
+  QVERIFY(senderPort != 0);
+  QVERIFY(receiverPort != 0);
+  QVERIFY(senderPort != receiverPort);
+  senderReservation.close();
+  receiverReservation.close();
+
+  const auto senderRoot = temporary.filePath(QStringLiteral("sender"));
+  const auto receiverRoot = temporary.filePath(QStringLiteral("receiver"));
+  const auto senderResult = temporary.filePath(QStringLiteral("sender-result.json"));
+  const auto receiverResult = temporary.filePath(QStringLiteral("receiver-result.json"));
+  const QString peer = QString::fromUtf8(RELAYDESK_TWO_PROCESS_PEER_PATH);
+
+  QProcess receiver;
+  receiver.setProgram(peer);
+  receiver.setArguments({
+      QStringLiteral("--role"), QStringLiteral("receiver"), QStringLiteral("--root"), receiverRoot,
+      QStringLiteral("--discovery-port"), QString::number(receiverPort), QStringLiteral("--peer-discovery-port"),
+      QString::number(senderPort), QStringLiteral("--source"), sourcePath, QStringLiteral("--expected-sha256"),
+      QString::fromLatin1(expectedSha), QStringLiteral("--result"), receiverResult,
+  });
+  receiver.start();
+  QVERIFY2(receiver.waitForStarted(5'000), qPrintable(receiver.errorString()));
+
+  QProcess sender;
+  sender.setProgram(peer);
+  sender.setArguments({
+      QStringLiteral("--role"), QStringLiteral("sender"), QStringLiteral("--root"), senderRoot,
+      QStringLiteral("--discovery-port"), QString::number(senderPort), QStringLiteral("--peer-discovery-port"),
+      QString::number(receiverPort), QStringLiteral("--source"), sourcePath, QStringLiteral("--expected-sha256"),
+      QString::fromLatin1(expectedSha), QStringLiteral("--result"), senderResult,
+  });
+  sender.start();
+  QVERIFY2(sender.waitForStarted(5'000), qPrintable(sender.errorString()));
+
+  const auto senderFinished = sender.waitForFinished(55'000);
+  const auto receiverFinished = receiver.waitForFinished(55'000);
+  if (!senderFinished) sender.kill();
+  if (!receiverFinished) receiver.kill();
+  QVERIFY2(senderFinished, qPrintable(processOutput(sender)));
+  QVERIFY2(receiverFinished, qPrintable(processOutput(receiver)));
+  QCOMPARE(sender.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(receiver.exitStatus(), QProcess::NormalExit);
+
+  const auto senderJson = readResult(senderResult);
+  const auto receiverJson = readResult(receiverResult);
+  QVERIFY2(
+      sender.exitCode() == 0,
+      qPrintable(
+          QStringLiteral("sender exit %1: %2")
+              .arg(sender.exitCode())
+              .arg(senderJson.value(QStringLiteral("error")).toString())
+      )
+  );
+  QVERIFY2(
+      receiver.exitCode() == 0,
+      qPrintable(
+          QStringLiteral("receiver exit %1: %2")
+              .arg(receiver.exitCode())
+              .arg(receiverJson.value(QStringLiteral("error")).toString())
+      )
+  );
+  QVERIFY(!senderJson.isEmpty());
+  QVERIFY(!receiverJson.isEmpty());
+  QVERIFY2(
+      senderJson.value(QStringLiteral("passed")).toBool(),
+      qPrintable(senderJson.value(QStringLiteral("error")).toString())
+  );
+  QVERIFY2(
+      receiverJson.value(QStringLiteral("passed")).toBool(),
+      qPrintable(receiverJson.value(QStringLiteral("error")).toString())
+  );
+  QVERIFY(senderJson.value(QStringLiteral("discovered")).toBool());
+  QVERIFY(receiverJson.value(QStringLiteral("discovered")).toBool());
+  QVERIFY(senderJson.value(QStringLiteral("trusted")).toBool());
+  QVERIFY(receiverJson.value(QStringLiteral("trusted")).toBool());
+  QVERIFY(
+      senderJson.value(QStringLiteral("deviceId")).toString() !=
+      receiverJson.value(QStringLiteral("deviceId")).toString()
+  );
+  QVERIFY(
+      senderJson.value(QStringLiteral("fingerprint")).toString() !=
+      receiverJson.value(QStringLiteral("fingerprint")).toString()
+  );
+  QVERIFY(
+      senderJson.value(QStringLiteral("settingsFile")).toString() !=
+      receiverJson.value(QStringLiteral("settingsFile")).toString()
+  );
+  QVERIFY(QFile::exists(senderJson.value(QStringLiteral("settingsFile")).toString()));
+  QVERIFY(QFile::exists(receiverJson.value(QStringLiteral("settingsFile")).toString()));
+}
+
+QTEST_MAIN(TwoProcessRelayDeskRuntimeTests)
+
+#include "TwoProcessRelayDeskRuntimeTests.moc"
