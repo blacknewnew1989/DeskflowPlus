@@ -1717,10 +1717,11 @@ void FileTransferRuntimeTests::incomingControlsRejectTransportFailureWithoutLoca
   std::optional<TransferSnapshot> receiverLatest;
   QSignalSpy operations(&receiver, &IFileTransferService::transferOperationFinished);
   QVERIFY(operations.isValid());
-  connect(&receiver, &IFileTransferService::incomingOffer, this, [&](const IncomingOffer &offer) {
+  QObject connectionContext;
+  connect(&receiver, &IFileTransferService::incomingOffer, &connectionContext, [&](const IncomingOffer &offer) {
     receiver.accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
   });
-  connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+  connect(&receiver, &IFileTransferService::transferChanged, &connectionContext, [&](const TransferSnapshot &snapshot) {
     if (snapshot.direction == TransferDirection::Receiving) {
       receiverLatest = snapshot;
     }

@@ -9,9 +9,9 @@ R0 当前结论：
 
 - Deskflow v1.26.0 的成熟输入捕获、注入、Server/Client 协议和屏幕切换实现未被重写；
 - RelayDesk 新增模块大多已接入生产组合根，可列为 `REUSE_AFTER_AUDIT` 候选；
-- 本轮尚未重新建立定向测试、两应用进程、平台运行或精确标签发布证据；
-- 全部 P0 功能状态初始化为 `NOT_RUN`；
-- 自动化历史失败和当前弱复现证据均保持 `UNVERIFIED`，不得推断根因；
+- 本轮已重新建立 R0-002 生命周期、R0-003 冲突解析、R0-004 同机双进程和同 SHA 双平台分支运行证据；
+- 未覆盖的 P0 功能、物理跨平台与系统交互仍保持 `NOT_RUN`，不因组件/hosted 证据外推；
+- 精确阶段标签与 Release 证据尚未重建，R0-005 保持 `NOT_RUN`；
 - 物理 Windows 与 macOS 双机项目保持 `FINAL_ACCEPTANCE_REQUIRED`。
 
 ## 2. Git 与远端实时证据
@@ -22,10 +22,10 @@ R0 当前结论：
 | 上游标签 | `v1.26.0` tag object `82fd4b78e4c8271a77420937b829f21d1cbe623d` | GitHub API |
 | 上游目标提交 | `760e3b99b00053647a96b405276bf614bd860075` | 解引用上游 annotated tag |
 | 产品远端分支 | `origin/product/relaydesk-v1` = `c544dc76fb4f29aefb6ef30c8acc4475b6778e07` | GitHub API |
-| 重开发分支 | `origin/agent/a0/redevelop-p0` = `c544dc76fb4f29aefb6ef30c8acc4475b6778e07` | GitHub refs API 创建后复读 |
+| 重开发分支 | `origin/agent/a0/redevelop-p0` = `b6a8852d0f1892ce5d5d493f8ec8fd85251101a9` | GitHub API 与普通 `ls-remote` |
 | 重开发前锚点 | `relaydesk-pre-redevelop-20260830-01` = `c544dc76fb4f29aefb6ef30c8acc4475b6778e07` | GitHub refs API 创建后复读 |
 | 本地重开发 worktree | `F:\github\DeskflowPlus\working\relaydesk-redevelop-p0` | `git worktree list` |
-| 本地重开发分支 | `agent/a0/redevelop-p0`，跟踪同 SHA 远端 ref | `git status --branch` |
+| 本地重开发分支 | `agent/a0/redevelop-p0@b6a8852d0f1892ce5d5d493f8ec8fd85251101a9`，跟踪同 SHA 远端 ref | `git status --branch` |
 
 本地 `v1.26.0` 与 API 解引用结果一致，且 `760e3b99` 是当前产品提交的祖先。实时远端结论以
 GitHub API 为准，不使用本地 ref 冒充远端状态。
@@ -75,13 +75,42 @@ run `32446566789` 的 macOS job 中，`RelayDeskAutoReconnectRuntimeTests` 以
 日志没有断言、堆栈或崩溃位置，因此根因保持 `UNVERIFIED`。历史上对销毁顺序的修改不能作为
 根因证明。R0 需要基于可注入 scheduler/connector 建立确定性生命周期复现，再决定是否改代码。
 
-### 当前弱复现
+### 当前定向复现
 
-文件传输审计代理在既有 Windows debug 构建目录尝试运行 8 个定向目标，首个
-`RelayDeskConflictResolverTests` 超过 60 秒无 CPU 和日志进展，随后只终止其启动的测试进程。
-该构建目录与当前 SHA 的新鲜度尚未证明，因此本轮测试状态仍为 `NOT_RUN`；“旧构建曾卡住”
-只作为待复现现象，不能据此认定源码缺陷。下一次复现必须先证明 configure/build SHA 与命令，
-再运行单一目标。
+既有 Windows debug 目录曾观察到 `RelayDeskConflictResolverTests` 无进展，但构建 SHA 未证明。
+A0 随后从重开发 worktree 配置 `build/windows/r0-debug-fresh`，只构建并运行目标测试：
+
+- 未改源码的 `RelayDeskAutoReconnectRuntimeTests`：连续 20/20 `PASS`，约 2.8 秒/轮；
+- 提交 `72008201e`：增加受控 scheduler 销毁回调用例并移除两处 `qWait(1100)`；
+- 改后 `RelayDeskAutoReconnectRuntimeTests`：连续 50/50 `PASS`，约 0.6 秒/轮；
+- `RelayDeskConflictResolverTests`：连续 50/50 `PASS`，总计 5.40 秒。
+
+因此旧目录卡住未在 fresh build 复现，不认定为当前源码缺陷。`72008201e` 是测试确定性收口，
+不是生产修复；后续 macOS A/B 已证明 ordered 场景存在跨用例 heap corruption，R0-002 继续按
+本报告问题表和独立诊断 ref 跟踪。
+
+### R0-002 根因与关闭证据
+
+macOS ASan 把历史 SIGABRT 的首次非法访问定位为测试代码 `stack-use-after-scope`：
+`FileTransferRuntime` 析构调用 `stop()` 并发出错误信号时，使用长生命周期测试对象 `this` 作为
+connect context 的 lambda 仍可能写入已离开作用域的局部量。
+
+- `3332378cf`：在 `QStringList errors` 之后声明局部 `QObject`，并将其作为 connect context；
+  逆序析构先断开连接，再析构 `errors` 和更早声明的 runtime。
+- `80a49b02c`：full ASan 暴露第二处同模式问题后，对被捕获的 `receiverLatest` 使用后声明的局部
+  connection context。
+- 提交前只在 `src/unittests/relaydesk/app` 定向搜索 `connect(..., this, [&]` 等引用捕获模式；
+  逐项按 sender/context/被捕获局部量析构顺序检查。除上述两处已确认问题外，没有第三处可确认的
+  析构期悬空引用，因此未做全仓机械替换。
+- ASan run `33329642343` 的 macOS job `99305807755` 成功：settings-only 50/50、ordered 50/50、
+  完整 CTest 101/101；AutoReconnect #95、TwoProcess #99 通过，ASan error/summary 与 SIGABRT 均为 0。
+- 清除 A/B、阶段日志、`.ips`/DiagnosticReports 收集和诊断 ref 后，normal clean run
+  [`33330456697`](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/33330456697) 在
+  `agent/a0/redevelop-p0@b6a8852d0f1892ce5d5d493f8ec8fd85251101a9` 为 `SUCCESS`：Windows 100/100、
+  macOS 101/101、Windows TEST-005 与 macOS install lifecycle 均通过。
+
+以上关闭 R0-002，但不改变产品分支 `product/relaydesk-v1@c544dc76fb4f29aefb6ef30c8acc4475b6778e07`，
+也不替代精确阶段标签、Release、物理 Win↔Mac 或系统权限验收。
 
 ## 5. 源码分类
 
@@ -132,14 +161,14 @@ run `32446566789` 的 macOS job 中，`RelayDeskAutoReconnectRuntimeTests` 以
 
 | ID | 级别 | 状态 | 内容 |
 |---|---|---|---|
-| R0-001 | P0 | `IN_PROGRESS` | 建立新基线、状态和任务板，清除旧 PASS 的当前效力。 |
-| R0-002 | P1 | `NOT_RUN` | 为 auto reconnect 建立无真实 socket/任意 sleep 的确定性生命周期复现。 |
-| R0-003 | P1 | `NOT_RUN` | 在证明构建 SHA 后单独复现 `RelayDeskConflictResolverTests` 卡住现象。 |
-| R0-004 | P1 | `NOT_RUN` | 建立两个真实应用进程的发现、配对、文件和 UI 控制纵向用例。 |
+| R0-001 | P0 | `PASS` | 基线 `30593b53e` 已普通推送，新状态和任务板已清除旧 PASS 的当前效力。 |
+| R0-002 | P1 | `PASS` | 两处测试回调 `stack-use-after-scope` 已按局部 connect context 生命周期修复；ordered 50/50、ASan 101/101、clean run `33330456697` 双平台全绿。 |
+| R0-003 | P1 | `PASS` | fresh build 的 conflict resolver 连续 50/50 PASS，旧目录卡住未复现。 |
+| R0-004 | P1 | `PASS` | E4 限定同机双进程单向 1 MiB+ 文件链路；详见 `R0-004_TWO_PROCESS_RUNTIME.md`。 |
 | R0-005 | P1 | `NOT_RUN` | 重新建立 Windows/macOS 同 SHA 的阶段标签和 Release 证据。 |
-| CI-001 | P1 | `IN_PROGRESS` | `materials-diagnostic` job 可 soft-fail 且不阻塞包；需决定是否让资料错误使 run 失败。 |
+| CI-001 | P1 | `PASS` | 已移除 materials job soft-fail；完整 run `33326619207` 的资料校验成功。 |
 | DOC-001 | P2 | `IN_PROGRESS` | `IPlatformFileSafety.h` 的 `FileReceiver NOT_WIRED` 注释与现有 runtime wiring 不一致。 |
-| NET-001 | P2 | `IN_PROGRESS` | Git Smart HTTP 间歇不可达；普通新提交 push 恢复前，远端同步必须保持可证实。 |
+| NET-001 | P2 | `PASS` | 普通 Git 已恢复并推送产品与 coordination 新提交；保留间歇连接风险但不使用手工提交对象流程。 |
 
 ## 8. 跨平台即时沟通
 
@@ -153,14 +182,29 @@ R0 已发送：
 - coordination commit：`4a811d11b`，已普通 push 到 `origin/coord/platform-sync`；
 - 目标：A5-macOS；
 - 主题：自动重连历史 macOS 失败、R0 证据归零、确定性生命周期测试与后续精确 SHA 复验；
-- ACK 状态：`NOT_RUN`，等待 `product/working/platform-sync/macos/` 的追加回复。
+- 基线 ACK：`product/working/platform-sync/macos/20260830-144918Z-R0-001-macos-redevelopment-ack.md`，
+  coordination commit `862688b63`；
+- 测试复验请求：`product/working/platform-sync/a0/20260830-151256Z-R0-002-macos-reconnect-test.md`，
+  coordination commit `d854d55cd`；
+- 精确测试 ACK 状态：`NOT_RUN`，异步等待 A5 结果，不阻塞 A0 继续其他 R0 工作。
 
 聊天、本地状态报告或未推送文件不能替代 GitHub 留言。A0 持续跟踪到 ACK 或明确阻塞。
 
+当前跨平台闭环补充：
+
+- R0-004 完整 run `33326619207` 为双平台成功；
+- A5 分列 ACK commit `d12afd4cca56ae0d366d554bf35edc1b18fded3c`；
+- R0-002 诊断使用独立 ref，不用诊断失败覆盖 R0-004 完整成功。
+- R0-002 clean-run ACK：`product/working/platform-sync/macos/20260830-192708Z-R0-002-macos-clean-final-run-ack.md`，
+  coordination commit `0661191ae9e9883323ea0ee24cf011e30ce8ecee`；macOS 101/101、AutoReconnect #95、
+  TwoProcess #99 和 artifact digest 已回传，未外推物理验收。
+- lifecycle 终态附录：`product/working/platform-sync/macos/20260830-193655Z-R0-002-macos-clean-final-lifecycle-addendum.md`，
+  coordination commit `a8eb7e7ebc8dc1d567ddd3fa3994313e06808e09`；job `99309748733` 与 evidence
+  artifact `9737670033` 为 `PASS`，仍只限 hosted isolated lifecycle。
+
 下一最小切片按顺序为：
 
-1. 提交并普通推送 R0 基线；
-2. 建立确定性 `AutoReconnectRuntime` 生命周期失败测试；
-3. 使用可证明 SHA 的新鲜 build 单独复现 conflict resolver；
-4. 只在根因证实后修改最小生产切片；
-5. 逐项把源码分类从候选升级为本轮可复用证据。
+1. 在 R0-004 薄宿主上增加暂停/继续/取消的独立 E4 切片；
+2. 增加多文件/文件夹与断线续传的独立 E4 切片；
+3. 重建 R0-005 精确阶段标签、artifact 和草稿 Release 证据；
+4. 逐项把源码分类从候选升级为本轮可复用证据。

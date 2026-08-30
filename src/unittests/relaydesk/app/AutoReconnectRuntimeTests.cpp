@@ -130,7 +130,8 @@ void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer(
   QVERIFY(secondDiscovery.registry().observeAdvertisement(directFirst, QHostAddress::LocalHost));
 
   QStringList errors;
-  connect(&firstFiles, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+  QObject errorContext;
+  connect(&firstFiles, &FileTransferRuntime::errorOccurred, &errorContext, [&](auto, auto, const QString &message) {
     errors.append(message);
   });
   QPointer<AutoReconnectCoordinator> coordinator;

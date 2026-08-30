@@ -11,7 +11,7 @@
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
 - Current phase: P0 重新开发 R0；旧 PASS 已降为历史候选证据，当前功能矩阵初始化为 `NOT_RUN`
-- Last updated: 2026-08-30
+- Last updated: 2026-08-31
 - User action required during development: none
 
 ## Git 状态
@@ -23,6 +23,7 @@
 - Current branch: `agent/a0/redevelop-p0`
 - Current product branch tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
+- Current verified redevelopment implementation tip: `b6a8852d0f1892ce5d5d493f8ec8fd85251101a9`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
 - Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
@@ -35,12 +36,35 @@
 
 | ID | 状态 | 当前证据 / 下一步 |
 |---|---|---|
-| R0-001 | IN_PROGRESS | 已创建 `agent/a0/redevelop-p0`、远端同 SHA ref 和重开发前锚点；基线报告待提交 |
-| R0-002 | NOT_RUN | 自动重连历史 macOS 99/100 失败根因仍为 `UNVERIFIED`；先建确定性生命周期复现 |
-| R0-003 | NOT_RUN | 文件传输、发现、配对、UI、平台和包均只完成静态复用审计，尚未建立本轮测试 PASS |
-| R0-004 | IN_PROGRESS | Git Smart HTTP 当前间歇连接重置；API 只用于核对及当前已有 SHA 锚点，新提交不得用手工对象流程冒充 push |
-| R0-005 | NOT_RUN | 两应用进程、物理 Win↔Mac、精确阶段标签与 Release 尚未执行 |
-| R0-006 | IN_PROGRESS | 已在 `coord/platform-sync` 推送 A0 macOS R0 留言 `4a811d11b`；等待 A5 在 `macos/` 追加 ACK |
+| R0-001 | PASS | 基线报告提交 `30593b53e` 已普通推送；远端分支、产品基线和上游 tag 均已 API 复读 |
+| R0-002 | PASS | macOS ASan 定位两处测试回调 `stack-use-after-scope`；局部连接 context 按逆序析构先断开。修复后 settings-only 50/50、ordered 50/50、ASan CTest 101/101，clean run `33330456697` 双平台全绿 |
+| R0-003 | PASS | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS；旧 debug 目录卡住未复现，不认定源码缺陷 |
+| R0-004 | PASS | E4 限定：同机双进程 discovery/pair/trust/TLS 单向 1 MiB+ 文件；Windows Debug/Release 10/10，run `33326619207` Win #98、Mac #99 PASS |
+| R0-005 | NOT_RUN | Windows/macOS 同 SHA 的精确阶段标签、artifact 和 Release 尚未执行 |
+| R0-006 | FINAL_ACCEPTANCE_REQUIRED | 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互留最终验收 |
+| R0-007 | PASS | A5 已在 `coord/platform-sync` 推送 clean-run ACK `0661191ae` 和 lifecycle 终态附录 `a8eb7e7eb`；准确分列重开发 ref 与未合入产品 ref，R0-002 跨平台闭环 |
+| NET-001 | PASS | 普通 Git push 已恢复并推送 `30593b53e`、`72008201e` 和 coordination commits；保留间歇风险记录 |
+
+### R0-002 最终证据
+
+- 根因：`FileTransferRuntime` 析构期间发出错误信号，测试使用长生命周期 `this` 作为 connect context，
+  引用捕获的局部量已先离开作用域；macOS ASan 报告 `stack-use-after-scope`。
+- 修复：`3332378cf` 在 `QStringList errors` 后声明局部 `QObject` 并用作连接 context；
+  `80a49b02c` 对 full ASan 暴露的第二处同模式问题采用相同的局部 context。逆序析构时先销毁
+  context 并断开连接，再销毁被捕获局部量和 runtime。
+- 定向审计：提交前仅搜索 `src/unittests/relaydesk/app` 中 `connect(..., this, [&]` 等引用捕获；
+  除上述两处 ASan 已确认问题外，没有发现第三处可确认的析构期悬空引用，未做全仓批量替换。
+- ASan run `33329642343`：macOS job `99305807755` 成功；settings-only 50/50、ordered 50/50、
+  CTest 101/101，AutoReconnect #95、TwoProcess #99 通过，ASan error/summary 与 SIGABRT 为 0。
+- clean run [`33330456697`](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/33330456697)
+  对 `agent/a0/redevelop-p0@b6a8852d0f1892ce5d5d493f8ec8fd85251101a9` 为 `SUCCESS`：Windows
+  100/100（AutoReconnect #94、TwoProcess #98）、macOS 101/101（AutoReconnect #95、TwoProcess #99）、
+  Windows TEST-005 和 macOS install lifecycle 均为 `PASS`。
+- artifacts：Windows `9737664755` / `sha256:58bf837e1c640f3ffa383bf2ea7fa40ac3708ff0a2b5fd11bbe7eb0c56125bed`；
+  macOS `9737551418` / `sha256:ba01e763ff9add351f5e283db6a119d206e10c1258ab991df0f1338387dab4cc`；
+  macOS lifecycle `9737670033` / `sha256:12bca85604fa8338dc89c1df473b56ccd8e7998734dccefcc876ece9aaf51839`。
+- 产品分支仍为 `product/relaydesk-v1@c544dc76fb4f29aefb6ef30c8acc4475b6778e07`。上述结论只属于尚未合入的
+  重开发分支；精确阶段标签、Release、物理 Win↔Mac 和系统权限交互仍按 R0-005/R0-006 处理。
 
 以下 2026-08-20 及更早内容全部为重开发前历史证据，只能用于选择候选测试和复现缺陷，不构成
 当前 R0 PASS。
