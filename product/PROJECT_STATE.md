@@ -10,23 +10,40 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: Phase 4 hosted 构建、打包和自动生命周期已完成；系统交互与物理验收保留 `NOT_RUN`
-- Last updated: 2026-08-21
+- Current phase: P0 重新开发 R0；旧 PASS 已降为历史候选证据，当前功能矩阵初始化为 `NOT_RUN`
+- Last updated: 2026-08-30
 - User action required during development: none
 
 ## Git 状态
 
 - Repository root: `F:\github\DeskflowPlus`
-- Active source worktree: `F:\github\DeskflowPlus\working\relaydesk-product`
+- Active source worktree: `F:\github\DeskflowPlus\working\relaydesk-redevelop-p0`
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
-- Current branch: `product/relaydesk-v1`
-- Current product implementation tip: `ea70650ffe7efcf4c8d89de8b7d66545d238b2a6`
-- Current verified tag target: `c134126b95977ca6b97036be18dcfc33a4a3a09a`
+- Current branch: `agent/a0/redevelop-p0`
+- Current product branch tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
+- Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
+- Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
+- Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
-- Current implementation: v1 内部发布主链已组合。共享 Qt 外壳包含紧凑首页、权限分项、设备/传输区域、集中品牌资源、托盘后台生命周期、输入角色设置、可信设备撤销、手动地址管理和 `Ask` 冲突逐文件决策。接收方直接暂停/继续/取消已接入运行时；Windows 单机 GUI、输入核心、发现/文件监听和设置持久化已真实运行。macOS TCC/menu bar、物理 Win↔Mac 双机和 unsigned 提示交互仍为 `NOT_RUN`。
-- Last verified stage tag: `relaydesk-phase4-20260820-02`（目标
-  `c134126b95977ca6b97036be18dcfc33a4a3a09a`；run `32362194153` `SUCCESS`）
+- Current implementation: 既有实现正在按 `KEEP_UPSTREAM`、`REUSE_AFTER_AUDIT`、`REWRITE`
+  和 `REMOVE` 重新审计。静态调用图不能转为本轮 PASS，详见
+  `product/docs/reports/REDEVELOPMENT_BASELINE.md`。
+- Historical verified stage tag: `relaydesk-phase4-20260820-02`（只作为历史候选，不证明重开发状态）
+
+## 2026-08-30 P0 重新开发 R0
+
+| ID | 状态 | 当前证据 / 下一步 |
+|---|---|---|
+| R0-001 | IN_PROGRESS | 已创建 `agent/a0/redevelop-p0`、远端同 SHA ref 和重开发前锚点；基线报告待提交 |
+| R0-002 | NOT_RUN | 自动重连历史 macOS 99/100 失败根因仍为 `UNVERIFIED`；先建确定性生命周期复现 |
+| R0-003 | NOT_RUN | 文件传输、发现、配对、UI、平台和包均只完成静态复用审计，尚未建立本轮测试 PASS |
+| R0-004 | IN_PROGRESS | Git Smart HTTP 当前间歇连接重置；API 只用于核对及当前已有 SHA 锚点，新提交不得用手工对象流程冒充 push |
+| R0-005 | NOT_RUN | 两应用进程、物理 Win↔Mac、精确阶段标签与 Release 尚未执行 |
+| R0-006 | IN_PROGRESS | 已在 `coord/platform-sync` 推送 A0 macOS R0 留言 `4a811d11b`；等待 A5 在 `macos/` 追加 ACK |
+
+以下 2026-08-20 及更早内容全部为重开发前历史证据，只能用于选择候选测试和复现缺陷，不构成
+当前 R0 PASS。
 
 ## 2026-08-20 收口复验
 

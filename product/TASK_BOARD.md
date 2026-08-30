@@ -2,6 +2,23 @@
 
 A0 维护本表；用户不参与任务移动和 Git 操作。
 
+> 2026-08-30 起进入 P0 重新开发。下方旧 Phase 0-4 看板保留为历史线索，其中的 `PASS` 不继承
+> 到本轮。当前状态以本节和 `product/docs/reports/REDEVELOPMENT_BASELINE.md` 为准。
+
+## R0 重新开发看板
+
+| ID | 状态 | Owner | 当前范围与完成条件 |
+|---|---|---|---|
+| R0-001 | IN_PROGRESS | A0/A1/A7 | 建立远端实时基线、源码分类、P0 `NOT_RUN` 矩阵和网络限制记录，提交并普通推送 |
+| R0-002 | NOT_RUN | A2/A0 | 用可注入 scheduler/connector 建立自动重连确定性生命周期复现，不继承旧 99/100 或分支全绿 |
+| R0-003 | NOT_RUN | A6/A7/A0 | 证明 build SHA 后单独复现 `RelayDeskConflictResolverTests`；旧 debug build 曾卡住但不能定性当前源码 |
+| R0-004 | NOT_RUN | A2/A3/A6/A0 | 建立两个真实应用进程的发现、配对、文件、暂停/恢复/取消和 Ask 纵向链路 |
+| R0-005 | NOT_RUN | A4/A5/A7/A0 | 重建同 SHA Windows/macOS 平台证据、精确阶段标签、artifact 和草稿 Release |
+| R0-006 | FINAL_ACCEPTANCE_REQUIRED | A0/用户 | 最终包完成后执行物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互 |
+| R0-007 | IN_PROGRESS | A0/A5 | A0 已推送 macOS R0 留言 `coord/platform-sync@4a811d11b`；持续跟踪 `macos/` ACK 或明确阻塞 |
+
+## 重开发前历史看板
+
 ## Ready
 
 既有 Phase 0-4 真机双机验收仍列在 `product/docs/reports/RELAYDESK_V1_INTERNAL_RC.md`。
