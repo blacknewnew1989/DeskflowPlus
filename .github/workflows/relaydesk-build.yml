@@ -174,6 +174,12 @@ jobs:
         run: |
           mkdir -p dist/${{ matrix.target.name }}
           set -o pipefail
+          if [[ "$RUNNER_OS" == "macOS" && "$GITHUB_REF" == "refs/heads/agent/a0/redevelop-p0" ]]; then
+            ctest --test-dir build/src/unittests -C Release \
+              -R '^RelayDeskAutoReconnectRuntimeTests$' \
+              --output-on-failure --repeat until-fail:50 2>&1 \
+              | tee dist/${{ matrix.target.name }}/autoreconnect-repeat.log
+          fi
           ctest --test-dir build/src/unittests -C Release --output-on-failure 2>&1 | tee dist/${{ matrix.target.name }}/ctest.log
 
       - name: Collect packages and SHA-256
