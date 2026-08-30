@@ -5,6 +5,7 @@
  */
 
 #include <QCryptographicHash>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QHostAddress>
 #include <QJsonDocument>
@@ -15,6 +16,9 @@
 #include <QTest>
 
 namespace {
+
+constexpr int kProcessDeadlineMs = 15'000;
+constexpr int kProcessKillWaitMs = 2'000;
 
 QJsonObject readResult(const QString &path)
 {
@@ -29,6 +33,13 @@ QString processOutput(QProcess &process)
   auto output = process.readAllStandardOutput();
   output += process.readAllStandardError();
   return QString::fromUtf8(output);
+}
+
+bool stopProcess(QProcess &process)
+{
+  if (process.state() == QProcess::NotRunning) return true;
+  process.kill();
+  return process.waitForFinished(kProcessKillWaitMs);
 }
 
 } // namespace
@@ -79,9 +90,6 @@ void TwoProcessRelayDeskRuntimeTests::discoveryPairingAndFileTransferUseTwoIndep
       QString::number(senderPort), QStringLiteral("--source"), sourcePath, QStringLiteral("--expected-sha256"),
       QString::fromLatin1(expectedSha), QStringLiteral("--result"), receiverResult,
   });
-  receiver.start();
-  QVERIFY2(receiver.waitForStarted(5'000), qPrintable(receiver.errorString()));
-
   QProcess sender;
   sender.setProgram(peer);
   sender.setArguments({
@@ -90,13 +98,33 @@ void TwoProcessRelayDeskRuntimeTests::discoveryPairingAndFileTransferUseTwoIndep
       QString::number(receiverPort), QStringLiteral("--source"), sourcePath, QStringLiteral("--expected-sha256"),
       QString::fromLatin1(expectedSha), QStringLiteral("--result"), senderResult,
   });
-  sender.start();
-  QVERIFY2(sender.waitForStarted(5'000), qPrintable(sender.errorString()));
-
-  const auto senderFinished = sender.waitForFinished(55'000);
-  const auto receiverFinished = receiver.waitForFinished(55'000);
-  if (!senderFinished) sender.kill();
-  if (!receiverFinished) receiver.kill();
+  QElapsedTimer deadline;
+  deadline.start();
+  const auto remaining = [&deadline] {
+    return qMax(0, kProcessDeadlineMs - static_cast<int>(deadline.elapsed()));
+  };
+  receiver.start();
+  const auto receiverStarted = receiver.waitForStarted(qMin(5'000, remaining()));
+  bool senderStarted = false;
+  if (receiverStarted && remaining() > 0) {
+    sender.start();
+    senderStarted = sender.waitForStarted(qMin(5'000, remaining()));
+  }
+  if (receiverStarted && senderStarted) {
+    while ((sender.state() != QProcess::NotRunning || receiver.state() != QProcess::NotRunning) &&
+           deadline.elapsed() < kProcessDeadlineMs) {
+      if (sender.state() != QProcess::NotRunning) sender.waitForFinished(50);
+      if (receiver.state() != QProcess::NotRunning) receiver.waitForFinished(50);
+    }
+  }
+  const auto senderFinished = sender.state() == QProcess::NotRunning;
+  const auto receiverFinished = receiver.state() == QProcess::NotRunning;
+  const auto senderStopped = stopProcess(sender);
+  const auto receiverStopped = stopProcess(receiver);
+  QVERIFY2(senderStopped, qPrintable(QStringLiteral("sender did not exit after kill")));
+  QVERIFY2(receiverStopped, qPrintable(QStringLiteral("receiver did not exit after kill")));
+  QVERIFY2(receiverStarted, qPrintable(receiver.errorString()));
+  QVERIFY2(senderStarted, qPrintable(sender.errorString()));
   QVERIFY2(senderFinished, qPrintable(processOutput(sender)));
   QVERIFY2(receiverFinished, qPrintable(processOutput(receiver)));
   QCOMPARE(sender.exitStatus(), QProcess::NormalExit);
@@ -150,6 +178,6 @@ void TwoProcessRelayDeskRuntimeTests::discoveryPairingAndFileTransferUseTwoIndep
   QVERIFY(QFile::exists(receiverJson.value(QStringLiteral("settingsFile")).toString()));
 }
 
-QTEST_MAIN(TwoProcessRelayDeskRuntimeTests)
+QTEST_APPLESS_MAIN(TwoProcessRelayDeskRuntimeTests)
 
 #include "TwoProcessRelayDeskRuntimeTests.moc"
