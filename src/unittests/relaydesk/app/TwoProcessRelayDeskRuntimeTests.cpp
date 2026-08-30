@@ -5,9 +5,11 @@
  */
 
 #include <QCryptographicHash>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QHostAddress>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
@@ -35,6 +37,18 @@ QString processOutput(QProcess &process)
   return QString::fromUtf8(output);
 }
 
+QString processEvidence(const QString &scenario, const QString &role, QProcess &process, const QString &resultPath)
+{
+  QFile result(resultPath);
+  const auto resultJson = result.open(QIODevice::ReadOnly) ? QString::fromUtf8(result.readAll()) : QStringLiteral("<missing>");
+  return QStringLiteral("scenario=%1 role=%2 error=%3 exitStatus=%4 exitCode=%5 result=%6 output=%7")
+      .arg(
+          scenario, role, process.errorString(),
+          process.exitStatus() == QProcess::NormalExit ? QStringLiteral("normal") : QStringLiteral("crash"),
+          QString::number(process.exitCode()), resultJson, processOutput(process)
+      );
+}
+
 bool stopProcess(QProcess &process)
 {
   if (process.state() == QProcess::NotRunning) return true;
@@ -52,6 +66,7 @@ private Q_SLOTS:
   void discoveryPairingAndFileTransferUseTwoIndependentProcesses();
   void pauseAndResumeUseTwoIndependentProcesses();
   void cancelUsesTwoIndependentProcesses();
+  void fileTreeUsesTwoIndependentProcesses();
 
 private:
   void runScenario(const QString &scenario);
@@ -72,19 +87,73 @@ void TwoProcessRelayDeskRuntimeTests::cancelUsesTwoIndependentProcesses()
   runScenario(QStringLiteral("cancel"));
 }
 
+void TwoProcessRelayDeskRuntimeTests::fileTreeUsesTwoIndependentProcesses()
+{
+  runScenario(QStringLiteral("file-tree"));
+}
+
 void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
 {
   QTemporaryDir temporary;
   QVERIFY(temporary.isValid());
   const auto sourcePath = temporary.filePath(QStringLiteral("payload.bin"));
-  const qsizetype sourceSize =
-      scenario == QStringLiteral("complete") ? 1024 * 1024 + 37 : 12 * 1024 * 1024 + 113;
-  const QByteArray sourceBytes(sourceSize, '\x6a');
-  QFile source(sourcePath);
-  QVERIFY(source.open(QIODevice::WriteOnly));
-  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
-  source.close();
-  const auto expectedSha = QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256).toHex();
+  QStringList sourcePaths;
+  QString expectedTreePath;
+  quint64 expectedCompletedFiles = 1;
+  quint64 expectedCompletedBytes = 0;
+  QByteArray expectedSha;
+  if (scenario == QStringLiteral("file-tree")) {
+    const QDir sourceRoot(temporary.filePath(QStringLiteral("sources")));
+    QVERIFY(QDir().mkpath(sourceRoot.filePath(QStringLiteral("bundle/nested/empty"))));
+    const auto alphaPath = sourceRoot.filePath(QStringLiteral("alpha.txt"));
+    const auto bundlePath = sourceRoot.filePath(QStringLiteral("bundle"));
+    const auto leafPath = sourceRoot.filePath(QStringLiteral("bundle/nested/leaf.bin"));
+    const QByteArray alphaBytes = QByteArrayLiteral("alpha relaydesk\n");
+    const QByteArray leafBytes(4097, '\x4c');
+    QFile alpha(alphaPath);
+    QVERIFY(alpha.open(QIODevice::WriteOnly));
+    QCOMPARE(alpha.write(alphaBytes), qint64(alphaBytes.size()));
+    alpha.close();
+    QFile leaf(leafPath);
+    QVERIFY(leaf.open(QIODevice::WriteOnly));
+    QCOMPARE(leaf.write(leafBytes), qint64(leafBytes.size()));
+    leaf.close();
+    sourcePaths = {alphaPath, bundlePath};
+    expectedSha = QCryptographicHash::hash(alphaBytes, QCryptographicHash::Sha256).toHex();
+    expectedCompletedFiles = 2;
+    expectedCompletedBytes = static_cast<quint64>(alphaBytes.size() + leafBytes.size());
+    expectedTreePath = temporary.filePath(QStringLiteral("expected-tree.json"));
+    const QJsonObject expectedTree{
+        {QStringLiteral("completedFiles"), static_cast<qint64>(expectedCompletedFiles)},
+        {QStringLiteral("completedBytes"), static_cast<qint64>(expectedCompletedBytes)},
+        {QStringLiteral("directories"), QJsonArray{
+             QStringLiteral("bundle"), QStringLiteral("bundle/nested"), QStringLiteral("bundle/nested/empty")}},
+        {QStringLiteral("files"), QJsonArray{
+             QJsonObject{{QStringLiteral("path"), QStringLiteral("alpha.txt")},
+                         {QStringLiteral("bytes"), static_cast<qint64>(alphaBytes.size())},
+                         {QStringLiteral("sha256"), QString::fromLatin1(expectedSha)}},
+             QJsonObject{{QStringLiteral("path"), QStringLiteral("bundle/nested/leaf.bin")},
+                         {QStringLiteral("bytes"), static_cast<qint64>(leafBytes.size())},
+                         {QStringLiteral("sha256"), QString::fromLatin1(
+                              QCryptographicHash::hash(leafBytes, QCryptographicHash::Sha256).toHex())}}}},
+    };
+    const auto expectedTreeBytes = QJsonDocument(expectedTree).toJson(QJsonDocument::Compact);
+    QFile expectedFile(expectedTreePath);
+    QVERIFY(expectedFile.open(QIODevice::WriteOnly));
+    QCOMPARE(expectedFile.write(expectedTreeBytes), qint64(expectedTreeBytes.size()));
+    expectedFile.close();
+  } else {
+    const qsizetype sourceSize =
+        scenario == QStringLiteral("complete") ? 1024 * 1024 + 37 : 12 * 1024 * 1024 + 113;
+    const QByteArray sourceBytes(sourceSize, '\x6a');
+    QFile source(sourcePath);
+    QVERIFY(source.open(QIODevice::WriteOnly));
+    QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+    source.close();
+    sourcePaths = {sourcePath};
+    expectedSha = QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256).toHex();
+    expectedCompletedBytes = static_cast<quint64>(sourceBytes.size());
+  }
 
   QUdpSocket senderReservation;
   QUdpSocket receiverReservation;
@@ -103,25 +172,24 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
   const auto senderResult = temporary.filePath(QStringLiteral("sender-result.json"));
   const auto receiverResult = temporary.filePath(QStringLiteral("receiver-result.json"));
   const QString peer = QString::fromUtf8(RELAYDESK_TWO_PROCESS_PEER_PATH);
+  const auto peerArguments = [&](QString role, QString root, quint16 localPort, quint16 remotePort, QString result) {
+    QStringList arguments{
+        QStringLiteral("--role"), std::move(role), QStringLiteral("--root"), std::move(root),
+        QStringLiteral("--scenario"), scenario, QStringLiteral("--discovery-port"), QString::number(localPort),
+        QStringLiteral("--peer-discovery-port"), QString::number(remotePort), QStringLiteral("--expected-sha256"),
+        QString::fromLatin1(expectedSha), QStringLiteral("--result"), std::move(result),
+    };
+    for (const auto &source : sourcePaths) arguments << QStringLiteral("--source") << source;
+    if (!expectedTreePath.isEmpty()) arguments << QStringLiteral("--expected-tree") << expectedTreePath;
+    return arguments;
+  };
 
   QProcess receiver;
   receiver.setProgram(peer);
-  receiver.setArguments({
-      QStringLiteral("--role"), QStringLiteral("receiver"), QStringLiteral("--root"), receiverRoot,
-      QStringLiteral("--scenario"), scenario,
-      QStringLiteral("--discovery-port"), QString::number(receiverPort), QStringLiteral("--peer-discovery-port"),
-      QString::number(senderPort), QStringLiteral("--source"), sourcePath, QStringLiteral("--expected-sha256"),
-      QString::fromLatin1(expectedSha), QStringLiteral("--result"), receiverResult,
-  });
+  receiver.setArguments(peerArguments(QStringLiteral("receiver"), receiverRoot, receiverPort, senderPort, receiverResult));
   QProcess sender;
   sender.setProgram(peer);
-  sender.setArguments({
-      QStringLiteral("--role"), QStringLiteral("sender"), QStringLiteral("--root"), senderRoot,
-      QStringLiteral("--scenario"), scenario,
-      QStringLiteral("--discovery-port"), QString::number(senderPort), QStringLiteral("--peer-discovery-port"),
-      QString::number(receiverPort), QStringLiteral("--source"), sourcePath, QStringLiteral("--expected-sha256"),
-      QString::fromLatin1(expectedSha), QStringLiteral("--result"), senderResult,
-  });
+  sender.setArguments(peerArguments(QStringLiteral("sender"), senderRoot, senderPort, receiverPort, senderResult));
   QElapsedTimer deadline;
   deadline.start();
   const auto remaining = [&deadline] {
@@ -145,33 +213,33 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
   const auto receiverFinished = receiver.state() == QProcess::NotRunning;
   const auto senderStopped = stopProcess(sender);
   const auto receiverStopped = stopProcess(receiver);
-  QVERIFY2(senderStopped, qPrintable(QStringLiteral("sender did not exit after kill")));
-  QVERIFY2(receiverStopped, qPrintable(QStringLiteral("receiver did not exit after kill")));
-  QVERIFY2(receiverStarted, qPrintable(receiver.errorString()));
-  QVERIFY2(senderStarted, qPrintable(sender.errorString()));
-  QVERIFY2(senderFinished, qPrintable(processOutput(sender)));
-  QVERIFY2(receiverFinished, qPrintable(processOutput(receiver)));
-  QCOMPARE(sender.exitStatus(), QProcess::NormalExit);
-  QCOMPARE(receiver.exitStatus(), QProcess::NormalExit);
+  if (!senderStopped) {
+    temporary.setAutoRemove(false);
+    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("sender"), sender, senderResult)));
+  }
+  if (!receiverStopped) {
+    temporary.setAutoRemove(false);
+    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("receiver"), receiver, receiverResult)));
+  }
+  if (!receiverStarted || !receiverFinished || receiver.exitStatus() != QProcess::NormalExit) {
+    temporary.setAutoRemove(false);
+    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("receiver"), receiver, receiverResult)));
+  }
+  if (!senderStarted || !senderFinished || sender.exitStatus() != QProcess::NormalExit) {
+    temporary.setAutoRemove(false);
+    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("sender"), sender, senderResult)));
+  }
 
   const auto senderJson = readResult(senderResult);
   const auto receiverJson = readResult(receiverResult);
-  QVERIFY2(
-      sender.exitCode() == 0,
-      qPrintable(
-          QStringLiteral("sender exit %1: %2")
-              .arg(sender.exitCode())
-              .arg(senderJson.value(QStringLiteral("error")).toString())
-      )
-  );
-  QVERIFY2(
-      receiver.exitCode() == 0,
-      qPrintable(
-          QStringLiteral("receiver exit %1: %2")
-              .arg(receiver.exitCode())
-              .arg(receiverJson.value(QStringLiteral("error")).toString())
-      )
-  );
+  if (sender.exitCode() != 0 || senderJson.isEmpty()) {
+    temporary.setAutoRemove(false);
+    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("sender"), sender, senderResult)));
+  }
+  if (receiver.exitCode() != 0 || receiverJson.isEmpty()) {
+    temporary.setAutoRemove(false);
+    QFAIL(qPrintable(processEvidence(scenario, QStringLiteral("receiver"), receiver, receiverResult)));
+  }
   QVERIFY(!senderJson.isEmpty());
   QVERIFY(!receiverJson.isEmpty());
   QVERIFY2(
@@ -210,6 +278,16 @@ void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
     QVERIFY(senderJson.value(QStringLiteral("cancelled")).toBool());
     QVERIFY(receiverJson.value(QStringLiteral("cancelled")).toBool());
     QVERIFY(receiverJson.value(QStringLiteral("cancelCleanupValid")).toBool());
+  }
+  if (scenario == QStringLiteral("file-tree")) {
+    QVERIFY(!senderJson.value(QStringLiteral("transferId")).toString().isEmpty());
+    QVERIFY(!receiverJson.value(QStringLiteral("transferId")).toString().isEmpty());
+    QCOMPARE(senderJson.value(QStringLiteral("completedFiles")).toVariant().toULongLong(), expectedCompletedFiles);
+    QCOMPARE(receiverJson.value(QStringLiteral("completedFiles")).toVariant().toULongLong(), expectedCompletedFiles);
+    QCOMPARE(senderJson.value(QStringLiteral("completedBytes")).toVariant().toULongLong(), expectedCompletedBytes);
+    QCOMPARE(receiverJson.value(QStringLiteral("completedBytes")).toVariant().toULongLong(), expectedCompletedBytes);
+    QVERIFY(receiverJson.value(QStringLiteral("tree")).toBool());
+    QVERIFY(!receiverJson.value(QStringLiteral("partFilesRemaining")).toBool());
   }
 }
 

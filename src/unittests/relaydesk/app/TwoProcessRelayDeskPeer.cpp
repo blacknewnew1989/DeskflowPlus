@@ -22,8 +22,10 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QSet>
 #include <QSettings>
 #include <QSysInfo>
 #include <QTimer>
@@ -36,7 +38,7 @@ using namespace ::relaydesk::transfer;
 namespace {
 
 enum class Role { Sender, Receiver };
-enum class Scenario { Complete, PauseResume, Cancel };
+enum class Scenario { Complete, PauseResume, Cancel, FileTree };
 
 constexpr quint64 kControlThresholdBytes = 1024U * 1024U;
 
@@ -72,15 +74,18 @@ class Peer final : public QObject
 {
 public:
   Peer(Role role, Scenario scenario, QString root, quint16 discoveryPort, quint16 peerDiscoveryPort,
-       QString sourcePath, QByteArray expectedSha256, QString resultPath, QObject *parent = nullptr)
+       QStringList sourcePaths, QByteArray expectedSha256, QString expectedTreePath, QString resultPath,
+       QObject *parent = nullptr)
       : QObject(parent),
         m_role(role),
         m_scenario(scenario),
         m_root(std::move(root)),
         m_discoveryPort(discoveryPort),
         m_peerDiscoveryPort(peerDiscoveryPort),
-        m_sourcePath(std::move(sourcePath)),
+        m_sourcePaths(std::move(sourcePaths)),
+        m_sourcePath(m_sourcePaths.first()),
         m_expectedSha256(std::move(expectedSha256)),
+        m_expectedTreePath(std::move(expectedTreePath)),
         m_resultPath(std::move(resultPath))
   {
   }
@@ -165,7 +170,9 @@ public:
     connect(m_files.get(), &FileTransferRuntime::peerReady, this, [this](const DeviceId &peer, const auto &) {
       if (m_role != Role::Sender || peer != m_peerId || m_sendStarted) return;
       m_sendStarted = true;
-      const auto started = m_files->send(m_peerId, {QUrl::fromLocalFile(m_sourcePath)}, {});
+      QList<QUrl> sources;
+      for (const auto &source : m_sourcePaths) sources.append(QUrl::fromLocalFile(source));
+      const auto started = m_files->send(m_peerId, sources, {});
       if (!started.ok()) finish(false, started.diagnostic);
     });
     connect(m_files.get(), &FileTransferRuntime::peerDisconnected, this, [this](const DeviceId &peer) {
@@ -259,7 +266,16 @@ private:
       finish(false, QStringLiteral("transfer did not complete"));
       return;
     }
+    if (snapshot.state == TransferState::Completed) {
+      m_lastTransferId = snapshot.id.toString();
+      m_completedFiles = snapshot.progress.completedFiles;
+      m_completedBytes = snapshot.progress.completedBytes;
+    }
     if (snapshot.direction == TransferDirection::Sending && m_role == Role::Sender) {
+      if (m_scenario == Scenario::FileTree) {
+        if (snapshot.state == TransferState::Completed) finish(true, {});
+        return;
+      }
       if (m_scenario == Scenario::PauseResume) {
         if (snapshot.state == TransferState::Paused) m_senderObservedPaused = true;
         if (snapshot.state == TransferState::Completed) {
@@ -271,13 +287,28 @@ private:
         return;
       }
       if (m_scenario == Scenario::Cancel) {
-        if (snapshot.state == TransferState::Cancelled) m_senderObservedCancelled = true;
+        if (snapshot.state == TransferState::Cancelled) {
+          m_senderObservedCancelled = true;
+          finish(true, {});
+        }
         return;
       }
       if (snapshot.state == TransferState::Completed) finish(true, {});
       return;
     }
     if (snapshot.direction != TransferDirection::Receiving || m_role != Role::Receiver) return;
+    if (m_scenario == Scenario::FileTree) {
+      if (snapshot.state == TransferState::Completed) {
+        m_treeValid = validateTree(snapshot);
+        if (!m_treeValid) {
+          finish(false, QStringLiteral("file tree completion validation failed"));
+        } else {
+          m_receiverTransferCompleted = true;
+          finishReceiverIfComplete();
+        }
+      }
+      return;
+    }
     if (m_scenario == Scenario::PauseResume) {
       if (!m_receiverControlIssued && snapshot.state == TransferState::Transferring &&
           snapshot.progress.completedBytes >= kControlThresholdBytes) {
@@ -361,6 +392,62 @@ private:
     });
   }
 
+  bool validateTree(const TransferSnapshot &snapshot)
+  {
+    QFile expectedFile(m_expectedTreePath);
+    if (!expectedFile.open(QIODevice::ReadOnly)) return false;
+    const auto document = QJsonDocument::fromJson(expectedFile.readAll());
+    if (!document.isObject()) return false;
+    const auto expected = document.object();
+    const auto expectedFiles = expected.value(QStringLiteral("files"));
+    const auto expectedDirectories = expected.value(QStringLiteral("directories"));
+    const auto expectedBytes = expected.value(QStringLiteral("completedBytes"));
+    const auto expectedFileCount = expected.value(QStringLiteral("completedFiles"));
+    if (!expectedFiles.isArray() || !expectedDirectories.isArray() || !expectedBytes.isDouble() ||
+        !expectedFileCount.isDouble() || snapshot.progress.completedBytes != expectedBytes.toVariant().toULongLong() ||
+        snapshot.progress.completedFiles != expectedFileCount.toVariant().toULongLong()) {
+      return false;
+    }
+    const QDir receiveRoot(QDir(m_root).filePath(QStringLiteral("receive")));
+    QSet<QString> expectedEntries;
+    for (const auto &directory : expectedDirectories.toArray()) {
+      if (!directory.isString()) return false;
+      const auto info = QFileInfo(receiveRoot.filePath(directory.toString()));
+      if (!info.isDir()) return false;
+      expectedEntries.insert(QStringLiteral("dir:") + directory.toString());
+    }
+    for (const auto &fileValue : expectedFiles.toArray()) {
+      if (!fileValue.isObject()) return false;
+      const auto file = fileValue.toObject();
+      const auto path = file.value(QStringLiteral("path"));
+      const auto sha256 = file.value(QStringLiteral("sha256"));
+      const auto bytes = file.value(QStringLiteral("bytes"));
+      if (!path.isString() || !sha256.isString() || !bytes.isDouble()) return false;
+      const auto filePath = receiveRoot.filePath(path.toString());
+      const auto info = QFileInfo(filePath);
+      if (!info.isFile() || info.size() != bytes.toVariant().toLongLong() ||
+          fileSha256(filePath).toHex() != sha256.toString().toLatin1()) {
+        return false;
+      }
+      expectedEntries.insert(QStringLiteral("file:") + path.toString());
+    }
+    QSet<QString> actualEntries;
+    QDirIterator iterator(
+        receiveRoot.absolutePath(), QDir::AllEntries | QDir::NoDotAndDotDot, QDirIterator::Subdirectories
+    );
+    while (iterator.hasNext()) {
+      iterator.next();
+      const auto relativePath = QDir::fromNativeSeparators(receiveRoot.relativeFilePath(iterator.filePath()));
+      if (relativePath == QStringLiteral(".incoming") || relativePath.startsWith(QStringLiteral(".incoming/"))) {
+        continue;
+      }
+      const auto info = iterator.fileInfo();
+      if (!info.isFile() && !info.isDir()) return false;
+      actualEntries.insert((info.isDir() ? QStringLiteral("dir:") : QStringLiteral("file:")) + relativePath);
+    }
+    return actualEntries == expectedEntries && !containsPartFile(receiveRoot.absolutePath());
+  }
+
   void finish(bool passed, const QString &error)
   {
     if (m_finished || m_finishQueued) return;
@@ -387,6 +474,11 @@ private:
         {QStringLiteral("cancelled"), m_role == Role::Sender ? m_senderObservedCancelled : m_receiverCancelled},
         {QStringLiteral("receiverControlled"), m_receiverControlIssued},
         {QStringLiteral("senderObservedPause"), m_senderObservedPaused},
+        {QStringLiteral("transferId"), m_lastTransferId},
+        {QStringLiteral("completedFiles"), static_cast<qint64>(m_completedFiles)},
+        {QStringLiteral("completedBytes"), static_cast<qint64>(m_completedBytes)},
+        {QStringLiteral("tree"), m_treeValid},
+        {QStringLiteral("partFilesRemaining"), containsPartFile(QDir(m_root).filePath(QStringLiteral("receive")))},
     };
     QSaveFile output(m_resultPath);
     if (output.open(QIODevice::WriteOnly)) {
@@ -408,8 +500,10 @@ private:
   QString m_root;
   quint16 m_discoveryPort;
   quint16 m_peerDiscoveryPort;
+  QStringList m_sourcePaths;
   QString m_sourcePath;
   QByteArray m_expectedSha256;
+  QString m_expectedTreePath;
   QString m_resultPath;
   std::unique_ptr<QSettings> m_settings;
   QString m_pemPath;
@@ -438,6 +532,10 @@ private:
   bool m_senderObservedCancelled = false;
   bool m_receiverCancelled = false;
   bool m_cancelCleanupValid = false;
+  QString m_lastTransferId;
+  quint64 m_completedFiles = 0;
+  quint64 m_completedBytes = 0;
+  bool m_treeValid = false;
 };
 
 } // namespace
@@ -464,11 +562,15 @@ int main(int argc, char *argv[])
       QStringLiteral("result"), QStringLiteral("terminal result JSON"), QStringLiteral("path")
   );
   QCommandLineOption scenarioOption(
-      QStringLiteral("scenario"), QStringLiteral("complete, pause-resume, or cancel"), QStringLiteral("name")
+      QStringLiteral("scenario"), QStringLiteral("complete, pause-resume, cancel, or file-tree"), QStringLiteral("name")
   );
-  parser.addOptions(
-      {roleOption, scenarioOption, rootOption, portOption, peerPortOption, sourceOption, shaOption, resultOption}
+  QCommandLineOption expectedTreeOption(
+      QStringLiteral("expected-tree"), QStringLiteral("file-tree expected JSON"), QStringLiteral("path")
   );
+  parser.addOptions({
+      roleOption, scenarioOption, rootOption, portOption, peerPortOption, sourceOption, shaOption, expectedTreeOption,
+      resultOption
+  });
   parser.process(application);
 
   const auto roleText = parser.value(roleOption);
@@ -477,7 +579,8 @@ int main(int argc, char *argv[])
   const auto scenarioText = parser.value(scenarioOption);
   const auto scenario = scenarioText == QStringLiteral("complete") ? Scenario::Complete
                       : scenarioText == QStringLiteral("pause-resume") ? Scenario::PauseResume
-                      : scenarioText == QStringLiteral("cancel") ? Scenario::Cancel : Scenario::Complete;
+                      : scenarioText == QStringLiteral("cancel") ? Scenario::Cancel
+                      : scenarioText == QStringLiteral("file-tree") ? Scenario::FileTree : Scenario::Complete;
   bool localPortOk = false;
   bool peerPortOk = false;
   const auto localPort = parser.value(portOption).toUShort(&localPortOk);
@@ -485,14 +588,15 @@ int main(int argc, char *argv[])
   const auto expected = QByteArray::fromHex(parser.value(shaOption).toLatin1());
   if ((roleText != QStringLiteral("sender") && roleText != QStringLiteral("receiver")) ||
       (scenarioText != QStringLiteral("complete") && scenarioText != QStringLiteral("pause-resume") &&
-       scenarioText != QStringLiteral("cancel")) || !localPortOk || !peerPortOk ||
+       scenarioText != QStringLiteral("cancel") && scenarioText != QStringLiteral("file-tree")) || !localPortOk || !peerPortOk ||
       localPort == 0 || peerPort == 0 || parser.value(rootOption).isEmpty() || parser.value(resultOption).isEmpty() ||
-      parser.value(sourceOption).isEmpty() || expected.size() != 32) {
+      parser.values(sourceOption).isEmpty() || expected.size() != 32 ||
+      (scenario == Scenario::FileTree && parser.value(expectedTreeOption).isEmpty())) {
     return 2;
   }
   Peer peer(
-      role, scenario, parser.value(rootOption), localPort, peerPort, parser.value(sourceOption), expected,
-      parser.value(resultOption)
+      role, scenario, parser.value(rootOption), localPort, peerPort, parser.values(sourceOption), expected,
+      parser.value(expectedTreeOption), parser.value(resultOption)
   );
   QString error;
   if (!peer.start(&error)) {
