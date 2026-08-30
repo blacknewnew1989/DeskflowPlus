@@ -22,6 +22,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <functional>
 #include <utility>
 
 using namespace deskflow::relaydesk;
@@ -70,6 +71,7 @@ class AutoReconnectRuntimeTests final : public QObject
 private Q_SLOTS:
   void trustRevocationStopsReconnectAndDisconnectsPeer();
   void settingsRefreshReplaysExistingTrustedSnapshot();
+  void destructionInvalidatesScheduledRetryCallbacks();
 };
 
 void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer()
@@ -132,18 +134,22 @@ void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer(
     errors.append(message);
   });
   QPointer<AutoReconnectCoordinator> coordinator;
+  QPointer<AddressCandidateProvider> provider;
   {
     AutoReconnectRuntime reconnect(firstPairing, firstDiscovery, firstFiles, {});
     QTRY_VERIFY2_WITH_TIMEOUT(firstFiles.isPeerReady(secondId), qPrintable(errors.join(QStringLiteral("; "))), 5000);
     QVERIFY(reconnect.m_coordinators.contains(secondId));
     coordinator = reconnect.m_coordinators.value(secondId);
+    provider = reconnect.m_providers.value(secondId);
     QVERIFY(coordinator != nullptr);
+    QVERIFY(provider != nullptr);
     reconnect.m_pending.insert(secondId, [](AutoReconnectConnectResult) {});
     QVERIFY(reconnect.m_pending.contains(secondId));
 
     QSignalSpy disconnected(&firstFiles, &FileTransferRuntime::peerDisconnected);
     QVERIFY(firstPairing.revoke(secondId).ok());
     QVERIFY(coordinator.isNull());
+    QVERIFY(provider.isNull());
     QTRY_VERIFY_WITH_TIMEOUT(disconnected.count() == 1 && !firstFiles.isPeerReady(secondId), 5000);
     QVERIFY(!reconnect.m_coordinators.contains(secondId));
     QVERIFY(!reconnect.m_providers.contains(secondId));
@@ -157,8 +163,8 @@ void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer(
     QVERIFY(!reconnect.m_coordinators.contains(secondId));
   }
 
-  QTest::qWait(1100);
   QVERIFY(coordinator.isNull());
+  QVERIFY(provider.isNull());
 }
 
 void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
@@ -190,11 +196,14 @@ void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
 
   FileTransferRuntime files(localId, pairing.trustedDevices(), discovery, identityPath);
   QPointer<AutoReconnectCoordinator> coordinator;
+  QPointer<AddressCandidateProvider> provider;
   {
     AutoReconnectRuntime reconnect(pairing, discovery, files, {});
     QTRY_VERIFY(reconnect.m_coordinators.contains(peerId));
     coordinator = reconnect.m_coordinators.value(peerId);
+    provider = reconnect.m_providers.value(peerId);
     QVERIFY(coordinator != nullptr);
+    QVERIFY(provider != nullptr);
     QSignalSpy connecting(coordinator, &AutoReconnectCoordinator::connecting);
     QTRY_VERIFY(connecting.count() >= 1);
     const auto initialAttemptCount = connecting.count();
@@ -206,7 +215,68 @@ void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
   }
 
   QVERIFY(coordinator.isNull());
-  QTest::qWait(1100);
+  QVERIFY(provider.isNull());
+}
+
+void AutoReconnectRuntimeTests::destructionInvalidatesScheduledRetryCallbacks()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+
+  const auto localId = DeviceId::generate();
+  const auto peerId = DeviceId::generate();
+  const auto localInfo = device(localId, identity.fingerprintSha256, QStringLiteral("Local"));
+  const auto trustPath = directory.filePath(QStringLiteral("trusted.json"));
+  TrustedDeviceStore seed(trustPath);
+  QVERIFY(seed.upsert(trustedDevice(peerId, identity.fingerprintSha256)));
+  QVERIFY(seed.save().ok);
+
+  DeviceHomeModel model;
+  PairingWizardModel pairingModel;
+  DeviceDiscoveryRuntime discovery(localInfo, model, loopbackDiscovery());
+  QString diagnostic;
+  QVERIFY2(discovery.start(&diagnostic), qPrintable(diagnostic));
+  PairingTrustRuntime pairing(localInfo, trustPath, discovery, model, pairingModel);
+  QVERIFY(pairing.isReady());
+  FileTransferRuntime files(localId, pairing.trustedDevices(), discovery, identityPath);
+  TrustedDeviceStore coordinatorStore(trustPath);
+  QVERIFY(coordinatorStore.load().ok);
+
+  QList<std::function<void()>> scheduled;
+  QPointer<AutoReconnectCoordinator> coordinator;
+  QPointer<AddressCandidateProvider> provider;
+  {
+    AutoReconnectRuntime reconnect(pairing, discovery, files, {});
+    provider = new AddressCandidateProvider({}, &reconnect);
+    coordinator = new AutoReconnectCoordinator(
+        coordinatorStore, *provider,
+        [](const DeviceId &, const AddressCandidate &, AutoReconnectCoordinator::ConnectCallback callback) {
+          callback({.error = AutoReconnectConnectError::NetworkError});
+        },
+        [&scheduled](ReconnectDelay, std::function<void()> callback) {
+          scheduled.append(std::move(callback));
+        }
+    );
+    reconnect.m_providers.insert(peerId, provider);
+    reconnect.m_coordinators.insert(peerId, coordinator);
+    coordinator->start({
+        .deviceId = peerId,
+        .discoveredAddresses = {QHostAddress::LocalHost},
+        .settings = {},
+        .inputPort = 24800,
+        .filePort = 24801,
+    });
+    QTRY_COMPARE(scheduled.size(), 1);
+  }
+
+  QVERIFY(coordinator.isNull());
+  QVERIFY(provider.isNull());
+  auto retry = std::move(scheduled.front());
+  retry();
+  QCOMPARE(scheduled.size(), 1);
 }
 
 QTEST_MAIN(AutoReconnectRuntimeTests)
