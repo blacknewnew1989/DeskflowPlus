@@ -169,11 +169,15 @@ void AutoReconnectRuntimeTests::trustRevocationStopsReconnectAndDisconnectsPeer(
 
 void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
 {
+  qInfo("R0_RECONNECT settings: enter");
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
+  qInfo("R0_RECONNECT settings: temporary directory ready");
   const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  qInfo("R0_RECONNECT settings: identity written");
   const auto identity = TlsIdentityAdapter::inspect(identityPath);
   QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  qInfo("R0_RECONNECT settings: identity inspected");
 
   const auto localId = DeviceId::generate();
   const auto peerId = DeviceId::generate();
@@ -184,21 +188,27 @@ void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
   TrustedDeviceStore seed(trustPath);
   QVERIFY(seed.upsert(trustedDevice(peerId, identity.fingerprintSha256)));
   QVERIFY(seed.save().ok);
+  qInfo("R0_RECONNECT settings: trust saved");
 
   DeviceHomeModel model;
   PairingWizardModel pairingModel;
   DeviceDiscoveryRuntime discovery(localInfo, model, loopbackDiscovery());
   QString diagnostic;
   QVERIFY2(discovery.start(&diagnostic), qPrintable(diagnostic));
+  qInfo("R0_RECONNECT settings: discovery started");
   PairingTrustRuntime pairing(localInfo, trustPath, discovery, model, pairingModel);
   QVERIFY(pairing.isReady());
+  qInfo("R0_RECONNECT settings: pairing ready");
   QVERIFY(discovery.registry().observeAdvertisement(peerInfo, QHostAddress(QStringLiteral("192.0.2.60"))));
+  qInfo("R0_RECONNECT settings: advertisement observed");
 
   FileTransferRuntime files(localId, pairing.trustedDevices(), discovery, identityPath);
+  qInfo("R0_RECONNECT settings: file runtime constructed");
   QPointer<AutoReconnectCoordinator> coordinator;
   QPointer<AddressCandidateProvider> provider;
   {
     AutoReconnectRuntime reconnect(pairing, discovery, files, {});
+    qInfo("R0_RECONNECT settings: reconnect runtime constructed");
     QTRY_VERIFY(reconnect.m_coordinators.contains(peerId));
     coordinator = reconnect.m_coordinators.value(peerId);
     provider = reconnect.m_providers.value(peerId);
@@ -206,16 +216,21 @@ void AutoReconnectRuntimeTests::settingsRefreshReplaysExistingTrustedSnapshot()
     QVERIFY(provider != nullptr);
     QSignalSpy connecting(coordinator, &AutoReconnectCoordinator::connecting);
     QTRY_VERIFY(connecting.count() >= 1);
+    qInfo("R0_RECONNECT settings: initial attempt observed");
     const auto initialAttemptCount = connecting.count();
 
     reconnect.setSettings({.manualAddresses = {*parseManualAddress(QStringLiteral("192.0.2.61"), 24800, 24801)}});
+    qInfo("R0_RECONNECT settings: settings refreshed");
 
     QTRY_VERIFY(connecting.count() >= initialAttemptCount + 2);
+    qInfo("R0_RECONNECT settings: refreshed attempts observed");
     QCOMPARE(connecting.last().at(1).value<AddressCandidate>().source, AddressCandidateSource::Manual);
   }
 
+  qInfo("R0_RECONNECT settings: reconnect runtime destroyed");
   QVERIFY(coordinator.isNull());
   QVERIFY(provider.isNull());
+  qInfo("R0_RECONNECT settings: complete");
 }
 
 void AutoReconnectRuntimeTests::destructionInvalidatesScheduledRetryCallbacks()
