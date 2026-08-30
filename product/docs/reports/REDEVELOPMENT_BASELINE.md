@@ -75,13 +75,18 @@ run `32446566789` 的 macOS job 中，`RelayDeskAutoReconnectRuntimeTests` 以
 日志没有断言、堆栈或崩溃位置，因此根因保持 `UNVERIFIED`。历史上对销毁顺序的修改不能作为
 根因证明。R0 需要基于可注入 scheduler/connector 建立确定性生命周期复现，再决定是否改代码。
 
-### 当前弱复现
+### 当前定向复现
 
-文件传输审计代理在既有 Windows debug 构建目录尝试运行 8 个定向目标，首个
-`RelayDeskConflictResolverTests` 超过 60 秒无 CPU 和日志进展，随后只终止其启动的测试进程。
-该构建目录与当前 SHA 的新鲜度尚未证明，因此本轮测试状态仍为 `NOT_RUN`；“旧构建曾卡住”
-只作为待复现现象，不能据此认定源码缺陷。下一次复现必须先证明 configure/build SHA 与命令，
-再运行单一目标。
+既有 Windows debug 目录曾观察到 `RelayDeskConflictResolverTests` 无进展，但构建 SHA 未证明。
+A0 随后从重开发 worktree 配置 `build/windows/r0-debug-fresh`，只构建并运行目标测试：
+
+- 未改源码的 `RelayDeskAutoReconnectRuntimeTests`：连续 20/20 `PASS`，约 2.8 秒/轮；
+- 提交 `72008201e`：增加受控 scheduler 销毁回调用例并移除两处 `qWait(1100)`；
+- 改后 `RelayDeskAutoReconnectRuntimeTests`：连续 50/50 `PASS`，约 0.6 秒/轮；
+- `RelayDeskConflictResolverTests`：连续 50/50 `PASS`，总计 5.40 秒。
+
+因此旧目录卡住未在 fresh build 复现，不认定为当前源码缺陷。历史 macOS abort 的生产根因仍未
+证明；`72008201e` 是测试确定性收口，不是生产修复。R0-002 仍等待 macOS 精确 SHA 复验。
 
 ## 5. 源码分类
 
@@ -132,14 +137,14 @@ run `32446566789` 的 macOS job 中，`RelayDeskAutoReconnectRuntimeTests` 以
 
 | ID | 级别 | 状态 | 内容 |
 |---|---|---|---|
-| R0-001 | P0 | `IN_PROGRESS` | 建立新基线、状态和任务板，清除旧 PASS 的当前效力。 |
-| R0-002 | P1 | `NOT_RUN` | 为 auto reconnect 建立无真实 socket/任意 sleep 的确定性生命周期复现。 |
-| R0-003 | P1 | `NOT_RUN` | 在证明构建 SHA 后单独复现 `RelayDeskConflictResolverTests` 卡住现象。 |
+| R0-001 | P0 | `PASS` | 基线 `30593b53e` 已普通推送，新状态和任务板已清除旧 PASS 的当前效力。 |
+| R0-002 | P1 | `IN_PROGRESS` | Windows 确定性测试 50/50 PASS；等待 macOS 对 `72008201e` 的最小目标 ACK。 |
+| R0-003 | P1 | `PASS` | fresh build 的 conflict resolver 连续 50/50 PASS，旧目录卡住未复现。 |
 | R0-004 | P1 | `NOT_RUN` | 建立两个真实应用进程的发现、配对、文件和 UI 控制纵向用例。 |
 | R0-005 | P1 | `NOT_RUN` | 重新建立 Windows/macOS 同 SHA 的阶段标签和 Release 证据。 |
 | CI-001 | P1 | `IN_PROGRESS` | `materials-diagnostic` job 可 soft-fail 且不阻塞包；需决定是否让资料错误使 run 失败。 |
 | DOC-001 | P2 | `IN_PROGRESS` | `IPlatformFileSafety.h` 的 `FileReceiver NOT_WIRED` 注释与现有 runtime wiring 不一致。 |
-| NET-001 | P2 | `IN_PROGRESS` | Git Smart HTTP 间歇不可达；普通新提交 push 恢复前，远端同步必须保持可证实。 |
+| NET-001 | P2 | `PASS` | 普通 Git 已恢复并推送产品与 coordination 新提交；保留间歇连接风险但不使用手工提交对象流程。 |
 
 ## 8. 跨平台即时沟通
 
@@ -153,7 +158,11 @@ R0 已发送：
 - coordination commit：`4a811d11b`，已普通 push 到 `origin/coord/platform-sync`；
 - 目标：A5-macOS；
 - 主题：自动重连历史 macOS 失败、R0 证据归零、确定性生命周期测试与后续精确 SHA 复验；
-- ACK 状态：`NOT_RUN`，等待 `product/working/platform-sync/macos/` 的追加回复。
+- 基线 ACK：`product/working/platform-sync/macos/20260830-144918Z-R0-001-macos-redevelopment-ack.md`，
+  coordination commit `862688b63`；
+- 测试复验请求：`product/working/platform-sync/a0/20260830-151256Z-R0-002-macos-reconnect-test.md`，
+  coordination commit `d854d55cd`；
+- 精确测试 ACK 状态：`NOT_RUN`，异步等待 A5 结果，不阻塞 A0 继续其他 R0 工作。
 
 聊天、本地状态报告或未推送文件不能替代 GitHub 留言。A0 持续跟踪到 ACK 或明确阻塞。
 

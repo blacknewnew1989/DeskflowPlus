@@ -23,6 +23,7 @@
 - Current branch: `agent/a0/redevelop-p0`
 - Current product branch tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
+- Current redevelopment tip: `72008201e9ff5eb89ba9f2baabba9479a46785a4`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
 - Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
@@ -35,12 +36,14 @@
 
 | ID | 状态 | 当前证据 / 下一步 |
 |---|---|---|
-| R0-001 | IN_PROGRESS | 已创建 `agent/a0/redevelop-p0`、远端同 SHA ref 和重开发前锚点；基线报告待提交 |
-| R0-002 | NOT_RUN | 自动重连历史 macOS 99/100 失败根因仍为 `UNVERIFIED`；先建确定性生命周期复现 |
-| R0-003 | NOT_RUN | 文件传输、发现、配对、UI、平台和包均只完成静态复用审计，尚未建立本轮测试 PASS |
-| R0-004 | IN_PROGRESS | Git Smart HTTP 当前间歇连接重置；API 只用于核对及当前已有 SHA 锚点，新提交不得用手工对象流程冒充 push |
-| R0-005 | NOT_RUN | 两应用进程、物理 Win↔Mac、精确阶段标签与 Release 尚未执行 |
-| R0-006 | IN_PROGRESS | 已在 `coord/platform-sync` 推送 A0 macOS R0 留言 `4a811d11b`；等待 A5 在 `macos/` 追加 ACK |
+| R0-001 | PASS | 基线报告提交 `30593b53e` 已普通推送；远端分支、产品基线和上游 tag 均已 API 复读 |
+| R0-002 | IN_PROGRESS | `72008201e` 仅改测试；Windows fresh Debug 改前 20/20、改后 50/50 PASS，等待 macOS 精确 SHA 复验 |
+| R0-003 | PASS | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS；旧 debug 目录卡住未复现，不认定源码缺陷 |
+| R0-004 | NOT_RUN | 两个真实应用进程的发现、配对、文件和 UI 控制纵向链路尚未建立 |
+| R0-005 | NOT_RUN | Windows/macOS 同 SHA 的精确阶段标签、artifact 和 Release 尚未执行 |
+| R0-006 | FINAL_ACCEPTANCE_REQUIRED | 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互留最终验收 |
+| R0-007 | IN_PROGRESS | A5 基线 ACK `862688b63` 已收到；A0 测试请求 `d854d55cd` 已推送，等待 macOS 精确 SHA 结果 |
+| NET-001 | PASS | 普通 Git push 已恢复并推送 `30593b53e`、`72008201e` 和 coordination commits；保留间歇风险记录 |
 
 以下 2026-08-20 及更早内容全部为重开发前历史证据，只能用于选择候选测试和复现缺陷，不构成
 当前 R0 PASS。
