@@ -12,6 +12,7 @@
 #include "relaydesk/transfer/ControlMessageCodec.h"
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
+#include "relaydesk/transfer/TransferRecoveryStore.h"
 #include "relaydesk/trust/TlsIdentityAdapter.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
 #include "../TestTlsIdentity.h"
@@ -107,6 +108,9 @@ private Q_SLOTS:
   void incomingConflictPolicies();
   void interruptedIncomingFileResumesFromDurableCheckpoint();
   void stoppingSenderLeavesOutgoingAtResumableCheckpoint();
+  void outgoingRecoverySaveFailureStopsBeforeStreaming();
+  void outgoingRecoveryRemovalFailureDoesNotPublishTerminalSuccess_data();
+  void outgoingRecoveryRemovalFailureDoesNotPublishTerminalSuccess();
   void incomingFolderCommitsEveryFileAndPreservesEmptyDirectories();
   void runtimeSourceUsesCanonicalSenderBoundary();
   void runtimeSourceComposesPlatformReceiver();
@@ -124,6 +128,7 @@ private:
       bool receiverControls, ::relaydesk::transfer::PartialDisposition partialDisposition,
       bool repeatCancel = false
   );
+  void recoveryStoreFailureDoesNotPublishSuccess(bool failSave, bool cancelAfterStart);
 };
 
 void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
@@ -1198,6 +1203,7 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   );
   FileTransferRuntimeOptions options;
   options.listenAddress = QHostAddress::LocalHost;
+  options.recoveryStateRoot = directory.filePath(QStringLiteral("sender-stop-recovery"));
   options.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
   FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
   FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
@@ -1261,6 +1267,22 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   QVERIFY(interruptedBytes >= 1024U * 1024U);
   QVERIFY(interruptedBytes < static_cast<quint64>(sourceBytes.size()));
 
+  TransferRecoveryStore recoveryStore(options.recoveryStateRoot);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      QFileInfo::exists(recoveryStore.outgoingStatePath(*started.transferId)), 5'000
+  );
+  const auto persisted = recoveryStore.loadOutgoing(*started.transferId);
+  QVERIFY2(persisted.ok(), qPrintable(persisted.diagnostic));
+  QCOMPARE(persisted.state->transferId, *started.transferId);
+  QCOMPARE(persisted.state->localDeviceId, senderId);
+  QCOMPARE(persisted.state->peerDeviceId, receiverId);
+  QCOMPARE(persisted.state->peerFingerprintSha256, identity.fingerprintSha256);
+  QCOMPARE(persisted.state->sourceRoots.size(), qsizetype{1});
+  QCOMPARE(persisted.state->sourceRoots.constFirst().canonicalPath, QFileInfo(sourcePath).canonicalFilePath());
+  QCOMPARE(persisted.state->summary.totalBytes, static_cast<quint64>(sourceBytes.size()));
+  QCOMPARE(persisted.state->pagePlan.entryCount, quint64{1});
+  QCOMPARE(persisted.state->progress.completedBytes, interruptedBytes);
+
   QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY2(sender.connectPeer(receiverId, &diagnostic), qPrintable(diagnostic));
 
@@ -1281,10 +1303,164 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   QVERIFY2(receiverLatest.has_value() && receiverLatest->state == TransferState::Completed, qPrintable(evidence));
   QVERIFY(senderStates.contains(QString::number(static_cast<int>(TransferState::Interrupted))));
   QVERIFY(senderStates.contains(QString::number(static_cast<int>(TransferState::Resuming))));
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !QFileInfo::exists(recoveryStore.outgoingStatePath(*started.transferId)), 5'000
+  );
   QFile committed(QDir(receiveRoot).filePath(QStringLiteral("sender-stop-source.bin")));
   QVERIFY2(committed.open(QIODevice::ReadOnly), qPrintable(committed.errorString()));
   QCOMPARE(committed.readAll(), sourceBytes);
   QVERIFY2(errors.isEmpty(), qPrintable(evidence));
+}
+
+void FileTransferRuntimeTests::outgoingRecoverySaveFailureStopsBeforeStreaming()
+{
+  recoveryStoreFailureDoesNotPublishSuccess(true, false);
+}
+
+void FileTransferRuntimeTests::outgoingRecoveryRemovalFailureDoesNotPublishTerminalSuccess_data()
+{
+  QTest::addColumn<bool>("cancelAfterStart");
+  QTest::newRow("completed") << false;
+  QTest::newRow("cancelled") << true;
+}
+
+void FileTransferRuntimeTests::outgoingRecoveryRemovalFailureDoesNotPublishTerminalSuccess()
+{
+  QFETCH(bool, cancelAfterStart);
+  recoveryStoreFailureDoesNotPublishSuccess(false, cancelAfterStart);
+}
+
+void FileTransferRuntimeTests::recoveryStoreFailureDoesNotPublishSuccess(
+    bool failSave, bool cancelAfterStart
+)
+{
+  using namespace ::relaydesk::transfer;
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  const QByteArray sourceBytes(4 * 1024 * 1024 + 113, '\x39');
+  const auto sourcePath = directory.filePath(QStringLiteral("recovery-failure-source.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+  source.close();
+  const auto receiveRoot = directory.filePath(QStringLiteral("recovery-failure-received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+
+  const auto recoveryRoot = directory.filePath(
+      failSave ? QStringLiteral("blocked-recovery-root") : QStringLiteral("recovery-root")
+  );
+  if (failSave) {
+    QFile blocker(recoveryRoot);
+    QVERIFY(blocker.open(QIODevice::WriteOnly));
+    QCOMPARE(blocker.write("blocked"), qint64{7});
+  }
+
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("recovery-failure-sender-trust.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("recovery-failure-receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  model::DeviceHomeModel senderModel;
+  model::DeviceHomeModel receiverModel;
+  DeviceDiscoveryRuntime senderDiscovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Recovery failure sender")), senderModel
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Recovery failure receiver")),
+      receiverModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  options.recoveryStateRoot = recoveryRoot;
+  options.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  TransferRecoveryStore recoveryStore(recoveryRoot);
+  QSignalSpy operations(&sender, &IFileTransferService::transferOperationFinished);
+  QVERIFY(operations.isValid());
+
+  QStringList errors;
+  std::optional<TransferSnapshot> senderLatest;
+  std::optional<TransferSnapshot> receiverLatest;
+  bool enteredTransferring = false;
+  bool removalFailureInjected = false;
+  QString injectionDiagnostic;
+  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(message);
+  });
+  connect(&receiver, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("receiver: ") + message);
+  });
+  connect(&receiver, &IFileTransferService::incomingOffer, this, [&](const IncomingOffer &offer) {
+    receiver.accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
+  });
+  connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Receiving) {
+      receiverLatest = snapshot;
+    }
+  });
+  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction != TransferDirection::Sending) {
+      return;
+    }
+    senderLatest = snapshot;
+    if (snapshot.state != TransferState::Transferring) {
+      return;
+    }
+    enteredTransferring = true;
+    if (failSave || removalFailureInjected) {
+      return;
+    }
+    const auto descriptor = recoveryStore.outgoingStatePath(snapshot.id);
+    if (!QFile::remove(descriptor) || !QDir().mkpath(descriptor)) {
+      injectionDiagnostic = QStringLiteral("could not replace recovery descriptor with a directory");
+      return;
+    }
+    removalFailureInjected = true;
+    if (cancelAfterStart) {
+      QTimer::singleShot(0, &sender, [&sender, transferId = snapshot.id] {
+        sender.cancel(transferId, {});
+      });
+    }
+  });
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+  const auto started = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderLatest.has_value() && senderLatest->state == TransferState::Failed, 15'000
+  );
+
+  if (failSave) {
+    QVERIFY(!enteredTransferring);
+    QVERIFY(errors.join(QLatin1Char(';')).contains(QStringLiteral("could not be saved")));
+    return;
+  }
+  QVERIFY2(removalFailureInjected, qPrintable(injectionDiagnostic));
+  QVERIFY(senderLatest->state != TransferState::Completed);
+  QVERIFY(senderLatest->state != TransferState::Cancelled);
+  QVERIFY(errors.join(QLatin1Char(';')).contains(QStringLiteral("could not be removed")));
+  if (cancelAfterStart) {
+    QVERIFY(!receiverLatest.has_value() || receiverLatest->state != TransferState::Cancelled);
+    QTRY_VERIFY_WITH_TIMEOUT(!operations.isEmpty(), 5'000);
+    const auto *operation = static_cast<const TransferOperationResult *>(
+        operations.last().constFirst().constData()
+    );
+    QVERIFY(operation != nullptr);
+    QCOMPARE(operation->operation, TransferOperation::Cancel);
+    QCOMPARE(operation->outcome, TransferOperationOutcome::Rejected);
+    QCOMPARE(operation->error, TransferOperationError::TransportFailed);
+  }
 }
 
 void FileTransferRuntimeTests::incomingFolderCommitsEveryFileAndPreservesEmptyDirectories()
@@ -1492,9 +1668,11 @@ void FileTransferRuntimeTests::commandsSynchronizeTransfer(
   );
   FileTransferRuntimeOptions options;
   options.listenAddress = QHostAddress::LocalHost;
+  options.recoveryStateRoot = directory.filePath(QStringLiteral("commands-recovery"));
   options.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
   FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
   FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  TransferRecoveryStore recoveryStore(options.recoveryStateRoot);
   QSignalSpy senderOperations(&sender, &IFileTransferService::transferOperationFinished);
   QSignalSpy receiverOperations(&receiver, &IFileTransferService::transferOperationFinished);
   QVERIFY(senderOperations.isValid());
@@ -1571,7 +1749,8 @@ void FileTransferRuntimeTests::commandsSynchronizeTransfer(
       receiverCancelled = snapshot;
       receiverCancelStates.append(snapshot.state);
       if (!cancelSent && snapshot.state == TransferState::Transferring &&
-          snapshot.progress.completedBytes >= 1024U * 1024U) {
+          snapshot.progress.completedBytes >= 1024U * 1024U &&
+          QFileInfo::exists(recoveryStore.outgoingStatePath(snapshot.id))) {
         cancelSent = true;
         cancelTransfer(snapshot.id);
       }
@@ -1604,6 +1783,9 @@ void FileTransferRuntimeTests::commandsSynchronizeTransfer(
           senderPaused->state == TransferState::Paused && receiverPaused->state == TransferState::Paused,
       15'000
   );
+  QTRY_VERIFY_WITH_TIMEOUT(
+      QFileInfo::exists(recoveryStore.outgoingStatePath(*pausedTransfer)), 5'000
+  );
   const auto pausedReceiverBytes = receiverPaused->progress.completedBytes;
   QTest::qWait(200);
   QCOMPARE(receiverPaused->state, TransferState::Paused);
@@ -1613,6 +1795,9 @@ void FileTransferRuntimeTests::commandsSynchronizeTransfer(
       senderPaused.has_value() && receiverPaused.has_value() && senderPaused->state == TransferState::Completed &&
           receiverPaused->state == TransferState::Completed,
       20'000
+  );
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !QFileInfo::exists(recoveryStore.outgoingStatePath(*pausedTransfer)), 5'000
   );
 
   const auto cancelled = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
@@ -1637,6 +1822,9 @@ void FileTransferRuntimeTests::commandsSynchronizeTransfer(
       QStringLiteral(".incoming/resume-active/%1.resume.cbor").arg(cancelledTransfer->toString())
   );
   QCOMPARE(QFileInfo::exists(resumeState), partialDisposition == PartialDisposition::Keep);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !QFileInfo::exists(recoveryStore.outgoingStatePath(*cancelledTransfer)), 5'000
+  );
   const auto &controllerOperations = receiverControls ? receiverOperations : senderOperations;
   std::optional<TransferOperationResult> lastCancelOperation;
   for (qsizetype index = 0; index < controllerOperations.count(); ++index) {

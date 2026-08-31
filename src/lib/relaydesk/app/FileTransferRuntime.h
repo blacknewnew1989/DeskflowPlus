@@ -18,10 +18,15 @@
 #include <QHostAddress>
 #include <QObject>
 
+#include <functional>
 #include <memory>
 #include <optional>
 
 class QThreadPool;
+
+namespace relaydesk::transfer {
+class TransferRecoveryStore;
+}
 
 namespace deskflow::relaydesk {
 
@@ -36,6 +41,7 @@ struct FileTransferRuntimeOptions
 {
   QHostAddress listenAddress = QHostAddress::Any;
   quint16 listenPort = 0;
+  QString recoveryStateRoot;
   FileTlsSettings tlsSettings;
   ::relaydesk::transfer::CapabilitiesMessage localCapabilities{
       .features = {QStringLiteral("file.v1"), QStringLiteral("sha256")},
@@ -174,10 +180,17 @@ private:
       QString *diagnostic = nullptr
   );
   void updateOutgoingProgress(OutgoingSession &session);
+  void persistOutgoing(OutgoingSession &session);
+  void startOutgoingRecoverySave(OutgoingSession &session);
+  void removeOutgoingRecovery(OutgoingSession &session, std::function<void(bool, QString)> completion);
+  void startOutgoingRecoveryRemoval(OutgoingSession &session);
   void completeOutgoing(OutgoingSession &session);
   void markOutgoingConnectionLost(OutgoingSession &session);
   void failOutgoing(
       OutgoingSession &session, ::relaydesk::transfer::TransferErrorCode errorCode, QString diagnostic = {}
+  );
+  void finishOutgoingFailure(
+      OutgoingSession &session, ::relaydesk::transfer::TransferErrorCode errorCode, QString diagnostic
   );
   void publishOperation(
       const ::relaydesk::transfer::TransferId &transferId,
@@ -199,6 +212,7 @@ private:
   QHash<DeviceId, FileTlsClient *> m_clients;
   QHash<::relaydesk::transfer::TransferId, OutgoingSession *> m_outgoing;
   std::unique_ptr<QThreadPool> m_workerPool;
+  std::unique_ptr<::relaydesk::transfer::TransferRecoveryStore> m_recoveryStore;
   std::unique_ptr<IPlatformFileSafety> m_fileSafety;
   std::unique_ptr<IncomingTransferRuntime> m_incoming;
 };
