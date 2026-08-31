@@ -10,7 +10,7 @@
 - Pinned tag: v1.26.0
 - Pinned commit: 760e3b9
 - Integration branch: `product/relaydesk-v1`
-- Current phase: P0 重新开发 R3；旧 PASS 仍为历史候选证据，当前结论按重开发 SHA 独立记录
+- Current phase: P0 重新开发 R4；旧 PASS 仍为历史候选证据，当前结论按重开发 SHA 独立记录
 - Last updated: 2026-08-31
 - User action required during development: none
 
@@ -53,6 +53,23 @@
 | R3-FILETREE-001 | PASS | 一次 production send 传输独立文件+嵌套文件夹+空目录；fresh Win 两配置 10/10，run `33341572421` Win #98、Mac #99 PASS |
 | R3-LISTENER-RESUME-001 | PASS | 同一 peer 对象 listener stop/start 后从非零 durable offset 恢复；sidecar production 清理已修复，fresh Win 两配置 10/10、hosted Win/Mac PASS |
 | R3-PROCESS-RECOVERY-001 | PASS | 正常退出后的 Windows localhost OS 子进程恢复已覆盖 receiver/sender 单文件 relaunch 与 receiver 文件树 relaunch；Store 目录 entry、shutdown 生命周期已收口。run `33385968319@043d6b3fb`：Windows 101/101、macOS 102/102，FileTransferRuntime #94/#95 与 TwoProcess #99/#100 PASS，macOS hosted lifecycle PASS。crash/强杀/断电进入 R5 `NOT_RUN`；物理 Win↔Mac、TCC、人工安装与正式发布不属于本 PASS；详见 `product/docs/reports/R3_PROCESS_RECOVERY_RUNTIME.md` |
+
+### R4 UI / 平台基线
+
+| ID | 状态 | 当前证据 / 下一步 |
+|---|---|---|
+| R4-UI-001 | NOT_RUN | 设备卡、信任和手动地址有 production 接线与组件测试线索；当前 SHA 未运行原生 UI/发现链路 |
+| R4-UI-002 | NOT_RUN | 配对 intent 已接 PairingTrustRuntime；当前 SHA 未运行 MainWindow 到真实两端配对 |
+| R4-UI-003 | NOT_RUN | 权限模型与平台 probe 已接线；Windows/macOS 原生系统设置与 TCC 未运行 |
+| R4-UI-004 | FAIL | 拖放/选择发送已接真实 service，但 TransferUiRuntime 丢弃 `TransferStartResult`；目标离线或 service 未启动时无用户可见失败 |
+| R4-UI-005 | NOT_RUN | Incoming Offer/Ask 已接 typed service intent；当前 SHA 未运行真实 TLS offer 到可视面板 |
+| R4-UI-006 | NOT_RUN | 传输中心控制已接 FileTransferRuntime；当前 SHA 未运行原生 UI 控制真实传输 |
+| R4-UI-007 | NOT_RUN | 迷你条复用 TransferCenterModel typed intent；当前 SHA 未运行真实后台传输刷新 |
+| R4-UI-008 | FAIL | 历史打开文件/位置与 history error 只发内部 signal，production MainWindow 没有用户可见失败 receiver |
+| R4-UI-009 | NOT_RUN | 传输设置保存与 runtime snapshot 接线存在；当前 SHA 未运行原生设置交互 |
+| R4-UI-010 | NOT_RUN | 托盘/menu bar action 与 shutdown 接线存在；当前 SHA 未运行 OS 托盘、macOS menu bar 或物理交互 |
+
+完整调用链、自动证据边界和首个修复切片见 `product/docs/reports/R4_UI_PLATFORM_BASELINE.md`。
 
 ### R0-002 最终证据
 

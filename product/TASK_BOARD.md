@@ -26,6 +26,21 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R3-LISTENER-RESUME-001 | PASS | A6/A7/A0 | 同一 peer 对象 listener 中断后从非零 durable offset 恢复；完成态 sidecar 清理已修复，fresh Win/hosted Win+Mac PASS |
 | R3-PROCESS-RECOVERY-001 | PASS | A3/A6/A7/A0 | receiver/sender 单文件 relaunch、receiver 文件树 relaunch、Store 目录 entry 与 shutdown 生命周期已集成；run `33385968319@043d6b3fb` hosted Windows 101/101、macOS 102/102，关键 FileTransferRuntime/TwoProcess 目标和 macOS lifecycle PASS。范围仅为正常退出后的 localhost OS 子进程恢复；crash/强杀/断电为 R5 `NOT_RUN`，物理 Win↔Mac/TCC/人工安装/正式发布仍未成立 |
 
+## R4 UI / 平台基线
+
+| ID | 状态 | Owner | 当前范围与完成条件 |
+|---|---|---|---|
+| R4-UI-001 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行设备卡、在线状态、信任动作与手动地址 production 组合 |
+| R4-UI-002 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行 MainWindow 配对手势到真实 PairingTrustRuntime 反馈 |
+| R4-UI-003 | NOT_RUN | A3/A4/A5/A7/A0 | 当前 SHA 运行权限卡、能力门控和原生系统设置往返；TCC 留物理验收 |
+| R4-UI-004 | FAIL | A3/A7/A0 | 红测目标离线/service 未启动时的发送 intent；必须把 typed `TransferStartResult` 显示为用户可见失败 |
+| R4-UI-005 | NOT_RUN | A3/A6/A7/A0 | 当前 SHA 运行真实 Incoming Offer/Ask 到接收与失败反馈 |
+| R4-UI-006 | NOT_RUN | A3/A6/A7/A0 | 当前 SHA 运行传输中心 pause/resume/cancel/retry 到真实 runtime |
+| R4-UI-007 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行迷你条与真实后台传输状态同步 |
+| R4-UI-008 | FAIL | A3/A7/A0 | 为历史打开/存储失败增加 production 可见反馈并做安全路径红测 |
+| R4-UI-009 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行设置保存、重开和 runtime 更新 |
+| R4-UI-010 | NOT_RUN | A3/A4/A5/A7/A0 | 当前 SHA 运行 Windows tray/macOS menu bar；物理交互不由 hosted 证明 |
+
 ## 重开发前历史看板
 
 ## Ready
