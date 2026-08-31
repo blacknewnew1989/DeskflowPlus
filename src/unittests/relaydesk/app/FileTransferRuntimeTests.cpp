@@ -1706,6 +1706,9 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
       senderId, senderTrust, senderDiscovery, identityPath, options
   );
   FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, receiverOptions);
+  ResumeStore receiverResumeStore(
+      QDir(receiveRoot).filePath(QStringLiteral(".incoming/resume-active"))
+  );
 
   QStringList errors;
   bool senderStopRequested = false;
@@ -1737,6 +1740,7 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   std::optional<TransferSnapshot> senderLatest;
   std::optional<TransferSnapshot> receiverLatest;
   quint64 interruptedBytes = 0;
+  quint64 receiverDurableOffset = 0;
   QStringList senderStates;
   QList<quint64> senderResumingBytes;
   const auto attachSender = [&](FileTransferRuntime &runtime) {
@@ -1779,16 +1783,6 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
           if (snapshot.state == TransferState::Resuming) {
             senderResumingBytes.append(snapshot.progress.completedBytes);
           }
-          if (!senderStopRequested && snapshot.state == TransferState::Transferring &&
-              snapshot.progress.completedBytes >= 1024U * 1024U &&
-              snapshot.progress.completedBytes < snapshot.progress.totalBytes) {
-            senderStopRequested = true;
-            interruptedBytes = snapshot.progress.completedBytes;
-            QTimer::singleShot(0, runtimePointer, [&, runtimePointer] {
-              senderStoppedAtCheckpoint = true;
-              runtimePointer->stop();
-            });
-          }
         }
     );
   };
@@ -1796,6 +1790,21 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
     if (snapshot.direction == TransferDirection::Receiving) {
       receiverLatest = snapshot;
+      if (!senderStopRequested && snapshot.state == TransferState::Transferring && senderLatest.has_value() &&
+          senderLatest->state == TransferState::Transferring) {
+        const auto resume = receiverResumeStore.load(snapshot.id);
+        if (resume.ok() && resume.state->files.size() == 1 &&
+            resume.state->files.constFirst().durableOffset > 0) {
+          receiverDurableOffset = resume.state->files.constFirst().durableOffset;
+          senderStopRequested = true;
+          auto *runtimePointer = sender.get();
+          QTimer::singleShot(0, runtimePointer, [&, runtimePointer] {
+            interruptedBytes = senderLatest.has_value() ? senderLatest->progress.completedBytes : 0;
+            senderStoppedAtCheckpoint = true;
+            runtimePointer->stop();
+          });
+        }
+      }
     }
   });
 
@@ -1815,33 +1824,35 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   );
   QVERIFY(interruptedBytes >= 1024U * 1024U);
   QVERIFY(interruptedBytes < static_cast<quint64>(sourceBytes.size()));
-  ResumeStore receiverResumeStore(
-      QDir(receiveRoot).filePath(QStringLiteral(".incoming/resume-active"))
-  );
   QTRY_VERIFY_WITH_TIMEOUT(
       QFileInfo::exists(receiverResumeStore.statePath(*started.transferId)), 5'000
   );
   const auto receiverResume = receiverResumeStore.load(*started.transferId);
   QVERIFY2(receiverResume.ok(), qPrintable(receiverResume.diagnostic));
   QCOMPARE(receiverResume.state->files.size(), qsizetype{1});
-  const auto receiverDurableOffset = receiverResume.state->files.constFirst().durableOffset;
+  receiverDurableOffset = receiverResume.state->files.constFirst().durableOffset;
   QVERIFY(receiverDurableOffset > 0);
 
   TransferRecoveryStore recoveryStore(options.recoveryStateRoot);
   QTRY_VERIFY_WITH_TIMEOUT(
       QFileInfo::exists(recoveryStore.outgoingStatePath(*started.transferId)), 5'000
   );
-  const auto persisted = recoveryStore.loadOutgoing(*started.transferId);
-  QVERIFY2(persisted.ok(), qPrintable(persisted.diagnostic));
-  QCOMPARE(persisted.state->transferId, *started.transferId);
-  QCOMPARE(persisted.state->localDeviceId, senderId);
-  QCOMPARE(persisted.state->peerDeviceId, receiverId);
-  QCOMPARE(persisted.state->peerFingerprintSha256, identity.fingerprintSha256);
-  QCOMPARE(persisted.state->sourceRoots.size(), qsizetype{1});
-  QCOMPARE(persisted.state->sourceRoots.constFirst().canonicalPath, QFileInfo(sourcePath).canonicalFilePath());
-  QCOMPARE(persisted.state->summary.totalBytes, static_cast<quint64>(sourceBytes.size()));
-  QCOMPARE(persisted.state->pagePlan.entryCount, quint64{1});
-  QCOMPARE(persisted.state->progress.completedBytes, interruptedBytes);
+  std::optional<OutgoingRecoveryState> persisted;
+  QTRY_VERIFY_WITH_TIMEOUT([&] {
+    const auto loaded = recoveryStore.loadOutgoing(*started.transferId);
+    if (!loaded.ok() || loaded.state->progress.completedBytes != interruptedBytes) return false;
+    persisted = *loaded.state;
+    return true;
+  }(), 5'000);
+  QCOMPARE(persisted->transferId, *started.transferId);
+  QCOMPARE(persisted->localDeviceId, senderId);
+  QCOMPARE(persisted->peerDeviceId, receiverId);
+  QCOMPARE(persisted->peerFingerprintSha256, identity.fingerprintSha256);
+  QCOMPARE(persisted->sourceRoots.size(), qsizetype{1});
+  QCOMPARE(persisted->sourceRoots.constFirst().canonicalPath, QFileInfo(sourcePath).canonicalFilePath());
+  QCOMPARE(persisted->summary.totalBytes, static_cast<quint64>(sourceBytes.size()));
+  QCOMPARE(persisted->pagePlan.entryCount, quint64{1});
+  QCOMPARE(persisted->progress.completedBytes, interruptedBytes);
 
   if (reconstructSender) {
     sender.reset();

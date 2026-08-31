@@ -1112,7 +1112,12 @@ private:
       output.write(QJsonDocument(result).toJson(QJsonDocument::Compact));
       output.commit();
     }
-    if (m_files != nullptr) m_files->stop();
+    if (m_files != nullptr) {
+      m_files->stop();
+      if (m_role == Role::Sender && m_scenario == Scenario::SenderProcessRecovery && m_restartGeneration == 0) {
+        m_files.reset();
+      }
+    }
     if (m_discovery != nullptr) m_discovery->stop();
     QCoreApplication::exit(passed ? 0 : 1);
   }
