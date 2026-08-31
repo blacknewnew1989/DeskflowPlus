@@ -161,6 +161,11 @@ TransferCenterDock::TransferCenterDock(model::TransferCenterModel &transfers, QW
   m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   m_list->setFrameShape(QFrame::NoFrame);
   layout->addWidget(m_list, 1);
+  m_feedback = new QLabel(body);
+  m_feedback->setObjectName(QStringLiteral("relaydeskTransferFeedback"));
+  m_feedback->setWordWrap(true);
+  m_feedback->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
+  layout->addWidget(m_feedback);
 
   auto *actions = new QHBoxLayout();
   actions->setSpacing(5);
@@ -263,6 +268,26 @@ model::TransferCenterModel &TransferCenterDock::transferModel() const
   return m_transfers;
 }
 
+void TransferCenterDock::showCompletionOpenFailure()
+{
+  m_completionOpenFailed = true;
+  updateFeedback();
+}
+
+void TransferCenterDock::clearCompletionOpenFailure()
+{
+  if (!m_completionOpenFailed)
+    return;
+  m_completionOpenFailed = false;
+  updateFeedback();
+}
+
+void TransferCenterDock::showHistoryFailure()
+{
+  m_historyUnavailable = true;
+  updateFeedback();
+}
+
 void TransferCenterDock::changeEvent(QEvent *event)
 {
   QDockWidget::changeEvent(event);
@@ -299,6 +324,24 @@ void TransferCenterDock::updateText()
   m_pauseMenuAction->setText(m_pauseButton->text());
   m_resumeMenuAction->setText(m_resumeButton->text());
   m_cancelMenuAction->setText(m_cancelButton->text());
+  updateFeedback();
+}
+
+void TransferCenterDock::updateFeedback()
+{
+  if (m_completionOpenFailed) {
+    m_feedback->setText(i18n::translate(Text::TransferFeedbackOpenFailed));
+    m_feedback->setAccessibleDescription(m_feedback->text());
+    m_feedback->setVisible(true);
+  } else if (m_historyUnavailable) {
+    m_feedback->setText(i18n::translate(Text::TransferFeedbackHistoryUnavailable));
+    m_feedback->setAccessibleDescription(m_feedback->text());
+    m_feedback->setVisible(true);
+  } else {
+    m_feedback->clear();
+    m_feedback->setAccessibleDescription({});
+    m_feedback->setVisible(false);
+  }
 }
 
 void TransferCenterDock::updateEmptyState()

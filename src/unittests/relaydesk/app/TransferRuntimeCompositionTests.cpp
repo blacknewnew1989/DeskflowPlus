@@ -17,6 +17,10 @@
 
 #include "../FakePairingService.h"
 
+#include <QFile>
+#include <QLabel>
+#include <QListView>
+#include <QPushButton>
 #include <QTest>
 #include <QTemporaryDir>
 #include <QSignalSpy>
@@ -92,6 +96,8 @@ private Q_SLOTS:
   void updatesIncomingOfferSettingsForSubsequentOffers();
   void loadsMoreThanOneHundredHistoryRecordsAtStartup();
   void appliesIncomingSettingsAndRefreshesReceiveRootSpaceAsync();
+  void rejectedCompletedOpenShowsNonModalFeedbackWithoutChangingHistory();
+  void asyncHistoryLoadAndPersistErrorsShowNonModalFeedbackWithoutDiagnostic();
 };
 
 void TransferRuntimeCompositionTests::ownsTypedServiceBindingAndLifecycle()
@@ -312,6 +318,164 @@ void TransferRuntimeCompositionTests::appliesIncomingSettingsAndRefreshesReceive
   QCOMPARE(composition.incomingOffers().settings().defaultConflictPolicy, ConflictPolicy::Ask);
   QTRY_VERIFY_WITH_TIMEOUT(composition.incomingOffers().settings().availableBytes > 0, 5000);
   QCOMPARE(composition.incomingOffers().settings().destinationRoot, updatedRoot);
+}
+
+void TransferRuntimeCompositionTests::rejectedCompletedOpenShowsNonModalFeedbackWithoutChangingHistory()
+{
+  Fixture fixture;
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const auto receiveRoot = temporary.filePath(QStringLiteral("receive"));
+  const auto completedDirectory = QDir(receiveRoot).filePath(QStringLiteral("Archive"));
+  QVERIFY(QDir().mkpath(completedDirectory));
+  const auto completedPath = QDir(completedDirectory).filePath(QStringLiteral("report.txt"));
+  QFile completedFile(completedPath);
+  QVERIFY(completedFile.open(QIODevice::WriteOnly));
+  QCOMPARE(completedFile.write("complete"), 8);
+
+  const TransferHistoryRecord record{
+      .transferId = TransferId::generate(),
+      .peerDeviceId = DeviceId::generate(),
+      .peerDisplayName = QStringLiteral("Studio Mac"),
+      .displayName = QStringLiteral("Archive"),
+      .direction = HistoryDirection::Receiving,
+      .fileCount = 1,
+      .totalBytes = 8,
+      .startedUtc = QDateTime::currentDateTimeUtc().addSecs(-1),
+      .finishedUtc = QDateTime::currentDateTimeUtc(),
+      .status = HistoryStatus::Completed,
+      .completedRelativePath = QStringLiteral("Archive/report.txt"),
+      .topLevelTargetRelativePath = QStringLiteral("Archive"),
+  };
+  fixture.transfers.setHistoryRecords({record});
+
+  bool rejectOpen = true;
+  TransferRuntimeComposition composition(
+      std::make_unique<FakeFileTransferService>(),
+      {.start = [](QString *) { return true; }, .stop = [] {}}, fixture.devicesDock, fixture.transferDock,
+      {.destinationRoot = receiveRoot, .availableBytes = 0}, {},
+      [receiveRoot, completedPath](const TransferHistoryRecord &) {
+        return std::optional<ResolvedTransferCompletion>{{receiveRoot, completedPath}};
+      },
+      [&rejectOpen](const QUrl &) { return !rejectOpen; }
+  );
+
+  auto *feedback = fixture.transferDock.findChild<QLabel *>(QStringLiteral("relaydeskTransferFeedback"));
+  auto *uiRuntime = composition.findChild<TransferUiRuntime *>();
+  fixture.transferDock.show();
+  auto *list = fixture.transferDock.findChild<QListView *>(QStringLiteral("relaydeskTransfersView"));
+  auto *openFile = fixture.transferDock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferOpenFileButton"));
+  QVERIFY(feedback != nullptr);
+  QVERIFY(uiRuntime != nullptr);
+  QVERIFY(list != nullptr);
+  QVERIFY(openFile != nullptr);
+  list->setCurrentIndex(fixture.transfers.index(0, 0));
+  QTRY_VERIFY(openFile->isVisible());
+  const auto selectedBeforeOpen = list->currentIndex();
+  QSignalSpy opened(uiRuntime, &TransferUiRuntime::completionOpened);
+  QVERIFY(fixture.transfers.requestOpenFile(record.transferId));
+  QVERIFY(fixture.transfers.requestOpenFolder(record.transferId));
+  QCOMPARE(feedback->text(), QStringLiteral("Could not open the completed item. Try again."));
+  QVERIFY(feedback->isVisible());
+  QVERIFY(!feedback->text().contains(receiveRoot));
+  QVERIFY(!feedback->text().contains(completedPath));
+  QCOMPARE(fixture.transfers.historyRecord(record.transferId), std::optional<TransferHistoryRecord>{record});
+  QCOMPARE(list->currentIndex(), selectedBeforeOpen);
+  QVERIFY(openFile->isVisible());
+
+  rejectOpen = false;
+  QVERIFY(fixture.transfers.requestOpenFile(record.transferId));
+  QCOMPARE(opened.count(), 1);
+  QVERIFY(!feedback->isVisible());
+  QCOMPARE(list->currentIndex(), selectedBeforeOpen);
+  QVERIFY(openFile->isVisible());
+  QCOMPARE(fixture.transfers.historyRecord(record.transferId), std::optional<TransferHistoryRecord>{record});
+}
+
+void TransferRuntimeCompositionTests::asyncHistoryLoadAndPersistErrorsShowNonModalFeedbackWithoutDiagnostic()
+{
+  Fixture fixture;
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const auto receiveRoot = temporary.filePath(QStringLiteral("receive"));
+  const auto completedDirectory = QDir(receiveRoot).filePath(QStringLiteral("Archive"));
+  QVERIFY(QDir().mkpath(completedDirectory));
+  const auto completedPath = QDir(completedDirectory).filePath(QStringLiteral("report.txt"));
+  QFile completedFile(completedPath);
+  QVERIFY(completedFile.open(QIODevice::WriteOnly));
+  QCOMPARE(completedFile.write("complete"), 8);
+  auto service = std::make_unique<FakeFileTransferService>();
+  auto *serviceObserver = service.get();
+  bool rejectOpen = true;
+
+  TransferRuntimeComposition composition(
+      std::move(service),
+      {.start = [](QString *) { return true; }, .stop = [] {}}, fixture.devicesDock, fixture.transferDock,
+      {.destinationRoot = receiveRoot, .availableBytes = 0}, temporary.path(),
+      [receiveRoot, completedPath](const TransferHistoryRecord &) {
+        return std::optional<ResolvedTransferCompletion>{{receiveRoot, completedPath}};
+      },
+      [&rejectOpen](const QUrl &) { return !rejectOpen; }
+  );
+  auto *historyRuntime = composition.findChild<TransferHistoryRuntime *>();
+  QVERIFY(historyRuntime != nullptr);
+  QSignalSpy historyErrors(historyRuntime, &TransferHistoryRuntime::historyError);
+  auto *feedback = fixture.transferDock.findChild<QLabel *>(QStringLiteral("relaydeskTransferFeedback"));
+  QVERIFY(feedback != nullptr);
+  fixture.transferDock.show();
+
+  QVERIFY(composition.start());
+  QTRY_VERIFY_WITH_TIMEOUT(historyErrors.count() > 0, 5000);
+  Q_EMIT serviceObserver->transferChanged({
+      .id = TransferId::generate(),
+      .peerId = DeviceId::generate(),
+      .peerDisplayName = QStringLiteral("Studio Mac"),
+      .displayName = QStringLiteral("Archive"),
+      .direction = TransferDirection::Receiving,
+      .state = TransferState::Completed,
+      .progress = {.completedBytes = 8, .totalBytes = 8, .completedFiles = 1, .totalFiles = 1},
+      .currentRelativeDisplayPath = QStringLiteral("Archive/report.txt"),
+      .createdUtc = QDateTime::currentDateTimeUtc().addSecs(-1),
+      .finishedUtc = QDateTime::currentDateTimeUtc(),
+  });
+  QTRY_COMPARE_WITH_TIMEOUT(historyErrors.count(), 2, 5000);
+  QCOMPARE(feedback->text(), QStringLiteral("Transfer history could not be updated. Try again."));
+  QVERIFY(feedback->isVisible());
+  QVERIFY(!feedback->text().contains(temporary.path()));
+
+  const TransferHistoryRecord record{
+      .transferId = TransferId::generate(),
+      .peerDeviceId = DeviceId::generate(),
+      .peerDisplayName = QStringLiteral("Studio Mac"),
+      .displayName = QStringLiteral("Archive"),
+      .direction = HistoryDirection::Receiving,
+      .fileCount = 1,
+      .totalBytes = 8,
+      .startedUtc = QDateTime::currentDateTimeUtc().addSecs(-1),
+      .finishedUtc = QDateTime::currentDateTimeUtc(),
+      .status = HistoryStatus::Completed,
+      .completedRelativePath = QStringLiteral("Archive/report.txt"),
+      .topLevelTargetRelativePath = QStringLiteral("Archive"),
+  };
+  fixture.transfers.setHistoryRecords({record});
+  auto *list = fixture.transferDock.findChild<QListView *>(QStringLiteral("relaydeskTransfersView"));
+  auto *openFile = fixture.transferDock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferOpenFileButton"));
+  QVERIFY(list != nullptr);
+  QVERIFY(openFile != nullptr);
+  list->setCurrentIndex(fixture.transfers.index(0, 0));
+  QTRY_VERIFY(openFile->isVisible());
+  const auto selectedBeforeOpen = list->currentIndex();
+
+  QVERIFY(fixture.transfers.requestOpenFile(record.transferId));
+  QCOMPARE(feedback->text(), QStringLiteral("Could not open the completed item. Try again."));
+  QVERIFY(feedback->isVisible());
+  rejectOpen = false;
+  QVERIFY(fixture.transfers.requestOpenFile(record.transferId));
+  QCOMPARE(feedback->text(), QStringLiteral("Transfer history could not be updated. Try again."));
+  QVERIFY(feedback->isVisible());
+  QCOMPARE(list->currentIndex(), selectedBeforeOpen);
+  QVERIFY(openFile->isVisible());
+  QCOMPARE(fixture.transfers.historyRecord(record.transferId), std::optional<TransferHistoryRecord>{record});
 }
 
 QTEST_MAIN(TransferRuntimeCompositionTests)

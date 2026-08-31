@@ -133,6 +133,8 @@
     <message><source>transfer.action.open_file</source><translation>Open file</translation></message>
     <message><source>transfer.action.details</source><translation>Details</translation></message>
     <message><source>transfer.action.close</source><translation>Close</translation></message>
+    <message><source>transfer.feedback.open_failed</source><translation>Could not open the completed item. Try again.</translation></message>
+    <message><source>transfer.feedback.history_unavailable</source><translation>Transfer history could not be updated. Try again.</translation></message>
     <message><source>transfer.history.details_title</source><translation>Transfer details</translation></message>
     <message><source>transfer.history.name_label</source><translation>Transfer</translation></message>
     <message><source>transfer.history.peer_label</source><translation>Device</translation></message>

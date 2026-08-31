@@ -133,6 +133,8 @@
     <message><source>transfer.action.open_file</source><translation>파일 열기</translation></message>
     <message><source>transfer.action.details</source><translation>세부 정보</translation></message>
     <message><source>transfer.action.close</source><translation>닫기</translation></message>
+    <message><source>transfer.feedback.open_failed</source><translation>완료된 항목을 열 수 없습니다. 다시 시도하세요.</translation></message>
+    <message><source>transfer.feedback.history_unavailable</source><translation>전송 기록을 업데이트할 수 없습니다. 다시 시도하세요.</translation></message>
     <message><source>transfer.history.details_title</source><translation>전송 세부 정보</translation></message>
     <message><source>transfer.history.name_label</source><translation>전송</translation></message>
     <message><source>transfer.history.peer_label</source><translation>기기</translation></message>

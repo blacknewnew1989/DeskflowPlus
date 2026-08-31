@@ -133,6 +133,8 @@
     <message><source>transfer.action.open_file</source><translation>ファイルを開く</translation></message>
     <message><source>transfer.action.details</source><translation>詳細</translation></message>
     <message><source>transfer.action.close</source><translation>閉じる</translation></message>
+    <message><source>transfer.feedback.open_failed</source><translation>完了した項目を開けませんでした。もう一度お試しください。</translation></message>
+    <message><source>transfer.feedback.history_unavailable</source><translation>転送履歴を更新できませんでした。もう一度お試しください。</translation></message>
     <message><source>transfer.history.details_title</source><translation>転送の詳細</translation></message>
     <message><source>transfer.history.name_label</source><translation>転送</translation></message>
     <message><source>transfer.history.peer_label</source><translation>デバイス</translation></message>

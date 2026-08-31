@@ -133,6 +133,8 @@
     <message><source>transfer.action.open_file</source><translation>Apri file</translation></message>
     <message><source>transfer.action.details</source><translation>Dettagli</translation></message>
     <message><source>transfer.action.close</source><translation>Chiudi</translation></message>
+    <message><source>transfer.feedback.open_failed</source><translation>Impossibile aprire l'elemento completato. Riprova.</translation></message>
+    <message><source>transfer.feedback.history_unavailable</source><translation>Impossibile aggiornare la cronologia dei trasferimenti. Riprova.</translation></message>
     <message><source>transfer.history.details_title</source><translation>Dettagli trasferimento</translation></message>
     <message><source>transfer.history.name_label</source><translation>Trasferimento</translation></message>
     <message><source>transfer.history.peer_label</source><translation>Dispositivo</translation></message>
