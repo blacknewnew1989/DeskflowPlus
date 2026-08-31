@@ -146,6 +146,7 @@ private Q_SLOTS:
   void roundTripsBothDirections();
   void replacesValidStateAndRejectsInvalidWithoutClobbering();
   void scanIsolatesCorruptAndUnknownSchema();
+  void scanBoundsDecodedStateCount();
   void rejectsUnsafePathsAndLimitsBeforeWriting();
   void removalIsIdempotentInBothDirections();
   void rejectsIdentityEnumAndCollisionBoundaries();
@@ -219,6 +220,36 @@ void TransferRecoveryStoreTests::scanIsolatesCorruptAndUnknownSchema()
   map.insert(QCborValue(1), QCborValue(99));
   writeBytes(store.incomingStatePath(kTransfer), QCborValue(map).toCbor(QCborValue::EncodingOption::SortKeysInMaps));
   QCOMPARE(store.loadIncoming(kTransfer).error, TransferRecoveryStoreError::UnsupportedSchema);
+}
+
+void TransferRecoveryStoreTests::scanBoundsDecodedStateCount()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  TransferRecoveryStore writer(temporary.path());
+  constexpr quint64 MaximumStates = 32;
+  for (quint64 index = 0; index <= MaximumStates; ++index) {
+    auto outgoingState = outgoing();
+    outgoingState.transferId = TransferId::generate();
+    outgoingState.summary.id = outgoingState.transferId;
+    QVERIFY(writer.saveOutgoing(outgoingState).ok());
+    auto incomingState = incoming();
+    incomingState.transferId = TransferId::generate();
+    incomingState.offer.transferId = incomingState.transferId;
+    QVERIFY(writer.saveIncoming(incomingState).ok());
+  }
+
+  TransferRecoveryStore limited(temporary.path(), {.maximumStates = MaximumStates});
+  const auto outgoingScan = limited.scanOutgoing();
+  const auto incomingScan = limited.scanIncoming();
+  QVERIFY(outgoingScan.ok());
+  QVERIFY(incomingScan.ok());
+  QCOMPARE(outgoingScan.states.size(), static_cast<qsizetype>(MaximumStates));
+  QCOMPARE(incomingScan.states.size(), static_cast<qsizetype>(MaximumStates));
+  QCOMPARE(outgoingScan.issues.size(), 1);
+  QCOMPARE(incomingScan.issues.size(), 1);
+  QCOMPARE(outgoingScan.issues.constFirst().error, TransferRecoveryStoreError::TooManyStates);
+  QCOMPARE(incomingScan.issues.constFirst().error, TransferRecoveryStoreError::TooManyStates);
 }
 
 void TransferRecoveryStoreTests::rejectsUnsafePathsAndLimitsBeforeWriting()

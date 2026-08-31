@@ -17,6 +17,7 @@
 #include "relaydesk/transfer/TransferCommandCodec.h"
 #include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/transfer/TransferOfferStateMachine.h"
+#include "relaydesk/transfer/TransferRecoveryStore.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
 
 #if defined(Q_OS_WIN)
@@ -36,6 +37,7 @@
 #include <QtConcurrentRun>
 
 #include <algorithm>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -222,6 +224,23 @@ std::unique_ptr<IPlatformFileSafety> createPlatformFileSafety()
 #endif
 }
 
+std::unique_ptr<::relaydesk::transfer::TransferControlStateMachine>
+interruptedControl(::relaydesk::transfer::TransferSnapshot initial, bool resuming)
+{
+  using namespace ::relaydesk::transfer;
+
+  auto control = std::make_unique<TransferControlStateMachine>(std::move(initial));
+  const bool ready = control->initialize().ok() && control->advance(TransferState::Offered).ok() &&
+                     control->advance(TransferState::WaitingForAcceptance).ok() &&
+                     control->advance(TransferState::Queued).ok() &&
+                     control->advance(TransferState::Transferring).ok() && control->interrupt().ok() &&
+                     (!resuming || control->resume().ok());
+  if (!ready) {
+    return {};
+  }
+  return control;
+}
+
 } // namespace
 
 struct FileTransferRuntime::OutgoingSession
@@ -240,7 +259,7 @@ struct FileTransferRuntime::OutgoingSession
   QList<QUrl> localItems;
   ::relaydesk::transfer::SendOptions options;
   ::relaydesk::transfer::TransferSnapshot snapshot;
-  std::optional<::relaydesk::transfer::TransferManifest> manifest;
+  std::shared_ptr<const ::relaydesk::transfer::TransferManifest> manifest;
   std::optional<::relaydesk::transfer::ManifestPagePlan> pagePlan;
   std::unique_ptr<::relaydesk::transfer::TransferOfferStateMachine> offerState;
   std::unique_ptr<::relaydesk::transfer::TransferControlStateMachine> control;
@@ -262,6 +281,23 @@ struct FileTransferRuntime::OutgoingSession
   bool interrupted = false;
   bool resumeQueryPending = false;
   bool cancelled = false;
+  quint64 recoveryGeneration = 0;
+  bool recoverySaveRunning = false;
+  bool recoverySavePending = false;
+  bool waitingForInitialRecovery = false;
+  bool recoveryRemovePending = false;
+  bool recoveryRemoveRunning = false;
+  bool terminalPending = false;
+  bool hydratedFromRecovery = false;
+  std::function<void(bool, QString)> recoveryRemoveCompletion;
+};
+
+struct FileTransferRuntime::OutgoingHydrationState
+{
+  QList<::relaydesk::transfer::OutgoingRecoveryState> pending;
+  quint64 epoch = 0;
+  bool scanStarted = false;
+  bool buildRunning = false;
 };
 
 FileTransferRuntime::FileTransferRuntime(
@@ -274,6 +310,31 @@ FileTransferRuntime::FileTransferRuntime(
 {
   m_workerPool->setMaxThreadCount(2);
   m_workerPool->setExpiryTimeout(30'000);
+  if (!m_options.recoveryStateRoot.isEmpty()) {
+    m_recoveryStore = std::make_unique<::relaydesk::transfer::TransferRecoveryStore>(
+        m_options.recoveryStateRoot
+    );
+    m_outgoingHydration = std::make_unique<OutgoingHydrationState>();
+  }
+  const auto retryHydratedPeer = [this](const DeviceSnapshot &snapshot) {
+    if (!isRunning() || isPeerReady(snapshot.id)) {
+      return;
+    }
+    const auto info = m_discoveryRuntime.registry().deviceInfo(snapshot.id);
+    if (!info.has_value() || info->filePort == 0) {
+      return;
+    }
+    for (auto *session : std::as_const(m_outgoing)) {
+      if (session != nullptr && session->peer == snapshot.id && session->interrupted &&
+          session->hydratedFromRecovery && !session->cancelled) {
+        QString diagnostic;
+        (void)connectPeer(snapshot.id, &diagnostic);
+        return;
+      }
+    }
+  };
+  connect(&m_discoveryRuntime.registry(), &DiscoveryRegistry::deviceAdded, this, retryHydratedPeer);
+  connect(&m_discoveryRuntime.registry(), &DiscoveryRegistry::deviceChanged, this, retryHydratedPeer);
   m_fileSafety = createPlatformFileSafety();
   if (m_fileSafety != nullptr) {
     m_incoming = std::make_unique<IncomingTransferRuntime>(
@@ -457,6 +518,7 @@ bool FileTransferRuntime::start(QString *diagnostic)
     );
   }
   Q_EMIT started(m_listener->serverPort());
+  startOutgoingRecoveryScan();
   return true;
 }
 
@@ -464,6 +526,13 @@ void FileTransferRuntime::stop()
 {
   if (QThread::currentThread() != thread()) {
     return;
+  }
+
+  if (m_outgoingHydration != nullptr) {
+    ++m_outgoingHydration->epoch;
+    m_outgoingHydration->scanStarted = false;
+    m_outgoingHydration->buildRunning = false;
+    m_outgoingHydration->pending.clear();
   }
 
   for (auto *session : std::as_const(m_outgoing)) {
@@ -966,31 +1035,67 @@ void FileTransferRuntime::cancel(
     return;
   }
   session->cancelled = true;
-  if (session->control != nullptr &&
-      !::relaydesk::transfer::TransferControlStateMachine::isTerminal(session->control->snapshot().state)) {
-    if (session->control->cancel().ok()) {
-      (void)session->control->confirmCancelled();
-      session->snapshot = session->control->snapshot();
-    }
-  } else {
-    session->snapshot.state = TransferState::Cancelled;
-    session->snapshot.canCancel = false;
-    session->snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
-  }
-  Q_EMIT transferChanged(session->snapshot);
-  QString diagnostic;
-  if (!sendCommand(
-          session->peer,
-          TransferCancelMessage{
-              .transferId = transferId,
-              .reason = options.reason,
-              .keepPartial = options.partialDisposition == PartialDisposition::Keep,
-          },
-          &diagnostic
-      )) {
-    Q_EMIT errorOccurred(FileTransferRuntimeError::TransportFailed, FileTlsError::ConnectionFailed, diagnostic);
-  }
-  publishOperation(transferId, TransferOperation::Cancel, TransferOperationOutcome::Applied);
+  session->terminalPending = true;
+  removeOutgoingRecovery(
+      *session,
+      [this, transferId, options](bool removed, QString removeDiagnostic) {
+        auto *current = outgoing(transferId);
+        if (current == nullptr) {
+          return;
+        }
+        current->terminalPending = false;
+        if (!removed) {
+          finishOutgoingFailure(
+              *current, TransferErrorCode::SenderFailed,
+              QStringLiteral("Outgoing recovery state could not be removed before cancellation: %1")
+                  .arg(removeDiagnostic)
+          );
+          publishOperation(
+              transferId, TransferOperation::Cancel, TransferOperationOutcome::Rejected,
+              TransferOperationError::TransportFailed, removeDiagnostic
+          );
+          return;
+        }
+        if (current->control != nullptr &&
+            !TransferControlStateMachine::isTerminal(current->control->snapshot().state)) {
+          const auto cancelling = current->control->cancel();
+          const auto cancelled = cancelling.ok() ? current->control->confirmCancelled() : cancelling;
+          if (!cancelling.ok() || !cancelled.ok()) {
+            finishOutgoingFailure(
+                *current, TransferErrorCode::SenderFailed,
+                cancelling.ok() ? cancelled.diagnostic : cancelling.diagnostic
+            );
+            publishOperation(
+                transferId, TransferOperation::Cancel, TransferOperationOutcome::Rejected,
+                TransferOperationError::InvalidState,
+                cancelling.ok() ? cancelled.diagnostic : cancelling.diagnostic
+            );
+            return;
+          }
+          current->snapshot = current->control->snapshot();
+        } else {
+          current->snapshot.state = TransferState::Cancelled;
+          current->snapshot.canCancel = false;
+          current->snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
+        }
+        Q_EMIT transferChanged(current->snapshot);
+        QString diagnostic;
+        if (!sendCommand(
+                current->peer,
+                TransferCancelMessage{
+                    .transferId = transferId,
+                    .reason = options.reason,
+                    .keepPartial = options.partialDisposition == PartialDisposition::Keep,
+                },
+                &diagnostic
+            )) {
+          Q_EMIT errorOccurred(
+              FileTransferRuntimeError::TransportFailed, FileTlsError::ConnectionFailed, diagnostic
+          );
+        }
+        publishOperation(transferId, TransferOperation::Cancel, TransferOperationOutcome::Applied);
+      }
+  );
 }
 
 void FileTransferRuntime::retry(const ::relaydesk::transfer::TransferId &transferId)
@@ -1339,12 +1444,33 @@ bool FileTransferRuntime::applyRemoteCommand(
       setDiagnostic(diagnostic, cancelled.diagnostic);
       return false;
     }
-    const auto confirmed = session->control->confirmCancelled();
-    if (!confirmed.ok()) {
-      setDiagnostic(diagnostic, confirmed.diagnostic);
-      return false;
-    }
     session->cancelled = true;
+    session->terminalPending = true;
+    session->snapshot = session->control->snapshot();
+    Q_EMIT transferChanged(session->snapshot);
+    removeOutgoingRecovery(*session, [this, transferId](bool removed, QString removeDiagnostic) {
+      auto *current = outgoing(transferId);
+      if (current == nullptr) {
+        return;
+      }
+      current->terminalPending = false;
+      if (!removed) {
+        finishOutgoingFailure(
+            *current, TransferErrorCode::SenderFailed,
+            QStringLiteral("Outgoing recovery state could not be removed before remote cancellation: %1")
+                .arg(removeDiagnostic)
+        );
+        return;
+      }
+      const auto confirmed = current->control->confirmCancelled();
+      if (!confirmed.ok()) {
+        finishOutgoingFailure(*current, TransferErrorCode::SenderFailed, confirmed.diagnostic);
+        return;
+      }
+      current->snapshot = current->control->snapshot();
+      Q_EMIT transferChanged(current->snapshot);
+    });
+    return true;
   }
   session->snapshot = session->control->snapshot();
   Q_EMIT transferChanged(session->snapshot);
@@ -1378,6 +1504,184 @@ bool FileTransferRuntime::sendCommand(
     return false;
   }
   return sendPeerFrame(peerDeviceId, frame, diagnostic);
+}
+
+void FileTransferRuntime::startOutgoingRecoveryScan()
+{
+  using namespace ::relaydesk::transfer;
+
+  if (m_recoveryStore == nullptr || m_outgoingHydration == nullptr ||
+      m_outgoingHydration->scanStarted) {
+    return;
+  }
+  m_outgoingHydration->scanStarted = true;
+  const quint64 epoch = ++m_outgoingHydration->epoch;
+  auto *store = m_recoveryStore.get();
+  auto *watcher = new QFutureWatcher<TransferRecoveryStoreScanResult<OutgoingRecoveryState>>(this);
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, epoch, watcher]() {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    if (!isRunning() || m_outgoingHydration == nullptr || epoch != m_outgoingHydration->epoch) {
+      return;
+    }
+    if (!result.ok()) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          QStringLiteral("Outgoing recovery scan failed: %1").arg(result.diagnostic)
+      );
+      return;
+    }
+    for (const auto &issue : std::as_const(result.issues)) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          QStringLiteral("Outgoing recovery state was skipped (%1): %2").arg(issue.path, issue.diagnostic)
+      );
+    }
+    m_outgoingHydration->pending = std::move(result.states);
+    hydrateNextOutgoingRecovery();
+  });
+  watcher->setFuture(QtConcurrent::run(m_workerPool.get(), [store]() { return store->scanOutgoing(); }));
+}
+
+void FileTransferRuntime::hydrateNextOutgoingRecovery()
+{
+  using namespace ::relaydesk::transfer;
+
+  if (m_outgoingHydration == nullptr || m_outgoingHydration->buildRunning ||
+      m_outgoingHydration->pending.isEmpty()) {
+    return;
+  }
+  auto state = std::make_shared<OutgoingRecoveryState>(m_outgoingHydration->pending.takeFirst());
+  if (outgoing(state->transferId) != nullptr) {
+    QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+    return;
+  }
+  const auto trustedPeer = m_trustedDevices.find(state->peerDeviceId);
+  if (state->localDeviceId != m_localDeviceId || !trustedPeer.has_value() || trustedPeer->revoked ||
+      trustedPeer->fingerprintSha256 != state->peerFingerprintSha256) {
+    Q_EMIT errorOccurred(
+        FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+        QStringLiteral("Outgoing recovery state failed local identity or trust validation")
+    );
+    QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+    return;
+  }
+
+  TransferManifestRequest request{
+      .transferId = state->transferId,
+      .displayName = state->summary.displayName,
+  };
+  request.sources.reserve(state->sourceRoots.size());
+  for (const auto &source : std::as_const(state->sourceRoots)) {
+    request.sources.append({
+        .sourcePath = source.canonicalPath,
+        .relativeProtocolPath = source.relativeProtocolPath,
+    });
+  }
+  m_outgoingHydration->buildRunning = true;
+  const quint64 epoch = m_outgoingHydration->epoch;
+  auto *watcher = new QFutureWatcher<TransferManifestBuildResult>(this);
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, epoch, state, watcher]() {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    if (!isRunning() || m_outgoingHydration == nullptr || epoch != m_outgoingHydration->epoch) {
+      return;
+    }
+    m_outgoingHydration->buildRunning = false;
+    const auto trustedPeer = m_trustedDevices.find(state->peerDeviceId);
+    const bool trustMatches = trustedPeer.has_value() && !trustedPeer->revoked &&
+                              trustedPeer->fingerprintSha256 == state->peerFingerprintSha256;
+    const auto plan = result.ok() ? ManifestPageCodec::plan(*result.manifest) : ManifestPagePlanResult{};
+    const ManifestPagePlanBinding binding = plan.ok()
+                                                ? ManifestPagePlanBinding{
+                                                      .entryCount = plan.plan->entryCount,
+                                                      .pageCount = plan.plan->pageCount(),
+                                                      .totalMetadataBytes = plan.plan->totalMetadataBytes,
+                                                  }
+                                                : ManifestPagePlanBinding{};
+    if (!result.ok() || !trustMatches || result.manifest->entries != state->entries ||
+        result.manifest->summary != state->summary || !plan.ok() || binding != state->pagePlan) {
+      const QString detail = !result.ok() ? result.diagnostic
+                             : !trustMatches ? QStringLiteral("trusted peer changed during source validation")
+                                             : QStringLiteral("source manifest or page plan changed");
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          QStringLiteral("Outgoing recovery state was not hydrated: %1").arg(detail)
+      );
+      QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+      return;
+    }
+
+    QList<QUrl> localItems;
+    localItems.reserve(state->sourceRoots.size());
+    for (const auto &source : std::as_const(state->sourceRoots)) {
+      localItems.append(QUrl::fromLocalFile(source.canonicalPath));
+    }
+    const auto discoveredPeer = m_discoveryRuntime.registry().snapshot(state->peerDeviceId);
+    QString peerDisplayName = discoveredPeer.has_value() ? discoveredPeer->displayName : trustedPeer->alias;
+    if (peerDisplayName.isEmpty()) {
+      peerDisplayName = state->peerDeviceId.toString();
+    }
+    QString currentPath;
+    if (state->progress.currentEntry < static_cast<quint64>(result.manifest->entries.size())) {
+      currentPath = result.manifest->entries.at(static_cast<qsizetype>(state->progress.currentEntry))
+                        .entry.relativeProtocolPath;
+    }
+    TransferSnapshot initial{
+        .id = state->transferId,
+        .peerId = state->peerDeviceId,
+        .peerDisplayName = std::move(peerDisplayName),
+        .displayName = state->summary.displayName,
+        .direction = TransferDirection::Sending,
+        .state = TransferState::Preparing,
+        .progress =
+            {
+                .completedBytes = state->progress.completedBytes,
+                .totalBytes = state->summary.totalBytes,
+                .completedFiles = state->progress.completedFiles,
+                .totalFiles = state->summary.fileCount,
+            },
+        .currentRelativeDisplayPath = std::move(currentPath),
+        .createdUtc = state->createdUtc,
+    };
+    auto control = interruptedControl(initial, false);
+    if (control == nullptr) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          QStringLiteral("Outgoing recovery state could not enter Interrupted")
+      );
+      QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+      return;
+    }
+
+    auto *session = new OutgoingSession(
+        state->transferId, state->peerDeviceId, std::move(localItems), state->sendOptions, initial
+    );
+    session->snapshot = control->snapshot();
+    session->manifest = std::make_shared<const TransferManifest>(std::move(*result.manifest));
+    session->pagePlan = *plan.plan;
+    session->control = std::move(control);
+    session->currentEntry = static_cast<qsizetype>(state->progress.currentEntry);
+    session->completedBytes = state->progress.completedBytes;
+    session->completedFiles = state->progress.completedFiles;
+    session->effectiveConflictPolicy = state->effectiveConflictPolicy;
+    session->interrupted = true;
+    session->hydratedFromRecovery = true;
+    m_outgoing.insert(session->id, session);
+    Q_EMIT transferAdded(session->snapshot);
+    if (isPeerReady(session->peer)) {
+      QTimer::singleShot(0, this, [this, peer = session->peer] { offerPreparedTransfers(peer); });
+    } else {
+      QString diagnostic;
+      (void)connectPeer(session->peer, &diagnostic);
+    }
+    QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+  });
+  watcher->setFuture(QtConcurrent::run(
+      m_workerPool.get(), [request = std::move(request)]() {
+        return ManifestBuilder::buildTransfer(request);
+      }
+  ));
 }
 
 void FileTransferRuntime::prepareOutgoing(const ::relaydesk::transfer::TransferId &transferId)
@@ -1427,7 +1731,9 @@ void FileTransferRuntime::finishManifestPreparation(
     return;
   }
 
-  session->manifest = std::move(*result.manifest);
+  session->manifest = std::make_shared<const ::relaydesk::transfer::TransferManifest>(
+      std::move(*result.manifest)
+  );
   const auto plan = ManifestPageCodec::plan(*session->manifest);
   if (!plan.ok()) {
     failOutgoing(*session, TransferErrorCode::ManifestBuildFailed, plan.diagnostic);
@@ -1467,7 +1773,7 @@ void FileTransferRuntime::offerPreparedTransfers(const DeviceId &peerDeviceId)
       } else {
         sendResumeQuery(*session);
       }
-    } else if (session != nullptr && session->peer == peerDeviceId && session->manifest.has_value() &&
+    } else if (session != nullptr && session->peer == peerDeviceId && session->manifest != nullptr &&
         session->pagePlan.has_value() && session->offerState == nullptr && !session->cancelled) {
       sendOffer(*session);
     }
@@ -1478,7 +1784,7 @@ void FileTransferRuntime::sendResumeQuery(OutgoingSession &session)
 {
   using namespace ::relaydesk::transfer;
 
-  if (!session.interrupted || session.resumeQueryPending || !session.manifest.has_value() ||
+  if (!session.interrupted || session.resumeQueryPending || session.manifest == nullptr ||
       session.control == nullptr) {
     return;
   }
@@ -1532,7 +1838,7 @@ void FileTransferRuntime::handleResumeResponse(const DeviceId &peerDeviceId, con
   }
   auto *session = outgoing(response->transferId);
   if (session == nullptr || session->peer != peerDeviceId || !session->resumeQueryPending ||
-      !session->resumeQuery.has_value() || !session->manifest.has_value() || session->control == nullptr) {
+      !session->resumeQuery.has_value() || session->manifest == nullptr || session->control == nullptr) {
     return;
   }
   QList<ManifestEntry> entries;
@@ -1573,6 +1879,32 @@ void FileTransferRuntime::handleResumeResponse(const DeviceId &peerDeviceId, con
     session->currentEntry = index;
     break;
   }
+  if (session->hydratedFromRecovery) {
+    TransferSnapshot authoritative = session->snapshot;
+    authoritative.state = TransferState::Preparing;
+    authoritative.progress.completedBytes = session->completedBytes;
+    authoritative.progress.completedFiles = session->completedFiles;
+    authoritative.progress.bytesPerSecond = 0.0;
+    authoritative.progress.estimatedRemaining.reset();
+    authoritative.currentRelativeDisplayPath.clear();
+    authoritative.errorCode = TransferErrorCode::None;
+    authoritative.canPause = false;
+    authoritative.canResume = false;
+    authoritative.canCancel = false;
+    authoritative.canRetry = false;
+    authoritative.finishedUtc = {};
+    auto control = interruptedControl(std::move(authoritative), true);
+    if (control == nullptr) {
+      failOutgoing(
+          *session, TransferErrorCode::ConnectionLost,
+          QStringLiteral("Receiver durable progress could not restore the sender state")
+      );
+      return;
+    }
+    session->control = std::move(control);
+    session->snapshot = session->control->snapshot();
+    session->hydratedFromRecovery = false;
+  }
   session->nextManifestPage = 0;
   session->sender.reset();
   session->awaitingFileResult = false;
@@ -1580,6 +1912,7 @@ void FileTransferRuntime::handleResumeResponse(const DeviceId &peerDeviceId, con
   session->resumeQueryPending = false;
   session->interrupted = false;
   updateOutgoingProgress(*session);
+  persistOutgoing(*session);
   Q_EMIT transferChanged(session->snapshot);
   QTimer::singleShot(0, this, [this, id = session->id]() { sendNextManifestPage(id); });
 }
@@ -1593,7 +1926,7 @@ void FileTransferRuntime::sendOffer(OutgoingSession &session)
   using ::relaydesk::transfer::TransferState;
 
   const auto negotiated = negotiatedCapabilities(session.peer);
-  if (!negotiated.has_value() || !session.manifest.has_value() || !session.pagePlan.has_value() ||
+  if (!negotiated.has_value() || session.manifest == nullptr || !session.pagePlan.has_value() ||
       session.control == nullptr) {
     return;
   }
@@ -1674,7 +2007,12 @@ void FileTransferRuntime::handleOfferResponse(const DeviceId &peerDeviceId, cons
     session->effectiveConflictPolicy = acceptance->effectiveConflictPolicy;
     session->snapshot = session->control->snapshot();
     Q_EMIT transferChanged(session->snapshot);
-    QTimer::singleShot(0, this, [this, id = session->id]() { sendNextManifestPage(id); });
+    if (m_recoveryStore == nullptr) {
+      QTimer::singleShot(0, this, [this, id = session->id]() { sendNextManifestPage(id); });
+    } else {
+      session->waitingForInitialRecovery = true;
+      persistOutgoing(*session);
+    }
     return;
   }
   if (const auto *rejection = std::get_if<TransferReject>(&*decoded.message)) {
@@ -1696,7 +2034,7 @@ void FileTransferRuntime::sendNextManifestPage(const ::relaydesk::transfer::Tran
   using ::relaydesk::transfer::ManifestPageCodec;
 
   auto *session = outgoing(transferId);
-  if (session == nullptr || session->cancelled || !session->manifest.has_value() ||
+  if (session == nullptr || session->cancelled || session->manifest == nullptr ||
       !session->pagePlan.has_value()) {
     return;
   }
@@ -1739,7 +2077,7 @@ void FileTransferRuntime::startNextOutgoingFile(OutgoingSession &session)
   using ::relaydesk::transfer::TransferSenderRequest;
   using ::relaydesk::transfer::TransferState;
 
-  if (!session.manifest.has_value() || session.control == nullptr || session.cancelled) {
+  if (session.manifest == nullptr || session.control == nullptr || session.cancelled) {
     return;
   }
   while (session.currentEntry < session.manifest->entries.size() &&
@@ -1925,7 +2263,7 @@ void FileTransferRuntime::handleFileResult(const DeviceId &peerDeviceId, const F
     return;
   }
   auto *session = outgoing(result->transferId);
-  if (session == nullptr || session->peer != peerDeviceId || !session->manifest.has_value() ||
+  if (session == nullptr || session->peer != peerDeviceId || session->manifest == nullptr ||
       !session->awaitingFileResult || session->currentEntry >= session->manifest->entries.size() ||
       session->manifest->entries.at(session->currentEntry).entry.id != result->fileId) {
     return;
@@ -1951,7 +2289,7 @@ void FileTransferRuntime::handleFileResult(const DeviceId &peerDeviceId, const F
 
 void FileTransferRuntime::updateOutgoingProgress(OutgoingSession &session)
 {
-  if (session.control == nullptr || !session.manifest.has_value()) {
+  if (session.control == nullptr || session.manifest == nullptr) {
     return;
   }
   QString currentPath;
@@ -1964,17 +2302,189 @@ void FileTransferRuntime::updateOutgoingProgress(OutgoingSession &session)
   session.snapshot = session.control->snapshot();
 }
 
+void FileTransferRuntime::persistOutgoing(OutgoingSession &session)
+{
+  if (m_recoveryStore == nullptr || session.manifest == nullptr || !session.pagePlan.has_value() ||
+      session.recoveryRemovePending || session.recoveryRemoveRunning) {
+    return;
+  }
+  ++session.recoveryGeneration;
+  session.recoverySavePending = true;
+  if (!session.recoverySaveRunning) {
+    startOutgoingRecoverySave(session);
+  }
+}
+
+void FileTransferRuntime::startOutgoingRecoverySave(OutgoingSession &session)
+{
+  using namespace ::relaydesk::transfer;
+
+  if (!session.recoverySavePending || session.recoverySaveRunning || m_recoveryStore == nullptr ||
+      session.manifest == nullptr || !session.pagePlan.has_value()) {
+    return;
+  }
+  const auto trustedPeer = m_trustedDevices.find(session.peer);
+  if (!trustedPeer.has_value() || trustedPeer->revoked) {
+    session.recoverySavePending = false;
+    failOutgoing(
+        session, TransferErrorCode::SenderFailed,
+        QStringLiteral("Outgoing recovery state requires a trusted peer")
+    );
+    return;
+  }
+
+  const auto transferId = session.id;
+  const auto localDeviceId = m_localDeviceId;
+  const auto peerDeviceId = session.peer;
+  const auto peerFingerprint = trustedPeer->fingerprintSha256;
+  const auto createdUtc = session.snapshot.createdUtc;
+  const auto sendOptions = session.options;
+  const auto manifest = session.manifest;
+  const auto pagePlan = *session.pagePlan;
+  const auto effectivePolicy = session.effectiveConflictPolicy;
+  const RecoveryProgress progress{
+      .completedBytes = session.completedBytes,
+      .completedFiles = session.completedFiles,
+      .currentEntry = static_cast<quint64>(session.currentEntry),
+  };
+  const qsizetype sourceRootCount = session.localItems.size();
+  const quint64 generation = session.recoveryGeneration;
+  auto *store = m_recoveryStore.get();
+  session.recoverySavePending = false;
+  session.recoverySaveRunning = true;
+
+  auto *watcher = new QFutureWatcher<TransferRecoveryStoreOperationResult>(this);
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, transferId, generation, watcher]() {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    auto *current = outgoing(transferId);
+    if (current == nullptr) {
+      return;
+    }
+    current->recoverySaveRunning = false;
+    if (current->recoveryRemovePending) {
+      startOutgoingRecoveryRemoval(*current);
+      return;
+    }
+    if (generation != current->recoveryGeneration && current->recoverySavePending) {
+      startOutgoingRecoverySave(*current);
+      return;
+    }
+    if (!result.ok()) {
+      current->waitingForInitialRecovery = false;
+      failOutgoing(
+          *current, TransferErrorCode::SenderFailed,
+          QStringLiteral("Outgoing recovery state could not be saved: %1").arg(result.diagnostic)
+      );
+      return;
+    }
+    if (current->waitingForInitialRecovery) {
+      current->waitingForInitialRecovery = false;
+      if (!current->cancelled && !current->interrupted && !current->terminalPending) {
+        QTimer::singleShot(0, this, [this, transferId]() { sendNextManifestPage(transferId); });
+      }
+    }
+  });
+  watcher->setFuture(QtConcurrent::run(
+      m_workerPool.get(),
+      [store, transferId, localDeviceId, peerDeviceId, peerFingerprint, createdUtc, sendOptions, manifest,
+       pagePlan, effectivePolicy, progress, sourceRootCount]() {
+        QList<RecoverySource> sourceRoots;
+        sourceRoots.reserve(sourceRootCount);
+        for (const auto &entry : manifest->entries) {
+          if (!entry.entry.relativeProtocolPath.contains(QLatin1Char('/'))) {
+            sourceRoots.append({
+                .canonicalPath = entry.canonicalSourcePath,
+                .relativeProtocolPath = entry.entry.relativeProtocolPath,
+                .type = entry.entry.type,
+            });
+          }
+        }
+        if (sourceRoots.size() != sourceRootCount) {
+          return TransferRecoveryStoreOperationResult{
+              .error = TransferRecoveryStoreError::InvalidState,
+              .diagnostic = QStringLiteral("prepared manifest does not match selected recovery roots"),
+          };
+        }
+        return store->saveOutgoing({
+            .transferId = transferId,
+            .localDeviceId = localDeviceId,
+            .peerDeviceId = peerDeviceId,
+            .peerFingerprintSha256 = peerFingerprint,
+            .createdUtc = createdUtc,
+            .sendOptions = sendOptions,
+            .sourceRoots = std::move(sourceRoots),
+            .entries = manifest->entries,
+            .summary = manifest->summary,
+            .pagePlan =
+                {
+                    .entryCount = pagePlan.entryCount,
+                    .pageCount = pagePlan.pageCount(),
+                    .totalMetadataBytes = pagePlan.totalMetadataBytes,
+                },
+            .effectiveConflictPolicy = effectivePolicy,
+            .progress = progress,
+        });
+      }
+  ));
+}
+
+void FileTransferRuntime::removeOutgoingRecovery(
+    OutgoingSession &session, std::function<void(bool, QString)> completion
+)
+{
+  if (m_recoveryStore == nullptr) {
+    completion(true, {});
+    return;
+  }
+  ++session.recoveryGeneration;
+  session.recoverySavePending = false;
+  session.recoveryRemovePending = true;
+  session.recoveryRemoveCompletion = std::move(completion);
+  if (!session.recoverySaveRunning && !session.recoveryRemoveRunning) {
+    startOutgoingRecoveryRemoval(session);
+  }
+}
+
+void FileTransferRuntime::startOutgoingRecoveryRemoval(OutgoingSession &session)
+{
+  if (!session.recoveryRemovePending || session.recoveryRemoveRunning || m_recoveryStore == nullptr) {
+    return;
+  }
+  const auto transferId = session.id;
+  auto *store = m_recoveryStore.get();
+  session.recoveryRemovePending = false;
+  session.recoveryRemoveRunning = true;
+  auto *watcher = new QFutureWatcher<::relaydesk::transfer::TransferRecoveryStoreOperationResult>(this);
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, transferId, watcher]() {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    auto *current = outgoing(transferId);
+    if (current == nullptr) {
+      return;
+    }
+    current->recoveryRemoveRunning = false;
+    auto completion = std::move(current->recoveryRemoveCompletion);
+    current->recoveryRemoveCompletion = {};
+    if (completion) {
+      completion(result.ok(), std::move(result.diagnostic));
+    }
+  });
+  watcher->setFuture(QtConcurrent::run(
+      m_workerPool.get(), [store, transferId]() { return store->removeOutgoing(transferId); }
+  ));
+}
+
 void FileTransferRuntime::completeOutgoing(OutgoingSession &session)
 {
   using ::relaydesk::transfer::TransferState;
 
-  if (session.control == nullptr) {
+  if (session.control == nullptr || session.terminalPending) {
     return;
   }
   updateOutgoingProgress(session);
   if (!session.control->advance(TransferState::Verifying).ok() ||
-      !session.control->advance(TransferState::Committing).ok() ||
-      !session.control->advance(TransferState::Completed).ok()) {
+      !session.control->advance(TransferState::Committing).ok()) {
     failOutgoing(
         session, TransferErrorCode::SenderFailed,
         QStringLiteral("Outgoing transfer could not complete its state sequence")
@@ -1982,7 +2492,30 @@ void FileTransferRuntime::completeOutgoing(OutgoingSession &session)
     return;
   }
   session.snapshot = session.control->snapshot();
-  Q_EMIT transferChanged(session.snapshot);
+  session.terminalPending = true;
+  removeOutgoingRecovery(session, [this, transferId = session.id](bool removed, QString diagnostic) {
+    auto *current = outgoing(transferId);
+    if (current == nullptr) {
+      return;
+    }
+    current->terminalPending = false;
+    if (!removed) {
+      finishOutgoingFailure(
+          *current, ::relaydesk::transfer::TransferErrorCode::SenderFailed,
+          QStringLiteral("Outgoing recovery state could not be removed before completion: %1").arg(diagnostic)
+      );
+      return;
+    }
+    if (!current->control->advance(::relaydesk::transfer::TransferState::Completed).ok()) {
+      finishOutgoingFailure(
+          *current, ::relaydesk::transfer::TransferErrorCode::SenderFailed,
+          QStringLiteral("Outgoing transfer could not enter the completed state")
+      );
+      return;
+    }
+    current->snapshot = current->control->snapshot();
+    Q_EMIT transferChanged(current->snapshot);
+  });
 }
 
 void FileTransferRuntime::markOutgoingConnectionLost(OutgoingSession &session)
@@ -1990,7 +2523,8 @@ void FileTransferRuntime::markOutgoingConnectionLost(OutgoingSession &session)
   using ::relaydesk::transfer::TransferControlStateMachine;
   using ::relaydesk::transfer::TransferErrorCode;
 
-  if (session.cancelled || TransferControlStateMachine::isTerminal(session.snapshot.state)) {
+  if (session.cancelled || session.terminalPending ||
+      TransferControlStateMachine::isTerminal(session.snapshot.state)) {
     return;
   }
 
@@ -2004,6 +2538,7 @@ void FileTransferRuntime::markOutgoingConnectionLost(OutgoingSession &session)
   if (session.control != nullptr && session.control->interrupt().ok()) {
     session.interrupted = true;
     session.snapshot = session.control->snapshot();
+    persistOutgoing(session);
     Q_EMIT transferChanged(session.snapshot);
     return;
   }
@@ -2016,14 +2551,50 @@ void FileTransferRuntime::failOutgoing(
     OutgoingSession &session, TransferErrorCode errorCode, QString diagnostic
 )
 {
+  if (session.terminalPending) {
+    return;
+  }
+  session.cancelled = true;
+  session.terminalPending = true;
+  removeOutgoingRecovery(
+      session,
+      [this, transferId = session.id, errorCode, diagnostic = std::move(diagnostic)](
+          bool removed, QString removeDiagnostic
+      ) mutable {
+        auto *current = outgoing(transferId);
+        if (current == nullptr) {
+          return;
+        }
+        current->terminalPending = false;
+        if (!removed) {
+          if (!diagnostic.isEmpty()) {
+            diagnostic.append(QStringLiteral("; "));
+          }
+          diagnostic.append(
+              QStringLiteral("outgoing recovery cleanup failed: %1").arg(removeDiagnostic)
+          );
+        }
+        finishOutgoingFailure(*current, errorCode, std::move(diagnostic));
+      }
+  );
+}
+
+void FileTransferRuntime::finishOutgoingFailure(
+    OutgoingSession &session, TransferErrorCode errorCode, QString diagnostic
+)
+{
   using ::relaydesk::transfer::TransferControlStateMachine;
   using ::relaydesk::transfer::TransferState;
 
+  bool stateMachineFailed = false;
   if (session.control != nullptr &&
       !TransferControlStateMachine::isTerminal(session.control->snapshot().state)) {
-    (void)session.control->fail(errorCode);
-    session.snapshot = session.control->snapshot();
-  } else if (!TransferControlStateMachine::isTerminal(session.snapshot.state)) {
+    stateMachineFailed = session.control->fail(errorCode).ok();
+    if (stateMachineFailed) {
+      session.snapshot = session.control->snapshot();
+    }
+  }
+  if (!stateMachineFailed && !TransferControlStateMachine::isTerminal(session.snapshot.state)) {
     session.snapshot.state = TransferState::Failed;
     session.snapshot.errorCode = errorCode;
     session.snapshot.canCancel = false;

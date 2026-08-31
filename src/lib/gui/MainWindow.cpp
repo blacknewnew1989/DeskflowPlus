@@ -520,9 +520,12 @@ void MainWindow::setupRelayDeskTransfer(const deskflow::relaydesk::DeviceId &loc
     return;
   }
 
+  deskflow::relaydesk::FileTransferRuntimeOptions runtimeOptions;
+  runtimeOptions.recoveryStateRoot =
+      QDir(Settings::settingsPath()).filePath(QStringLiteral("relaydesk/transfer-recovery"));
   auto runtime = std::make_unique<deskflow::relaydesk::FileTransferRuntime>(
       localDeviceId, m_relayDeskPairing->trustedDevices(), *m_relayDeskDiscovery,
-      Settings::value(Settings::Security::Certificate).toString()
+      Settings::value(Settings::Security::Certificate).toString(), std::move(runtimeOptions)
   );
   auto *runtimeObserver = runtime.get();
   connect(
