@@ -59,7 +59,7 @@
 | ID | 状态 | 当前证据 / 下一步 |
 |---|---|---|
 | R4-UI-001 | NOT_RUN | 设备卡、信任和手动地址有 production 接线与组件测试线索；当前 SHA 未运行原生 UI/发现链路 |
-| R4-UI-002 | NOT_RUN | 配对 intent 已接 PairingTrustRuntime；当前 SHA 未运行 MainWindow 到真实两端配对 |
+| R4-UI-002 | PASS | owner `b6a37091f` / A0 内容等价提交 `a2cb8a2af`：两个真实 UDP discovery/pairing runtime 与 production DevicesDock 完成 Pair、六位 SAS Confirm、双向独立指纹 trust 持久化、重复配对边界及独立 Cancel 无 trust。owner Confirm/Cancel 各 3/3、10 个完整相关目标全绿；A0 fresh Confirm/Cancel 与 PairingTrustRuntime 11/11。证据见 R4 基线报告第 9 节，仅限 localhost/offscreen |
 | R4-UI-003 | NOT_RUN | 权限模型与平台 probe 已接线；Windows/macOS 原生系统设置与 TCC 未运行 |
 | R4-UI-004 | PASS | `b036e1f7b` / A0 `5aa0bfc4b`：TransferUiRuntime 消费 typed `TransferStartResult`，NotRunning/PeerUnavailable 写入现有本地化反馈并保留选择；红测 1→0，完整 TransferUiRuntime/DevicesDock 目标退出 0 |
 | R4-UI-005 | PASS | owner `5ac175f90` / A0 内容等价提交 `36d83e77c`：真实 FileTransferRuntime/TLS localhost offer 已进入 production composition/model/DevicesDock；真实按钮 accept 完成文件 SHA/Completed row/状态清理，reject 不落文件且 sender typed Rejected。owner 三完整相关目标退出 0，A0 fresh Composition 11/11；命令与日志见 R4 基线报告第 6 节。Ask、原生窗口系统与物理双机仍 `NOT_RUN` |

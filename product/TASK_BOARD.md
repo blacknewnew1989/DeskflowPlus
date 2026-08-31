@@ -31,7 +31,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | ID | 状态 | Owner | 当前范围与完成条件 |
 |---|---|---|---|
 | R4-UI-001 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行设备卡、在线状态、信任动作与手动地址 production 组合 |
-| R4-UI-002 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行 MainWindow 配对手势到真实 PairingTrustRuntime 反馈 |
+| R4-UI-002 | PASS | A2/A3/A7/A0 | owner `b6a37091f` / A0 内容等价提交 `a2cb8a2af`；本端真实 Pair/Confirm/Cancel widget 手势经 typed boundary 驱动双真实 UDP PairingTrustRuntime，双方独立 trust/指纹、card、重复与取消边界通过。owner 双槽各3/3、10个完整目标与A0 fresh全绿，pairing/UI双review GO；详见第9节 |
 | R4-UI-003 | NOT_RUN | A3/A4/A5/A7/A0 | 当前 SHA 运行权限卡、能力门控和原生系统设置往返；TCC 留物理验收 |
 | R4-UI-004 | PASS | A3/A7/A0 | owner `b036e1f7b` / A0 `5aa0bfc4b`；typed NotRunning/PeerUnavailable 显示本地化反馈，失败保留设备/路径选择且不创建 transfer row；红测与两完整目标退出 0 |
 | R4-UI-005 | PASS | A3/A6/A7/A0 | owner `5ac175f90` / A0 内容等价提交 `36d83e77c`；真实 TLS localhost offer 经 production widget accept/reject 完成 SHA/row/清理与 typed rejection 验收，双 reviewer GO，A0 fresh Composition 11/11。证据见 R4 基线报告第 6 节；Ask、原生窗口系统和物理双机仍 `NOT_RUN` |

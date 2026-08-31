@@ -18,7 +18,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | ID | 表面 | UI intent | Production service / typed boundary | 失败反馈 | 状态 |
 |---|---|---|---|---|---|
 | R4-UI-001 | 设备卡、信任、手动地址 | DevicesDock pairing/revoke/autoAccept/manual save | MainWindow -> PairingTrustRuntime / DiscoverySettingsStore / DeviceDiscoveryRuntime | auto-accept 可见；pair/revoke 即时失败仅日志 | `NOT_RUN` |
-| R4-UI-002 | 配对 | pairingRequested、SAS confirm/cancel | PairingTrustRuntime -> DiscoveryService datagram -> trust store | 状态模型存在；组合根原生手势未运行 | `NOT_RUN` |
+| R4-UI-002 | 配对 | pairingRequested、SAS confirm/cancel | DevicesDock -> PairingTrustRuntime -> UDP pairing -> trust store | localhost production widget/UDP/trust 已验证 | `PASS` |
 | R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | banner/detail model 存在；TCC/系统往返未运行 | `NOT_RUN` |
 | R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
 | R4-UI-005 | Incoming Offer / Ask | accept/reject/conflict decision | IncomingOfferModel / TransferUiRuntime -> FileTransferRuntime | 真实 TLS offer 经 production widget accept/reject 完成或拒绝 | `PASS` |
@@ -44,7 +44,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 
 | 范围 | 候选测试 | 仅能证明 | 不能证明 |
 |---|---|---|---|
-| 设备卡/配对 | DeviceHomeModel、DevicesDock、PairingWizardModel、PairingTrustRuntime | model、typed intent、UDP/trust 组件 | MainWindow 原生手势、物理配对 |
+| 设备卡/配对 | DeviceHomeModel、DevicesDock、PairingWizardModel、PairingTrustRuntime | localhost Pair/Confirm/Cancel widget intent、UDP 双端与 trust 持久化 | 原生窗口、真实 LAN、多网卡、物理配对 |
 | 权限 | PermissionStatusModel、DevicesDock、MainWindowLayout | 门控、文案、控件绑定 | TCC、Windows/macOS 系统设置往返 |
 | 拖放发送 | DevicesDock、TransferUiRuntime | local URL 过滤、immutable intent、fake service adapter | Explorer/Finder DnD、真实 service 失败反馈 |
 | Incoming Offer | IncomingOfferModel、DevicesDock、TransferRuntimeComposition、FileTransferRuntime | localhost TLS offer、widget accept/reject、文件 SHA/row/清理 | Ask、原生窗口系统、物理双机 |
@@ -277,7 +277,54 @@ Transfer Center widget intent。native Windows/macOS window system、TCC、物�
 production composition 范围内为 `PASS`。该状态不证明 native Windows/macOS window system、TCC、
 物理 Win↔Mac 或正式发布行为。
 
-## 9. 证据边界
+## 9. 第六个纵向证据切片
+
+选择 `R4-UI-002`，范围只包含 production pairing UI 的 Pair、SAS Confirm 与独立 Cancel。
+
+实现与验收结果：
+
+- owner：`agent/a2/r4-pairing-ui@b6a37091f7d6e775f65bde1304490256c4aa7e90`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@a2cb8a2af92cca580ca5c09cea19cdbe1ce854a3`。两提交
+  parent 均为 `1f6df3e6c72999bb9b35f18853d8850c5ab481ee`、tree 均为
+  `cffa3e0fec7de840e494f7baf11812aa14ce2116`，由 cherry-pick 产生不同 commit id；
+- 测试复用现有 RuntimePair：两个真实 DeviceDiscoveryRuntime/PairingTrustRuntime 各自绑定独立
+  localhost UDP port，使用不同 DeviceId、不同 advertised certificate fingerprint、不同 device model 和
+  独立 trust store 路径；endpoint resolver 指向对端实际 boundPort，没有新增协议宿主；
+- 本端真实 DevicesDock 从已发现候选 card 选中设备，只通过 Pair QPushButton mouse click 发出 typed
+  DeviceId；测试连接与 production MainWindow 相同的 intent boundary，由 PairingTrustRuntime 使用当前
+  discovery identity/endpoint 发起配对，本端没有直接调用 service/model；
+- 发起端 PairingWizardModel 显示实际六位 SAS，widget label 使用三位分组。协议角色非对称：远端不展示
+  SAS，而是进入 canSubmitCode 状态；远端 harness 仅提交发起端模型的实际 SAS 值，未硬编码验证码；
+- 本端只点击真实 Confirm QPushButton。完成后双方 session 为 Completed，双方 device card 为
+  Online + trusted，pinned fingerprint 分别准确绑定对端 fingerprint；重新加载两份 trust store 仍为
+  Trusted；
+- 完成后本端 Pair 按钮隐藏；对隐藏按钮的重复手势不产生新 session，两份 trust JSON 在手势前后字节
+  完全一致，证明没有重复写 trust；
+- 独立 Cancel 场景使用新的 runtime pair、身份和 trust 目录。本端只点击真实 Pair 和 Cancel 按钮，双方
+  session 为 Rejected，device card 回到 Discovered/untrusted，Cancel 隐藏、Pair 恢复可用；重新加载
+  两份 store 均无对端 trust；
+- 本切片只新增测试，没有修改 production；
+- owner C 盘日志根为 `C:\Users\52323\AppData\Local\Temp\relaydesk-a2-ui002`。Confirm 三轮为
+  504/516/459ms，Cancel 三轮为 456/522/547ms，均 3/0/0、退出 0。完整目标均退出 0：
+  PairingTrustRuntime 11/0、DevicesDock 30/0、PairingWizardModel 10/0、PairingStateMachine 11/0、
+  PairingMessageCodec 13/0、PairingTrustCommitter 6/0、PairingManager 9/0、PairingService 5/0、
+  TrustedDeviceStore 10/0、DeviceDiscoveryRuntime 10/0；对应 receipts 为 `full-*.txt`；
+- UI reviewer 首轮 GO。pairing reviewer 首轮把协议误读为双方都展示 SAS；定向动态复跑证明 responder
+  模型按设计不展示 SAS、只提交 initiator 码，reviewer 按非对称 production 角色复核后 GO；修正版 Confirm
+  `pairing-ui-confirm-sas-asymmetric.txt` 为 3/0/0，完整 PairingTrustRuntime
+  `full-PairingTrustRuntime-sas-asymmetric.txt` 为 11/0/0，均退出 0；
+- A0 fresh build `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui002` 使用 VS 2022、Ninja、
+  Qt 6.10.1 与现有 x64-windows Debug vcpkg 安装树，serial 106/106 构建退出 0，日志
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui002-build.log`（2026-09-01 03:26:55）；Confirm
+  `relaydesk-a0-ui002-confirm.log`（03:27:20，187ms）与 Cancel `relaydesk-a0-ui002-cancel.log`
+  （03:27:21，171ms）均为 3/0/0、退出 0，完整 PairingTrustRuntime
+  `relaydesk-a0-ui002-full.log`（03:27:22，714ms）为 11/0/0、退出 0。
+
+`R4-UI-002` 的 `PASS` 只覆盖 Windows 同进程 localhost UDP、offscreen Qt widget、真实 pairing runtime
+和 trust store。它不证明 native Windows/macOS window system、真实 LAN 广播、多网卡选路、TCC、物理
+Win↔Mac 设备或正式发布行为。
+
+## 10. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
