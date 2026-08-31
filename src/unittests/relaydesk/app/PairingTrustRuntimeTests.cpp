@@ -9,11 +9,17 @@
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
+#include "relaydesk/model/PermissionStatusModel.h"
 #include "relaydesk/trust/TlsPeerPinningPolicy.h"
+#include "relaydesk/widgets/DevicesDock.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFrame>
+#include <QLabel>
+#include <QListView>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -21,6 +27,7 @@
 
 using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
+using namespace deskflow::relaydesk::widgets;
 
 namespace {
 DeviceInfo device(QString name, char fingerprintByte)
@@ -122,6 +129,8 @@ private Q_SLOTS:
   void autoAcceptUpdateRollsBackPrimaryWhenBackupWriteFails();
   void unusableTrustStoreBlocksPairing();
   void rejectsMissingFreshDiscoveryIdentityAndEndpoint();
+  void productionPairingWidgetsConfirmAndPersistIndependentTrust();
+  void productionPairingWidgetsCancelWithoutPersistingTrust();
 };
 
 void PairingTrustRuntimeTests::twoSharedDiscoverySocketsPersistExplicitlyConfirmedTrust()
@@ -341,6 +350,149 @@ void PairingTrustRuntimeTests::rejectsMissingFreshDiscoveryIdentityAndEndpoint()
   QCOMPARE(failed.count(), 2);
   QVERIFY(!runtime.snapshot().has_value());
   QVERIFY(!runtime.trustedDevices().find(peerInfo.deviceId).has_value());
+}
+
+void PairingTrustRuntimeTests::productionPairingWidgetsConfirmAndPersistIndependentTrust()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  RuntimePair pair(directory, {.sasGenerator = [] { return 123456U; }});
+  QVERIFY2(pair.ready, qPrintable(pair.readyDiagnostic));
+
+  PermissionStatusModel permissions(PermissionPlatform::Other);
+  DevicesDock dock(pair.firstModel, pair.firstPairingModel, permissions);
+  // This is the production MainWindow intent boundary: the local UI emits a
+  // typed DeviceId and the runtime resolves the current discovery identity.
+  connect(&dock, &DevicesDock::pairingRequested, pair.first.get(), [runtime = pair.first.get()](const DeviceId &id) {
+    (void)runtime->startPairing(id);
+  });
+  dock.show();
+
+  auto *list = dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *pairButton = dock.findChild<QPushButton *>(QStringLiteral("relaydeskPairSelectedButton"));
+  auto *panel = dock.findChild<QFrame *>(QStringLiteral("relaydeskPairingPanel"));
+  auto *sas = dock.findChild<QLabel *>(QStringLiteral("relaydeskPairingSasLabel"));
+  auto *confirm = dock.findChild<QPushButton *>(QStringLiteral("relaydeskConfirmMatchingSasButton"));
+  QVERIFY(list != nullptr);
+  QVERIFY(pairButton != nullptr);
+  QVERIFY(panel != nullptr);
+  QVERIFY(sas != nullptr);
+  QVERIFY(confirm != nullptr);
+
+  const auto index = pair.firstModel.index(pair.firstModel.indexOf(pair.secondInfo.deviceId), 0);
+  QVERIFY(index.isValid());
+  list->setCurrentIndex(index);
+  QTRY_VERIFY(pairButton->isVisible() && pairButton->isEnabled());
+  QTest::mouseClick(pairButton, Qt::LeftButton);
+
+  QTRY_VERIFY_WITH_TIMEOUT(pair.second->snapshot().has_value(), 3000);
+  QTRY_VERIFY_WITH_TIMEOUT(pair.firstPairingModel.active() && pair.secondPairingModel.active(), 3000);
+  QTRY_VERIFY_WITH_TIMEOUT(!pair.firstPairingModel.sixDigitSas().isEmpty(), 3000);
+  QVERIFY(pair.secondPairingModel.canSubmitCode());
+  QVERIFY(pair.secondPairingModel.sixDigitSas().isEmpty());
+  QTRY_VERIFY(panel->isVisible());
+  QCOMPARE(
+      sas->text(), pair.firstPairingModel.sixDigitSas().first(3) + QStringLiteral(" ") +
+                       pair.firstPairingModel.sixDigitSas().last(3)
+  );
+  QTRY_VERIFY(confirm->isVisible() && confirm->isEnabled());
+
+  QTest::mouseClick(confirm, Qt::LeftButton);
+  QVERIFY(pair.secondPairingModel.submitDisplayedSas(pair.firstPairingModel.sixDigitSas()));
+  QTRY_COMPARE_WITH_TIMEOUT(pair.first->snapshot()->state, PairingState::Completed, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(pair.second->snapshot()->state, PairingState::Completed, 3000);
+
+  const auto firstDevice = pair.firstModel.snapshot(pair.secondInfo.deviceId);
+  const auto secondDevice = pair.secondModel.snapshot(pair.firstInfo.deviceId);
+  QVERIFY(firstDevice.has_value());
+  QVERIFY(secondDevice.has_value());
+  QCOMPARE(firstDevice->presence, DevicePresence::Online);
+  QCOMPARE(secondDevice->presence, DevicePresence::Online);
+  QVERIFY(firstDevice->trusted);
+  QVERIFY(secondDevice->trusted);
+  QCOMPARE(firstDevice->pinnedFingerprint, pair.secondInfo.certificateFingerprintSha256);
+  QCOMPARE(secondDevice->pinnedFingerprint, pair.firstInfo.certificateFingerprintSha256);
+
+  TrustedDeviceStore firstStore(directory.filePath(QStringLiteral("first/trusted.json")));
+  TrustedDeviceStore secondStore(directory.filePath(QStringLiteral("second/trusted.json")));
+  QVERIFY(firstStore.load().ok);
+  QVERIFY(secondStore.load().ok);
+  QCOMPARE(
+      firstStore.trustStatus(pair.secondInfo.deviceId, pair.secondInfo.certificateFingerprintSha256), TrustStatus::Trusted
+  );
+  QCOMPARE(
+      secondStore.trustStatus(pair.firstInfo.deviceId, pair.firstInfo.certificateFingerprintSha256), TrustStatus::Trusted
+  );
+
+  QFile firstTrustFile(directory.filePath(QStringLiteral("first/trusted.json")));
+  QFile secondTrustFile(directory.filePath(QStringLiteral("second/trusted.json")));
+  QVERIFY(firstTrustFile.open(QIODevice::ReadOnly));
+  QVERIFY(secondTrustFile.open(QIODevice::ReadOnly));
+  const auto firstTrustBeforeRepeat = firstTrustFile.readAll();
+  const auto secondTrustBeforeRepeat = secondTrustFile.readAll();
+  firstTrustFile.close();
+  secondTrustFile.close();
+  const auto completedSession = pair.first->snapshot()->pairingSessionId;
+  QTRY_VERIFY(!pairButton->isVisible());
+  QTest::mouseClick(pairButton, Qt::LeftButton);
+  QCOMPARE(pair.first->snapshot()->pairingSessionId, completedSession);
+  QVERIFY(firstTrustFile.open(QIODevice::ReadOnly));
+  QVERIFY(secondTrustFile.open(QIODevice::ReadOnly));
+  QCOMPARE(firstTrustFile.readAll(), firstTrustBeforeRepeat);
+  QCOMPARE(secondTrustFile.readAll(), secondTrustBeforeRepeat);
+}
+
+void PairingTrustRuntimeTests::productionPairingWidgetsCancelWithoutPersistingTrust()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  RuntimePair pair(directory, {.sasGenerator = [] { return 654321U; }});
+  QVERIFY2(pair.ready, qPrintable(pair.readyDiagnostic));
+
+  PermissionStatusModel permissions(PermissionPlatform::Other);
+  DevicesDock dock(pair.firstModel, pair.firstPairingModel, permissions);
+  connect(&dock, &DevicesDock::pairingRequested, pair.first.get(), [runtime = pair.first.get()](const DeviceId &id) {
+    (void)runtime->startPairing(id);
+  });
+  dock.show();
+
+  auto *list = dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *pairButton = dock.findChild<QPushButton *>(QStringLiteral("relaydeskPairSelectedButton"));
+  auto *cancel = dock.findChild<QPushButton *>(QStringLiteral("relaydeskCancelPairingButton"));
+  QVERIFY(list != nullptr);
+  QVERIFY(pairButton != nullptr);
+  QVERIFY(cancel != nullptr);
+
+  const auto index = pair.firstModel.index(pair.firstModel.indexOf(pair.secondInfo.deviceId), 0);
+  QVERIFY(index.isValid());
+  list->setCurrentIndex(index);
+  QTRY_VERIFY(pairButton->isVisible() && pairButton->isEnabled());
+  QTest::mouseClick(pairButton, Qt::LeftButton);
+  QTRY_VERIFY_WITH_TIMEOUT(pair.second->snapshot().has_value(), 3000);
+  QTRY_VERIFY_WITH_TIMEOUT(cancel->isVisible() && cancel->isEnabled(), 3000);
+  QTest::mouseClick(cancel, Qt::LeftButton);
+
+  QTRY_COMPARE_WITH_TIMEOUT(pair.first->snapshot()->state, PairingState::Rejected, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(pair.second->snapshot()->state, PairingState::Rejected, 3000);
+  QVERIFY(!pair.first->trustedDevices().find(pair.secondInfo.deviceId).has_value());
+  QVERIFY(!pair.second->trustedDevices().find(pair.firstInfo.deviceId).has_value());
+  const auto firstDevice = pair.firstModel.snapshot(pair.secondInfo.deviceId);
+  const auto secondDevice = pair.secondModel.snapshot(pair.firstInfo.deviceId);
+  QVERIFY(firstDevice.has_value());
+  QVERIFY(secondDevice.has_value());
+  QCOMPARE(firstDevice->presence, DevicePresence::Discovered);
+  QCOMPARE(secondDevice->presence, DevicePresence::Discovered);
+  QVERIFY(!firstDevice->trusted);
+  QVERIFY(!secondDevice->trusted);
+  QTRY_VERIFY(!cancel->isVisible());
+  QTRY_VERIFY(pairButton->isVisible() && pairButton->isEnabled());
+
+  TrustedDeviceStore firstStore(directory.filePath(QStringLiteral("first/trusted.json")));
+  TrustedDeviceStore secondStore(directory.filePath(QStringLiteral("second/trusted.json")));
+  QVERIFY(firstStore.load().ok);
+  QVERIFY(secondStore.load().ok);
+  QVERIFY(!firstStore.find(pair.secondInfo.deviceId).has_value());
+  QVERIFY(!secondStore.find(pair.firstInfo.deviceId).has_value());
 }
 
 QTEST_MAIN(PairingTrustRuntimeTests)
