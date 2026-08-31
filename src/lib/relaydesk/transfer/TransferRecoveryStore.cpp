@@ -8,6 +8,7 @@
 #include <QCborParserError>
 #include <QCborValue>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
@@ -900,13 +901,32 @@ TransferRecoveryStoreLoadResult<IncomingRecoveryState> TransferRecoveryStore::lo
 }
 
 template <typename State, typename Loader>
-TransferRecoveryStoreScanResult<State> scanStates(const QString &directory, Loader loader)
+TransferRecoveryStoreScanResult<State> scanStates(const QString &directory, quint64 maximumStates, Loader loader)
 {
   TransferRecoveryStoreScanResult<State> result;
   const QDir dir(directory);
   if (!dir.exists())
     return result;
-  for (const auto &entry : dir.entryInfoList({QStringLiteral("*.recovery.cbor")}, QDir::Files, QDir::Name)) {
+  if (maximumStates == 0)
+    return {
+        .error = TransferRecoveryStoreError::TooManyStates,
+        .diagnostic = QStringLiteral("recovery state scan limit is zero")
+    };
+  QDirIterator entries(
+      directory, {QStringLiteral("*.recovery.cbor")}, QDir::Files | QDir::NoDotAndDotDot
+  );
+  quint64 scanned = 0;
+  while (entries.hasNext()) {
+    if (scanned == maximumStates) {
+      result.issues.append(
+          {dir.absolutePath(), TransferRecoveryStoreError::TooManyStates,
+           QStringLiteral("recovery state scan limit exceeded")}
+      );
+      break;
+    }
+    entries.next();
+    ++scanned;
+    const QFileInfo entry = entries.fileInfo();
     if (entry.isSymLink()) {
       result.issues.append(
           {entry.absoluteFilePath(), TransferRecoveryStoreError::InvalidPath,
@@ -941,7 +961,7 @@ TransferRecoveryStoreScanResult<OutgoingRecoveryState> TransferRecoveryStore::sc
         .diagnostic = QStringLiteral("recovery root must be absolute")
     };
   return scanStates<OutgoingRecoveryState>(
-      QDir(m_rootDirectory).filePath(QStringLiteral("outgoing")),
+      QDir(m_rootDirectory).filePath(QStringLiteral("outgoing")), m_limits.maximumStates,
       [this](const TransferId &id) { return loadOutgoing(id); }
   );
 }
@@ -953,7 +973,7 @@ TransferRecoveryStoreScanResult<IncomingRecoveryState> TransferRecoveryStore::sc
         .diagnostic = QStringLiteral("recovery root must be absolute")
     };
   return scanStates<IncomingRecoveryState>(
-      QDir(m_rootDirectory).filePath(QStringLiteral("incoming")),
+      QDir(m_rootDirectory).filePath(QStringLiteral("incoming")), m_limits.maximumStates,
       [this](const TransferId &id) { return loadIncoming(id); }
   );
 }

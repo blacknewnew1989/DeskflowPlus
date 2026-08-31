@@ -12,6 +12,7 @@
 #include "relaydesk/transfer/ControlMessageCodec.h"
 #include "relaydesk/transfer/FileMessageCodec.h"
 #include "relaydesk/transfer/ManifestPageCodec.h"
+#include "relaydesk/transfer/ResumeStore.h"
 #include "relaydesk/transfer/TransferRecoveryStore.h"
 #include "relaydesk/trust/TlsIdentityAdapter.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
@@ -23,9 +24,12 @@
 #include <QDirIterator>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QScopeGuard>
+#include <QSemaphore>
 #include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QThreadPool>
 #include <QTimer>
 
 #include <limits>
@@ -62,6 +66,26 @@ public:
   {
     return runtime.m_incoming != nullptr &&
            runtime.m_incoming->hasPendingIncomingConflict(transferId, conflictId);
+  }
+
+  static void occupyWorkerPool(FileTransferRuntime &runtime, QSemaphore &started, QSemaphore &release)
+  {
+    for (int index = 0; index < 2; ++index) {
+      runtime.m_workerPool->start([&started, &release] {
+        started.release();
+        release.acquire();
+      });
+    }
+  }
+
+  static qsizetype peerConnectionCount(const FileTransferRuntime &runtime)
+  {
+    return runtime.m_peerConnections.size();
+  }
+
+  static qsizetype clientCount(const FileTransferRuntime &runtime)
+  {
+    return runtime.m_clients.size();
   }
 };
 } // namespace deskflow::relaydesk
@@ -107,6 +131,7 @@ private Q_SLOTS:
   void incomingConflictPolicies_data();
   void incomingConflictPolicies();
   void interruptedIncomingFileResumesFromDurableCheckpoint();
+  void stoppingSenderLeavesOutgoingAtResumableCheckpoint_data();
   void stoppingSenderLeavesOutgoingAtResumableCheckpoint();
   void outgoingRecoverySaveFailureStopsBeforeStreaming();
   void outgoingRecoveryRemovalFailureDoesNotPublishTerminalSuccess_data();
@@ -1169,9 +1194,39 @@ void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoi
   QVERIFY2(errors.isEmpty(), qPrintable(evidence));
 }
 
+void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint_data()
+{
+  QTest::addColumn<bool>("reconstructSender");
+  QTest::addColumn<bool>("peerReadyBeforeHydration");
+  QTest::addColumn<bool>("stopDuringHydration");
+  QTest::addColumn<QString>("recoveryMutation");
+  QTest::addColumn<QString>("expectedDiagnostic");
+  QTest::newRow("listener-restart") << false << false << false << QString{} << QString{};
+  QTest::newRow("runtime-reconstruction") << true << false << false << QString{} << QString{};
+  QTest::newRow("late-discovery")
+      << true << false << false << QStringLiteral("late-discovery") << QString{};
+  QTest::newRow("peer-ready-before-hydration") << true << true << false << QString{} << QString{};
+  QTest::newRow("stop-during-hydration") << true << false << true << QString{} << QString{};
+  QTest::newRow("source-size-changed")
+      << true << false << false << QStringLiteral("source-size") << QStringLiteral("not hydrated");
+  QTest::newRow("source-hash-changed")
+      << true << false << false << QStringLiteral("source-hash") << QStringLiteral("not hydrated");
+  QTest::newRow("trust-revoked")
+      << true << false << false << QStringLiteral("trust-revoked") << QStringLiteral("trust validation");
+  QTest::newRow("fingerprint-changed")
+      << true << false << false << QStringLiteral("fingerprint") << QStringLiteral("trust validation");
+  QTest::newRow("descriptor-corrupt")
+      << true << false << false << QStringLiteral("descriptor") << QStringLiteral("was skipped");
+}
+
 void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint()
 {
   using namespace ::relaydesk::transfer;
+  QFETCH(bool, reconstructSender);
+  QFETCH(bool, peerReadyBeforeHydration);
+  QFETCH(bool, stopDuringHydration);
+  QFETCH(QString, recoveryMutation);
+  QFETCH(QString, expectedDiagnostic);
 
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -1205,15 +1260,31 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   options.listenAddress = QHostAddress::LocalHost;
   options.recoveryStateRoot = directory.filePath(QStringLiteral("sender-stop-recovery"));
   options.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
-  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  std::unique_ptr<model::DeviceHomeModel> reconstructedSenderModel;
+  std::unique_ptr<DeviceDiscoveryRuntime> reconstructedDiscovery;
+  auto sender = std::make_unique<FileTransferRuntime>(
+      senderId, senderTrust, senderDiscovery, identityPath, options
+  );
   FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
 
   QStringList errors;
   bool senderStopRequested = false;
   bool senderStoppedAtCheckpoint = false;
-  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto error, auto, const QString &message) {
-    if (!senderStoppedAtCheckpoint || error != FileTransferRuntimeError::TransportFailed) {
-      errors.append(QStringLiteral("sender: ") + message);
+  bool recordHydrationOrder = false;
+  int eventOrder = 0;
+  int peerReadyCount = 0;
+  int peerReadyOrder = 0;
+  int hydrationAddedCount = 0;
+  int hydrationOrder = 0;
+  bool hydrationVisibleInActiveTransfers = false;
+  qsizetype connectionsBeforeHydration = -1;
+  qsizetype clientsBeforeHydration = -1;
+  QSemaphore workerStarted;
+  QSemaphore workerRelease;
+  bool workersReleased = false;
+  const auto workerReleaseGuard = qScopeGuard([&] {
+    if (!workersReleased) {
+      workerRelease.release(2);
     }
   });
   connect(&receiver, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
@@ -1227,23 +1298,61 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   std::optional<TransferSnapshot> receiverLatest;
   quint64 interruptedBytes = 0;
   QStringList senderStates;
-  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
-    if (snapshot.direction != TransferDirection::Sending) {
-      return;
-    }
-    senderLatest = snapshot;
-    senderStates.append(QString::number(static_cast<int>(snapshot.state)));
-    if (!senderStopRequested && snapshot.state == TransferState::Transferring &&
-        snapshot.progress.completedBytes >= 1024U * 1024U &&
-        snapshot.progress.completedBytes < snapshot.progress.totalBytes) {
-      senderStopRequested = true;
-      interruptedBytes = snapshot.progress.completedBytes;
-      QTimer::singleShot(0, &sender, [&] {
-        senderStoppedAtCheckpoint = true;
-        sender.stop();
-      });
-    }
-  });
+  QList<quint64> senderResumingBytes;
+  const auto attachSender = [&](FileTransferRuntime &runtime) {
+    auto *runtimePointer = &runtime;
+    connect(runtimePointer, &FileTransferRuntime::errorOccurred, this, [&](auto error, auto, const QString &message) {
+      if (recoveryMutation == QStringLiteral("late-discovery") &&
+          error == FileTransferRuntimeError::PeerUnavailable && peerReadyOrder == 0) {
+        return;
+      }
+      if (!senderStoppedAtCheckpoint || error != FileTransferRuntimeError::TransportFailed) {
+        errors.append(QStringLiteral("sender: ") + message);
+      }
+    });
+    connect(
+        runtimePointer, &IFileTransferService::transferAdded, this,
+        [&, runtimePointer](const TransferSnapshot &snapshot) {
+          if (snapshot.direction == TransferDirection::Sending) {
+            senderLatest = snapshot;
+            senderStates.append(QString::number(static_cast<int>(snapshot.state)));
+            if (recordHydrationOrder && snapshot.state == TransferState::Interrupted) {
+              ++hydrationAddedCount;
+              hydrationOrder = ++eventOrder;
+              for (const auto &active : runtimePointer->activeTransfers()) {
+                if (active.id == snapshot.id && active.state == TransferState::Interrupted) {
+                  hydrationVisibleInActiveTransfers = true;
+                }
+              }
+            }
+          }
+        }
+    );
+    connect(
+        runtimePointer, &IFileTransferService::transferChanged, this,
+        [&, runtimePointer](const TransferSnapshot &snapshot) {
+          if (snapshot.direction != TransferDirection::Sending) {
+            return;
+          }
+          senderLatest = snapshot;
+          senderStates.append(QString::number(static_cast<int>(snapshot.state)));
+          if (snapshot.state == TransferState::Resuming) {
+            senderResumingBytes.append(snapshot.progress.completedBytes);
+          }
+          if (!senderStopRequested && snapshot.state == TransferState::Transferring &&
+              snapshot.progress.completedBytes >= 1024U * 1024U &&
+              snapshot.progress.completedBytes < snapshot.progress.totalBytes) {
+            senderStopRequested = true;
+            interruptedBytes = snapshot.progress.completedBytes;
+            QTimer::singleShot(0, runtimePointer, [&, runtimePointer] {
+              senderStoppedAtCheckpoint = true;
+              runtimePointer->stop();
+            });
+          }
+        }
+    );
+  };
+  attachSender(*sender);
   connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
     if (snapshot.direction == TransferDirection::Receiving) {
       receiverLatest = snapshot;
@@ -1251,12 +1360,12 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   });
 
   QString diagnostic;
-  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(sender->start(&diagnostic), qPrintable(diagnostic));
   QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY(senderDiscovery.registry().observeAdvertisement(
       receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
   ));
-  const auto started = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  const auto started = sender->send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
   QVERIFY2(started.ok(), qPrintable(started.diagnostic));
   QTRY_VERIFY_WITH_TIMEOUT(senderStoppedAtCheckpoint, 15'000);
   QTRY_VERIFY_WITH_TIMEOUT(
@@ -1266,6 +1375,17 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   );
   QVERIFY(interruptedBytes >= 1024U * 1024U);
   QVERIFY(interruptedBytes < static_cast<quint64>(sourceBytes.size()));
+  ResumeStore receiverResumeStore(
+      QDir(receiveRoot).filePath(QStringLiteral(".incoming/resume-active"))
+  );
+  QTRY_VERIFY_WITH_TIMEOUT(
+      QFileInfo::exists(receiverResumeStore.statePath(*started.transferId)), 5'000
+  );
+  const auto receiverResume = receiverResumeStore.load(*started.transferId);
+  QVERIFY2(receiverResume.ok(), qPrintable(receiverResume.diagnostic));
+  QCOMPARE(receiverResume.state->files.size(), qsizetype{1});
+  const auto receiverDurableOffset = receiverResume.state->files.constFirst().durableOffset;
+  QVERIFY(receiverDurableOffset > 0);
 
   TransferRecoveryStore recoveryStore(options.recoveryStateRoot);
   QTRY_VERIFY_WITH_TIMEOUT(
@@ -1283,8 +1403,103 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   QCOMPARE(persisted.state->pagePlan.entryCount, quint64{1});
   QCOMPARE(persisted.state->progress.completedBytes, interruptedBytes);
 
-  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
-  QVERIFY2(sender.connectPeer(receiverId, &diagnostic), qPrintable(diagnostic));
+  if (reconstructSender) {
+    sender.reset();
+    senderLatest.reset();
+    senderStates.clear();
+    senderResumingBytes.clear();
+    errors.clear();
+    if (recoveryMutation == QStringLiteral("source-size")) {
+      QFile changed(sourcePath);
+      QVERIFY(changed.open(QIODevice::Append));
+      QCOMPARE(changed.write("x"), qint64{1});
+    } else if (recoveryMutation == QStringLiteral("source-hash")) {
+      const auto modifiedUtc = QFileInfo(sourcePath).lastModified();
+      QFile changed(sourcePath);
+      QVERIFY(changed.open(QIODevice::ReadWrite));
+      QCOMPARE(changed.write("y"), qint64{1});
+      QVERIFY(changed.setFileTime(modifiedUtc, QFileDevice::FileModificationTime));
+    } else if (recoveryMutation == QStringLiteral("trust-revoked")) {
+      QVERIFY(senderTrust.revoke(receiverId));
+    } else if (recoveryMutation == QStringLiteral("fingerprint")) {
+      auto changedTrust = senderTrust.find(receiverId);
+      QVERIFY(changedTrust.has_value());
+      changedTrust->fingerprintSha256 = QByteArray(32, '\x71');
+      QVERIFY(senderTrust.upsert(*changedTrust));
+    } else if (recoveryMutation == QStringLiteral("descriptor")) {
+      QFile descriptor(recoveryStore.outgoingStatePath(*started.transferId));
+      QVERIFY(descriptor.open(QIODevice::WriteOnly | QIODevice::Truncate));
+      QCOMPARE(descriptor.write("corrupt"), qint64{7});
+    }
+    auto *hydrationDiscovery = &senderDiscovery;
+    if (recoveryMutation == QStringLiteral("late-discovery")) {
+      reconstructedSenderModel = std::make_unique<model::DeviceHomeModel>();
+      reconstructedDiscovery = std::make_unique<DeviceDiscoveryRuntime>(
+          localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Reconstructed sender")),
+          *reconstructedSenderModel
+      );
+      hydrationDiscovery = reconstructedDiscovery.get();
+    }
+    sender = std::make_unique<FileTransferRuntime>(
+        senderId, senderTrust, *hydrationDiscovery, identityPath, options
+    );
+    recordHydrationOrder = true;
+    attachSender(*sender);
+    connect(sender.get(), &FileTransferRuntime::peerReady, this, [&](DeviceId peer, const auto &) {
+      if (peer == receiverId) {
+        ++peerReadyCount;
+        peerReadyOrder = ++eventOrder;
+      }
+    });
+    if (peerReadyBeforeHydration || stopDuringHydration) {
+      FileTransferRuntimeTestAccess::occupyWorkerPool(*sender, workerStarted, workerRelease);
+      QVERIFY(workerStarted.tryAcquire(2, 5'000));
+    }
+    QVERIFY2(sender->start(&diagnostic), qPrintable(diagnostic));
+    if (peerReadyBeforeHydration) {
+      QVERIFY2(sender->connectPeer(receiverId, &diagnostic), qPrintable(diagnostic));
+      QTRY_VERIFY_WITH_TIMEOUT(peerReadyOrder > 0, 10'000);
+      connectionsBeforeHydration = FileTransferRuntimeTestAccess::peerConnectionCount(*sender);
+      clientsBeforeHydration = FileTransferRuntimeTestAccess::clientCount(*sender);
+      workerRelease.release(2);
+      workersReleased = true;
+    } else if (stopDuringHydration) {
+      sender->stop();
+      QVERIFY2(sender->start(&diagnostic), qPrintable(diagnostic));
+      workerRelease.release(2);
+      workersReleased = true;
+    }
+    if (!expectedDiagnostic.isEmpty()) {
+      QTRY_VERIFY_WITH_TIMEOUT(
+          errors.join(QLatin1Char(';')).contains(expectedDiagnostic), 10'000
+      );
+      QVERIFY(sender->activeTransfers().isEmpty());
+      QVERIFY(QFileInfo::exists(recoveryStore.outgoingStatePath(*started.transferId)));
+      return;
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(hydrationAddedCount > 0, 10'000);
+    QCOMPARE(hydrationAddedCount, 1);
+    QVERIFY(hydrationVisibleInActiveTransfers);
+    if (recoveryMutation == QStringLiteral("late-discovery")) {
+      QVERIFY(hydrationDiscovery->registry().observeAdvertisement(
+          receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+      ));
+    }
+    if (peerReadyBeforeHydration) {
+      QVERIFY(peerReadyOrder < hydrationOrder);
+      QCOMPARE(peerReadyCount, 1);
+      QCOMPARE(FileTransferRuntimeTestAccess::peerConnectionCount(*sender), connectionsBeforeHydration);
+      QCOMPARE(FileTransferRuntimeTestAccess::clientCount(*sender), clientsBeforeHydration);
+    } else {
+      QTRY_VERIFY_WITH_TIMEOUT(peerReadyOrder > 0, 10'000);
+      QVERIFY(hydrationOrder < peerReadyOrder);
+    }
+  } else {
+    QVERIFY2(sender->start(&diagnostic), qPrintable(diagnostic));
+  }
+  if (!reconstructSender) {
+    QVERIFY2(sender->connectPeer(receiverId, &diagnostic), qPrintable(diagnostic));
+  }
 
   QElapsedTimer wait;
   wait.start();
@@ -1303,6 +1518,11 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   QVERIFY2(receiverLatest.has_value() && receiverLatest->state == TransferState::Completed, qPrintable(evidence));
   QVERIFY(senderStates.contains(QString::number(static_cast<int>(TransferState::Interrupted))));
   QVERIFY(senderStates.contains(QString::number(static_cast<int>(TransferState::Resuming))));
+  QVERIFY(!senderResumingBytes.isEmpty());
+  QVERIFY(senderResumingBytes.constFirst() >= receiverDurableOffset);
+  if (reconstructSender) {
+    QCOMPARE(senderResumingBytes.constLast(), receiverDurableOffset);
+  }
   QTRY_VERIFY_WITH_TIMEOUT(
       !QFileInfo::exists(recoveryStore.outgoingStatePath(*started.transferId)), 5'000
   );

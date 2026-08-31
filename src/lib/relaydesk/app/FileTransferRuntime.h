@@ -132,6 +132,7 @@ private:
     std::optional<::relaydesk::transfer::NegotiatedCapabilities> negotiated;
   };
   struct OutgoingSession;
+  struct OutgoingHydrationState;
 
   [[nodiscard]] bool onOwningThread(QString *diagnostic);
   [[nodiscard]] bool connectPeerAt(
@@ -153,6 +154,8 @@ private:
       QString *diagnostic = nullptr
   );
   void prepareOutgoing(const ::relaydesk::transfer::TransferId &transferId);
+  void startOutgoingRecoveryScan();
+  void hydrateNextOutgoingRecovery();
   void finishManifestPreparation(
       const ::relaydesk::transfer::TransferId &transferId,
       ::relaydesk::transfer::TransferManifestBuildResult result
@@ -213,6 +216,7 @@ private:
   QHash<::relaydesk::transfer::TransferId, OutgoingSession *> m_outgoing;
   std::unique_ptr<QThreadPool> m_workerPool;
   std::unique_ptr<::relaydesk::transfer::TransferRecoveryStore> m_recoveryStore;
+  std::unique_ptr<OutgoingHydrationState> m_outgoingHydration;
   std::unique_ptr<IPlatformFileSafety> m_fileSafety;
   std::unique_ptr<IncomingTransferRuntime> m_incoming;
 };

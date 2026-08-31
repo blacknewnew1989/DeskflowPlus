@@ -224,6 +224,23 @@ std::unique_ptr<IPlatformFileSafety> createPlatformFileSafety()
 #endif
 }
 
+std::unique_ptr<::relaydesk::transfer::TransferControlStateMachine>
+interruptedControl(::relaydesk::transfer::TransferSnapshot initial, bool resuming)
+{
+  using namespace ::relaydesk::transfer;
+
+  auto control = std::make_unique<TransferControlStateMachine>(std::move(initial));
+  const bool ready = control->initialize().ok() && control->advance(TransferState::Offered).ok() &&
+                     control->advance(TransferState::WaitingForAcceptance).ok() &&
+                     control->advance(TransferState::Queued).ok() &&
+                     control->advance(TransferState::Transferring).ok() && control->interrupt().ok() &&
+                     (!resuming || control->resume().ok());
+  if (!ready) {
+    return {};
+  }
+  return control;
+}
+
 } // namespace
 
 struct FileTransferRuntime::OutgoingSession
@@ -271,7 +288,16 @@ struct FileTransferRuntime::OutgoingSession
   bool recoveryRemovePending = false;
   bool recoveryRemoveRunning = false;
   bool terminalPending = false;
+  bool hydratedFromRecovery = false;
   std::function<void(bool, QString)> recoveryRemoveCompletion;
+};
+
+struct FileTransferRuntime::OutgoingHydrationState
+{
+  QList<::relaydesk::transfer::OutgoingRecoveryState> pending;
+  quint64 epoch = 0;
+  bool scanStarted = false;
+  bool buildRunning = false;
 };
 
 FileTransferRuntime::FileTransferRuntime(
@@ -288,7 +314,27 @@ FileTransferRuntime::FileTransferRuntime(
     m_recoveryStore = std::make_unique<::relaydesk::transfer::TransferRecoveryStore>(
         m_options.recoveryStateRoot
     );
+    m_outgoingHydration = std::make_unique<OutgoingHydrationState>();
   }
+  const auto retryHydratedPeer = [this](const DeviceSnapshot &snapshot) {
+    if (!isRunning() || isPeerReady(snapshot.id)) {
+      return;
+    }
+    const auto info = m_discoveryRuntime.registry().deviceInfo(snapshot.id);
+    if (!info.has_value() || info->filePort == 0) {
+      return;
+    }
+    for (auto *session : std::as_const(m_outgoing)) {
+      if (session != nullptr && session->peer == snapshot.id && session->interrupted &&
+          session->hydratedFromRecovery && !session->cancelled) {
+        QString diagnostic;
+        (void)connectPeer(snapshot.id, &diagnostic);
+        return;
+      }
+    }
+  };
+  connect(&m_discoveryRuntime.registry(), &DiscoveryRegistry::deviceAdded, this, retryHydratedPeer);
+  connect(&m_discoveryRuntime.registry(), &DiscoveryRegistry::deviceChanged, this, retryHydratedPeer);
   m_fileSafety = createPlatformFileSafety();
   if (m_fileSafety != nullptr) {
     m_incoming = std::make_unique<IncomingTransferRuntime>(
@@ -472,6 +518,7 @@ bool FileTransferRuntime::start(QString *diagnostic)
     );
   }
   Q_EMIT started(m_listener->serverPort());
+  startOutgoingRecoveryScan();
   return true;
 }
 
@@ -479,6 +526,13 @@ void FileTransferRuntime::stop()
 {
   if (QThread::currentThread() != thread()) {
     return;
+  }
+
+  if (m_outgoingHydration != nullptr) {
+    ++m_outgoingHydration->epoch;
+    m_outgoingHydration->scanStarted = false;
+    m_outgoingHydration->buildRunning = false;
+    m_outgoingHydration->pending.clear();
   }
 
   for (auto *session : std::as_const(m_outgoing)) {
@@ -1452,6 +1506,184 @@ bool FileTransferRuntime::sendCommand(
   return sendPeerFrame(peerDeviceId, frame, diagnostic);
 }
 
+void FileTransferRuntime::startOutgoingRecoveryScan()
+{
+  using namespace ::relaydesk::transfer;
+
+  if (m_recoveryStore == nullptr || m_outgoingHydration == nullptr ||
+      m_outgoingHydration->scanStarted) {
+    return;
+  }
+  m_outgoingHydration->scanStarted = true;
+  const quint64 epoch = ++m_outgoingHydration->epoch;
+  auto *store = m_recoveryStore.get();
+  auto *watcher = new QFutureWatcher<TransferRecoveryStoreScanResult<OutgoingRecoveryState>>(this);
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, epoch, watcher]() {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    if (!isRunning() || m_outgoingHydration == nullptr || epoch != m_outgoingHydration->epoch) {
+      return;
+    }
+    if (!result.ok()) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          QStringLiteral("Outgoing recovery scan failed: %1").arg(result.diagnostic)
+      );
+      return;
+    }
+    for (const auto &issue : std::as_const(result.issues)) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          QStringLiteral("Outgoing recovery state was skipped (%1): %2").arg(issue.path, issue.diagnostic)
+      );
+    }
+    m_outgoingHydration->pending = std::move(result.states);
+    hydrateNextOutgoingRecovery();
+  });
+  watcher->setFuture(QtConcurrent::run(m_workerPool.get(), [store]() { return store->scanOutgoing(); }));
+}
+
+void FileTransferRuntime::hydrateNextOutgoingRecovery()
+{
+  using namespace ::relaydesk::transfer;
+
+  if (m_outgoingHydration == nullptr || m_outgoingHydration->buildRunning ||
+      m_outgoingHydration->pending.isEmpty()) {
+    return;
+  }
+  auto state = std::make_shared<OutgoingRecoveryState>(m_outgoingHydration->pending.takeFirst());
+  if (outgoing(state->transferId) != nullptr) {
+    QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+    return;
+  }
+  const auto trustedPeer = m_trustedDevices.find(state->peerDeviceId);
+  if (state->localDeviceId != m_localDeviceId || !trustedPeer.has_value() || trustedPeer->revoked ||
+      trustedPeer->fingerprintSha256 != state->peerFingerprintSha256) {
+    Q_EMIT errorOccurred(
+        FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+        QStringLiteral("Outgoing recovery state failed local identity or trust validation")
+    );
+    QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+    return;
+  }
+
+  TransferManifestRequest request{
+      .transferId = state->transferId,
+      .displayName = state->summary.displayName,
+  };
+  request.sources.reserve(state->sourceRoots.size());
+  for (const auto &source : std::as_const(state->sourceRoots)) {
+    request.sources.append({
+        .sourcePath = source.canonicalPath,
+        .relativeProtocolPath = source.relativeProtocolPath,
+    });
+  }
+  m_outgoingHydration->buildRunning = true;
+  const quint64 epoch = m_outgoingHydration->epoch;
+  auto *watcher = new QFutureWatcher<TransferManifestBuildResult>(this);
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, epoch, state, watcher]() {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    if (!isRunning() || m_outgoingHydration == nullptr || epoch != m_outgoingHydration->epoch) {
+      return;
+    }
+    m_outgoingHydration->buildRunning = false;
+    const auto trustedPeer = m_trustedDevices.find(state->peerDeviceId);
+    const bool trustMatches = trustedPeer.has_value() && !trustedPeer->revoked &&
+                              trustedPeer->fingerprintSha256 == state->peerFingerprintSha256;
+    const auto plan = result.ok() ? ManifestPageCodec::plan(*result.manifest) : ManifestPagePlanResult{};
+    const ManifestPagePlanBinding binding = plan.ok()
+                                                ? ManifestPagePlanBinding{
+                                                      .entryCount = plan.plan->entryCount,
+                                                      .pageCount = plan.plan->pageCount(),
+                                                      .totalMetadataBytes = plan.plan->totalMetadataBytes,
+                                                  }
+                                                : ManifestPagePlanBinding{};
+    if (!result.ok() || !trustMatches || result.manifest->entries != state->entries ||
+        result.manifest->summary != state->summary || !plan.ok() || binding != state->pagePlan) {
+      const QString detail = !result.ok() ? result.diagnostic
+                             : !trustMatches ? QStringLiteral("trusted peer changed during source validation")
+                                             : QStringLiteral("source manifest or page plan changed");
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          QStringLiteral("Outgoing recovery state was not hydrated: %1").arg(detail)
+      );
+      QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+      return;
+    }
+
+    QList<QUrl> localItems;
+    localItems.reserve(state->sourceRoots.size());
+    for (const auto &source : std::as_const(state->sourceRoots)) {
+      localItems.append(QUrl::fromLocalFile(source.canonicalPath));
+    }
+    const auto discoveredPeer = m_discoveryRuntime.registry().snapshot(state->peerDeviceId);
+    QString peerDisplayName = discoveredPeer.has_value() ? discoveredPeer->displayName : trustedPeer->alias;
+    if (peerDisplayName.isEmpty()) {
+      peerDisplayName = state->peerDeviceId.toString();
+    }
+    QString currentPath;
+    if (state->progress.currentEntry < static_cast<quint64>(result.manifest->entries.size())) {
+      currentPath = result.manifest->entries.at(static_cast<qsizetype>(state->progress.currentEntry))
+                        .entry.relativeProtocolPath;
+    }
+    TransferSnapshot initial{
+        .id = state->transferId,
+        .peerId = state->peerDeviceId,
+        .peerDisplayName = std::move(peerDisplayName),
+        .displayName = state->summary.displayName,
+        .direction = TransferDirection::Sending,
+        .state = TransferState::Preparing,
+        .progress =
+            {
+                .completedBytes = state->progress.completedBytes,
+                .totalBytes = state->summary.totalBytes,
+                .completedFiles = state->progress.completedFiles,
+                .totalFiles = state->summary.fileCount,
+            },
+        .currentRelativeDisplayPath = std::move(currentPath),
+        .createdUtc = state->createdUtc,
+    };
+    auto control = interruptedControl(initial, false);
+    if (control == nullptr) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError,
+          QStringLiteral("Outgoing recovery state could not enter Interrupted")
+      );
+      QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+      return;
+    }
+
+    auto *session = new OutgoingSession(
+        state->transferId, state->peerDeviceId, std::move(localItems), state->sendOptions, initial
+    );
+    session->snapshot = control->snapshot();
+    session->manifest = std::make_shared<const TransferManifest>(std::move(*result.manifest));
+    session->pagePlan = *plan.plan;
+    session->control = std::move(control);
+    session->currentEntry = static_cast<qsizetype>(state->progress.currentEntry);
+    session->completedBytes = state->progress.completedBytes;
+    session->completedFiles = state->progress.completedFiles;
+    session->effectiveConflictPolicy = state->effectiveConflictPolicy;
+    session->interrupted = true;
+    session->hydratedFromRecovery = true;
+    m_outgoing.insert(session->id, session);
+    Q_EMIT transferAdded(session->snapshot);
+    if (isPeerReady(session->peer)) {
+      QTimer::singleShot(0, this, [this, peer = session->peer] { offerPreparedTransfers(peer); });
+    } else {
+      QString diagnostic;
+      (void)connectPeer(session->peer, &diagnostic);
+    }
+    QTimer::singleShot(0, this, [this] { hydrateNextOutgoingRecovery(); });
+  });
+  watcher->setFuture(QtConcurrent::run(
+      m_workerPool.get(), [request = std::move(request)]() {
+        return ManifestBuilder::buildTransfer(request);
+      }
+  ));
+}
+
 void FileTransferRuntime::prepareOutgoing(const ::relaydesk::transfer::TransferId &transferId)
 {
   using ::relaydesk::transfer::ManifestSourceRequest;
@@ -1646,6 +1878,32 @@ void FileTransferRuntime::handleResumeResponse(const DeviceId &peerDeviceId, con
     }
     session->currentEntry = index;
     break;
+  }
+  if (session->hydratedFromRecovery) {
+    TransferSnapshot authoritative = session->snapshot;
+    authoritative.state = TransferState::Preparing;
+    authoritative.progress.completedBytes = session->completedBytes;
+    authoritative.progress.completedFiles = session->completedFiles;
+    authoritative.progress.bytesPerSecond = 0.0;
+    authoritative.progress.estimatedRemaining.reset();
+    authoritative.currentRelativeDisplayPath.clear();
+    authoritative.errorCode = TransferErrorCode::None;
+    authoritative.canPause = false;
+    authoritative.canResume = false;
+    authoritative.canCancel = false;
+    authoritative.canRetry = false;
+    authoritative.finishedUtc = {};
+    auto control = interruptedControl(std::move(authoritative), true);
+    if (control == nullptr) {
+      failOutgoing(
+          *session, TransferErrorCode::ConnectionLost,
+          QStringLiteral("Receiver durable progress could not restore the sender state")
+      );
+      return;
+    }
+    session->control = std::move(control);
+    session->snapshot = session->control->snapshot();
+    session->hydratedFromRecovery = false;
   }
   session->nextManifestPage = 0;
   session->sender.reset();

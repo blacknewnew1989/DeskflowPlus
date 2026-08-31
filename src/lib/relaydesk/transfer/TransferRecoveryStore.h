@@ -19,6 +19,7 @@ namespace relaydesk::transfer {
 inline constexpr quint64 kTransferRecoverySchemaVersion = 1;
 inline constexpr quint64 kDefaultMaximumRecoveryStateBytes = 64U * 1024U * 1024U;
 inline constexpr quint64 kDefaultMaximumRecoveryEntries = 100'000;
+inline constexpr quint64 kDefaultMaximumRecoveryStates = 32;
 
 struct RecoverySource
 {
@@ -89,6 +90,7 @@ enum class TransferRecoveryStoreError
   InvalidState,
   InvalidPath,
   TooManyEntries,
+  TooManyStates,
   StateTooLarge,
   OpenFailed,
   ReadFailed,
@@ -149,6 +151,7 @@ struct TransferRecoveryStoreLimits
 {
   quint64 maximumEncodedBytes = kDefaultMaximumRecoveryStateBytes;
   quint64 maximumEntries = kDefaultMaximumRecoveryEntries;
+  quint64 maximumStates = kDefaultMaximumRecoveryStates;
   PathLimits pathLimits;
 };
 
