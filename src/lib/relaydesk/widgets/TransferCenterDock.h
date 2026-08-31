@@ -31,6 +31,9 @@ public:
   explicit TransferCenterDock(model::TransferCenterModel &transfers, QWidget *parent = nullptr);
 
   [[nodiscard]] model::TransferCenterModel &transferModel() const;
+  void showCompletionOpenFailure();
+  void clearCompletionOpenFailure();
+  void showHistoryFailure();
 
 protected:
   void changeEvent(QEvent *event) override;
@@ -39,11 +42,13 @@ private:
   void updateText();
   void updateEmptyState();
   void updateSelection();
+  void updateFeedback();
   void showHistoryDetails();
 
   model::TransferCenterModel &m_transfers;
   QListView *m_list = nullptr;
   QLabel *m_emptyLabel = nullptr;
+  QLabel *m_feedback = nullptr;
   QPushButton *m_detailsButton = nullptr;
   QPushButton *m_openFolderButton = nullptr;
   QPushButton *m_openFileButton = nullptr;
@@ -60,6 +65,8 @@ private:
   QAction *m_pauseMenuAction = nullptr;
   QAction *m_resumeMenuAction = nullptr;
   QAction *m_cancelMenuAction = nullptr;
+  bool m_completionOpenFailed = false;
+  bool m_historyUnavailable = false;
 };
 
 } // namespace deskflow::relaydesk::widgets

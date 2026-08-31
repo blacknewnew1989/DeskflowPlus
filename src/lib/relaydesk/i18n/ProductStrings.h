@@ -143,6 +143,8 @@ enum class Text
   TransferActionOpenFile,
   TransferActionDetails,
   TransferActionClose,
+  TransferFeedbackOpenFailed,
+  TransferFeedbackHistoryUnavailable,
   TransferHistoryDetailsTitle,
   TransferHistoryNameLabel,
   TransferHistoryPeerLabel,

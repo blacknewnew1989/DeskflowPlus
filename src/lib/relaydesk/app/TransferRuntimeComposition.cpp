@@ -32,10 +32,26 @@ TransferRuntimeComposition::TransferRuntimeComposition(
       )
 {
   Q_ASSERT(m_service != nullptr);
+  connect(
+      &m_uiRuntime, &TransferUiRuntime::completionOpenRejected, &transferCenterDock,
+      [&transferCenterDock](const ::relaydesk::transfer::TransferId &, TransferUiRuntime::OpenTarget,
+                            TransferUiRuntime::OpenError) { transferCenterDock.showCompletionOpenFailure(); }
+  );
+  connect(
+      &m_uiRuntime, &TransferUiRuntime::completionOpened, &transferCenterDock,
+      [&transferCenterDock](const ::relaydesk::transfer::TransferId &, TransferUiRuntime::OpenTarget,
+                            const QUrl &) { transferCenterDock.clearCompletionOpenFailure(); }
+  );
   if (!historyPath.isEmpty()) {
     m_historyRuntime = std::make_unique<TransferHistoryRuntime>(
         *m_service, transferCenterDock.transferModel(), m_incomingOffers,
         m_incomingOffers.settings().destinationRoot, std::move(historyPath), this
+    );
+    connect(
+        m_historyRuntime.get(), &TransferHistoryRuntime::historyError, &transferCenterDock,
+        [&transferCenterDock](::relaydesk::transfer::TransferHistoryError, const QString &) {
+          transferCenterDock.showHistoryFailure();
+        }
     );
   }
 }

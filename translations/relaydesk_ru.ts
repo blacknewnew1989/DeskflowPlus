@@ -133,6 +133,8 @@
     <message><source>transfer.action.open_file</source><translation>Открыть файл</translation></message>
     <message><source>transfer.action.details</source><translation>Сведения</translation></message>
     <message><source>transfer.action.close</source><translation>Закрыть</translation></message>
+    <message><source>transfer.feedback.open_failed</source><translation>Не удалось открыть завершенный элемент. Повторите попытку.</translation></message>
+    <message><source>transfer.feedback.history_unavailable</source><translation>Не удалось обновить историю передач. Повторите попытку.</translation></message>
     <message><source>transfer.history.details_title</source><translation>Сведения о передаче</translation></message>
     <message><source>transfer.history.name_label</source><translation>Передача</translation></message>
     <message><source>transfer.history.peer_label</source><translation>Устройство</translation></message>

@@ -133,6 +133,8 @@
     <message><source>transfer.action.open_file</source><translation>打开文件</translation></message>
     <message><source>transfer.action.details</source><translation>详情</translation></message>
     <message><source>transfer.action.close</source><translation>关闭</translation></message>
+    <message><source>transfer.feedback.open_failed</source><translation>无法打开已完成的项目，请重试。</translation></message>
+    <message><source>transfer.feedback.history_unavailable</source><translation>无法更新传输历史，请重试。</translation></message>
     <message><source>transfer.history.details_title</source><translation>传输详情</translation></message>
     <message><source>transfer.history.name_label</source><translation>传输</translation></message>
     <message><source>transfer.history.peer_label</source><translation>设备</translation></message>
