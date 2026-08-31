@@ -6,18 +6,26 @@
 
 #include "relaydesk/app/TransferRuntimeComposition.h"
 #include "relaydesk/app/TransferHistoryRuntime.h"
+#include "relaydesk/app/DeviceDiscoveryRuntime.h"
+#include "relaydesk/app/FileTransferRuntime.h"
 
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PairingWizardModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
 #include "relaydesk/model/TransferCenterModel.h"
 #include "relaydesk/transfer/IFileTransferService.h"
+#include "relaydesk/trust/TlsIdentityAdapter.h"
+#include "relaydesk/trust/TrustedDeviceStore.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 
 #include "../FakePairingService.h"
+#include "../TestTlsIdentity.h"
 
+#include <QCryptographicHash>
+#include <QDirIterator>
 #include <QFile>
+#include <QFrame>
 #include <QLabel>
 #include <QListView>
 #include <QPushButton>
@@ -83,6 +91,36 @@ struct Fixture
   TransferCenterDock transferDock{transfers};
 };
 
+DeviceInfo loopbackDevice(DeviceId id, QByteArray fingerprint, QString name)
+{
+  return {
+      .deviceId = std::move(id),
+      .displayName = std::move(name),
+      .platform = QStringLiteral("windows"),
+      .architecture = QStringLiteral("x86_64"),
+      .appVersion = QStringLiteral("0.1.0"),
+      .inputPort = 24800,
+      .capabilities = {.input = true, .clipboardText = true},
+      .certificateFingerprintSha256 = std::move(fingerprint),
+  };
+}
+
+TrustedDevice loopbackTrustedDevice(DeviceId id, QByteArray fingerprint)
+{
+  return {
+      .deviceId = std::move(id),
+      .alias = QStringLiteral("Loopback peer"),
+      .platform = QStringLiteral("windows"),
+      .fingerprintSha256 = std::move(fingerprint),
+  };
+}
+
+bool hasPartFile(const QString &root)
+{
+  QDirIterator iterator(root, {QStringLiteral("*.part")}, QDir::Files, QDirIterator::Subdirectories);
+  return iterator.hasNext();
+}
+
 } // namespace
 
 class TransferRuntimeCompositionTests final : public QObject
@@ -98,6 +136,7 @@ private Q_SLOTS:
   void appliesIncomingSettingsAndRefreshesReceiveRootSpaceAsync();
   void rejectedCompletedOpenShowsNonModalFeedbackWithoutChangingHistory();
   void asyncHistoryLoadAndPersistErrorsShowNonModalFeedbackWithoutDiagnostic();
+  void productionIncomingOfferButtonsDriveLoopbackTransferAndTypedRejection();
 };
 
 void TransferRuntimeCompositionTests::ownsTypedServiceBindingAndLifecycle()
@@ -476,6 +515,144 @@ void TransferRuntimeCompositionTests::asyncHistoryLoadAndPersistErrorsShowNonMod
   QCOMPARE(list->currentIndex(), selectedBeforeOpen);
   QVERIFY(openFile->isVisible());
   QCOMPARE(fixture.transfers.historyRecord(record.transferId), std::optional<TransferHistoryRecord>{record});
+}
+
+void TransferRuntimeCompositionTests::productionIncomingOfferButtonsDriveLoopbackTransferAndTypedRejection()
+{
+  QTemporaryDir temporary(QDir::tempPath() + QStringLiteral("/relaydesk-r4-incoming-offer-XXXXXX"));
+  QVERIFY2(temporary.isValid(), qPrintable(temporary.errorString()));
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(temporary);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+
+  const auto receiveRoot = temporary.filePath(QStringLiteral("received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+  const auto acceptedSourcePath = temporary.filePath(QStringLiteral("accepted-source.bin"));
+  const auto rejectedSourcePath = temporary.filePath(QStringLiteral("rejected-source.bin"));
+  const QByteArray acceptedContents(1'048'579, '\x5a');
+  const QByteArray rejectedContents("this file must not be received");
+  for (const auto &[path, contents] : {std::pair{acceptedSourcePath, acceptedContents},
+                                       std::pair{rejectedSourcePath, rejectedContents}}) {
+    QFile source(path);
+    QVERIFY2(source.open(QIODevice::WriteOnly), qPrintable(source.errorString()));
+    QCOMPARE(source.write(contents), static_cast<qint64>(contents.size()));
+  }
+
+  Fixture fixture;
+  fixture.devicesDock.resize(480, 720);
+  fixture.devicesDock.show();
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(temporary.filePath(QStringLiteral("sender-trust.json")));
+  TrustedDeviceStore receiverTrust(temporary.filePath(QStringLiteral("receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(loopbackTrustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(loopbackTrustedDevice(senderId, identity.fingerprintSha256)));
+  DeviceHomeModel senderDevices;
+  DeviceDiscoveryRuntime senderDiscovery(
+      loopbackDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender")), senderDevices
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      loopbackDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver")), fixture.devices
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  auto receiver = std::make_unique<FileTransferRuntime>(
+      receiverId, receiverTrust, receiverDiscovery, identityPath, options
+  );
+  auto *receiverRuntime = receiver.get();
+  TransferRuntimeComposition composition(
+      std::move(receiver),
+      {
+          .start = [receiverRuntime](QString *diagnostic) { return receiverRuntime->start(diagnostic); },
+          .stop = [receiverRuntime] { receiverRuntime->stop(); },
+      },
+      fixture.devicesDock, fixture.transferDock,
+      {.destinationRoot = receiveRoot, .availableBytes = 20U * 1024U * 1024U}
+  );
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(composition.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+
+  auto *panel = fixture.devicesDock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingOfferPanel"));
+  auto *accept = fixture.devicesDock.findChild<QPushButton *>(QStringLiteral("relaydeskAcceptIncomingOfferButton"));
+  auto *reject = fixture.devicesDock.findChild<QPushButton *>(QStringLiteral("relaydeskRejectIncomingOfferButton"));
+  QVERIFY(panel != nullptr);
+  QVERIFY(accept != nullptr);
+  QVERIFY(reject != nullptr);
+  std::optional<TransferSnapshot> senderAccepted;
+  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Sending)
+      senderAccepted = snapshot;
+  });
+
+  const auto acceptedStart = sender.send(receiverId, {QUrl::fromLocalFile(acceptedSourcePath)}, {});
+  QVERIFY2(acceptedStart.ok(), qPrintable(acceptedStart.diagnostic));
+  QVERIFY(acceptedStart.transferId.has_value());
+  QTRY_VERIFY_WITH_TIMEOUT(panel->isVisible() && accept->isVisible() && accept->isEnabled(), 10'000);
+  QCOMPARE(composition.incomingOffers().status(), IncomingOfferModel::Status::AwaitingDecision);
+  QTest::mouseClick(accept, Qt::LeftButton);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderAccepted.has_value() && senderAccepted->id == *acceptedStart.transferId &&
+          senderAccepted->state == TransferState::Completed,
+      20'000
+  );
+  const auto acceptedTargetPath = QDir(receiveRoot).filePath(QStringLiteral("accepted-source.bin"));
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(acceptedTargetPath), 10'000);
+  QFile acceptedTarget(acceptedTargetPath);
+  QVERIFY(acceptedTarget.open(QIODevice::ReadOnly));
+  QCOMPARE(
+      QCryptographicHash::hash(acceptedTarget.readAll(), QCryptographicHash::Sha256),
+      QCryptographicHash::hash(acceptedContents, QCryptographicHash::Sha256)
+  );
+  QTRY_VERIFY_WITH_TIMEOUT(
+      fixture.transfers.snapshot(*acceptedStart.transferId).has_value() &&
+          fixture.transfers.snapshot(*acceptedStart.transferId)->state == TransferState::Completed,
+      10'000
+  );
+  fixture.transferDock.show();
+  auto *transferList = fixture.transferDock.findChild<QListView *>(QStringLiteral("relaydeskTransfersView"));
+  QVERIFY(transferList != nullptr);
+  const auto acceptedRow = fixture.transfers.indexOf(*acceptedStart.transferId);
+  QVERIFY(acceptedRow >= 0);
+  const auto acceptedIndex = fixture.transfers.index(acceptedRow, 0);
+  QVERIFY(acceptedIndex.isValid());
+  transferList->setCurrentIndex(acceptedIndex);
+  const auto acceptedSnapshot = fixture.transfers.snapshot(*acceptedStart.transferId);
+  QVERIFY(acceptedSnapshot.has_value());
+  QCOMPARE(acceptedSnapshot->state, TransferState::Completed);
+  const auto rowCountBeforeReject = fixture.transfers.rowCount();
+  const auto selectedBeforeReject = transferList->currentIndex();
+  QVERIFY(!panel->isVisible());
+  QVERIFY(!hasPartFile(receiveRoot));
+
+  std::optional<TransferSnapshot> senderRejected;
+  const auto rejectedStart = sender.send(receiverId, {QUrl::fromLocalFile(rejectedSourcePath)}, {});
+  QVERIFY2(rejectedStart.ok(), qPrintable(rejectedStart.diagnostic));
+  QVERIFY(rejectedStart.transferId.has_value());
+  QTRY_VERIFY_WITH_TIMEOUT(panel->isVisible() && reject->isVisible(), 10'000);
+  QTest::mouseClick(reject, Qt::LeftButton);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderAccepted.has_value() && senderAccepted->id == *rejectedStart.transferId &&
+          senderAccepted->state == TransferState::Rejected,
+      10'000
+  );
+  senderRejected = senderAccepted;
+  QCOMPARE(senderRejected->state, TransferState::Rejected);
+  QVERIFY(!QFileInfo::exists(QDir(receiveRoot).filePath(QStringLiteral("rejected-source.bin"))));
+  QVERIFY(!hasPartFile(receiveRoot));
+  QVERIFY(!panel->isVisible());
+  QVERIFY(!fixture.transfers.snapshot(*rejectedStart.transferId).has_value());
+  QCOMPARE(fixture.transfers.snapshot(*acceptedStart.transferId), acceptedSnapshot);
+  QCOMPARE(fixture.transfers.rowCount(), rowCountBeforeReject);
+  QCOMPARE(transferList->currentIndex(), selectedBeforeReject);
+
+  composition.stop();
+  sender.stop();
 }
 
 QTEST_MAIN(TransferRuntimeCompositionTests)
