@@ -26,6 +26,15 @@ namespace {
 constexpr int kProcessDeadlineMs = 15'000;
 constexpr int kProcessKillWaitMs = 2'000;
 
+QByteArray fileSha256(const QString &path)
+{
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) return {};
+  QCryptographicHash hash(QCryptographicHash::Sha256);
+  while (!file.atEnd()) hash.addData(file.read(1024 * 1024));
+  return hash.result();
+}
+
 QJsonObject readResult(const QString &path)
 {
   QFile file(path);
@@ -85,11 +94,13 @@ private Q_SLOTS:
   void fileTreeUsesTwoIndependentProcesses();
   void listenerResumeUsesTwoIndependentProcesses();
   void receiverRelaunchResumesInTwoIndependentProcesses();
+  void receiverFileTreeRelaunchResumesInTwoIndependentProcesses();
   void senderRelaunchResumesInTwoIndependentProcesses();
 
 private:
   void runScenario(const QString &scenario);
   void runReceiverRelaunchScenario();
+  void runReceiverFileTreeRelaunchScenario();
   void runSenderRelaunchScenario();
 };
 
@@ -121,6 +132,11 @@ void TwoProcessRelayDeskRuntimeTests::listenerResumeUsesTwoIndependentProcesses(
 void TwoProcessRelayDeskRuntimeTests::receiverRelaunchResumesInTwoIndependentProcesses()
 {
   runReceiverRelaunchScenario();
+}
+
+void TwoProcessRelayDeskRuntimeTests::receiverFileTreeRelaunchResumesInTwoIndependentProcesses()
+{
+  runReceiverFileTreeRelaunchScenario();
 }
 
 void TwoProcessRelayDeskRuntimeTests::senderRelaunchResumesInTwoIndependentProcesses()
@@ -266,6 +282,196 @@ void TwoProcessRelayDeskRuntimeTests::runReceiverRelaunchScenario()
   QVERIFY(senderJson.value(QStringLiteral("senderFirstResumingCaptured")).toBool());
   QVERIFY(senderJson.value(QStringLiteral("firstResumingBytes")).toVariant().toULongLong() >=
           stageJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong());
+  QVERIFY(senderJson.value(QStringLiteral("expectedTransportErrorCount")).toInt() <= 1);
+}
+
+void TwoProcessRelayDeskRuntimeTests::runReceiverFileTreeRelaunchScenario()
+{
+  const QString scenario = QStringLiteral("receiver-file-tree-process-recovery");
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const QDir sourceRoot(temporary.filePath(QStringLiteral("tree-payload")));
+  QVERIFY(QDir().mkpath(sourceRoot.filePath(QStringLiteral("nested/z-empty"))));
+  const QByteArray firstBytes(700'003, '\x31');
+  const QByteArray nextBytes(20 * 1024 * 1024 + 113, '\x32');
+  const QString firstPath = sourceRoot.filePath(QStringLiteral("first.bin"));
+  const QString nextPath = sourceRoot.filePath(QStringLiteral("nested/next.bin"));
+  QFile first(firstPath);
+  QVERIFY(first.open(QIODevice::WriteOnly));
+  QCOMPARE(first.write(firstBytes), qint64(firstBytes.size()));
+  first.close();
+  QFile next(nextPath);
+  QVERIFY(next.open(QIODevice::WriteOnly));
+  QCOMPARE(next.write(nextBytes), qint64(nextBytes.size()));
+  next.close();
+  const QByteArray firstSha = QCryptographicHash::hash(firstBytes, QCryptographicHash::Sha256).toHex();
+  const QByteArray nextSha = QCryptographicHash::hash(nextBytes, QCryptographicHash::Sha256).toHex();
+  const quint64 expectedBytes = static_cast<quint64>(firstBytes.size() + nextBytes.size());
+  const QString expectedTreePath = temporary.filePath(QStringLiteral("expected-tree.json"));
+  const QJsonObject expectedTree{
+      {QStringLiteral("completedFiles"), 2},
+      {QStringLiteral("completedBytes"), static_cast<qint64>(expectedBytes)},
+      {QStringLiteral("completedTarget"), QStringLiteral("tree-payload/first.bin")},
+      {QStringLiteral("emptyDirectory"), QStringLiteral("tree-payload/nested/z-empty")},
+      {QStringLiteral("directories"),
+       QJsonArray{QStringLiteral("tree-payload"), QStringLiteral("tree-payload/nested"),
+                  QStringLiteral("tree-payload/nested/z-empty")}},
+      {QStringLiteral("files"),
+       QJsonArray{
+           QJsonObject{{QStringLiteral("path"), QStringLiteral("tree-payload/first.bin")},
+                       {QStringLiteral("bytes"), static_cast<qint64>(firstBytes.size())},
+                       {QStringLiteral("sha256"), QString::fromLatin1(firstSha)}},
+           QJsonObject{{QStringLiteral("path"), QStringLiteral("tree-payload/nested/next.bin")},
+                       {QStringLiteral("bytes"), static_cast<qint64>(nextBytes.size())},
+                       {QStringLiteral("sha256"), QString::fromLatin1(nextSha)}}}}
+  };
+  QFile expectedFile(expectedTreePath);
+  QVERIFY(expectedFile.open(QIODevice::WriteOnly));
+  const auto expectedBytesJson = QJsonDocument(expectedTree).toJson(QJsonDocument::Compact);
+  QCOMPARE(expectedFile.write(expectedBytesJson), qint64(expectedBytesJson.size()));
+  expectedFile.close();
+
+  QUdpSocket senderReservation;
+  QUdpSocket receiverReservation;
+  QVERIFY(senderReservation.bind(QHostAddress::LocalHost, 0));
+  QVERIFY(receiverReservation.bind(QHostAddress::LocalHost, 0));
+  const quint16 senderPort = senderReservation.localPort();
+  const quint16 receiverPort = receiverReservation.localPort();
+  QVERIFY(senderPort != 0 && receiverPort != 0 && senderPort != receiverPort);
+  senderReservation.close();
+  receiverReservation.close();
+
+  const QString senderRoot = temporary.filePath(QStringLiteral("sender"));
+  const QString receiverRoot = temporary.filePath(QStringLiteral("receiver"));
+  const QString senderResult = temporary.filePath(QStringLiteral("sender-result.json"));
+  const QString receiverStageResult = temporary.filePath(QStringLiteral("receiver-stage.json"));
+  const QString receiverFinalResult = temporary.filePath(QStringLiteral("receiver-final.json"));
+  const QString peer = QString::fromUtf8(RELAYDESK_TWO_PROCESS_PEER_PATH);
+  const auto arguments = [&](const QString &role, const QString &root, const QString &peerRoot,
+                             quint16 localPort, quint16 remotePort, const QString &result, int generation) {
+    return QStringList{
+        QStringLiteral("--role"), role,
+        QStringLiteral("--root"), root,
+        QStringLiteral("--peer-root"), peerRoot,
+        QStringLiteral("--scenario"), scenario,
+        QStringLiteral("--discovery-port"), QString::number(localPort),
+        QStringLiteral("--peer-discovery-port"), QString::number(remotePort),
+        QStringLiteral("--source"), sourceRoot.absolutePath(),
+        QStringLiteral("--expected-sha256"), QString::fromLatin1(firstSha),
+        QStringLiteral("--expected-tree"), expectedTreePath,
+        QStringLiteral("--result"), result,
+        QStringLiteral("--restart-generation"), QString::number(generation),
+    };
+  };
+
+  QProcess receiverFirst;
+  receiverFirst.setProgram(peer);
+  receiverFirst.setArguments(arguments(
+      QStringLiteral("receiver"), receiverRoot, senderRoot, receiverPort, senderPort, receiverStageResult, 0
+  ));
+  QProcess receiverSecond;
+  receiverSecond.setProgram(peer);
+  receiverSecond.setArguments(arguments(
+      QStringLiteral("receiver"), receiverRoot, senderRoot, receiverPort, senderPort, receiverFinalResult, 1
+  ));
+  QProcess sender;
+  sender.setProgram(peer);
+  sender.setArguments(arguments(
+      QStringLiteral("sender"), senderRoot, receiverRoot, senderPort, receiverPort, senderResult, 0
+  ));
+  const auto stopAll = qScopeGuard([&] {
+    (void)stopProcess(sender);
+    (void)stopProcess(receiverFirst);
+    (void)stopProcess(receiverSecond);
+  });
+  const auto preserveFailure = qScopeGuard([&] {
+    if (QTest::currentTestFailed()) {
+      temporary.setAutoRemove(false);
+      qCritical().noquote() << processEvidence(
+          scenario, temporary.path(), QStringLiteral("sender"), sender, senderResult
+      );
+      qCritical().noquote() << processEvidence(
+          scenario, temporary.path(), QStringLiteral("receiver-first"), receiverFirst, receiverStageResult
+      );
+      qCritical().noquote() << processEvidence(
+          scenario, temporary.path(), QStringLiteral("receiver-second"), receiverSecond, receiverFinalResult
+      );
+    }
+  });
+  QElapsedTimer deadline;
+  deadline.start();
+  const auto remaining = [&] { return qMax(0, 45'000 - static_cast<int>(deadline.elapsed())); };
+
+  receiverFirst.start();
+  QVERIFY2(receiverFirst.waitForStarted(qMin(5'000, remaining())), qPrintable(receiverFirst.errorString()));
+  sender.start();
+  QVERIFY2(sender.waitForStarted(qMin(5'000, remaining())), qPrintable(sender.errorString()));
+  QVERIFY2(receiverFirst.waitForFinished(remaining()), qPrintable(processOutput(receiverFirst)));
+  QCOMPARE(receiverFirst.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(receiverFirst.exitCode(), 0);
+  QCOMPARE(sender.state(), QProcess::Running);
+  const auto stageJson = readResult(receiverStageResult);
+  QVERIFY2(stageJson.value(QStringLiteral("passed")).toBool(), qPrintable(stageJson.value(QStringLiteral("error")).toString()));
+  QCOMPARE(stageJson.value(QStringLiteral("phase")).toString(), QStringLiteral("checkpoint_ready"));
+  QCOMPARE(stageJson.value(QStringLiteral("completedFilesBeforeRestart")).toVariant().toULongLong(), quint64{1});
+  QCOMPARE(stageJson.value(QStringLiteral("remainingFilesBeforeRestart")).toVariant().toULongLong(), quint64{1});
+  QCOMPARE(stageJson.value(QStringLiteral("completedTargetPath")).toString(), QStringLiteral("tree-payload/first.bin"));
+  QVERIFY(stageJson.value(QStringLiteral("emptyDirectoryInManifest")).toBool());
+  QVERIFY(stageJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong() > 0);
+  QVERIFY(stageJson.value(QStringLiteral("partBytesBeforeRestart")).toVariant().toULongLong() >=
+          stageJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong());
+  QVERIFY(stageJson.value(QStringLiteral("resumeStateExisted")).toBool());
+  QVERIFY(!stageJson.value(QStringLiteral("transferId")).toString().isEmpty());
+  const QDir committedRoot(QDir(receiverRoot).filePath(QStringLiteral("receive/tree-payload")));
+  QCOMPARE(committedRoot.entryList(QStringList{QStringLiteral("first*.bin")}, QDir::Files).size(), 1);
+  QCOMPARE(fileSha256(committedRoot.filePath(QStringLiteral("first.bin"))).toHex(), firstSha);
+
+  receiverSecond.start();
+  QVERIFY2(receiverSecond.waitForStarted(qMin(5'000, remaining())), qPrintable(receiverSecond.errorString()));
+  QVERIFY2(receiverSecond.waitForFinished(remaining()), qPrintable(processOutput(receiverSecond)));
+  QVERIFY2(sender.waitForFinished(remaining()), qPrintable(processOutput(sender)));
+  QCOMPARE(receiverSecond.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(sender.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(receiverSecond.exitCode(), 0);
+  QCOMPARE(sender.exitCode(), 0);
+  const auto receiverJson = readResult(receiverFinalResult);
+  const auto senderJson = readResult(senderResult);
+  QVERIFY2(receiverJson.value(QStringLiteral("passed")).toBool(), qPrintable(receiverJson.value(QStringLiteral("error")).toString()));
+  QVERIFY2(senderJson.value(QStringLiteral("passed")).toBool(), qPrintable(senderJson.value(QStringLiteral("error")).toString()));
+  QCOMPARE(receiverJson.value(QStringLiteral("deviceId")).toString(), stageJson.value(QStringLiteral("deviceId")).toString());
+  QCOMPARE(receiverJson.value(QStringLiteral("fingerprint")).toString(), stageJson.value(QStringLiteral("fingerprint")).toString());
+  QCOMPARE(receiverJson.value(QStringLiteral("settingsFile")).toString(), stageJson.value(QStringLiteral("settingsFile")).toString());
+  QCOMPARE(receiverJson.value(QStringLiteral("transferId")).toString(), stageJson.value(QStringLiteral("transferId")).toString());
+  QCOMPARE(senderJson.value(QStringLiteral("transferId")).toString(), stageJson.value(QStringLiteral("transferId")).toString());
+  QVERIFY(receiverJson.value(QStringLiteral("resumedFromNonZero")).toBool());
+  QVERIFY(receiverJson.value(QStringLiteral("receiverFirstTransferringAfterInterruptCaptured")).toBool());
+  QVERIFY(receiverJson.value(QStringLiteral("firstReceiverResumingBytes")).toVariant().toULongLong() >=
+          stageJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong());
+  QCOMPARE(receiverJson.value(QStringLiteral("completedFiles")).toVariant().toULongLong(), quint64{2});
+  QCOMPARE(receiverJson.value(QStringLiteral("completedBytes")).toVariant().toULongLong(), expectedBytes);
+  QVERIFY(receiverJson.value(QStringLiteral("tree")).toBool());
+  QVERIFY(!receiverJson.value(QStringLiteral("partFilesRemaining")).toBool());
+  QVERIFY(!receiverJson.value(QStringLiteral("resumeStateRemaining")).toBool());
+  QCOMPARE(committedRoot.entryList(QStringList{QStringLiteral("first*.bin")}, QDir::Files).size(), 1);
+  QCOMPARE(fileSha256(committedRoot.filePath(QStringLiteral("first.bin"))).toHex(), firstSha);
+  QCOMPARE(fileSha256(committedRoot.filePath(QStringLiteral("nested/next.bin"))).toHex(), nextSha);
+  QVERIFY(committedRoot.exists(QStringLiteral("nested/z-empty")));
+  QVERIFY(containsOrderedStates(
+      senderJson.value(QStringLiteral("states")).toArray(),
+      {static_cast<int>(::relaydesk::transfer::TransferState::Interrupted),
+       static_cast<int>(::relaydesk::transfer::TransferState::Resuming),
+       static_cast<int>(::relaydesk::transfer::TransferState::Completed)}
+  ));
+  const auto transferId = stageJson.value(QStringLiteral("transferId")).toString();
+  QVERIFY(!QFileInfo::exists(QDir(senderRoot).filePath(
+      QStringLiteral("state/transfer-recovery/outgoing/%1.recovery.cbor").arg(transferId)
+  )));
+  QVERIFY(!QFileInfo::exists(QDir(receiverRoot).filePath(
+      QStringLiteral("state/transfer-recovery/incoming/%1.recovery.cbor").arg(transferId)
+  )));
+  QVERIFY(!QFileInfo::exists(QDir(receiverRoot).filePath(
+      QStringLiteral("receive/.incoming/resume-active/%1.resume.cbor").arg(transferId)
+  )));
   QVERIFY(senderJson.value(QStringLiteral("expectedTransportErrorCount")).toInt() <= 1);
 }
 
