@@ -1611,7 +1611,10 @@ void MainWindow::beginShutdown()
       .persistAndStopTransfers =
           [this] {
             if (m_relayDeskTransfer != nullptr) {
-              m_relayDeskTransfer->stop();
+              auto *transfer = m_relayDeskTransfer;
+              m_relayDeskTransfer = nullptr;
+              transfer->stop();
+              delete transfer;
             }
           },
       .stopNetworkServices =
