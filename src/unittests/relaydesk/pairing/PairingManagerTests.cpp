@@ -6,6 +6,7 @@
 
 #include "relaydesk/pairing/PairingManager.h"
 
+#include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
@@ -115,6 +116,7 @@ private Q_SLOTS:
   void rejectsDuplicatesAndOutOfOrderMessages();
   void persistenceFailureRejectsBothSides();
   void cancelAndRevokeAreDurable();
+  void revokeKeepsPrimaryCommitWhenBackupFails();
 };
 
 void PairingManagerTests::completesOnlyAfterBothUsersConfirm()
@@ -347,6 +349,27 @@ void PairingManagerTests::cancelAndRevokeAreDurable()
   QVERIFY(reloaded.load().ok);
   QVERIFY(reloaded.find(fixture.secondId)->revoked);
   QCOMPARE(fixture.first.revoke(DeviceId::generate()).error, PairingOperationError::RevokeFailed);
+}
+
+void PairingManagerTests::revokeKeepsPrimaryCommitWhenBackupFails()
+{
+  Fixture fixture;
+  QVERIFY(fixture.firstStore.upsert({
+      .deviceId = fixture.secondId,
+      .alias = QStringLiteral("Second"),
+      .platform = QStringLiteral("windows"),
+      .fingerprintSha256 = fixture.secondInfo.certificateFingerprintSha256,
+  }));
+  QVERIFY(fixture.firstStore.save().ok);
+  const auto backupPath = fixture.firstStore.path() + QStringLiteral(".bak");
+  QVERIFY(QFile::remove(backupPath));
+  QVERIFY(QDir().mkpath(backupPath));
+
+  QVERIFY(fixture.first.revoke(fixture.secondId).ok());
+  QVERIFY(fixture.firstStore.find(fixture.secondId)->revoked);
+  TrustedDeviceStore reloaded(fixture.firstStore.path());
+  QVERIFY(reloaded.load().ok);
+  QVERIFY(reloaded.find(fixture.secondId)->revoked);
 }
 
 QTEST_MAIN(PairingManagerTests)

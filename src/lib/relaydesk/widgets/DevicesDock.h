@@ -68,6 +68,8 @@ public:
   void showIncomingConflictCancelTransportFailure(const ::relaydesk::transfer::TransferId &transferId);
   void clearIncomingConflictPrompts(const ::relaydesk::transfer::TransferId &transferId);
   void showSendFailure(::relaydesk::transfer::TransferStartError error);
+  void showTrustActionFailure();
+  void clearTrustActionFeedback();
   void setManualAddresses(QList<ManualAddress> addresses);
 
 Q_SIGNALS:
@@ -184,6 +186,7 @@ private:
   QList<::relaydesk::transfer::IncomingConflictPrompt> m_incomingConflictPrompts;
   QString m_incomingConflictErrorText;
   QList<ManualAddress> m_manualAddresses;
+  bool m_trustActionFeedbackVisible = false;
 };
 
 } // namespace deskflow::relaydesk::widgets

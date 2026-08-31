@@ -22,6 +22,7 @@
     <message><source>devices.action.revoke_trust</source><translation>信頼を取り消す</translation></message>
     <message><source>devices.revoke_trust.title</source><translation>信頼を取り消しますか?</translation></message>
     <message><source>devices.revoke_trust.confirmation</source><translation>%1 の信頼を削除しますか? ファイル接続は閉じられ、自動再接続は停止します。</translation></message>
+    <message><source>devices.trust.update_failed</source><translation>デバイスの信頼設定を更新できませんでした。もう一度お試しください。</translation></message>
     <message><source>devices.action.more</source><translation>その他</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>自動配置</translation></message>
     <message><source>devices.action.configure_input</source><translation>入力配置</translation></message>

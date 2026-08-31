@@ -1022,6 +1022,7 @@ void DevicesDock::clearDropTarget()
 
 void DevicesDock::showSendFeedback(const QString &message)
 {
+  m_trustActionFeedbackVisible = false;
   m_sendFeedback->setText(message);
   m_sendFeedback->setAccessibleDescription(message);
   m_sendFeedback->setVisible(!message.isEmpty());
@@ -1034,6 +1035,18 @@ void DevicesDock::showSendFailure(::relaydesk::transfer::TransferStartError erro
                          : i18n::translate(Text::TransferNotificationFailed);
   showSendFeedback(message);
   Q_EMIT sendItemsRejected(message);
+}
+
+void DevicesDock::showTrustActionFailure()
+{
+  showSendFeedback(i18n::translate(Text::DevicesTrustUpdateFailed));
+  m_trustActionFeedbackVisible = true;
+}
+
+void DevicesDock::clearTrustActionFeedback()
+{
+  if (m_trustActionFeedbackVisible)
+    showSendFeedback({});
 }
 
 bool DevicesDock::publishSendIntent(const QModelIndex &index, const QList<QUrl> &items)

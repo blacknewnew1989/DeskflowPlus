@@ -261,9 +261,9 @@ TrustedDeviceStoreResult TrustedDeviceStore::save() const
   }
   if (!writeAtomic(backupPath(), QByteArrayView(contents), &diagnostic)) {
     return {
-        .ok = false,
+        .ok = true,
         .source = TrustedDeviceLoadSource::Primary,
-        .diagnostic = QStringLiteral("primary store was saved but backup failed: %1").arg(diagnostic),
+        .diagnostic = QStringLiteral("backup degraded after primary store save: %1").arg(diagnostic),
     };
   }
   return {.ok = true, .source = TrustedDeviceLoadSource::Primary};

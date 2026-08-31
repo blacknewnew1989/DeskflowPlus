@@ -22,6 +22,7 @@
     <message><source>devices.action.revoke_trust</source><translation>Отозвать доверие</translation></message>
     <message><source>devices.revoke_trust.title</source><translation>Отозвать доверие?</translation></message>
     <message><source>devices.revoke_trust.confirmation</source><translation>Удалить доверие к %1? Файловое соединение будет закрыто, а автоподключение остановлено.</translation></message>
+    <message><source>devices.trust.update_failed</source><translation>Не удалось обновить доверие к устройству. Повторите попытку.</translation></message>
     <message><source>devices.action.more</source><translation>Ещё</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Расставить автоматически</translation></message>
     <message><source>devices.action.configure_input</source><translation>Расположить ввод</translation></message>
