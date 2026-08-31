@@ -58,8 +58,9 @@
 
 | ID | 状态 | 当前证据 / 下一步 |
 |---|---|---|
-| R4-UI-001 | IN_PROGRESS | `R4-UI-001A` 已验证 production trust card auto-accept/revoke 与失败反馈；manual address 仍 `NOT_RUN`，总项不提前 PASS |
+| R4-UI-001 | PASS | `R4-UI-001A` 已验证 production trust card，`R4-UI-001B` 已验证 manual address Add/Save/Remove 与 runtime listener 启动；总项仅在 localhost/offscreen 范围关闭，真实 LAN/多网卡/物理设备仍未覆盖 |
 | R4-UI-001A | PASS | owner `fb4e75f92` / A0 内容等价提交 `709533024`：真实 MainWindow/DevicesDock 手势持久化 auto-accept、成功 revoke tombstone/card、重复边界；primary 写失败显示七语言非模态脱敏反馈，内存/card/backup reload 不谎称成功，恢复后成功动作清旧反馈。共享 Store 契约统一 primary committed/backup degraded。owner 双槽各3/3，MainWindow 15/15、DevicesDock 30/30、Store 11/11、PairingManager 10/10、PairingTrust 11/11、i18n 7/7；A0 fresh 278/278 与 MainWindow 15/15。证据见第10节，仅限 localhost/offscreen |
+| R4-UI-001B | PASS | owner `d81c13e54` / A0 内容等价提交 `34f248170`：真实 MainWindow/DevicesDock manual-address dialog Add/Save 持久化 127.0.0.1 与自定义 ports，使 disabled/empty 的 DiscoveryRuntime listener 无需重启应用即启动；重开显示、Remove/Save 清空 store，runtime 不重复启动。owner 槽3/3、MainWindow16/16、DevicesDock30/30、DiscoverySettings22/22、DeviceDiscoveryRuntime10/10、AddressCandidate10/10；A0 fresh 278/278、槽3/3、MainWindow16/16。证据见第11节；不证明 probe 数据包/真实LAN |
 | R4-UI-002 | PASS | owner `b6a37091f` / A0 内容等价提交 `a2cb8a2af`：两个真实 UDP discovery/pairing runtime 与 production DevicesDock 完成 Pair、六位 SAS Confirm、双向独立指纹 trust 持久化、重复配对边界及独立 Cancel 无 trust。owner Confirm/Cancel 各 3/3、10 个完整相关目标全绿；A0 fresh Confirm/Cancel 与 PairingTrustRuntime 11/11。证据见 R4 基线报告第 9 节，仅限 localhost/offscreen |
 | R4-UI-003 | NOT_RUN | 权限模型与平台 probe 已接线；Windows/macOS 原生系统设置与 TCC 未运行 |
 | R4-UI-004 | PASS | `b036e1f7b` / A0 `5aa0bfc4b`：TransferUiRuntime 消费 typed `TransferStartResult`，NotRunning/PeerUnavailable 写入现有本地化反馈并保留选择；红测 1→0，完整 TransferUiRuntime/DevicesDock 目标退出 0 |

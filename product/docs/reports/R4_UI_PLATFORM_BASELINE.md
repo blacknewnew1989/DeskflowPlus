@@ -17,8 +17,9 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 
 | ID | 表面 | UI intent | Production service / typed boundary | 失败反馈 | 状态 |
 |---|---|---|---|---|---|
-| R4-UI-001 | 设备卡、信任、手动地址 | DevicesDock pairing/revoke/autoAccept/manual save | MainWindow -> PairingTrustRuntime / DiscoverySettingsStore / DeviceDiscoveryRuntime | trust card 已由001A验证；manual address未运行 | `IN_PROGRESS` |
+| R4-UI-001 | 设备卡、信任、手动地址 | DevicesDock pairing/revoke/autoAccept/manual save | MainWindow -> PairingTrustRuntime / DiscoverySettingsStore / DeviceDiscoveryRuntime | 001A trust card 与001B manual address均已验证 | `PASS` |
 | R4-UI-001A | 信任卡片 | auto-accept/revoke | DevicesDock -> PairingTrustRuntime -> TrustedDeviceStore | 成功持久化与失败非模态反馈均已验证 | `PASS` |
+| R4-UI-001B | 手动地址 | add/save/remove | DevicesDock -> DiscoverySettingsStore -> DeviceDiscoveryRuntime | 持久化与listener启动/刷新入口已验证 | `PASS` |
 | R4-UI-002 | 配对 | pairingRequested、SAS confirm/cancel | DevicesDock -> PairingTrustRuntime -> UDP pairing -> trust store | localhost production widget/UDP/trust 已验证 | `PASS` |
 | R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | banner/detail model 存在；TCC/系统往返未运行 | `NOT_RUN` |
 | R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
@@ -45,7 +46,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 
 | 范围 | 候选测试 | 仅能证明 | 不能证明 |
 |---|---|---|---|
-| 设备卡/配对 | DeviceHomeModel、DevicesDock、PairingWizardModel、PairingTrustRuntime | localhost Pair/Confirm/Cancel 与 trust card auto-accept/revoke widget intent | manual address、原生窗口、真实 LAN、多网卡、物理配对 |
+| 设备卡/配对 | DeviceHomeModel、DevicesDock、PairingWizardModel、PairingTrustRuntime、DeviceDiscoveryRuntime | localhost Pair/Confirm/Cancel、trust card与manual-address widget intent | 实际probe报文、原生窗口、真实 LAN、多网卡、物理配对 |
 | 权限 | PermissionStatusModel、DevicesDock、MainWindowLayout | 门控、文案、控件绑定 | TCC、Windows/macOS 系统设置往返 |
 | 拖放发送 | DevicesDock、TransferUiRuntime | local URL 过滤、immutable intent、fake service adapter | Explorer/Finder DnD、真实 service 失败反馈 |
 | Incoming Offer | IncomingOfferModel、DevicesDock、TransferRuntimeComposition、FileTransferRuntime | localhost TLS offer、widget accept/reject、文件 SHA/row/清理 | Ask、原生窗口系统、物理双机 |
@@ -368,10 +369,46 @@ manual address 不在本切片。
   15/0/0、退出 0。
 
 `R4-UI-001A` 的 `PASS` 只覆盖 Windows localhost advertisement、真实临时 store 与 offscreen MainWindow
-widget intent。manual address 仍为 `NOT_RUN`，因此 `R4-UI-001` 保持 `IN_PROGRESS`；native
-Windows/macOS window system、真实 LAN、多网卡、TCC、物理 Win↔Mac 和发布不由本证据证明。
+widget intent。native Windows/macOS window system、真实 LAN、多网卡、TCC、物理 Win↔Mac 和发布不由
+本证据证明。
 
-## 11. 证据边界
+## 11. 第八个纵向证据切片
+
+选择 `R4-UI-001B`，范围只包含 manual address 的 Add/Save/重开/Remove/Save production UI 链。
+
+实现与验收结果：
+
+- owner：`agent/a2/r4-manual-address-ui@d81c13e549ab491b86a11f4ee4ab082785a9582f`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@34f2481700dbf2119d93dbca047e2f4545011997`。两提交
+  parent 均为 `cff80aacf0d6d5df9f4fca1471d5ebd5ed16cc61`、tree 均为
+  `c1d09dce21dde2fc9e6947f678a6e4addce59c65`，由 cherry-pick 产生不同 commit id；
+- 初始 DiscoverySettings 为 `enabled=false` 且 manualAddresses 为空，真实 MainWindow 构造后
+  DeviceDiscoveryRuntime 未运行；
+- 测试只通过 DevicesDock 的 Manage QPushButton 打开真实 modal dialog，填写 `127.0.0.1`、input port
+  `24910`、file port `24911`，并用 Add/Save mouse click 触发 production receipt；没有直接调用 signal、
+  model、store 或 runtime；
+- 保存成功后 dialog 关闭，DiscoverySettingsStore 复读地址和 ports 一致；DeviceDiscoveryRuntime 从 stopped
+  进入 running，DiscoveryService `started` 只发一次，证明 listener 已启动且 manual-address refresh 入口可达；
+- 再次真实打开 dialog 可见同一条目；选中后 Remove/Save，store 复读为空。runtime 合理保持 running，
+  `started` 仍为一次，没有重复启动；
+- 本切片只新增测试，production 现有接线直接通过；
+- owner 稳定证据位于 `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui001b-ownercheck`：新增槽
+  `ui001b-first.log`、`ui001b-stability-2.log`、`ui001b-stability-3.log` 均为 3/0/0、退出 0；完整
+  MainWindowLayout 16/0、DevicesDock 30/0、DiscoverySettings 22/0、DeviceDiscoveryRuntime 10/0、
+  AddressCandidateProvider 10/0，均退出 0；
+- UI 与 discovery reviewer 均 GO，未发现 P0/P1。reviewer 明确 `started/isRunning` 只证明 UDP listener
+  启动和刷新入口可达，不能证明 AddressCandidateProvider 已完成解析或 probe datagram 抵达；
+- A0 fresh build `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui001b` 使用 VS 2022、Ninja、
+  Qt 6.10.1 与独立 x64-windows Debug vcpkg 安装树，serial 278/278 构建退出 0，日志
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui001b-build.log`（2026-09-01 06:39:33）；新增槽
+  `ui001b-slot.log`（06:39:52，653ms）为 3/0/0、退出 0，完整 MainWindowLayout
+  `main-window-layout-full.log`（06:39:56，3.916s）为 16/0/0、退出 0。
+
+`R4-UI-001B` 关闭了 manual-address UI 缺口，因此 `R4-UI-001` 在 Windows localhost/offscreen
+production UI 范围内为 `PASS`。该状态不证明实际 probe 数据包、native Windows/macOS window system、
+真实 LAN、DNS、多网卡选路、TCC、物理 Win↔Mac 或正式发布行为。
+
+## 12. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；

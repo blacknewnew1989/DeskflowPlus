@@ -30,8 +30,9 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 
 | ID | 状态 | Owner | 当前范围与完成条件 |
 |---|---|---|---|
-| R4-UI-001 | IN_PROGRESS | A2/A3/A7/A0 | `R4-UI-001A` trust card 已 PASS；manual address 仍 `NOT_RUN`，总项保持进行中 |
+| R4-UI-001 | PASS | A2/A3/A7/A0 | `R4-UI-001A` trust card 与 `R4-UI-001B` manual address 均已通过 localhost/offscreen production UI 验收；真实LAN/多网卡/物理设备不由此PASS证明 |
 | R4-UI-001A | PASS | A2/A3/A7/A0 | owner `fb4e75f92` / A0 内容等价提交 `709533024`；真实 auto-accept/revoke菜单+确认、tombstone/card/重复边界与 primary失败非模态反馈通过，Store primary/backup契约统一。owner 双槽3/3、六完整目标及A0 fresh全绿，pairing/UI双review GO；详见第10节 |
+| R4-UI-001B | PASS | A2/A3/A7/A0 | owner `d81c13e54` / A0 内容等价提交 `34f248170`；真实 manual dialog Add/Save/重开/Remove/Save、settings持久化与Discovery listener一次启动通过。owner 3/3、五完整目标与A0 fresh全绿，UI/discovery双review GO；详见第11节，实际probe/LAN仍未验证 |
 | R4-UI-002 | PASS | A2/A3/A7/A0 | owner `b6a37091f` / A0 内容等价提交 `a2cb8a2af`；本端真实 Pair/Confirm/Cancel widget 手势经 typed boundary 驱动双真实 UDP PairingTrustRuntime，双方独立 trust/指纹、card、重复与取消边界通过。owner 双槽各3/3、10个完整目标与A0 fresh全绿，pairing/UI双review GO；详见第9节 |
 | R4-UI-003 | NOT_RUN | A3/A4/A5/A7/A0 | 当前 SHA 运行权限卡、能力门控和原生系统设置往返；TCC 留物理验收 |
 | R4-UI-004 | PASS | A3/A7/A0 | owner `b036e1f7b` / A0 `5aa0bfc4b`；typed NotRunning/PeerUnavailable 显示本地化反馈，失败保留设备/路径选择且不创建 transfer row；红测与两完整目标退出 0 |
