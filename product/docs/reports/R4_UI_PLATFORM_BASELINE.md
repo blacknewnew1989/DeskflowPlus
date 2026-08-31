@@ -20,7 +20,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-001 | 设备卡、信任、手动地址 | DevicesDock pairing/revoke/autoAccept/manual save | MainWindow -> PairingTrustRuntime / DiscoverySettingsStore / DeviceDiscoveryRuntime | auto-accept 可见；pair/revoke 即时失败仅日志 | `NOT_RUN` |
 | R4-UI-002 | 配对 | pairingRequested、SAS confirm/cancel | PairingTrustRuntime -> DiscoveryService datagram -> trust store | 状态模型存在；组合根原生手势未运行 | `NOT_RUN` |
 | R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | banner/detail model 存在；TCC/系统往返未运行 | `NOT_RUN` |
-| R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | `TransferStartResult` 被丢弃；UI 先清空反馈 | `FAIL` |
+| R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
 | R4-UI-005 | Incoming Offer / Ask | accept/reject/conflict decision | IncomingOfferModel / TransferUiRuntime -> FileTransferRuntime | safety/prompt 有反馈；真实 TLS 组合未运行 | `NOT_RUN` |
 | R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | snapshot 可显示；一般 operation rejection 未运行 | `NOT_RUN` |
 | R4-UI-007 | 迷你条 | primary action、details | TransferCenterModel typed intents；details 打开 TransferCenterDock | 真实后台传输刷新未运行 | `NOT_RUN` |
@@ -69,8 +69,20 @@ Hosted CI、offscreen Qt 和 fake service 测试均不能替代物理 Win↔Mac�
 - 不创建 transfer row，不清空为成功态，不依赖真实物理设备；
 - 成功发送和既有 transfer snapshot 路径保持不变。
 
-最小实现不得重设计界面，不得同时处理托盘、权限、七语言或打包。`R4-UI-008` 保留为下一独立
-FAIL，不能顺手修复。
+实现结果：
+
+- owner：`agent/a3/r4-send-failure-feedback@b036e1f7bbfaeb5fbc81b0223dac80240eeed8d2`；
+- A0 集成：`agent/a0/redevelop-p0@5aa0bfc4bc53a2532c6be99629e8a839902fb32e`；
+- `publishSendIntent` 先清旧提示再发送 intent，避免同步失败提示被覆盖；
+- TransferUiRuntime 使用自身作为连接 context，消费 typed `TransferStartResult`；
+- PeerUnavailable 复用设备不可用文案，其余 start failure 复用 `Transfer failed`，不显示内部 diagnostic；
+- 失败保留设备与路径选择，不创建 transfer row；后续成功会清除失败提示；
+- 新测试修复前退出 1，修复后定向槽、完整 RelayDeskTransferUiRuntimeTests、完整
+  RelayDeskDevicesDockTests 均退出 0；A0 两完整目标复验退出 0；
+- 独立 transfer reviewer 给出 GO，未发现 P0/P1、UAF、同步覆盖或 service 接口越界。
+
+未新增视觉组件、翻译键、协议或 service API。`R4-UI-008` 保留为下一独立 FAIL；托盘、权限、
+七语言和打包没有在本切片展开。
 
 ## 5. 证据边界
 

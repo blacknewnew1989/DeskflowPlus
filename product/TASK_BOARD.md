@@ -33,7 +33,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R4-UI-001 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行设备卡、在线状态、信任动作与手动地址 production 组合 |
 | R4-UI-002 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行 MainWindow 配对手势到真实 PairingTrustRuntime 反馈 |
 | R4-UI-003 | NOT_RUN | A3/A4/A5/A7/A0 | 当前 SHA 运行权限卡、能力门控和原生系统设置往返；TCC 留物理验收 |
-| R4-UI-004 | FAIL | A3/A7/A0 | 红测目标离线/service 未启动时的发送 intent；必须把 typed `TransferStartResult` 显示为用户可见失败 |
+| R4-UI-004 | PASS | A3/A7/A0 | owner `b036e1f7b` / A0 `5aa0bfc4b`；typed NotRunning/PeerUnavailable 显示本地化反馈，失败保留设备/路径选择且不创建 transfer row；红测与两完整目标退出 0 |
 | R4-UI-005 | NOT_RUN | A3/A6/A7/A0 | 当前 SHA 运行真实 Incoming Offer/Ask 到接收与失败反馈 |
 | R4-UI-006 | NOT_RUN | A3/A6/A7/A0 | 当前 SHA 运行传输中心 pause/resume/cancel/retry 到真实 runtime |
 | R4-UI-007 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行迷你条与真实后台传输状态同步 |

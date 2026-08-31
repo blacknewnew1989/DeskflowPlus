@@ -23,7 +23,7 @@
 - Current branch: `agent/a0/redevelop-p0`
 - Current product branch tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
-- Current verified redevelopment implementation tip: `043d6b3fb25fbd618804a36ab0ba3f263938e448`
+- Current verified redevelopment implementation tip: `5aa0bfc4bc53a2532c6be99629e8a839902fb32e`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
 - Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
@@ -61,7 +61,7 @@
 | R4-UI-001 | NOT_RUN | 设备卡、信任和手动地址有 production 接线与组件测试线索；当前 SHA 未运行原生 UI/发现链路 |
 | R4-UI-002 | NOT_RUN | 配对 intent 已接 PairingTrustRuntime；当前 SHA 未运行 MainWindow 到真实两端配对 |
 | R4-UI-003 | NOT_RUN | 权限模型与平台 probe 已接线；Windows/macOS 原生系统设置与 TCC 未运行 |
-| R4-UI-004 | FAIL | 拖放/选择发送已接真实 service，但 TransferUiRuntime 丢弃 `TransferStartResult`；目标离线或 service 未启动时无用户可见失败 |
+| R4-UI-004 | PASS | `b036e1f7b` / A0 `5aa0bfc4b`：TransferUiRuntime 消费 typed `TransferStartResult`，NotRunning/PeerUnavailable 写入现有本地化反馈并保留选择；红测 1→0，完整 TransferUiRuntime/DevicesDock 目标退出 0 |
 | R4-UI-005 | NOT_RUN | Incoming Offer/Ask 已接 typed service intent；当前 SHA 未运行真实 TLS offer 到可视面板 |
 | R4-UI-006 | NOT_RUN | 传输中心控制已接 FileTransferRuntime；当前 SHA 未运行原生 UI 控制真实传输 |
 | R4-UI-007 | NOT_RUN | 迷你条复用 TransferCenterModel typed intent；当前 SHA 未运行真实后台传输刷新 |
