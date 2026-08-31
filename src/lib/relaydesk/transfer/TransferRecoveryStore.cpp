@@ -142,7 +142,7 @@ std::optional<ManifestEntry> decodeEntry(const QCborValue &encoded, const PathLi
   const auto flags = valueFor(map, 7);
   if (!id.isByteArray() || !path.isString() || !type.isInteger() || !size.isInteger() || !modified.isInteger() ||
       !hash.isByteArray() || !flags.isInteger() || size.toInteger() < 0 || modified.toInteger() <= 0 ||
-      flags.toInteger() < 0)
+      flags.toInteger() < 0 || static_cast<quint64>(flags.toInteger()) > std::numeric_limits<quint32>::max())
     return std::nullopt;
   const auto parsedId = FileId::fromBytes(id.toByteArray());
   const auto parsedType = entryType(type.toInteger());
@@ -543,6 +543,31 @@ std::optional<NegotiatedCapabilities> decodeCapabilities(const QCborValue &encod
   };
 }
 
+bool validateNegotiatedCapabilities(const NegotiatedCapabilities &value)
+{
+  if (value.protocolMajorVersion != kProtocolMajorVersion || value.chunkBytes == 0 ||
+      value.chunkBytes > kMaximumNegotiablePayloadBytes || value.maxPayloadBytes == 0 ||
+      value.maxPayloadBytes > kMaximumNegotiablePayloadBytes || value.maxConcurrentTransfers == 0 ||
+      value.maxConcurrentTransfers > kMaximumNegotiableConcurrency || value.maxConcurrentFiles == 0 ||
+      value.maxConcurrentFiles > kMaximumNegotiableConcurrency || value.maxManifestEntries == 0 ||
+      value.maxManifestEntries > kMaximumNegotiableManifestEntries || !value.localCanReceiveFiles ||
+      !value.features.contains(QStringLiteral("resume.v1")))
+    return false;
+  QSet<QString> features;
+  for (const auto &feature : value.features) {
+    if (feature.isEmpty() || features.contains(feature))
+      return false;
+    features.insert(feature);
+  }
+  QSet<ConflictPolicy> policies;
+  for (const auto policyValue : value.conflictPolicies) {
+    if (!validPolicy(policyValue) || policies.contains(policyValue))
+      return false;
+    policies.insert(policyValue);
+  }
+  return !policies.isEmpty();
+}
+
 bool validCommon(
     const TransferId &transfer, const deskflow::relaydesk::DeviceId &local, const deskflow::relaydesk::DeviceId &peer,
     QByteArrayView fingerprint
@@ -578,13 +603,35 @@ bool validRoot(const QString &root)
   return !root.isEmpty() && QDir::isAbsolutePath(root);
 }
 
+bool validateSources(const QList<RecoverySource> &sources, quint64 maximumEntries, const PathLimits &limits)
+{
+  if (sources.isEmpty() || static_cast<quint64>(sources.size()) > maximumEntries)
+    return false;
+
+  QSet<QString> canonicalPaths;
+  QSet<QString> protocolPaths;
+  for (const auto &source : sources) {
+    const auto canonicalPath = QDir::cleanPath(source.canonicalPath);
+    const auto protocolPath = PathPolicy::validateRelative(source.relativeProtocolPath, limits);
+    if (!validAbsolutePath(source.canonicalPath) || canonicalPath != source.canonicalPath || !protocolPath.ok ||
+        protocolPath.normalized != source.relativeProtocolPath || !validEntryType(source.type) ||
+        canonicalPaths.contains(canonicalPath) || protocolPaths.contains(protocolPath.collisionKey))
+      return false;
+    canonicalPaths.insert(canonicalPath);
+    protocolPaths.insert(protocolPath.collisionKey);
+  }
+  return true;
+}
+
 bool validateManifest(
     const QList<PreparedManifestEntry> &prepared, const TransferManifestSummary &summary,
     const ManifestPagePlanBinding &binding, const PathLimits &limits
 )
 {
   if (prepared.isEmpty() || summary.canonicalSha256.size() != kSha256Bytes ||
-      binding.entryCount != static_cast<quint64>(prepared.size()))
+      binding.entryCount != static_cast<quint64>(prepared.size()) || !validCount(summary.totalBytes) ||
+      !validCount(summary.fileCount) || !validCount(summary.directoryCount) || !validCount(binding.entryCount) ||
+      !validCount(binding.pageCount) || !validCount(binding.totalMetadataBytes))
     return false;
   QSet<QByteArray> ids;
   QSet<QString> paths;
@@ -595,8 +642,8 @@ bool validateManifest(
     const auto checked = PathPolicy::validateRelative(item.entry.relativeProtocolPath, limits);
     if (!validAbsolutePath(item.canonicalSourcePath) || !checked.ok ||
         checked.normalized != item.entry.relativeProtocolPath || item.protocolCollisionKey != checked.collisionKey ||
-        item.entry.sha256.size() != kSha256Bytes || ids.contains(item.entry.id.toBytes()) ||
-        paths.contains(checked.collisionKey))
+        item.entry.sha256.size() != kSha256Bytes || !validCount(item.entry.size) ||
+        ids.contains(item.entry.id.toBytes()) || paths.contains(checked.collisionKey))
       return false;
     ids.insert(item.entry.id.toBytes());
     paths.insert(checked.collisionKey);
@@ -657,17 +704,15 @@ TransferRecoveryStoreOperationResult TransferRecoveryStore::saveOutgoing(const O
       !state.createdUtc.isValid() || state.createdUtc.toMSecsSinceEpoch() <= 0 ||
       !validPolicy(state.sendOptions.conflictPolicy) || !validPolicy(state.effectiveConflictPolicy) ||
       m_limits.maximumEntries == 0 || state.entries.isEmpty() ||
-      static_cast<quint64>(state.entries.size()) > m_limits.maximumEntries ||
-      static_cast<quint64>(state.sourceRoots.size()) > m_limits.maximumEntries ||
-      state.summary.id != state.transferId || state.summary.canonicalSha256.size() != kSha256Bytes ||
+      static_cast<quint64>(state.entries.size()) > m_limits.maximumEntries || state.summary.id != state.transferId ||
+      state.summary.canonicalSha256.size() != kSha256Bytes || !validCount(state.progress.completedBytes) ||
+      !validCount(state.progress.completedFiles) || !validCount(state.progress.currentEntry) ||
       state.progress.completedBytes > state.summary.totalBytes ||
       state.progress.completedFiles > state.summary.fileCount ||
       state.progress.currentEntry > static_cast<quint64>(state.entries.size()))
     return fail(TransferRecoveryStoreError::InvalidState, QStringLiteral("outgoing recovery state is invalid"));
-  for (const auto &source : state.sourceRoots)
-    if (!validAbsolutePath(source.canonicalPath) ||
-        !validRelativePath(source.relativeProtocolPath, m_limits.pathLimits) || !validEntryType(source.type))
-      return fail(TransferRecoveryStoreError::InvalidPath, QStringLiteral("outgoing recovery source path is invalid"));
+  if (!validateSources(state.sourceRoots, m_limits.maximumEntries, m_limits.pathLimits))
+    return fail(TransferRecoveryStoreError::InvalidPath, QStringLiteral("outgoing recovery source path is invalid"));
   for (const auto &entry : state.entries)
     if (!validAbsolutePath(entry.canonicalSourcePath) ||
         !validRelativePath(entry.entry.relativeProtocolPath, m_limits.pathLimits) ||
@@ -706,13 +751,15 @@ TransferRecoveryStoreOperationResult TransferRecoveryStore::saveIncoming(const I
       state.offer.transferId != state.transferId || state.offer.manifestSha256.size() != kSha256Bytes ||
       !validPolicy(state.offer.requestedConflictPolicy) || !validPolicy(state.receiveOptions.conflictPolicy) ||
       !validAbsolutePath(state.receiveOptions.destinationRoot) || m_limits.maximumEntries == 0 ||
-      static_cast<quint64>(state.entries.size()) > m_limits.maximumEntries ||
+      static_cast<quint64>(state.entries.size()) > m_limits.maximumEntries || state.offer.createdAtMs == 0 ||
+      !validCount(state.offer.createdAtMs) || !validCount(state.offer.totalBytes) ||
+      !validCount(state.offer.fileCount) || !validCount(state.offer.directoryCount) ||
+      !validCount(state.offer.manifestPageCount) ||
       state.pagePlan.entryCount != static_cast<quint64>(state.entries.size()) ||
       state.offer.fileCount > std::numeric_limits<quint64>::max() - state.offer.directoryCount ||
       state.offer.fileCount + state.offer.directoryCount != static_cast<quint64>(state.entries.size()) ||
       !validateIncomingManifest(state.entries, state.offer, state.pagePlan, m_limits.pathLimits) ||
-      state.negotiatedCapabilities.protocolMajorVersion != kProtocolMajorVersion ||
-      state.negotiatedCapabilities.features.isEmpty() || state.negotiatedCapabilities.conflictPolicies.isEmpty())
+      !validateNegotiatedCapabilities(state.negotiatedCapabilities))
     return fail(TransferRecoveryStoreError::InvalidState, QStringLiteral("incoming recovery state is invalid"));
   for (const auto &entry : state.entries)
     if (!validRelativePath(entry.relativeProtocolPath, m_limits.pathLimits) || entry.sha256.size() != kSha256Bytes)
@@ -776,7 +823,8 @@ TransferRecoveryStoreLoadResult<OutgoingRecoveryState> TransferRecoveryStore::lo
         const auto plan = decodePlan(valueFor(map, PlanKey));
         const auto progress = decodeProgress(valueFor(map, ProgressKey));
         if (!sendPolicy || !effective || !sources || !entries || !summary || !plan || !progress ||
-            static_cast<quint64>(entries->size()) > m_limits.maximumEntries)
+            static_cast<quint64>(entries->size()) > m_limits.maximumEntries ||
+            !validateSources(*sources, m_limits.maximumEntries, m_limits.pathLimits))
           return std::nullopt;
         OutgoingRecoveryState state{
             *transfer,
@@ -858,8 +906,14 @@ TransferRecoveryStoreScanResult<State> scanStates(const QString &directory, Load
   const QDir dir(directory);
   if (!dir.exists())
     return result;
-  for (const auto &entry :
-       dir.entryInfoList({QStringLiteral("*.recovery.cbor")}, QDir::Files | QDir::NoSymLinks, QDir::Name)) {
+  for (const auto &entry : dir.entryInfoList({QStringLiteral("*.recovery.cbor")}, QDir::Files, QDir::Name)) {
+    if (entry.isSymLink()) {
+      result.issues.append(
+          {entry.absoluteFilePath(), TransferRecoveryStoreError::InvalidPath,
+           QStringLiteral("recovery state symbolic links are not followed")}
+      );
+      continue;
+    }
     QString name = entry.fileName();
     name.chop(QStringLiteral(".recovery.cbor").size());
     const auto id = TransferId::fromString(name);

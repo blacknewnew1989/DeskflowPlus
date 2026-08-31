@@ -3,11 +3,14 @@
 
 #include "relaydesk/transfer/TransferRecoveryStore.h"
 
+#include <QCborArray>
 #include <QCborMap>
 #include <QCborValue>
 #include <QFile>
 #include <QTemporaryDir>
 #include <QtTest>
+
+#include <limits>
 
 using namespace relaydesk::transfer;
 
@@ -141,11 +144,14 @@ class TransferRecoveryStoreTests final : public QObject
 
 private Q_SLOTS:
   void roundTripsBothDirections();
-  void replacesAtomicallyWithoutClobberingValidState();
+  void replacesValidStateAndRejectsInvalidWithoutClobbering();
   void scanIsolatesCorruptAndUnknownSchema();
   void rejectsUnsafePathsAndLimitsBeforeWriting();
   void removalIsIdempotentInBothDirections();
   void rejectsIdentityEnumAndCollisionBoundaries();
+  void rejectsInvalidCapabilitiesAndIntegerOverflowWithoutClobbering();
+  void isolatesTamperedIncomingRecords();
+  void scanReportsSymbolicLinkWithoutFollowingTarget();
 };
 
 void TransferRecoveryStoreTests::roundTripsBothDirections()
@@ -171,7 +177,7 @@ void TransferRecoveryStoreTests::roundTripsBothDirections()
   QCOMPARE(incomingScan.states, QList<IncomingRecoveryState>{expectedIncoming});
 }
 
-void TransferRecoveryStoreTests::replacesAtomicallyWithoutClobberingValidState()
+void TransferRecoveryStoreTests::replacesValidStateAndRejectsInvalidWithoutClobbering()
 {
   QTemporaryDir temporary;
   QVERIFY(temporary.isValid());
@@ -265,6 +271,123 @@ void TransferRecoveryStoreTests::rejectsIdentityEnumAndCollisionBoundaries()
   QCOMPARE(store.saveOutgoing(state).error, TransferRecoveryStoreError::InvalidState);
   TransferRecoveryStore relative(QStringLiteral("relative"));
   QCOMPARE(relative.saveOutgoing(outgoing()).error, TransferRecoveryStoreError::InvalidStoreDirectory);
+}
+
+void TransferRecoveryStoreTests::rejectsInvalidCapabilitiesAndIntegerOverflowWithoutClobbering()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  TransferRecoveryStore store(temporary.path());
+  const auto valid = incoming();
+  QVERIFY(store.saveIncoming(valid).ok());
+  auto invalid = valid;
+  invalid.negotiatedCapabilities.maxConcurrentTransfers = 65;
+  QCOMPARE(store.saveIncoming(invalid).error, TransferRecoveryStoreError::InvalidState);
+  invalid = valid;
+  invalid.negotiatedCapabilities.features.append(QStringLiteral("resume.v1"));
+  QCOMPARE(store.saveIncoming(invalid).error, TransferRecoveryStoreError::InvalidState);
+  const auto loaded = store.loadIncoming(kTransfer);
+  QVERIFY(loaded.ok());
+  QCOMPARE(*loaded.state, valid);
+  auto overflow = outgoing();
+  overflow.entries[0].entry.size = quint64{1} << 63;
+  QCOMPARE(store.saveOutgoing(overflow).error, TransferRecoveryStoreError::InvalidState);
+  auto incomingOverflow = valid;
+  incomingOverflow.offer.createdAtMs = static_cast<quint64>(std::numeric_limits<qint64>::max()) + 1;
+  QCOMPARE(store.saveIncoming(incomingOverflow).error, TransferRecoveryStoreError::InvalidState);
+
+  auto invalidSources = outgoing();
+  invalidSources.sourceRoots.clear();
+  QCOMPARE(store.saveOutgoing(invalidSources).error, TransferRecoveryStoreError::InvalidPath);
+  invalidSources = outgoing();
+  invalidSources.sourceRoots.append(invalidSources.sourceRoots.first());
+  QCOMPARE(store.saveOutgoing(invalidSources).error, TransferRecoveryStoreError::InvalidPath);
+}
+
+void TransferRecoveryStoreTests::isolatesTamperedIncomingRecords()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  TransferRecoveryStore store(temporary.path());
+  const auto valid = incoming();
+  QVERIFY(store.saveIncoming(valid).ok());
+  auto tampered = valid;
+  tampered.transferId = *TransferId::fromString(QStringLiteral("22222222-2222-4222-8222-222222222222"));
+  tampered.offer.transferId = tampered.transferId;
+  tampered.offer.manifestSha256 = ManifestPageCodec::canonicalSha256({tampered.entries.first()});
+  const auto savedTampered = store.saveIncoming(tampered);
+  QVERIFY2(savedTampered.ok(), qPrintable(savedTampered.diagnostic));
+  QFile input(store.incomingStatePath(tampered.transferId));
+  QVERIFY(input.open(QIODevice::ReadOnly));
+  const auto original = QCborValue::fromCbor(input.readAll()).toMap();
+  input.close();
+  for (int mutation = 0; mutation < 5; ++mutation) {
+    auto map = original;
+    if (mutation == 0) {
+      auto offer = map.value(QCborValue(15)).toMap();
+      offer.insert(QCborValue(6), QByteArray(32, '\x7f'));
+      map.insert(QCborValue(15), offer);
+    } else if (mutation == 1) {
+      auto plan = map.value(QCborValue(11)).toMap();
+      plan.insert(QCborValue(2), plan.value(QCborValue(2)).toInteger() + 1);
+      map.insert(QCborValue(11), plan);
+    } else if (mutation == 2) {
+      map.insert(QCborValue(99), QCborValue(1));
+    } else if (mutation == 3) {
+      auto caps = map.value(QCborValue(17)).toMap();
+      caps.insert(QCborValue(5), QCborValue(65));
+      map.insert(QCborValue(17), caps);
+    } else {
+      auto entries = map.value(QCborValue(9)).toArray();
+      auto first = entries.first().toMap();
+      first.insert(QCborValue(7), QCborValue(qint64{4'294'967'296LL}));
+      entries[0] = first;
+      map.insert(QCborValue(9), entries);
+    }
+    writeBytes(
+        store.incomingStatePath(tampered.transferId), QCborValue(map).toCbor(QCborValue::EncodingOption::SortKeysInMaps)
+    );
+    QCOMPARE(store.loadIncoming(tampered.transferId).error, TransferRecoveryStoreError::InvalidFields);
+    const auto scan = store.scanIncoming();
+    QCOMPARE(scan.states, QList<IncomingRecoveryState>{valid});
+    QCOMPARE(scan.issues.size(), 1);
+    const auto restored = store.saveIncoming(tampered);
+    QVERIFY2(restored.ok(), qPrintable(restored.diagnostic));
+  }
+
+  auto outgoingState = outgoing();
+  QVERIFY(store.saveOutgoing(outgoingState).ok());
+  QFile outgoingInput(store.outgoingStatePath(outgoingState.transferId));
+  QVERIFY(outgoingInput.open(QIODevice::ReadOnly));
+  auto outgoingMap = QCborValue::fromCbor(outgoingInput.readAll()).toMap();
+  outgoingInput.close();
+  auto sources = outgoingMap.value(QCborValue(8)).toArray();
+  sources.append(sources.first());
+  outgoingMap.insert(QCborValue(8), sources);
+  writeBytes(
+      store.outgoingStatePath(outgoingState.transferId),
+      QCborValue(outgoingMap).toCbor(QCborValue::EncodingOption::SortKeysInMaps)
+  );
+  QCOMPARE(store.loadOutgoing(outgoingState.transferId).error, TransferRecoveryStoreError::InvalidFields);
+}
+
+void TransferRecoveryStoreTests::scanReportsSymbolicLinkWithoutFollowingTarget()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  TransferRecoveryStore store(temporary.path());
+  QVERIFY(store.saveIncoming(incoming()).ok());
+  const auto linkPath = QDir(temporary.path()).filePath(QStringLiteral("incoming/link.recovery.cbor"));
+  if (!QFile::link(store.incomingStatePath(kTransfer), linkPath))
+    QSKIP("the current Windows token cannot create a symbolic link");
+  if (!QFileInfo(linkPath).isSymLink()) {
+    QFile::remove(linkPath);
+    QSKIP("platform did not create symbolic link");
+  }
+  const auto scan = store.scanIncoming();
+  QCOMPARE(scan.states, QList<IncomingRecoveryState>{incoming()});
+  QCOMPARE(scan.issues.size(), 1);
+  QCOMPARE(scan.issues.first().error, TransferRecoveryStoreError::InvalidPath);
 }
 
 QTEST_GUILESS_MAIN(TransferRecoveryStoreTests)
