@@ -63,7 +63,8 @@
 | R4-UI-003 | NOT_RUN | 权限模型与平台 probe 已接线；Windows/macOS 原生系统设置与 TCC 未运行 |
 | R4-UI-004 | PASS | `b036e1f7b` / A0 `5aa0bfc4b`：TransferUiRuntime 消费 typed `TransferStartResult`，NotRunning/PeerUnavailable 写入现有本地化反馈并保留选择；红测 1→0，完整 TransferUiRuntime/DevicesDock 目标退出 0 |
 | R4-UI-005 | PASS | owner `5ac175f90` / A0 内容等价提交 `36d83e77c`：真实 FileTransferRuntime/TLS localhost offer 已进入 production composition/model/DevicesDock；真实按钮 accept 完成文件 SHA/Completed row/状态清理，reject 不落文件且 sender typed Rejected。owner 三完整相关目标退出 0，A0 fresh Composition 11/11；命令与日志见 R4 基线报告第 6 节。Ask、原生窗口系统与物理双机仍 `NOT_RUN` |
-| R4-UI-006 | NOT_RUN | 传输中心控制已接 FileTransferRuntime；当前 SHA 未运行原生 UI 控制真实传输 |
+| R4-UI-006 | IN_PROGRESS | `R4-UI-006A` 已验证 production widget pause/resume/cancel；retry 仍 `NOT_RUN`，不能把总项写 PASS |
+| R4-UI-006A | PASS | owner `361b3ba2e` / A0 内容等价提交 `9c38f79e9`：修复 receiver Transferring snapshot 未发布 `canPause` 的 production 缺陷；真实 Transfer Center 按钮完成双端 Paused 稳定、Resume SHA/清理与 Cancelled Keep partial 验收。owner 新增槽 3/3、Composition 12/12、Dock 4/4、FileRuntime 56/0/4；A0 fresh 槽 3/3、Composition 12/12。证据见 R4 基线报告第 7 节，仅限 localhost/offscreen |
 | R4-UI-007 | NOT_RUN | 迷你条复用 TransferCenterModel typed intent；当前 SHA 未运行真实后台传输刷新 |
 | R4-UI-008 | PASS | owner `258d7aa6e` / A0 内容等价提交 `941149532`：validated opener 拒绝与 history load/persist error 已接入 Transfer Center 本地化非模态反馈；打开成功只清打开失败，不覆盖仍有效的历史错误。owner 四完整目标退出 0，A0 四目标构建退出 0；命令与日志见 `product/docs/reports/R4_UI_PLATFORM_BASELINE.md` 第 5 节，fake opener 不证明 Explorer/Finder/OS shell 实际打开 |
 | R4-UI-009 | NOT_RUN | 传输设置保存与 runtime snapshot 接线存在；当前 SHA 未运行原生设置交互 |

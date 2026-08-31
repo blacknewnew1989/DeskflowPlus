@@ -22,7 +22,8 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | banner/detail model 存在；TCC/系统往返未运行 | `NOT_RUN` |
 | R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
 | R4-UI-005 | Incoming Offer / Ask | accept/reject/conflict decision | IncomingOfferModel / TransferUiRuntime -> FileTransferRuntime | 真实 TLS offer 经 production widget accept/reject 完成或拒绝 | `PASS` |
-| R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | snapshot 可显示；一般 operation rejection 未运行 | `NOT_RUN` |
+| R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | pause/resume/cancel 已由 006A 验证；retry 未运行 | `IN_PROGRESS` |
+| R4-UI-006A | 传输中心控制 | pause/resume/cancel | TransferCenterDock -> TransferCenterModel -> FileTransferRuntime | 真实 widget 手势、双端状态与文件状态已验证 | `PASS` |
 | R4-UI-007 | 迷你条 | primary action、details | TransferCenterModel typed intents；details 打开 TransferCenterDock | 真实后台传输刷新未运行 | `NOT_RUN` |
 | R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | opener 拒绝与 history load/persist error 写入本地化非模态反馈 | `PASS` |
 | R4-UI-009 | 设置 | transferSettingsSaved | TransferSettingsStore -> MainWindow composition snapshot | 保存失败有 QMessageBox；原生交互未运行 | `NOT_RUN` |
@@ -46,7 +47,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | 权限 | PermissionStatusModel、DevicesDock、MainWindowLayout | 门控、文案、控件绑定 | TCC、Windows/macOS 系统设置往返 |
 | 拖放发送 | DevicesDock、TransferUiRuntime | local URL 过滤、immutable intent、fake service adapter | Explorer/Finder DnD、真实 service 失败反馈 |
 | Incoming Offer | IncomingOfferModel、DevicesDock、TransferRuntimeComposition、FileTransferRuntime | localhost TLS offer、widget accept/reject、文件 SHA/row/清理 | Ask、原生窗口系统、物理双机 |
-| 传输中心/迷你条 | TransferCenterModel/Dock、TransferMiniBar | 控制 intent、状态/ETA 映射 | 真实传输期间原生交互 |
+| 传输中心/迷你条 | TransferCenterModel/Dock、TransferMiniBar、FileTransferRuntime | localhost 真实传输期间 pause/resume/cancel widget intent | retry、原生窗口与物理交互 |
 | 历史/打开 | TransferUiRuntime、TransferRuntimeComposition | receive-root 路径校验、可注入 opener、失败反馈与交错状态 | OS shell 实际打开 |
 | 设置/托盘 | MainWindowLayout、BackgroundLifecycle、QuitRegression | 保存绑定、close/minimize/quit policy | OS tray/menu bar、系统后台行为 |
 
@@ -183,7 +184,59 @@ Explorer/Finder/QDesktopServices 在真实操作系统中实际打开文件或�
 composition/model 和 offscreen Qt widget typed intent。它不证明 native Windows/macOS window system、
 Explorer/Finder、macOS TCC、物理 Win↔Mac 双机、Ask 冲突或正式发布行为；这些仍为 `NOT_RUN`。
 
-## 7. 证据边界
+## 7. 第四个纵向修复切片
+
+选择 `R4-UI-006A`，范围只包含 Transfer Center 的 pause/resume/cancel；retry 不在本切片。
+
+根因与修复：
+
+- 初始动态红测使用真实 FileTransferRuntime/TLS/trust/discovery 与非零 `.part`，receiver runtime 和
+  TransferCenterModel 均已处于 `Transferring`，但 UI 无法点击 Pause；4 KiB chunk 最终红证据为 runtime
+  `22,548,480 / 33,554,469`、model `22,470,656 / 33,554,469`、`.part=22,556,672`，日志
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a7-ui006a\ui006a-chunk4k-final.log`；
+- production 根因是 `IncomingTransferRuntime::publishProgress()` 将 receiver snapshot 状态改为
+  `Transferring`，却继承 WaitingForAcceptance 的 `canPause=false`；底层直接调用 service 的旧测试绕过
+  TransferCenterModel capability role，未暴露该缺口；
+- 修复在既有状态发布点同步 action flags：Transferring 可 pause/cancel，Completed/Failed 清理控制，
+  Resuming 禁止 pause/resume 但可 cancel，Interrupted 可 resume/cancel；没有新增接口、协议或 retry 行为。
+
+实现与验收结果：
+
+- owner：`agent/a7/r4-transfer-center-controls@361b3ba2e5aa9e675e24dc0ecdd40d4808278434`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@9c38f79e9394ed283ad5ef24a2c2710f2563a281`。两提交
+  parent 均为 `79f3469aa9e48657d426672271afaa1faa4f1b77`、tree 均为
+  `710fd6f1c280c0a7acba53d7f72c99428a842c7b`，由 cherry-pick 产生不同 commit id；
+- fixture 使用 32 MiB + 37 B 确定性文件、4 KiB negotiated chunk、16 KiB payload 和 64 KiB TLS
+  write queue；全部是 production 支持的有界配置；
+- Pause/Resume 通过当前选中 active row 的真实 QPushButton mouse click；Cancel 通过真实 More
+  InstantPopup 和 QMenu action geometry mouse click。model signal 只负责选中 row，并用 `singleShot(0)`
+  把手势排到下一事件循环，没有在 signal 栈内直接控制 service；
+- Pause 后 sender/receiver 均为 `Paused`，400 ms 内双方 completedBytes 与 `.part` size 不前进；
+  Resume 后双方 `Completed`，最终文件 SHA-256 与源文件一致，incoming/outgoing recovery state 和
+  `.part` 均清理；
+- 独立第二次传输 Cancel 后双方 typed `Cancelled`，receiver 顺序包含 `Cancelling -> Cancelled`，无最终
+  文件；默认 Keep 策略保留 `.part` 与 incoming recovery state，outgoing recovery descriptor 清除，
+  无 runtime error；
+- owner 最终 portable-temp 新增槽日志
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a7-ui006a\ui006a-portable-slot.log`（2026-09-01
+  01:31:37，64.984s）为 3/0/0、退出 0；同一控制逻辑在 portable-path 修正前的稳定性日志
+  `ui006a-final-chain.log`、`ui006a-stability-2.log`、`ui006a-stability-3.log` 均为 3/0/0，形成
+  3/3。修正后完整 Composition `composition-portable-full.log`（01:33:01，63.909s）为 12/0/0，
+  Dock `transfer-center-dock-full.log`（01:21:40）为 4/0/0，FileTransferRuntime
+  `file-transfer-runtime-full.log`（01:22:48）为 56 passed、0 failed、4 skipped，均退出 0；
+- transfer reviewer 最终按 UI-006A 原始状态/文件契约给出 GO。UI reviewer 首轮因硬编码 Windows
+  临时路径给出 NO-GO；改用 `QDir::tempPath()` 后复核 GO，未发现新的 P0/P1；
+- A0 fresh build `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui006a` 使用 VS 2022、Ninja、
+  Qt 6.10.1 与现有 x64-windows Debug vcpkg 安装树，Composition 106/106 构建退出 0，日志
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui006a-build.log`（2026-09-01 01:43:16）；新增槽
+  `relaydesk-a0-ui006a-slot.log`（01:44:46，62.552s）为 3/0/0、退出 0，完整 Composition
+  `relaydesk-a0-ui006a-composition-full.log`（01:45:51，64.585s）为 12/0/0、退出 0。
+
+`R4-UI-006A` 的 `PASS` 只覆盖 Windows 同机 localhost TLS、真实临时文件系统和 offscreen Qt
+Transfer Center widget intent。retry 仍为 `NOT_RUN`，因此 `R4-UI-006` 保持 `IN_PROGRESS`；native
+Windows/macOS window system、TCC、物理 Win↔Mac 和正式发布也不由本证据证明。
+
+## 8. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
