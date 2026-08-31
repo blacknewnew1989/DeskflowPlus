@@ -14,6 +14,8 @@
 #include "gui/dialogs/AboutDialog.h"
 #include "gui/dialogs/SettingsDialog.h"
 #include "gui/widgets/LogDock.h"
+#include "relaydesk/app/DeviceDiscoveryRuntime.h"
+#include "relaydesk/app/PairingTrustRuntime.h"
 #include "relaydesk/app/TransferRuntimeComposition.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
 #include "relaydesk/transfer/TransferSettings.h"
@@ -36,6 +38,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QPointer>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSettings>
@@ -110,6 +113,7 @@ private Q_SLOTS:
   void fileTransferSettingsFitWithinDialog();
   void fileTransferSettingsPersistAndReopen();
   void fileTransferSettingsEntryAppliesToRuntime();
+  void transferRuntimeIsDestroyedBeforeReferencedDependencies();
   void hiddenWindowKeepsCurrentSessionGeometry();
   void restoredSmallGeometryIsClampedToMinimumSize();
   void trayIconLoadsEmbeddedWindowsFallback();
@@ -525,6 +529,27 @@ void MainWindowLayoutTests::fileTransferSettingsEntryAppliesToRuntime()
   QCOMPARE(persisted.settings.receiveRoot, QDir::cleanPath(receiveRoot));
   QCOMPARE(persisted.settings.incomingPolicy, ::relaydesk::transfer::IncomingTransferPolicy::AutoAcceptTrusted);
   QCOMPARE(persisted.settings.defaultConflictPolicy, ::relaydesk::transfer::ConflictPolicy::Overwrite);
+}
+
+void MainWindowLayoutTests::transferRuntimeIsDestroyedBeforeReferencedDependencies()
+{
+  auto window = std::make_unique<MainWindow>();
+  auto *transfer = window->findChild<deskflow::relaydesk::TransferRuntimeComposition *>();
+  auto *pairing = window->findChild<deskflow::relaydesk::PairingTrustRuntime *>();
+  auto *discovery = window->findChild<deskflow::relaydesk::DeviceDiscoveryRuntime *>();
+  QVERIFY(transfer != nullptr);
+  QVERIFY(pairing != nullptr);
+  QVERIFY(discovery != nullptr);
+
+  const QPointer<deskflow::relaydesk::PairingTrustRuntime> pairingGuard(pairing);
+  const QPointer<deskflow::relaydesk::DeviceDiscoveryRuntime> discoveryGuard(discovery);
+  bool dependenciesAliveWhenTransferDestroyed = false;
+  connect(transfer, &QObject::destroyed, this, [&] {
+    dependenciesAliveWhenTransferDestroyed = !pairingGuard.isNull() && !discoveryGuard.isNull();
+  });
+
+  window.reset();
+  QVERIFY(dependenciesAliveWhenTransferDestroyed);
 }
 
 void MainWindowLayoutTests::restoredSmallGeometryIsClampedToMinimumSize()
