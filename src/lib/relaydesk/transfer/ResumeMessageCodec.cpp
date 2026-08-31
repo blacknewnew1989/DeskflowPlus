@@ -312,9 +312,12 @@ ResumeResponseBuildResult ResumeNegotiator::buildResponse(const ResumeStore &sto
   }
 
   QList<ResumeFileOffset> files;
-  files.reserve(loaded.state->files.size());
+  files.reserve(loaded.state->files.size() + loaded.state->resolvedTargets.size());
   for (const auto &file : loaded.state->files) {
     files.append({.fileId = file.fileId, .durableOffset = file.durableOffset});
+  }
+  for (const auto &target : loaded.state->resolvedTargets) {
+    files.append({.fileId = target.fileId, .durableOffset = target.size});
   }
   std::sort(files.begin(), files.end(), [](const ResumeFileOffset &left, const ResumeFileOffset &right) {
     return left.fileId.toBytes() < right.fileId.toBytes();

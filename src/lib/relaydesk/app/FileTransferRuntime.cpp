@@ -345,6 +345,17 @@ FileTransferRuntime::FileTransferRuntime(
         },
         this
     );
+    m_incoming->configureRecovery(
+        m_localDeviceId,
+        [this](const DeviceId &deviceId) -> std::optional<QByteArray> {
+          const auto trusted = m_trustedDevices.find(deviceId);
+          if (!trusted.has_value() || trusted->revoked) {
+            return std::nullopt;
+          }
+          return trusted->fingerprintSha256;
+        },
+        m_recoveryStore.get()
+    );
   }
   auto *incoming = m_incoming.get();
   if (incoming != nullptr) {
@@ -398,6 +409,11 @@ FileTransferRuntime::FileTransferRuntime(
           );
         }
     );
+    connect(incoming, &IncomingTransferRuntime::recoveryIssue, this, [this](QString diagnostic) {
+      Q_EMIT errorOccurred(
+          FileTransferRuntimeError::ProtocolFailed, FileTlsError::ProtocolError, std::move(diagnostic)
+      );
+    });
     connect(
         incoming, &IncomingTransferRuntime::responseReady, this,
         [this](const DeviceId &peer, const Frame &frame) {
@@ -519,6 +535,9 @@ bool FileTransferRuntime::start(QString *diagnostic)
   }
   Q_EMIT started(m_listener->serverPort());
   startOutgoingRecoveryScan();
+  if (m_incoming != nullptr) {
+    m_incoming->startRecoveryScan();
+  }
   return true;
 }
 
@@ -533,6 +552,9 @@ void FileTransferRuntime::stop()
     m_outgoingHydration->scanStarted = false;
     m_outgoingHydration->buildRunning = false;
     m_outgoingHydration->pending.clear();
+  }
+  if (m_incoming != nullptr) {
+    m_incoming->stopRecoveryScan();
   }
 
   for (auto *session : std::as_const(m_outgoing)) {

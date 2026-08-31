@@ -11,8 +11,11 @@
 #include "relaydesk/transfer/ManifestPageCodec.h"
 #include "relaydesk/transfer/ResumeMessageCodec.h"
 #include "relaydesk/transfer/TransferControlStateMachine.h"
+#include "relaydesk/transfer/TransferRecoveryStore.h"
 
 #include <QDir>
+#include <QCryptographicHash>
+#include <QFile>
 #include <QFutureWatcher>
 #include <QFileInfo>
 #include <QMutex>
@@ -22,6 +25,7 @@
 #include <QStorageInfo>
 #include <QThread>
 #include <QThreadPool>
+#include <QTimer>
 #include <QWaitCondition>
 #include <QtConcurrentRun>
 
@@ -40,7 +44,8 @@ struct IncomingTransferRuntime::Session
       ::relaydesk::transfer::NegotiatedCapabilities capabilities
   )
       : peer(std::move(peerDeviceId)), peerDisplayName(std::move(peerName)), peerTrusted(trusted),
-        peerAllowsAutoAccept(allowsAutoAccept), offer(std::move(incomingOffer)), stateMachine(std::move(capabilities))
+        peerAllowsAutoAccept(allowsAutoAccept), offer(std::move(incomingOffer)), capabilities(std::move(capabilities)),
+        stateMachine(this->capabilities)
   {
   }
 
@@ -49,6 +54,7 @@ struct IncomingTransferRuntime::Session
   bool peerTrusted = false;
   bool peerAllowsAutoAccept = false;
   ::relaydesk::transfer::TransferOffer offer;
+  ::relaydesk::transfer::NegotiatedCapabilities capabilities;
   ::relaydesk::transfer::TransferOfferStateMachine stateMachine;
   bool acceptPreflightPending = false;
   ::relaydesk::transfer::ReceiveOptions receiveOptions;
@@ -79,6 +85,14 @@ struct IncomingTransferRuntime::AcceptPreflightResult
   quint64 freeBytes = 0;
 };
 
+struct IncomingTransferRuntime::RecoveryHydrationState
+{
+  QList<::relaydesk::transfer::IncomingRecoveryState> pending;
+  quint64 epoch = 0;
+  bool scanStarted = false;
+  bool validationRunning = false;
+};
+
 struct CancelCleanupResult
 {
   QString diagnostic;
@@ -86,6 +100,19 @@ struct CancelCleanupResult
   [[nodiscard]] bool ok() const noexcept
   {
     return diagnostic.isEmpty();
+  }
+};
+
+struct IncomingRecoveryValidationResult
+{
+  std::optional<::relaydesk::transfer::ResumeState> resumeState;
+  quint64 completedBytes = 0;
+  quint64 completedFiles = 0;
+  QString diagnostic;
+
+  [[nodiscard]] bool ok() const noexcept
+  {
+    return resumeState.has_value() && diagnostic.isEmpty();
   }
 };
 
@@ -122,6 +149,23 @@ bool isReceivePipelineActive(::relaydesk::transfer::TransferState state)
          state == ::relaydesk::transfer::TransferState::Transferring ||
          state == ::relaydesk::transfer::TransferState::Paused ||
          state == ::relaydesk::transfer::TransferState::Resuming;
+}
+
+::relaydesk::transfer::IncomingConflictDecision defaultConflictDecision(
+    ::relaydesk::transfer::ConflictPolicy policy
+)
+{
+  using namespace ::relaydesk::transfer;
+  switch (policy) {
+  case ConflictPolicy::AutoRename:
+    return IncomingConflictDecision::AutoRename;
+  case ConflictPolicy::Skip:
+    return IncomingConflictDecision::Skip;
+  case ConflictPolicy::Overwrite:
+  case ConflictPolicy::Ask:
+    return IncomingConflictDecision::Overwrite;
+  }
+  return IncomingConflictDecision::Overwrite;
 }
 
 std::optional<::relaydesk::transfer::TransferId> decodedDataTransferId(
@@ -240,12 +284,15 @@ public:
       ::relaydesk::transfer::ReceiveOptions options, IPlatformFileSafety &fileSafety,
       QThreadPool &pool,
       std::optional<::relaydesk::transfer::ResumeState> resumeState = std::nullopt,
-      quint64 generation = 0
+      quint64 generation = 0,
+      std::optional<::relaydesk::transfer::IncomingRecoveryState> recoveryDescriptor = std::nullopt,
+      ::relaydesk::transfer::TransferRecoveryStore *recoveryStore = nullptr
   )
       : m_runtime(&runtime), m_peer(std::move(peer)), m_offer(std::move(offer)),
         m_options(std::move(options)), m_fileSafety(fileSafety),
         m_resumeStore(QDir(m_options.destinationRoot).filePath(QStringLiteral(".incoming/resume-active"))),
-        m_resumeState(std::move(resumeState)), m_generation(generation), m_reassembler(
+        m_resumeState(std::move(resumeState)), m_generation(generation),
+        m_recoveryDescriptor(std::move(recoveryDescriptor)), m_recoveryStore(recoveryStore), m_reassembler(
             m_offer.transferId, m_offer.manifestPageCount,
             m_offer.fileCount + m_offer.directoryCount, m_offer.manifestSha256
         )
@@ -373,6 +420,9 @@ private:
       if (m_manifestReady) {
         m_manifestReady = prepareResumeState(diagnostic);
       }
+      if (m_manifestReady) {
+        m_manifestReady = persistRecoveryDescriptor(diagnostic);
+      }
       if (!m_manifestReady) {
         fail(TransferErrorCode::InternalError, diagnostic);
       }
@@ -416,6 +466,7 @@ private:
           .manifestSha256 = m_offer.manifestSha256,
           .conflictPolicy = m_options.conflictPolicy,
       };
+      m_activeDecision = defaultConflictDecision(m_options.conflictPolicy);
       const auto *resumeFile = resumeFileFor(begin->fileId);
       const QString partPath = QDir(m_options.destinationRoot).filePath(
           QStringLiteral(".incoming/%1/%2.part")
@@ -436,6 +487,7 @@ private:
           });
           return false;
         }
+        m_activeDecision = *decision;
         resolved = m_receiver->resolveConflict(*decision);
       }
       if (!resolved.ok()) {
@@ -444,6 +496,7 @@ private:
         return false;
       }
       if (m_receiver->disposition() == IncomingFileDisposition::Skip) {
+        m_activeDecision = IncomingConflictDecision::Skip;
         m_receiver.reset();
         m_skippedBegin = *begin;
         m_skippedEntry = *entry;
@@ -516,7 +569,7 @@ private:
                 .diagnostic = QStringLiteral("TARGET_SKIPPED"),
             },
         };
-        if (!persistCompletedFile(end->fileId, diagnostic)) {
+        if (!persistCompletedFile(end->fileId, {}, IncomingConflictDecision::Skip, diagnostic)) {
           fail(TransferErrorCode::InternalError, diagnostic);
           return false;
         }
@@ -544,7 +597,7 @@ private:
                                  result.fileResult.has_value() &&
                                  result.fileResult->code == FileResultCode::TargetExists;
         if (skippedRace && snapshot.fileId.has_value() &&
-            persistCompletedFile(*snapshot.fileId, diagnostic)) {
+            persistCompletedFile(*snapshot.fileId, {}, IncomingConflictDecision::Skip, diagnostic)) {
           sendFileResult(result);
           m_completedBytes += snapshot.expectedSize;
           ++m_completedFiles;
@@ -562,7 +615,10 @@ private:
         return false;
       }
       const auto snapshot = m_receiver->snapshot();
-      if (!persistCompletedFile(snapshot.fileId.value(), diagnostic)) {
+      if (!persistCompletedFile(
+              snapshot.fileId.value(), snapshot.committedPath,
+              m_activeDecision.value_or(defaultConflictDecision(m_options.conflictPolicy)), diagnostic
+          )) {
         fail(TransferErrorCode::InternalError, diagnostic);
         return false;
       }
@@ -678,12 +734,30 @@ private:
       if (entry.type != ManifestEntryType::File) {
         continue;
       }
+      const auto *resolved = resolvedTargetFor(entry.id);
+      if (resolved != nullptr) {
+        if (resolved->size != entry.size || resolved->sha256 != entry.sha256 ||
+            resolved->decision == IncomingConflictDecision::CancelTransfer) {
+          diagnostic = QStringLiteral("stored resolved target does not match the accepted manifest");
+          return false;
+        }
+        m_completedBytes += entry.size;
+        ++m_completedFiles;
+        continue;
+      }
       const auto *file = resumeFileFor(entry.id);
       const QString expectedPart = QStringLiteral(".incoming/%1/%2.part")
                                        .arg(m_offer.transferId.toString(), entry.id.toString());
       if (file == nullptr) {
         if (entry.size == 0) {
-          ++m_completedFiles;
+          m_resumeState->files.append({
+              .fileId = entry.id,
+              .relativeProtocolPath = entry.relativeProtocolPath,
+              .totalBytes = 0,
+              .partRelativePath =
+                  QStringLiteral(".incoming/%1/%2.part")
+                      .arg(m_offer.transferId.toString(), entry.id.toString()),
+          });
           continue;
         }
         diagnostic = QStringLiteral("stored resume state is missing a non-empty manifest file");
@@ -711,25 +785,104 @@ private:
     return true;
   }
 
+  [[nodiscard]] bool persistRecoveryDescriptor(QString &diagnostic)
+  {
+    using namespace ::relaydesk::transfer;
+
+    if (!m_recoveryDescriptor.has_value()) {
+      return true;
+    }
+    if (m_recoveryStore == nullptr) {
+      diagnostic = QStringLiteral("incoming recovery store is unavailable");
+      return false;
+    }
+    QList<PreparedManifestEntry> prepared;
+    prepared.reserve(m_entries.size());
+    for (const auto &entry : std::as_const(m_entries)) {
+      const auto path = PathPolicy::validateRelative(entry.relativeProtocolPath);
+      if (!path.ok) {
+        diagnostic = path.diagnostic;
+        return false;
+      }
+      prepared.append({
+          .canonicalSourcePath = QDir::rootPath(),
+          .protocolCollisionKey = path.collisionKey,
+          .entry = entry,
+      });
+    }
+    const TransferManifestSummary summary{
+        .id = m_offer.transferId,
+        .displayName = m_offer.displayName,
+        .totalBytes = m_offer.totalBytes,
+        .fileCount = m_offer.fileCount,
+        .directoryCount = m_offer.directoryCount,
+        .canonicalSha256 = m_offer.manifestSha256,
+    };
+    const auto plan = ManifestPageCodec::plan({.entries = prepared, .summary = summary});
+    if (!plan.ok() || plan.plan->pageCount() != m_offer.manifestPageCount) {
+      diagnostic = plan.ok() ? QStringLiteral("incoming recovery page count changed") : plan.diagnostic;
+      return false;
+    }
+    m_recoveryDescriptor->entries = m_entries;
+    m_recoveryDescriptor->pagePlan = {
+        .entryCount = plan.plan->entryCount,
+        .pageCount = plan.plan->pageCount(),
+        .totalMetadataBytes = plan.plan->totalMetadataBytes,
+    };
+    const auto saved = m_recoveryStore->saveIncoming(*m_recoveryDescriptor);
+    if (!saved.ok()) {
+      diagnostic = saved.diagnostic;
+      return false;
+    }
+    return true;
+  }
+
   [[nodiscard]] bool persistCompletedFile(
-      const ::relaydesk::transfer::FileId &fileId, QString &diagnostic
+      const ::relaydesk::transfer::FileId &fileId, QString targetPath,
+      ::relaydesk::transfer::IncomingConflictDecision decision, QString &diagnostic
   )
   {
+    using namespace ::relaydesk::transfer;
+
     auto *resumeFile = resumeFileFor(fileId);
-    if (resumeFile == nullptr) {
+    const auto entry = entryFor(fileId);
+    if (resumeFile == nullptr || !entry.has_value() || decision == IncomingConflictDecision::CancelTransfer) {
       diagnostic = QStringLiteral("completed file is absent from resume state");
       return false;
     }
-    if (resumeFile->totalBytes == 0) {
-      for (auto iterator = m_resumeState->files.begin(); iterator != m_resumeState->files.end(); ++iterator) {
-        if (iterator->fileId == fileId) {
-          m_resumeState->files.erase(iterator);
-          break;
-        }
+    QString relativeTargetPath;
+    if (decision != IncomingConflictDecision::Skip) {
+      relativeTargetPath = std::move(targetPath);
+      if (QDir::isAbsolutePath(relativeTargetPath)) {
+        relativeTargetPath = QDir(m_options.destinationRoot).relativeFilePath(relativeTargetPath);
       }
-    } else {
-      resumeFile->durableOffset = resumeFile->totalBytes;
+      relativeTargetPath.replace(QLatin1Char('\\'), QLatin1Char('/'));
+      const auto checked = PathPolicy::validateRelative(relativeTargetPath);
+      if (!checked.ok) {
+        diagnostic = checked.diagnostic;
+        return false;
+      }
+      relativeTargetPath = checked.normalized;
     }
+    for (const auto &resolved : std::as_const(m_resumeState->resolvedTargets)) {
+      if (resolved.fileId == fileId) {
+        diagnostic = QStringLiteral("completed file already has a resolved target");
+        return false;
+      }
+    }
+    for (auto iterator = m_resumeState->files.begin(); iterator != m_resumeState->files.end(); ++iterator) {
+      if (iterator->fileId == fileId) {
+        m_resumeState->files.erase(iterator);
+        break;
+      }
+    }
+    m_resumeState->resolvedTargets.append({
+        .fileId = fileId,
+        .relativeTargetPath = std::move(relativeTargetPath),
+        .size = entry->size,
+        .sha256 = entry->sha256,
+        .decision = decision,
+    });
     m_resumeState->updatedUtc = QDateTime::currentDateTimeUtc();
     const auto persisted = m_resumeStore.save(*m_resumeState);
     if (!persisted.ok()) {
@@ -761,6 +914,24 @@ private:
   resumeFileFor(const ::relaydesk::transfer::FileId &fileId) const
   {
     return const_cast<ReceivePipeline *>(this)->resumeFileFor(fileId);
+  }
+
+  [[nodiscard]] const ::relaydesk::transfer::ResolvedTargetState *
+  resolvedTargetFor(const ::relaydesk::transfer::FileId &fileId) const
+  {
+    if (!m_resumeState.has_value()) {
+      return nullptr;
+    }
+    const ::relaydesk::transfer::ResolvedTargetState *matching = nullptr;
+    for (const auto &target : m_resumeState->resolvedTargets) {
+      if (target.fileId == fileId) {
+        if (matching != nullptr) {
+          return nullptr;
+        }
+        matching = &target;
+      }
+    }
+    return matching;
   }
 
   void sendCheckpoint(const ::relaydesk::transfer::FileCheckpointMessage &checkpoint)
@@ -839,6 +1010,13 @@ private:
     if (!removed.ok()) {
       fail(::relaydesk::transfer::TransferErrorCode::InternalError, removed.diagnostic);
       return;
+    }
+    if (m_recoveryStore != nullptr) {
+      const auto recoveryRemoved = m_recoveryStore->removeIncoming(m_offer.transferId);
+      if (!recoveryRemoved.ok()) {
+        fail(::relaydesk::transfer::TransferErrorCode::InternalError, recoveryRemoved.diagnostic);
+        return;
+      }
     }
     const auto completedRelativePath =
         m_completedAtReceiveRoot ? QStringLiteral(".") : m_completedRelativePath;
@@ -936,6 +1114,8 @@ private:
   ::relaydesk::transfer::ResumeStore m_resumeStore;
   std::optional<::relaydesk::transfer::ResumeState> m_resumeState;
   quint64 m_generation = 0;
+  std::optional<::relaydesk::transfer::IncomingRecoveryState> m_recoveryDescriptor;
+  ::relaydesk::transfer::TransferRecoveryStore *m_recoveryStore = nullptr;
   QString m_completedRelativePath;
   bool m_completedAtReceiveRoot = false;
   ::relaydesk::transfer::ManifestPageReassembler m_reassembler;
@@ -943,6 +1123,7 @@ private:
   std::unique_ptr<IncomingFileReceiverWorker> m_receiver;
   std::optional<::relaydesk::transfer::FileBeginMessage> m_skippedBegin;
   std::optional<::relaydesk::transfer::ManifestEntry> m_skippedEntry;
+  std::optional<::relaydesk::transfer::IncomingConflictDecision> m_activeDecision;
   quint64 m_skippedBytes = 0;
   quint64 m_skippedNextSequence = 0;
   quint64 m_completedBytes = 0;
@@ -965,6 +1146,286 @@ IncomingTransferRuntime::IncomingTransferRuntime(
 )
     : QObject(parent), m_fileSafety(fileSafety), m_workerPool(workerPool), m_trustChecker(std::move(trustChecker))
 {
+}
+
+void IncomingTransferRuntime::configureRecovery(
+    DeviceId localDeviceId, PeerFingerprintProvider peerFingerprintProvider,
+    ::relaydesk::transfer::TransferRecoveryStore *recoveryStore
+)
+{
+  m_localDeviceId = std::move(localDeviceId);
+  m_peerFingerprintProvider = std::move(peerFingerprintProvider);
+  m_recoveryStore = recoveryStore;
+  if (m_recoveryStore != nullptr) {
+    m_recoveryHydration = std::make_unique<RecoveryHydrationState>();
+  }
+}
+
+void IncomingTransferRuntime::startRecoveryScan()
+{
+  using namespace ::relaydesk::transfer;
+
+  if (m_recoveryStore == nullptr || m_recoveryHydration == nullptr || m_recoveryHydration->scanStarted) {
+    return;
+  }
+  m_recoveryHydration->scanStarted = true;
+  const quint64 epoch = ++m_recoveryHydration->epoch;
+  auto *store = m_recoveryStore;
+  auto *watcher = new QFutureWatcher<TransferRecoveryStoreScanResult<IncomingRecoveryState>>(this);
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, epoch, watcher] {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    if (m_recoveryHydration == nullptr || epoch != m_recoveryHydration->epoch) {
+      return;
+    }
+    if (!result.ok()) {
+      Q_EMIT recoveryIssue(QStringLiteral("Incoming recovery scan failed: %1").arg(result.diagnostic));
+      return;
+    }
+    for (const auto &issue : std::as_const(result.issues)) {
+      Q_EMIT recoveryIssue(
+          QStringLiteral("Incoming recovery state was skipped (%1): %2").arg(issue.path, issue.diagnostic)
+      );
+    }
+    m_recoveryHydration->pending = std::move(result.states);
+    hydrateNextRecoveryState();
+  });
+  watcher->setFuture(QtConcurrent::run(&m_workerPool, [store] { return store->scanIncoming(); }));
+}
+
+void IncomingTransferRuntime::stopRecoveryScan()
+{
+  if (m_recoveryHydration == nullptr) {
+    return;
+  }
+  ++m_recoveryHydration->epoch;
+  m_recoveryHydration->scanStarted = false;
+  m_recoveryHydration->validationRunning = false;
+  m_recoveryHydration->pending.clear();
+}
+
+void IncomingTransferRuntime::hydrateNextRecoveryState()
+{
+  using namespace ::relaydesk::transfer;
+
+  if (m_recoveryHydration == nullptr || m_recoveryHydration->validationRunning ||
+      m_recoveryHydration->pending.isEmpty()) {
+    return;
+  }
+  auto state = std::make_shared<IncomingRecoveryState>(m_recoveryHydration->pending.takeFirst());
+  if (m_sessions.contains(state->transferId)) {
+    QTimer::singleShot(0, this, [this] { hydrateNextRecoveryState(); });
+    return;
+  }
+  const auto fingerprint = m_peerFingerprintProvider ? m_peerFingerprintProvider(state->peerDeviceId) : std::nullopt;
+  if (!m_localDeviceId.has_value() || state->localDeviceId != *m_localDeviceId ||
+      (m_trustChecker && !m_trustChecker(state->peerDeviceId)) || !fingerprint.has_value() ||
+      *fingerprint != state->peerFingerprintSha256) {
+    Q_EMIT recoveryIssue(QStringLiteral("Incoming recovery state failed local identity or trust validation"));
+    QTimer::singleShot(0, this, [this] { hydrateNextRecoveryState(); });
+    return;
+  }
+  const quint64 epoch = m_recoveryHydration->epoch;
+  auto *fileSafety = &m_fileSafety;
+  m_recoveryHydration->validationRunning = true;
+  auto *watcher = new QFutureWatcher<IncomingRecoveryValidationResult>(this);
+  connect(watcher, &QFutureWatcherBase::finished, this, [this, epoch, state, watcher] {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    if (m_recoveryHydration == nullptr || epoch != m_recoveryHydration->epoch) {
+      return;
+    }
+    m_recoveryHydration->validationRunning = false;
+    const auto fingerprint = m_peerFingerprintProvider ? m_peerFingerprintProvider(state->peerDeviceId) : std::nullopt;
+    if (!result.ok() || !fingerprint.has_value() || *fingerprint != state->peerFingerprintSha256 ||
+        (m_trustChecker && !m_trustChecker(state->peerDeviceId))) {
+      Q_EMIT recoveryIssue(
+          result.ok() ? QStringLiteral("Incoming recovery peer changed during validation")
+                      : QStringLiteral("Incoming recovery state was not hydrated: %1").arg(result.diagnostic)
+      );
+      QTimer::singleShot(0, this, [this] { hydrateNextRecoveryState(); });
+      return;
+    }
+    auto *session = new Session(
+        state->peerDeviceId, state->peerDisplayName, true, false, state->offer,
+        state->negotiatedCapabilities
+    );
+    const auto received = session->stateMachine.receiveIncoming(state->offer);
+    const bool accepted = received.ok() && session->stateMachine.acceptIncoming(
+                                              state->receiveOptions.conflictPolicy,
+                                              logicalDestination(state->receiveOptions.destinationRoot),
+                                              std::numeric_limits<quint64>::max(),
+                                              state->receiveOptions.acceptanceOrigin
+                                          ).ok();
+    if (!accepted) {
+      delete session;
+      Q_EMIT recoveryIssue(QStringLiteral("Incoming recovery state could not restore accepted offer"));
+      QTimer::singleShot(0, this, [this] { hydrateNextRecoveryState(); });
+      return;
+    }
+    session->receiveOptions = state->receiveOptions;
+    session->resumeNegotiated = state->negotiatedCapabilities.features.contains(QStringLiteral("resume.v1"));
+    session->pipelineSnapshot.state = TransferState::Interrupted;
+    session->pipelineSnapshot.progress.completedBytes = result.completedBytes;
+    session->pipelineSnapshot.progress.completedFiles = result.completedFiles;
+    session->pipelineSnapshot.canPause = false;
+    session->pipelineSnapshot.canResume = true;
+    session->pipelineSnapshot.canCancel = true;
+    m_sessions.insert(state->transferId, session);
+    Q_EMIT transferAdded(session->pipelineSnapshot);
+    QTimer::singleShot(0, this, [this] { hydrateNextRecoveryState(); });
+  });
+  watcher->setFuture(QtConcurrent::run(&m_workerPool, [state, fileSafety] {
+    IncomingRecoveryValidationResult result;
+    const auto safety = fileSafety->verifyReceiveRoot({.receiveRoot = state->receiveOptions.destinationRoot});
+    if (!safety.ok()) {
+      result.diagnostic = safety.diagnostic;
+      return result;
+    }
+    ResumeStore store(
+        QDir(state->receiveOptions.destinationRoot).filePath(QStringLiteral(".incoming/resume-active"))
+    );
+    const QString resumeStatePath = store.statePath(state->transferId);
+    const auto resumeNoLinks = fileSafety->verifyNoLinkTraversal(
+        {.receiveRoot = state->receiveOptions.destinationRoot, .candidatePath = resumeStatePath}
+    );
+    if (!resumeNoLinks.ok()) {
+      result.diagnostic = resumeNoLinks.diagnostic;
+      return result;
+    }
+    auto loaded = store.load(state->transferId);
+    if (!loaded.ok() || loaded.state->peerDeviceId != state->peerDeviceId ||
+        loaded.state->manifestSha256 != state->offer.manifestSha256 ||
+        loaded.state->direction != ResumeDirection::Receiving) {
+      result.diagnostic = loaded.ok() ? QStringLiteral("incoming resume state binding changed") : loaded.diagnostic;
+      return result;
+    }
+    if (loaded.schemaVersion == kLegacyResumeStateSchemaVersion) {
+      result.diagnostic = QStringLiteral("legacy v1 resume state is not eligible for process hydration");
+      return result;
+    }
+    QHash<QByteArray, qsizetype> fileIndexes;
+    for (qsizetype index = 0; index < loaded.state->files.size(); ++index) {
+      auto &file = loaded.state->files[index];
+      const QByteArray id = file.fileId.toBytes();
+      if (fileIndexes.contains(id)) {
+        result.diagnostic = QStringLiteral("incoming resume state has duplicate files");
+        return result;
+      }
+      fileIndexes.insert(id, index);
+    }
+    QHash<QByteArray, qsizetype> targetIndexes;
+    for (qsizetype index = 0; index < loaded.state->resolvedTargets.size(); ++index) {
+      const QByteArray id = loaded.state->resolvedTargets[index].fileId.toBytes();
+      if (targetIndexes.contains(id) || fileIndexes.contains(id)) {
+        result.diagnostic = QStringLiteral("incoming resume state has duplicate resolved targets");
+        return result;
+      }
+      targetIndexes.insert(id, index);
+    }
+    qsizetype matchedFiles = 0;
+    qsizetype matchedTargets = 0;
+    bool incompleteSeen = false;
+    for (const auto &entry : std::as_const(state->entries)) {
+      if (entry.type != ManifestEntryType::File) {
+        continue;
+      }
+      const auto targetIndex = targetIndexes.constFind(entry.id.toBytes());
+      const ResolvedTargetState *resolved = targetIndex == targetIndexes.cend()
+                                                  ? nullptr
+                                                  : &loaded.state->resolvedTargets[*targetIndex];
+      if (resolved != nullptr) {
+        ++matchedTargets;
+        if (resolved->size != entry.size || resolved->sha256 != entry.sha256 ||
+            resolved->decision == IncomingConflictDecision::CancelTransfer) {
+          result.diagnostic = QStringLiteral("incoming resolved target binding changed");
+          return result;
+        }
+        if (resolved->decision != IncomingConflictDecision::Skip) {
+          QString absoluteTarget;
+          const auto joined = PathPolicy::joinLexicallyUnderRoot(
+              state->receiveOptions.destinationRoot, resolved->relativeTargetPath, absoluteTarget
+          );
+          if (!joined.ok) {
+            result.diagnostic = joined.diagnostic;
+            return result;
+          }
+          const auto noLinks = fileSafety->verifyNoLinkTraversal(
+              {.receiveRoot = state->receiveOptions.destinationRoot, .candidatePath = absoluteTarget}
+          );
+          QFileInfo targetInfo(absoluteTarget);
+          if (!noLinks.ok() || !targetInfo.exists() || targetInfo.isSymLink() || !targetInfo.isFile() ||
+              targetInfo.size() < 0 || static_cast<quint64>(targetInfo.size()) != resolved->size) {
+            result.diagnostic = noLinks.ok() ? QStringLiteral("incoming resolved target is missing or changed")
+                                             : noLinks.diagnostic;
+            return result;
+          }
+          QFile target(absoluteTarget);
+          if (!target.open(QIODevice::ReadOnly)) {
+            result.diagnostic = target.errorString();
+            return result;
+          }
+          QCryptographicHash hash(QCryptographicHash::Sha256);
+          while (!target.atEnd()) {
+            const QByteArray chunk = target.read(1024 * 1024);
+            if (chunk.isEmpty() && target.error() != QFileDevice::NoError) {
+              result.diagnostic = target.errorString();
+              return result;
+            }
+            hash.addData(chunk);
+          }
+          if (hash.result() != resolved->sha256) {
+            result.diagnostic = QStringLiteral("incoming resolved target hash changed");
+            return result;
+          }
+        }
+        result.completedBytes += entry.size;
+        ++result.completedFiles;
+        continue;
+      }
+      const auto fileIndex = fileIndexes.constFind(entry.id.toBytes());
+      ResumeFileState *matching =
+          fileIndex == fileIndexes.cend() ? nullptr : &loaded.state->files[*fileIndex];
+      if (matching == nullptr) {
+        result.diagnostic = QStringLiteral("incoming resume state is missing a file");
+        return result;
+      }
+      ++matchedFiles;
+      if (matching->relativeProtocolPath != entry.relativeProtocolPath || matching->totalBytes != entry.size ||
+          matching->durableOffset > entry.size || (incompleteSeen && matching->durableOffset != 0)) {
+        result.diagnostic = QStringLiteral("incoming resume offsets changed");
+        return result;
+      }
+      incompleteSeen = true;
+      if (matching->durableOffset != 0) {
+        QString absolutePart;
+        const auto joined = PathPolicy::joinLexicallyUnderRoot(
+            state->receiveOptions.destinationRoot, matching->partRelativePath, absolutePart
+        );
+        const auto noLinks = joined.ok ? fileSafety->verifyNoLinkTraversal(
+                                            {.receiveRoot = state->receiveOptions.destinationRoot,
+                                             .candidatePath = absolutePart}
+                                        )
+                                       : FileSafetyResult{
+                                             .error = FileSafetyError::DestinationInvalid,
+                                             .diagnostic = joined.diagnostic,
+                                         };
+        const QFileInfo part(absolutePart);
+        if (!noLinks.ok() || !part.exists() || part.isSymLink() || part.size() < 0 ||
+            static_cast<quint64>(part.size()) != matching->durableOffset) {
+          result.diagnostic = noLinks.ok() ? QStringLiteral("incoming partial file does not match durable offset")
+                                           : noLinks.diagnostic;
+          return result;
+        }
+      }
+    }
+    if (matchedFiles != loaded.state->files.size() || matchedTargets != loaded.state->resolvedTargets.size()) {
+      result.diagnostic = QStringLiteral("incoming resume state has a different file set");
+      return result;
+    }
+    result.resumeState = std::move(*loaded.state);
+    return result;
+  }));
 }
 
 IncomingTransferRuntime::~IncomingTransferRuntime()
@@ -1253,6 +1714,7 @@ bool IncomingTransferRuntime::receiveCommand(
   publish();
 
   const QString destinationRoot = session->receiveOptions.destinationRoot;
+  auto *recoveryStore = m_recoveryStore;
   const auto pipelineHolder = std::make_shared<std::shared_ptr<ReceivePipeline>>(pipeline);
   auto *watcher = new QFutureWatcher<CancelCleanupResult>(this);
   connect(watcher, &QFutureWatcherBase::finished, this, [this, transferId, generation, watcher]() {
@@ -1277,7 +1739,8 @@ bool IncomingTransferRuntime::receiveCommand(
     Q_EMIT transferChanged(current->pipelineSnapshot);
   });
   watcher->setFuture(QtConcurrent::run(
-      &m_workerPool, [pipelineHolder, destinationRoot, transferId, keepPartial = cancel.keepPartial]() {
+      &m_workerPool,
+      [pipelineHolder, destinationRoot, transferId, keepPartial = cancel.keepPartial, recoveryStore]() {
         (*pipelineHolder)->waitForFinished();
         pipelineHolder->reset();
         CancelCleanupResult result;
@@ -1295,6 +1758,13 @@ bool IncomingTransferRuntime::receiveCommand(
         const auto removed = store.remove(transferId);
         if (!removed.ok()) {
           result.diagnostic = removed.diagnostic;
+          return result;
+        }
+        if (recoveryStore != nullptr) {
+          const auto recoveryRemoved = recoveryStore->removeIncoming(transferId);
+          if (!recoveryRemoved.ok()) {
+            result.diagnostic = recoveryRemoved.diagnostic;
+          }
         }
         return result;
       }
@@ -1460,6 +1930,14 @@ bool IncomingTransferRuntime::receiveResumeQuery(
   ResumeStore store(
       QDir(session->receiveOptions.destinationRoot).filePath(QStringLiteral(".incoming/resume-active"))
   );
+  const QString resumeStatePath = store.statePath(query->transferId);
+  const auto resumeNoLinks = m_fileSafety.verifyNoLinkTraversal(
+      {.receiveRoot = session->receiveOptions.destinationRoot, .candidatePath = resumeStatePath}
+  );
+  if (!resumeNoLinks.ok()) {
+    setDiagnostic(diagnostic, resumeNoLinks.diagnostic);
+    return false;
+  }
   const auto loaded = store.load(query->transferId);
   if (!loaded.ok() || loaded.state->peerDeviceId != peerDeviceId) {
     setDiagnostic(
@@ -1490,7 +1968,7 @@ bool IncomingTransferRuntime::receiveResumeQuery(
   session->pipelineSnapshot.state = TransferState::Resuming;
   session->pipeline = std::make_shared<ReceivePipeline>(
       *this, session->peer, session->offer, session->receiveOptions, m_fileSafety,
-      m_workerPool, *loaded.state, session->pipelineGeneration
+      m_workerPool, *loaded.state, session->pipelineGeneration, std::nullopt, m_recoveryStore
   );
   Q_EMIT transferChanged(session->pipelineSnapshot);
   Q_EMIT responseReady(peerDeviceId, std::move(response));
@@ -1531,7 +2009,8 @@ QList<::relaydesk::transfer::TransferSnapshot> IncomingTransferRuntime::activeTr
   for (const auto *session : m_sessions) {
     if (session != nullptr &&
         (session->pipeline != nullptr ||
-         session->pipelineSnapshot.state == ::relaydesk::transfer::TransferState::Cancelling) &&
+         session->pipelineSnapshot.state == ::relaydesk::transfer::TransferState::Cancelling ||
+         session->pipelineSnapshot.state == ::relaydesk::transfer::TransferState::Interrupted) &&
         !::relaydesk::transfer::TransferControlStateMachine::isTerminal(
             session->pipelineSnapshot.state
         )) {
@@ -1582,9 +2061,25 @@ void IncomingTransferRuntime::finishAcceptPreflight(
   Q_ASSERT(snapshot.has_value() && snapshot->acceptance.has_value());
   session->receiveOptions = options;
   session->pipelineSnapshot.state = TransferState::Queued;
+  std::optional<IncomingRecoveryState> recoveryDescriptor;
+  if (m_recoveryStore != nullptr && m_localDeviceId.has_value() && m_peerFingerprintProvider) {
+    const auto peerFingerprint = m_peerFingerprintProvider(session->peer);
+    if (peerFingerprint.has_value()) {
+      recoveryDescriptor = IncomingRecoveryState{
+          .transferId = session->offer.transferId,
+          .localDeviceId = *m_localDeviceId,
+          .peerDeviceId = session->peer,
+          .peerFingerprintSha256 = *peerFingerprint,
+          .peerDisplayName = session->peerDisplayName,
+          .offer = session->offer,
+          .receiveOptions = options,
+          .negotiatedCapabilities = session->capabilities,
+      };
+    }
+  }
   session->pipeline = std::make_shared<ReceivePipeline>(
       *this, session->peer, session->offer, options, m_fileSafety, m_workerPool,
-      std::nullopt, session->pipelineGeneration
+      std::nullopt, session->pipelineGeneration, std::move(recoveryDescriptor), m_recoveryStore
   );
   Q_EMIT transferAdded(session->pipelineSnapshot);
   Q_EMIT transferAccepted(session->peer, *snapshot->acceptance);
