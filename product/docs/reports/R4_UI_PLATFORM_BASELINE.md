@@ -17,7 +17,8 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 
 | ID | 表面 | UI intent | Production service / typed boundary | 失败反馈 | 状态 |
 |---|---|---|---|---|---|
-| R4-UI-001 | 设备卡、信任、手动地址 | DevicesDock pairing/revoke/autoAccept/manual save | MainWindow -> PairingTrustRuntime / DiscoverySettingsStore / DeviceDiscoveryRuntime | auto-accept 可见；pair/revoke 即时失败仅日志 | `NOT_RUN` |
+| R4-UI-001 | 设备卡、信任、手动地址 | DevicesDock pairing/revoke/autoAccept/manual save | MainWindow -> PairingTrustRuntime / DiscoverySettingsStore / DeviceDiscoveryRuntime | trust card 已由001A验证；manual address未运行 | `IN_PROGRESS` |
+| R4-UI-001A | 信任卡片 | auto-accept/revoke | DevicesDock -> PairingTrustRuntime -> TrustedDeviceStore | 成功持久化与失败非模态反馈均已验证 | `PASS` |
 | R4-UI-002 | 配对 | pairingRequested、SAS confirm/cancel | DevicesDock -> PairingTrustRuntime -> UDP pairing -> trust store | localhost production widget/UDP/trust 已验证 | `PASS` |
 | R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | banner/detail model 存在；TCC/系统往返未运行 | `NOT_RUN` |
 | R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
@@ -44,7 +45,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 
 | 范围 | 候选测试 | 仅能证明 | 不能证明 |
 |---|---|---|---|
-| 设备卡/配对 | DeviceHomeModel、DevicesDock、PairingWizardModel、PairingTrustRuntime | localhost Pair/Confirm/Cancel widget intent、UDP 双端与 trust 持久化 | 原生窗口、真实 LAN、多网卡、物理配对 |
+| 设备卡/配对 | DeviceHomeModel、DevicesDock、PairingWizardModel、PairingTrustRuntime | localhost Pair/Confirm/Cancel 与 trust card auto-accept/revoke widget intent | manual address、原生窗口、真实 LAN、多网卡、物理配对 |
 | 权限 | PermissionStatusModel、DevicesDock、MainWindowLayout | 门控、文案、控件绑定 | TCC、Windows/macOS 系统设置往返 |
 | 拖放发送 | DevicesDock、TransferUiRuntime | local URL 过滤、immutable intent、fake service adapter | Explorer/Finder DnD、真实 service 失败反馈 |
 | Incoming Offer | IncomingOfferModel、DevicesDock、TransferRuntimeComposition、FileTransferRuntime | localhost TLS offer、widget accept/reject、文件 SHA/row/清理 | Ask、原生窗口系统、物理双机 |
@@ -324,7 +325,53 @@ production composition 范围内为 `PASS`。该状态不证明 native Windows/m
 和 trust store。它不证明 native Windows/macOS window system、真实 LAN 广播、多网卡选路、TCC、物理
 Win↔Mac 设备或正式发布行为。
 
-## 10. 证据边界
+## 10. 第七个纵向修复切片
+
+选择 `R4-UI-001A`，范围只包含 trusted device card 的 auto-accept、revoke 与 persistence failure 反馈；
+manual address 不在本切片。
+
+根因与修复：
+
+- 成功链使用真实 MainWindow/DevicesDock More 菜单：AutoAccept action 经 production typed boundary 调用
+  PairingTrustRuntime，持久化 JSON 与 card 同步；Revoke action 经真实确认对话框写 revoked tombstone、清除
+  autoAccept 并把 card 置为不再信任；隐藏/禁用后的重复手势不改写 store；
+- 初始负向红测以真实 primary path 写失败注入触发 PersistenceFailed。MainWindow 原先只写 diagnostic 日志，
+  用户界面没有反馈；修复复用 DevicesDock 现有非模态 feedback 面，显示固定七语言
+  `devices.trust.update_failed` 文案，不接收或显示 diagnostic/path；
+- trust feedback 带来源 guard。成功 revoke 或成功 auto-accept 只清理 trust error，不会误清除文件发送反馈；
+- 负向测试连续两次走真实 Revoke 菜单与确认按钮，runtime/card 保持 trusted + autoAccept，primary 不可写时
+  load 从旧 backup 恢复相同状态；恢复 primary 可写后，真实 AutoAccept 成功持久化并清除旧 feedback；
+- 监督审阅发现 backup-only 语义不能只在 PairingManager::revoke 特判。共享契约下沉到
+  TrustedDeviceStore::save：authoritative primary 原子提交即 `ok=true`；backup 写失败只通过
+  `source=Primary + diagnostic` 表示降级。primary 首次写失败仍为 `ok=false`，所有 PairingManager、
+  PairingTrustRuntime、PairingTrustCommitter、reconnect 调用方行为一致；
+- Store、PairingManager 与 PairingTrustRuntime 分别补充 backup-only 回归，证明 auto-accept/revoke 在 primary
+  已提交时同步更新内存，避免磁盘已提交而调用方回滚。
+
+实现与验收结果：
+
+- owner：`agent/a2/r4-trust-card-actions@fb4e75f9214cb4f37afea896095aac5cf8a527da`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@7095330241f1e3a093e96359370a8cbc5c1f98d3`。两提交 parent 均为
+  `dbefd7dd94c642d5cddc90f1d962b94e2cf09425`、tree 均为
+  `543df89f246831ce899ccfa30f66b3ad72b189f3`，由 cherry-pick 产生不同 commit id；
+- owner 使用稳定 clean C 盘 build `C:\Users\52323\AppData\Local\Temp\relaydesk-a2-ui001a-clean`。
+  成功链与 primary-write failure 负向各 bounded 3/3、均退出 0；完整 MainWindowLayout 15/15、
+  DevicesDock 30/30、TrustedDeviceStore 11/11、PairingManager 10/10、PairingTrustRuntime 11/11、
+  i18n 7/7，均退出 0；
+- UI 与 pairing reviewer 最终均 GO，未发现 P0/P1；监督要求的完整 DevicesDockTests 已在 guard 修改后
+  独立重跑；
+- A0 fresh build `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui001a` 使用 VS 2022、Ninja、
+  Qt 6.10.1 与独立 x64-windows Debug vcpkg 安装树，serial 278/278 构建退出 0，日志
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui001a-build.log`（2026-09-01 05:37:49）；成功链
+  `ui001a-success.log`（05:38:17，361ms）与失败链 `ui001a-failure.log`（05:38:17，522ms）均为
+  3/0/0、退出 0，完整 MainWindowLayout `main-window-layout-full.log`（05:38:21，3.245s）为
+  15/0/0、退出 0。
+
+`R4-UI-001A` 的 `PASS` 只覆盖 Windows localhost advertisement、真实临时 store 与 offscreen MainWindow
+widget intent。manual address 仍为 `NOT_RUN`，因此 `R4-UI-001` 保持 `IN_PROGRESS`；native
+Windows/macOS window system、真实 LAN、多网卡、TCC、物理 Win↔Mac 和发布不由本证据证明。
+
+## 11. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
