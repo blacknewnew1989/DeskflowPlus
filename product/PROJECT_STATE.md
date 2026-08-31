@@ -23,7 +23,7 @@
 - Current branch: `agent/a0/redevelop-p0`
 - Current product branch tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
-- Current verified redevelopment implementation tip: `f176a1f1202ac45462b70359482458048f588bad`
+- Current verified redevelopment implementation tip: `043d6b3fb25fbd618804a36ab0ba3f263938e448`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
 - Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
@@ -52,7 +52,7 @@
 | R3-CTRL-001 | PASS | receiver 通过 queued production intent 直接 pause/resume/cancel；Windows Debug/Release 独立 10/10，run `33333471632` Win #98、Mac #99 PASS |
 | R3-FILETREE-001 | PASS | 一次 production send 传输独立文件+嵌套文件夹+空目录；fresh Win 两配置 10/10，run `33341572421` Win #98、Mac #99 PASS |
 | R3-LISTENER-RESUME-001 | PASS | 同一 peer 对象 listener stop/start 后从非零 durable offset 恢复；sidecar production 清理已修复，fresh Win 两配置 10/10、hosted Win/Mac PASS |
-| R3-PROCESS-RECOVERY-001 | IN_PROGRESS | outgoing/incoming 持久化与 bootstrap 已集成；Windows 同机 receiver 正常退出后由新子进程沿用同 transferId 从非零 offset 完成续传，owner 单次与 20/20、A0 完整 TwoProcess 可执行目标均退出 0；recovery-root file-tree 回归退出 0。sender 子进程 relaunch、文件夹跨进程 relaunch、macOS 当前 SHA 仍为 `NOT_RUN`，物理 Win↔Mac 为 `FINAL_ACCEPTANCE_REQUIRED`；详见 `product/docs/reports/R3_PROCESS_RECOVERY_RUNTIME.md` |
+| R3-PROCESS-RECOVERY-001 | PASS | 正常退出后的 Windows localhost OS 子进程恢复已覆盖 receiver/sender 单文件 relaunch 与 receiver 文件树 relaunch；Store 目录 entry、shutdown 生命周期已收口。run `33385968319@043d6b3fb`：Windows 101/101、macOS 102/102，FileTransferRuntime #94/#95 与 TwoProcess #99/#100 PASS，macOS hosted lifecycle PASS。crash/强杀/断电进入 R5 `NOT_RUN`；物理 Win↔Mac、TCC、人工安装与正式发布不属于本 PASS；详见 `product/docs/reports/R3_PROCESS_RECOVERY_RUNTIME.md` |
 
 ### R0-002 最终证据
 
