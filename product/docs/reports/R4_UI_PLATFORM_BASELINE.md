@@ -17,9 +17,10 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 
 | ID | 表面 | UI intent | Production service / typed boundary | 失败反馈 | 状态 |
 |---|---|---|---|---|---|
-| R4-UI-001 | 设备卡、信任、手动地址 | DevicesDock pairing/revoke/autoAccept/manual save | MainWindow -> PairingTrustRuntime / DiscoverySettingsStore / DeviceDiscoveryRuntime | 001A trust card 与001B manual address均已验证 | `PASS` |
-| R4-UI-001A | 信任卡片 | auto-accept/revoke | DevicesDock -> PairingTrustRuntime -> TrustedDeviceStore | 成功持久化与失败非模态反馈均已验证 | `PASS` |
+| R4-UI-001 | 设备卡、信任、手动地址 | DevicesDock pairing/revoke/autoAccept/manual save | MainWindow -> PairingTrustRuntime / DiscoverySettingsStore / DeviceDiscoveryRuntime | 001A/001B/001C 均已验证 | `PASS` |
+| R4-UI-001A | 信任卡片 | auto-accept/revoke | DevicesDock -> PairingTrustRuntime -> TrustedDeviceStore | 成功动作与 revoke 写失败非模态反馈已验证 | `PASS` |
 | R4-UI-001B | 手动地址 | add/save/remove | DevicesDock -> DiscoverySettingsStore -> DeviceDiscoveryRuntime | 持久化与listener启动/刷新入口已验证 | `PASS` |
+| R4-UI-001C | 信任卡片失败反馈 | auto-accept | DevicesDock -> PairingTrustRuntime -> TrustedDeviceStore | primary 写失败改为固定脱敏非模态反馈 | `PASS` |
 | R4-UI-002 | 配对 | pairingRequested、SAS confirm/cancel | DevicesDock -> PairingTrustRuntime -> UDP pairing -> trust store | localhost production widget/UDP/trust 已验证 | `PASS` |
 | R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | banner/detail model 存在；TCC/系统往返未运行 | `NOT_RUN` |
 | R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
@@ -328,7 +329,7 @@ Win↔Mac 设备或正式发布行为。
 
 ## 10. 第七个纵向修复切片
 
-选择 `R4-UI-001A`，范围只包含 trusted device card 的 auto-accept、revoke 与 persistence failure 反馈；
+选择 `R4-UI-001A`，范围只包含 trusted device card 的 auto-accept、revoke 与 revoke persistence failure 反馈；
 manual address 不在本切片。
 
 根因与修复：
@@ -404,11 +405,44 @@ widget intent。native Windows/macOS window system、真实 LAN、多网卡、TC
   `ui001b-slot.log`（06:39:52，653ms）为 3/0/0、退出 0，完整 MainWindowLayout
   `main-window-layout-full.log`（06:39:56，3.916s）为 16/0/0、退出 0。
 
-`R4-UI-001B` 关闭了 manual-address UI 缺口，因此 `R4-UI-001` 在 Windows localhost/offscreen
-production UI 范围内为 `PASS`。该状态不证明实际 probe 数据包、native Windows/macOS window system、
+`R4-UI-001B` 关闭了 manual-address UI 缺口。该状态不证明实际 probe 数据包、native Windows/macOS window system、
 真实 LAN、DNS、多网卡选路、TCC、物理 Win↔Mac 或正式发布行为。
 
-## 12. 证据边界
+## 12. 第九个纵向修复切片
+
+选择 `R4-UI-001C`，范围只包含 trusted device card 的 auto-accept primary 写失败反馈；不重复
+revoke、manual address 或视觉设计。
+
+根因与修复：
+
+- 根因位于 production MainWindow 组合层：revoke 失败已调用 DevicesDock 的非模态 trust feedback，
+  但 auto-accept 失败仍调用 `QMessageBox::warning`，并把 `PairingOperationResult::diagnostic` 拼入用户文案；
+- 最小修复保留 diagnostic 日志，只把用户反馈改为既有 `showTrustActionFailure()`；成功路径继续调用
+  `clearTrustActionFeedback()`，其来源 guard 不会清除文件发送反馈；
+- owner：`agent/a2/r4-auto-accept-failure-feedback@55388091f36c28f602c7fb7db6d2bf6609e7df75`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@38e955bd62fcf6dc78078b004cdccbfbd8b17be5`。两提交
+  parent 均为 `6b65e951fe8f64b0ef77d052951ca400c52682fa`、tree 均为
+  `3a467e04971119da42cc4871857549329b5facd7`。
+
+RED/GREEN 与复审：
+
+- 同一新增测试仅应用到精确 parent 的临时基线，不含 production 修复；
+  `ui001c-red-final.log` 退出 1，2 passed / 1 failed，日志包含旧路径 internal diagnostic，断言记录
+  `modalSeen=1 feedbackVisible=0 feedbackText=`；
+- 修复版通过真实 DevicesDock More 菜单与 auto-accept action 触发失败：没有模态框，现有非模态面显示
+  `devices.trust.update_failed` 的固定本地化文案，不含路径；PairingTrustRuntime、device card 与 store 均保持
+  原 auto-accept 状态。恢复 primary 写入后，同一真实手势成功持久化新状态并清除旧 trust feedback；
+- owner 新增槽三轮均 3/0/0；完整 MainWindowLayout 17/0、DevicesDock 30/0、TrustedDeviceStore 11/0、
+  PairingManager 10/0、PairingTrustRuntime 11/0、i18n 7/0，均退出 0；格式化后新增槽 3/0/0、退出 0；
+- UI 与 pairing reviewer 均 GO，无 P0/P1；
+- A0 fresh 目录 `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui001b` 增量构建 7/7、退出 0，
+  `ui001c-a0-slot.log` 为 3/0/0、461ms、退出 0。
+
+因此 `R4-UI-001C` 为 `PASS`，`R4-UI-001` 在 Windows localhost/offscreen production UI 与临时 store
+范围内恢复为 `PASS`。该证据不证明 native Windows/macOS window system、真实 LAN、多网卡、TCC、
+物理 Win↔Mac 或正式发布行为。
+
+## 13. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
