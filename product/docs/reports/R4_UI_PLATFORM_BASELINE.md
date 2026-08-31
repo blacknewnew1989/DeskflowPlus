@@ -22,7 +22,8 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-001B | 手动地址 | add/save/remove | DevicesDock -> DiscoverySettingsStore -> DeviceDiscoveryRuntime | 持久化与listener启动/刷新入口已验证 | `PASS` |
 | R4-UI-001C | 信任卡片失败反馈 | auto-accept | DevicesDock -> PairingTrustRuntime -> TrustedDeviceStore | primary 写失败改为固定脱敏非模态反馈 | `PASS` |
 | R4-UI-002 | 配对 | pairingRequested、SAS confirm/cancel | DevicesDock -> PairingTrustRuntime -> UDP pairing -> trust store | localhost production widget/UDP/trust 已验证 | `PASS` |
-| R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | banner/detail model 存在；TCC/系统往返未运行 | `NOT_RUN` |
+| R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | 003A 权限卡/门控已验证；原生往返未运行 | `IN_PROGRESS` |
+| R4-UI-003A | 权限卡与能力门控 | PermissionSnapshot refresh | MainWindow -> PermissionStatusModel -> DevicesDock | 分项禁用、固定文案与同窗口恢复已验证 | `PASS` |
 | R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
 | R4-UI-005 | Incoming Offer / Ask | accept/reject/conflict decision | IncomingOfferModel / TransferUiRuntime -> FileTransferRuntime | 真实 TLS offer 经 production widget accept/reject 完成或拒绝 | `PASS` |
 | R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | 006A 控制与 006B history retry 均已验证 | `PASS` |
@@ -442,7 +443,41 @@ RED/GREEN 与复审：
 范围内恢复为 `PASS`。该证据不证明 native Windows/macOS window system、真实 LAN、多网卡、TCC、
 物理 Win↔Mac 或正式发布行为。
 
-## 13. 证据边界
+## 13. 第十个纵向证据切片
+
+选择 `R4-UI-003A`，范围只包含当前 SHA 的 production 权限卡与 capability gating；不包含系统设置页、
+迷你条、tray 或视觉改版。
+
+实现与动态证据：
+
+- owner：`agent/a3/r4-permission-card-gating@16f0dbe39fcc4ce44f72ac4629176149f097719c`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@bfe7a5d868324fe1ba2953ff8884eb2456b5c1f0`。两提交
+  parent 均为 `9714a169edc4d826f55dbaa486f66ebf1671c36d`、tree 均为
+  `5c71c8616e07575db7e47f0a73c856c9a1ab68fa`；
+- 只新增 MainWindowLayout 动态测试，production 现有接线直接通过；
+- 测试构造真实 MainWindow，通过 production discovery registry 显示候选设备并用 DevicesDock 列表手势选中；
+  Granted 时 Pair 可用，Windows Firewall Denied 时 Pair 禁用并显示固定防火墙文案；
+- Windows Firewall 恢复 Granted 后，ListeningPort 按真实 probe 契约发布
+  `NeedsAction + WindowsPortUnavailable`，Pair 再次禁用并显示固定端口文案；两项恢复 Granted 后，
+  同一 MainWindow 无需重启即可重新启用，真实 Pair 按钮点击发出 typed pairing intent；
+- macOS 条件分支只翻转 LocalNetwork，Accessibility/InputMonitoring 保持 Granted，证明 source contract
+  不把网络权限扩展为输入权限总开关；当前未在真实 macOS/TCC 环境运行；
+- owner fresh 目录 `C:\Users\52323\AppData\Local\Temp\relaydesk-a3-r4-permission-card-gating-fresh`
+  的有效 build 为 294/294；最终新增槽三轮均 3/0/0。完整 MainWindowLayout 18/0、DevicesDock 30/0、
+  PermissionStatusModel 9/0、PermissionSnapshot 4/0、WindowsFirewallProbe 22/0，均退出 0；
+- UI reviewer 与 platform reviewer 最终均 GO。platform reviewer 确认 ListeningPort 状态与 production
+  `WindowsFirewallProbe::listeningPortEntry(NotListening)` 映射一致；
+- A0 fresh 目录 `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui001b` 单次增量构建 4/4、退出 0，
+  `ui003a-a0-slot.txt` 为 3/0/0、532ms、退出 0。
+
+因此 `R4-UI-003A` 在 Windows localhost/offscreen 与注入 PermissionSnapshot contract 范围内为 `PASS`，
+`R4-UI-003` 改为 `IN_PROGRESS`。真实 Windows Firewall probe、macOS TCC、系统设置往返、native
+Windows/macOS window system、物理 Win↔Mac 与正式发布仍为 `NOT_RUN` 或最终验收项。
+
+后续 R4 默认采用单构建执行者：每个 owner/A0 工作树只由明确执行者启动并持有构建进程到退出；
+状态轮询只读取 PID、进程状态和日志，不用重复 `cmake --build` 轮询。
+
+## 14. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
