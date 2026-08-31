@@ -15,6 +15,7 @@
 #include "gui/dialogs/SettingsDialog.h"
 #include "gui/widgets/LogDock.h"
 #include "relaydesk/app/DeviceDiscoveryRuntime.h"
+#include "relaydesk/discovery/DiscoveryService.h"
 #include "relaydesk/app/PairingTrustRuntime.h"
 #include "relaydesk/app/TransferRuntimeComposition.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
@@ -41,6 +42,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QListWidget>
 #include <QMenu>
 #include <QPointer>
 #include <QPushButton>
@@ -48,6 +50,7 @@
 #include <QSettings>
 #include <QScopeGuard>
 #include <QSignalSpy>
+#include <QSpinBox>
 #include <QSystemTrayIcon>
 #include <QTabWidget>
 #include <QTemporaryDir>
@@ -124,6 +127,7 @@ private Q_SLOTS:
   void restoredSmallGeometryIsClampedToMinimumSize();
   void trayIconLoadsEmbeddedWindowsFallback();
   void chineseProductChromeUsesLocalizedText();
+  void manualAddressesPersistAndStartTargetedDiscovery();
   void trustedDeviceCardActionsPersistAndRevoke();
   void trustCardPersistenceFailureShowsNonModalFeedback();
 
@@ -640,6 +644,96 @@ void MainWindowLayoutTests::chineseProductChromeUsesLocalizedText()
   QCOMPARE(actualDescription, QStringLiteral("局域网键盘、鼠标、剪贴板和文件共享"));
 
   I18N::setLanguage(QStringLiteral("en"));
+}
+
+void MainWindowLayoutTests::manualAddressesPersistAndStartTargetedDiscovery()
+{
+  QSettings initialSettings(Settings::settingsFile(), QSettings::IniFormat);
+  deskflow::relaydesk::DiscoverySettingsStore initialStore(initialSettings);
+  QString diagnostic;
+  QVERIFY2(initialStore.save({.enabled = false}, &diagnostic), qPrintable(diagnostic));
+
+  const auto portableSettings = Settings::portableSettingsFile();
+  QVERIFY(QDir().mkpath(QFileInfo(portableSettings).absolutePath()));
+  QFile portableMarker(portableSettings);
+  QVERIFY(portableMarker.open(QIODevice::WriteOnly));
+  portableMarker.close();
+  const auto removePortableMarker = qScopeGuard([portableSettings] { QFile::remove(portableSettings); });
+
+  MainWindow window;
+  auto *discovery = window.findChild<deskflow::relaydesk::DeviceDiscoveryRuntime *>();
+  QVERIFY(discovery != nullptr);
+  QVERIFY(!discovery->isRunning());
+  QSignalSpy started(&discovery->service(), &deskflow::relaydesk::DiscoveryService::started);
+  window.open(false);
+
+  auto &dock = window.relayDeskDevicesDock();
+  auto *manage = dock.findChild<QPushButton *>(QStringLiteral("relaydeskManageManualAddressesButton"));
+  QVERIFY(manage != nullptr);
+  bool added = false;
+  NextDialogInteractor addAddress(dock, [&](QDialog *dialog) {
+    if (dialog->objectName() != QStringLiteral("relaydeskManualAddressesDialog")) {
+      dialog->reject();
+      return;
+    }
+    auto *host = dialog->findChild<QLineEdit *>(QStringLiteral("relaydeskManualAddressHost"));
+    auto *inputPort = dialog->findChild<QSpinBox *>(QStringLiteral("relaydeskManualAddressInputPort"));
+    auto *filePort = dialog->findChild<QSpinBox *>(QStringLiteral("relaydeskManualAddressFilePort"));
+    auto *add = dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressAddButton"));
+    auto *save = dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressSaveButton"));
+    if (host == nullptr || inputPort == nullptr || filePort == nullptr || add == nullptr || save == nullptr) {
+      dialog->reject();
+      return;
+    }
+    host->setText(QStringLiteral("127.0.0.1"));
+    inputPort->setValue(24910);
+    filePort->setValue(24911);
+    QTest::mouseClick(add, Qt::LeftButton);
+    QTest::mouseClick(save, Qt::LeftButton);
+    added = dialog->result() == QDialog::Accepted;
+  });
+  QTest::mouseClick(manage, Qt::LeftButton);
+  QTRY_VERIFY(added);
+  QTRY_VERIFY(discovery->isRunning());
+  QCOMPARE(started.count(), 1);
+
+  QSettings savedSettings(Settings::settingsFile(), QSettings::IniFormat);
+  deskflow::relaydesk::DiscoverySettingsStore savedStore(savedSettings);
+  const auto saved = savedStore.load();
+  QVERIFY2(saved.ok, qPrintable(saved.diagnostic));
+  QCOMPARE(saved.settings.enabled, false);
+  const QList<deskflow::relaydesk::ManualAddress> expectedAddresses{
+      {.host = QStringLiteral("127.0.0.1"), .inputPort = 24910, .filePort = 24911},
+  };
+  QCOMPARE(saved.settings.manualAddresses, expectedAddresses);
+
+  bool removed = false;
+  NextDialogInteractor removeAddress(dock, [&](QDialog *dialog) {
+    if (dialog->objectName() != QStringLiteral("relaydeskManualAddressesDialog")) {
+      dialog->reject();
+      return;
+    }
+    auto *addresses = dialog->findChild<QListWidget *>(QStringLiteral("relaydeskManualAddressesList"));
+    auto *remove = dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressRemoveButton"));
+    auto *save = dialog->findChild<QPushButton *>(QStringLiteral("relaydeskManualAddressSaveButton"));
+    if (addresses == nullptr || remove == nullptr || save == nullptr || addresses->count() != 1) {
+      dialog->reject();
+      return;
+    }
+    QCOMPARE(addresses->item(0)->text(), QStringLiteral("127.0.0.1  24910 / 24911"));
+    addresses->setCurrentRow(0);
+    QTest::mouseClick(remove, Qt::LeftButton);
+    QTest::mouseClick(save, Qt::LeftButton);
+    removed = dialog->result() == QDialog::Accepted;
+  });
+  QTest::mouseClick(manage, Qt::LeftButton);
+  QTRY_VERIFY(removed);
+  QVERIFY(discovery->isRunning());
+  QCOMPARE(started.count(), 1);
+
+  const auto cleared = savedStore.load();
+  QVERIFY2(cleared.ok, qPrintable(cleared.diagnostic));
+  QVERIFY(cleared.settings.manualAddresses.isEmpty());
 }
 
 void MainWindowLayoutTests::trustedDeviceCardActionsPersistAndRevoke()
