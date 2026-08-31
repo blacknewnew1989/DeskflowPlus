@@ -44,10 +44,11 @@ TransferUiRuntime::TransferUiRuntime(
   devicesDock.setIncomingOfferModel(&incomingOffers);
 
   connect(
-      &devicesDock, &widgets::DevicesDock::sendItemsRequested, &service,
-      [&service](const DeviceId &peerDeviceId, const QList<QUrl> &localItems,
-                 const ::relaydesk::transfer::SendOptions &options) {
-        (void)service.send(peerDeviceId, localItems, options);
+      &devicesDock, &widgets::DevicesDock::sendItemsRequested, this,
+      [&service, &devicesDock](const DeviceId &peerDeviceId, const QList<QUrl> &localItems,
+                              const ::relaydesk::transfer::SendOptions &options) {
+        const auto result = service.send(peerDeviceId, localItems, options);
+        if (!result.ok()) devicesDock.showSendFailure(result.error);
       }
   );
   connect(

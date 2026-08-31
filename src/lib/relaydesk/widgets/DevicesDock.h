@@ -67,6 +67,7 @@ public:
   void showIncomingConflictPrompt(::relaydesk::transfer::IncomingConflictPrompt prompt);
   void showIncomingConflictCancelTransportFailure(const ::relaydesk::transfer::TransferId &transferId);
   void clearIncomingConflictPrompts(const ::relaydesk::transfer::TransferId &transferId);
+  void showSendFailure(::relaydesk::transfer::TransferStartError error);
   void setManualAddresses(QList<ManualAddress> addresses);
 
 Q_SIGNALS:
