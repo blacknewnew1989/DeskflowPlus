@@ -39,7 +39,15 @@ using namespace ::relaydesk::transfer;
 namespace {
 
 enum class Role { Sender, Receiver };
-enum class Scenario { Complete, PauseResume, Cancel, FileTree, ListenerResume, ReceiverProcessRecovery };
+enum class Scenario {
+  Complete,
+  PauseResume,
+  Cancel,
+  FileTree,
+  ListenerResume,
+  ReceiverProcessRecovery,
+  SenderProcessRecovery
+};
 
 constexpr quint64 kControlThresholdBytes = 1024U * 1024U;
 
@@ -83,7 +91,7 @@ class Peer final : public QObject
 public:
   Peer(Role role, Scenario scenario, QString root, quint16 discoveryPort, quint16 peerDiscoveryPort,
        QStringList sourcePaths, QByteArray expectedSha256, QString expectedTreePath, QString resultPath,
-       int restartGeneration, QObject *parent = nullptr)
+       QString peerRoot, int restartGeneration, QObject *parent = nullptr)
       : QObject(parent),
         m_role(role),
         m_scenario(scenario),
@@ -95,6 +103,7 @@ public:
         m_expectedSha256(std::move(expectedSha256)),
         m_expectedTreePath(std::move(expectedTreePath)),
         m_resultPath(std::move(resultPath)),
+        m_peerRoot(std::move(peerRoot)),
         m_restartGeneration(restartGeneration)
   {
   }
@@ -158,12 +167,17 @@ public:
 
     FileTransferRuntimeOptions transferOptions;
     transferOptions.listenAddress = QHostAddress::LocalHost;
-    if (m_scenario == Scenario::ReceiverProcessRecovery || m_scenario == Scenario::FileTree) {
+    if (m_scenario == Scenario::ReceiverProcessRecovery || m_scenario == Scenario::SenderProcessRecovery ||
+        m_scenario == Scenario::FileTree) {
       transferOptions.recoveryStateRoot = QDir(m_root).filePath(QStringLiteral("state/transfer-recovery"));
     }
     transferOptions.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
     if (m_role == Role::Receiver && m_scenario == Scenario::ReceiverProcessRecovery && m_restartGeneration > 0 &&
         !loadProcessRecoveryCheckpoint(error)) {
+      return false;
+    }
+    if (m_role == Role::Sender && m_scenario == Scenario::SenderProcessRecovery && m_restartGeneration > 0 &&
+        !loadSenderProcessRecoveryCheckpoint(error)) {
       return false;
     }
     m_files = std::make_unique<FileTransferRuntime>(
@@ -189,7 +203,12 @@ public:
     });
     connect(m_files.get(), &FileTransferRuntime::peerReady, this, [this](const DeviceId &peer, const auto &) {
       if (resumesAfterInterruption() && peer == m_peerId) m_senderInterruptionEligible = false;
+      if (m_role == Role::Receiver && m_scenario == Scenario::SenderProcessRecovery && peer == m_peerId &&
+          m_receiverInterrupted) {
+        m_receiverInterruptionWindow = false;
+      }
       if (m_role != Role::Sender || peer != m_peerId || m_sendStarted) return;
+      if (m_scenario == Scenario::SenderProcessRecovery && m_restartGeneration > 0) return;
       m_sendStarted = true;
       QList<QUrl> sources;
       for (const auto &source : m_sourcePaths) sources.append(QUrl::fromLocalFile(source));
@@ -199,6 +218,7 @@ public:
     connect(m_files.get(), &FileTransferRuntime::peerDisconnected, this, [this](const DeviceId &peer) {
       if (m_role == Role::Receiver && peer == m_peerId) {
         m_senderDisconnected = true;
+        if (m_scenario == Scenario::SenderProcessRecovery) m_receiverInterrupted = true;
         finishReceiverIfComplete();
       } else if (m_role == Role::Sender && m_scenario == Scenario::Cancel && peer == m_peerId &&
                  m_senderObservedCancelled) {
@@ -250,7 +270,8 @@ public:
 private:
   [[nodiscard]] bool resumesAfterInterruption() const
   {
-    return m_scenario == Scenario::ListenerResume || m_scenario == Scenario::ReceiverProcessRecovery;
+    return m_scenario == Scenario::ListenerResume || m_scenario == Scenario::ReceiverProcessRecovery ||
+           m_scenario == Scenario::SenderProcessRecovery;
   }
 
   bool failStart(QString *error, const QString &message)
@@ -325,6 +346,17 @@ private:
     if (snapshot.direction == TransferDirection::Sending && m_role == Role::Sender) {
       if (resumesAfterInterruption()) {
         m_senderStates.append(static_cast<int>(snapshot.state));
+        if (m_scenario == Scenario::SenderProcessRecovery && m_restartGeneration == 0) {
+          if (!m_listenerRestartQueued && snapshot.state == TransferState::Transferring &&
+              snapshot.progress.completedBytes >= kControlThresholdBytes &&
+              snapshot.progress.completedBytes < snapshot.progress.totalBytes) {
+            m_listenerRestartQueued = true;
+            QTimer::singleShot(0, this, [this, id = snapshot.id, total = snapshot.progress.totalBytes] {
+              exitSenderAtCheckpoint(id, total);
+            });
+          }
+          return;
+        }
         if (snapshot.state == TransferState::Transferring &&
             snapshot.progress.completedBytes >= kControlThresholdBytes) {
           m_senderInterruptionEligible = true;
@@ -349,7 +381,13 @@ private:
         }
         if (snapshot.state == TransferState::Completed) {
           const bool resumed = m_senderInterrupted && m_senderResuming;
-          finish(resumed, resumed ? QString{} : QStringLiteral("sender listener resume states missing"));
+          if (m_scenario == Scenario::SenderProcessRecovery) {
+            QTimer::singleShot(0, this, [this, transferId = snapshot.id] {
+              validateSenderProcessRecoveryCompletion(transferId);
+            });
+          } else {
+            finish(resumed, resumed ? QString{} : QStringLiteral("sender listener resume states missing"));
+          }
         }
         return;
       }
@@ -378,6 +416,28 @@ private:
       return;
     }
     if (snapshot.direction != TransferDirection::Receiving || m_role != Role::Receiver) return;
+    if (m_scenario == Scenario::SenderProcessRecovery) {
+      m_receiverStates.append(static_cast<int>(snapshot.state));
+      if (!m_resumeStateExisted && snapshot.state == TransferState::Transferring &&
+          snapshot.progress.completedBytes >= kControlThresholdBytes &&
+          snapshot.progress.completedBytes < snapshot.progress.totalBytes) {
+        captureSenderProcessCheckpoint(snapshot.id, snapshot.progress.totalBytes);
+      }
+      if (snapshot.state == TransferState::Interrupted) m_receiverInterrupted = true;
+      if (m_receiverInterrupted && snapshot.state == TransferState::Transferring &&
+          !m_receiverFirstTransferringAfterInterruptCaptured) {
+        m_receiverFirstTransferringAfterInterruptCaptured = true;
+        m_firstReceiverResumingBytes = snapshot.progress.completedBytes;
+        m_resumedFromNonZero = m_durableOffset > 0 && m_firstReceiverResumingBytes >= m_durableOffset;
+        m_receiverInterruptionWindow = false;
+      }
+      if (snapshot.state == TransferState::Completed) {
+        QTimer::singleShot(0, this, [this, transferId = snapshot.id] {
+          validateSenderProcessReceiverCompletion(transferId);
+        });
+      }
+      return;
+    }
     if (m_scenario == Scenario::ReceiverProcessRecovery) {
       m_receiverStates.append(static_cast<int>(snapshot.state));
       if (snapshot.state == TransferState::Interrupted) m_receiverInterrupted = true;
@@ -578,6 +638,104 @@ private:
     return true;
   }
 
+  void captureSenderProcessCheckpoint(const TransferId &transferId, quint64 totalBytes)
+  {
+    const auto receiveRoot = QDir(m_root).filePath(QStringLiteral("receive"));
+    ResumeStore store(QDir(receiveRoot).filePath(QStringLiteral(".incoming/resume-active")));
+    const auto loaded = store.load(transferId);
+    if (!loaded.ok() || loaded.state->files.size() != 1) return;
+    const auto &file = loaded.state->files.first();
+    const auto partSize = QFileInfo(QDir(receiveRoot).filePath(file.partRelativePath)).size();
+    const auto outgoingDescriptor = QDir(m_peerRoot).filePath(
+        QStringLiteral("state/transfer-recovery/outgoing/%1.recovery.cbor").arg(transferId.toString())
+    );
+    const auto incomingDescriptor = QDir(m_root).filePath(
+        QStringLiteral("state/transfer-recovery/incoming/%1.recovery.cbor").arg(transferId.toString())
+    );
+    if (file.durableOffset == 0 || file.durableOffset >= totalBytes ||
+        partSize < static_cast<qint64>(file.durableOffset) || !QFileInfo::exists(outgoingDescriptor) ||
+        !QFileInfo::exists(incomingDescriptor)) {
+      return;
+    }
+    QSaveFile marker(QDir(m_root).filePath(QStringLiteral("sender-process-checkpoint.json")));
+    if (!marker.open(QIODevice::WriteOnly) ||
+        marker.write(QJsonDocument(QJsonObject{
+                         {QStringLiteral("transferId"), transferId.toString()},
+                         {QStringLiteral("durableOffset"), static_cast<qint64>(file.durableOffset)},
+                         {QStringLiteral("partBytes"), partSize},
+                     })
+                         .toJson(QJsonDocument::Compact)) < 0 ||
+        !marker.commit()) {
+      finish(false, QStringLiteral("could not write sender process checkpoint"));
+      return;
+    }
+    m_lastTransferId = transferId.toString();
+    m_durableOffset = file.durableOffset;
+    m_partBytesBeforeRestart = static_cast<quint64>(partSize);
+    m_resumeStateExisted = true;
+    m_receiverInterruptionWindow = true;
+  }
+
+  void exitSenderAtCheckpoint(const TransferId &transferId, quint64 totalBytes)
+  {
+    QFile marker(QDir(m_peerRoot).filePath(QStringLiteral("sender-process-checkpoint.json")));
+    if (!marker.open(QIODevice::ReadOnly)) {
+      m_listenerRestartQueued = false;
+      return;
+    }
+    const auto document = QJsonDocument::fromJson(marker.readAll());
+    const auto checkpoint = document.isObject() ? document.object() : QJsonObject{};
+    const auto durableOffset = checkpoint.value(QStringLiteral("durableOffset")).toVariant().toULongLong();
+    const auto partSize = checkpoint.value(QStringLiteral("partBytes")).toVariant().toULongLong();
+    const auto outgoingDescriptor = QDir(m_root).filePath(
+        QStringLiteral("state/transfer-recovery/outgoing/%1.recovery.cbor").arg(transferId.toString())
+    );
+    const auto incomingDescriptor = QDir(m_peerRoot).filePath(
+        QStringLiteral("state/transfer-recovery/incoming/%1.recovery.cbor").arg(transferId.toString())
+    );
+    if (checkpoint.value(QStringLiteral("transferId")).toString() != transferId.toString() ||
+        durableOffset == 0 || durableOffset >= totalBytes || partSize < durableOffset ||
+        !QFileInfo::exists(outgoingDescriptor) || !QFileInfo::exists(incomingDescriptor)) {
+      m_listenerRestartQueued = false;
+      return;
+    }
+    m_lastTransferId = transferId.toString();
+    m_durableOffset = durableOffset;
+    m_partBytesBeforeRestart = partSize;
+    m_resumeStateExisted = true;
+    m_resultPhase = QStringLiteral("checkpoint_ready");
+    finish(true, {});
+  }
+
+  bool loadSenderProcessRecoveryCheckpoint(QString *error)
+  {
+    const auto receiveRoot = QDir(m_peerRoot).filePath(QStringLiteral("receive"));
+    ResumeStore store(QDir(receiveRoot).filePath(QStringLiteral(".incoming/resume-active")));
+    const auto scan = store.scan();
+    if (!scan.ok() || scan.states.size() != 1 || scan.states.first().files.size() != 1) {
+      return failStart(error, QStringLiteral("recovery sender requires exactly one resume state"));
+    }
+    const auto &state = scan.states.first();
+    const auto &file = state.files.first();
+    const auto partSize = QFileInfo(QDir(receiveRoot).filePath(file.partRelativePath)).size();
+    const auto outgoingDescriptor = QDir(m_root).filePath(
+        QStringLiteral("state/transfer-recovery/outgoing/%1.recovery.cbor").arg(state.transferId.toString())
+    );
+    const auto incomingDescriptor = QDir(m_peerRoot).filePath(
+        QStringLiteral("state/transfer-recovery/incoming/%1.recovery.cbor").arg(state.transferId.toString())
+    );
+    if (file.durableOffset == 0 || file.durableOffset >= file.totalBytes ||
+        partSize < static_cast<qint64>(file.durableOffset) || !QFileInfo::exists(outgoingDescriptor) ||
+        !QFileInfo::exists(incomingDescriptor)) {
+      return failStart(error, QStringLiteral("recovery sender checkpoint is not durable"));
+    }
+    m_lastTransferId = state.transferId.toString();
+    m_durableOffset = file.durableOffset;
+    m_partBytesBeforeRestart = static_cast<quint64>(partSize);
+    m_resumeStateExisted = true;
+    return true;
+  }
+
   void exitReceiverAtCheckpoint(const TransferId &transferId, quint64 totalBytes)
   {
     const auto receiveRoot = QDir(m_root).filePath(QStringLiteral("receive"));
@@ -637,6 +795,48 @@ private:
                        !m_resumeStateRemaining;
     m_resultPhase = QStringLiteral("completed");
     finish(valid, valid ? QString{} : QStringLiteral("receiver process recovery validation failed"));
+  }
+
+  bool senderProcessRecoveryStateRemains(const TransferId &transferId) const
+  {
+    const auto outgoingDescriptor = QDir(m_role == Role::Sender ? m_root : m_peerRoot).filePath(
+        QStringLiteral("state/transfer-recovery/outgoing/%1.recovery.cbor").arg(transferId.toString())
+    );
+    const auto receiverRoot = m_role == Role::Receiver ? m_root : m_peerRoot;
+    const auto incomingDescriptor = QDir(receiverRoot).filePath(
+        QStringLiteral("state/transfer-recovery/incoming/%1.recovery.cbor").arg(transferId.toString())
+    );
+    const auto sidecar = QDir(receiverRoot).filePath(
+        QStringLiteral("receive/.incoming/resume-active/%1.resume.cbor").arg(transferId.toString())
+    );
+    return QFileInfo::exists(outgoingDescriptor) || QFileInfo::exists(incomingDescriptor) ||
+           QFileInfo::exists(sidecar);
+  }
+
+  void validateSenderProcessRecoveryCompletion(const TransferId &transferId)
+  {
+    m_lastTransferId = transferId.toString();
+    m_resumeStateRemaining = senderProcessRecoveryStateRemains(transferId);
+    const auto receiveRoot = QDir(m_peerRoot).filePath(QStringLiteral("receive"));
+    const bool valid = m_senderInterrupted && m_senderResuming && m_senderFirstResumingCaptured &&
+                       m_durableOffset > 0 && m_firstResumingBytes >= m_durableOffset &&
+                       !containsPartFile(receiveRoot) && !m_resumeStateRemaining;
+    m_resultPhase = QStringLiteral("completed");
+    finish(valid, valid ? QString{} : QStringLiteral("sender process recovery validation failed"));
+  }
+
+  void validateSenderProcessReceiverCompletion(const TransferId &transferId)
+  {
+    const auto receiveRoot = QDir(m_root).filePath(QStringLiteral("receive"));
+    m_lastTransferId = transferId.toString();
+    m_actualSha = fileSha256(QDir(receiveRoot).filePath(QFileInfo(m_sourcePath).fileName())).toHex();
+    m_resumeStateRemaining = senderProcessRecoveryStateRemains(transferId);
+    const bool valid = m_receiverInterrupted && m_durableOffset > 0 &&
+                       m_partBytesBeforeRestart >= m_durableOffset && m_resumedFromNonZero &&
+                       m_actualSha == m_expectedSha256.toHex() && !containsPartFile(receiveRoot) &&
+                       !m_resumeStateRemaining;
+    m_resultPhase = QStringLiteral("completed");
+    finish(valid, valid ? QString{} : QStringLiteral("sender process receiver validation failed"));
   }
 
   void writeListenerStage(const QString &stage) const
@@ -789,6 +989,7 @@ private:
   QByteArray m_expectedSha256;
   QString m_expectedTreePath;
   QString m_resultPath;
+  QString m_peerRoot;
   int m_restartGeneration = 0;
   QString m_resultPhase = QStringLiteral("completed");
   std::unique_ptr<QSettings> m_settings;
@@ -869,19 +1070,26 @@ int main(int argc, char *argv[])
   );
   QCommandLineOption scenarioOption(
       QStringLiteral("scenario"),
-      QStringLiteral("complete, pause-resume, cancel, file-tree, listener-resume, or receiver-process-recovery"),
+      QStringLiteral(
+          "complete, pause-resume, cancel, file-tree, listener-resume, receiver-process-recovery, or "
+          "sender-process-recovery"
+      ),
       QStringLiteral("name")
   );
   QCommandLineOption restartGenerationOption(
-      QStringLiteral("restart-generation"), QStringLiteral("receiver process generation"), QStringLiteral("number"),
+      QStringLiteral("restart-generation"), QStringLiteral("process generation"), QStringLiteral("number"),
       QStringLiteral("0")
+  );
+  QCommandLineOption peerRootOption(
+      QStringLiteral("peer-root"), QStringLiteral("peer state root for process recovery tests"),
+      QStringLiteral("path")
   );
   QCommandLineOption expectedTreeOption(
       QStringLiteral("expected-tree"), QStringLiteral("file-tree expected JSON"), QStringLiteral("path")
   );
   parser.addOptions({
       roleOption, scenarioOption, rootOption, portOption, peerPortOption, sourceOption, shaOption, expectedTreeOption,
-      resultOption, restartGenerationOption
+      resultOption, restartGenerationOption, peerRootOption
   });
   parser.process(application);
 
@@ -896,6 +1104,8 @@ int main(int argc, char *argv[])
                       : scenarioText == QStringLiteral("listener-resume") ? Scenario::ListenerResume
                       : scenarioText == QStringLiteral("receiver-process-recovery")
                           ? Scenario::ReceiverProcessRecovery
+                      : scenarioText == QStringLiteral("sender-process-recovery")
+                          ? Scenario::SenderProcessRecovery
                           : Scenario::Complete;
   bool localPortOk = false;
   bool peerPortOk = false;
@@ -908,16 +1118,18 @@ int main(int argc, char *argv[])
       (scenarioText != QStringLiteral("complete") && scenarioText != QStringLiteral("pause-resume") &&
        scenarioText != QStringLiteral("cancel") && scenarioText != QStringLiteral("file-tree") &&
        scenarioText != QStringLiteral("listener-resume") &&
-       scenarioText != QStringLiteral("receiver-process-recovery")) || !localPortOk || !peerPortOk ||
+       scenarioText != QStringLiteral("receiver-process-recovery") &&
+       scenarioText != QStringLiteral("sender-process-recovery")) || !localPortOk || !peerPortOk ||
       !restartGenerationOk || restartGeneration < 0 || restartGeneration > 1 ||
       localPort == 0 || peerPort == 0 || parser.value(rootOption).isEmpty() || parser.value(resultOption).isEmpty() ||
       parser.values(sourceOption).isEmpty() || expected.size() != 32 ||
-      (scenario == Scenario::FileTree && parser.value(expectedTreeOption).isEmpty())) {
+      (scenario == Scenario::FileTree && parser.value(expectedTreeOption).isEmpty()) ||
+      (scenario == Scenario::SenderProcessRecovery && parser.value(peerRootOption).isEmpty())) {
     return 2;
   }
   Peer peer(
       role, scenario, parser.value(rootOption), localPort, peerPort, parser.values(sourceOption), expected,
-      parser.value(expectedTreeOption), parser.value(resultOption), restartGeneration
+      parser.value(expectedTreeOption), parser.value(resultOption), parser.value(peerRootOption), restartGeneration
   );
   QString error;
   if (!peer.start(&error)) {
