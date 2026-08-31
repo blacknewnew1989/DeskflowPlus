@@ -20,6 +20,7 @@
 #include "relaydesk/app/TransferRuntimeComposition.h"
 #include "relaydesk/discovery/DiscoverySettings.h"
 #include "relaydesk/model/DeviceHomeModel.h"
+#include "relaydesk/model/PermissionStatusModel.h"
 #include "relaydesk/transfer/TransferSettings.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
 #include "relaydesk/widgets/DevicesDock.h"
@@ -131,6 +132,7 @@ private Q_SLOTS:
   void trustedDeviceCardActionsPersistAndRevoke();
   void trustCardPersistenceFailureShowsNonModalFeedback();
   void autoAcceptPrimaryWriteFailureShowsNonModalFeedback();
+  void permissionCardGatesPairingAndRefreshesWithoutRestart();
 
 private:
   std::unique_ptr<QTemporaryDir> m_directory;
@@ -1066,6 +1068,117 @@ void MainWindowLayoutTests::autoAcceptPrimaryWriteFailureShowsNonModalFeedback()
   QVERIFY(!pairing->trustedDevices().find(peerId)->autoAcceptFiles);
   QVERIFY(reloaded.load().ok);
   QVERIFY(!reloaded.find(peerId)->autoAcceptFiles);
+}
+
+void MainWindowLayoutTests::permissionCardGatesPairingAndRefreshesWithoutRestart()
+{
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+  QSKIP("This production permission-card path is platform-specific.");
+#else
+  const auto peerId = deskflow::relaydesk::DeviceId::generate();
+  const QByteArray fingerprint(32, '\x6d');
+  MainWindow window;
+  auto *discovery = window.findChild<deskflow::relaydesk::DeviceDiscoveryRuntime *>();
+  QVERIFY(discovery != nullptr);
+  QVERIFY(discovery->registry().observeAdvertisement(
+      {.deviceId = peerId,
+       .displayName = QStringLiteral("Permission-gated peer"),
+       .platform = QStringLiteral("windows"),
+       .architecture = QStringLiteral("x86_64"),
+       .appVersion = QStringLiteral("1.26.0"),
+       .inputPort = 24800,
+       .filePort = 24801,
+       .capabilities = {.input = true, .clipboardText = true, .fileV1 = true},
+       .certificateFingerprintSha256 = fingerprint},
+      QHostAddress::LocalHost
+  ));
+  window.open(false);
+
+  auto &dock = window.relayDeskDevicesDock();
+  auto *list = dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *pair = dock.findChild<QPushButton *>(QStringLiteral("relaydeskPairSelectedButton"));
+  auto *permissionTitle = dock.findChild<QLabel *>(QStringLiteral("relaydeskPermissionTitle"));
+  auto *permissionMessage = dock.findChild<QLabel *>(QStringLiteral("relaydeskPermissionMessage"));
+  QVERIFY(list != nullptr && pair != nullptr && permissionTitle != nullptr && permissionMessage != nullptr);
+  const auto index = window.relayDeskDeviceModel().index(window.relayDeskDeviceModel().indexOf(peerId), 0);
+  QVERIFY(index.isValid());
+  auto &permissions = window.relayDeskPermissionModel();
+  const auto publishSnapshot = [&permissions](
+                                   deskflow::relaydesk::PermissionState primaryState,
+                                   deskflow::relaydesk::PermissionState secondaryState =
+                                       deskflow::relaydesk::PermissionState::Granted
+                               ) {
+#if defined(Q_OS_WIN)
+    return permissions.setSnapshot({
+        .platform = deskflow::relaydesk::PermissionPlatform::Windows,
+        .entries = {
+            {.kind = deskflow::relaydesk::PermissionKind::WindowsFirewall,
+             .state = primaryState,
+             .errorCode = primaryState == deskflow::relaydesk::PermissionState::Denied
+                              ? deskflow::relaydesk::PermissionErrorCode::WindowsFirewallBlocked
+                              : deskflow::relaydesk::PermissionErrorCode::None,
+             .canOpenSettings = true},
+            {.kind = deskflow::relaydesk::PermissionKind::WindowsListeningPort,
+             .state = secondaryState,
+             .errorCode = secondaryState == deskflow::relaydesk::PermissionState::NeedsAction
+                              ? deskflow::relaydesk::PermissionErrorCode::WindowsPortUnavailable
+                              : deskflow::relaydesk::PermissionErrorCode::None},
+        },
+    });
+#elif defined(Q_OS_MACOS)
+    (void)secondaryState;
+    return permissions.setSnapshot({
+        .platform = deskflow::relaydesk::PermissionPlatform::MacOS,
+        .entries = {
+            {.kind = deskflow::relaydesk::PermissionKind::MacLocalNetwork,
+             .state = primaryState,
+             .errorCode = primaryState == deskflow::relaydesk::PermissionState::Denied
+                              ? deskflow::relaydesk::PermissionErrorCode::MacLocalNetworkDenied
+                              : deskflow::relaydesk::PermissionErrorCode::None,
+             .canOpenSettings = true},
+            {.kind = deskflow::relaydesk::PermissionKind::MacAccessibility,
+             .state = deskflow::relaydesk::PermissionState::Granted},
+            {.kind = deskflow::relaydesk::PermissionKind::MacInputMonitoring,
+             .state = deskflow::relaydesk::PermissionState::Granted},
+        },
+    });
+#endif
+  };
+
+  QVERIFY(publishSnapshot(deskflow::relaydesk::PermissionState::Granted));
+  QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier, list->visualRect(index).center());
+  QTRY_VERIFY(pair->isVisible() && pair->isEnabled());
+  QVERIFY(publishSnapshot(deskflow::relaydesk::PermissionState::Denied));
+  QTRY_VERIFY(!pair->isEnabled());
+  QCOMPARE(permissionTitle->text(), QStringLiteral("Permission needed"));
+#if defined(Q_OS_WIN)
+  QCOMPARE(permissionMessage->text(), QStringLiteral("Allow RelayDesk through Windows Firewall on private networks."));
+#elif defined(Q_OS_MACOS)
+  QCOMPARE(permissionMessage->text(), QStringLiteral("Allow Local Network access so RelayDesk can find nearby devices."));
+#endif
+
+  QVERIFY(publishSnapshot(deskflow::relaydesk::PermissionState::Granted));
+  QTRY_VERIFY(pair->isEnabled());
+#if defined(Q_OS_WIN)
+  QVERIFY(publishSnapshot(
+      deskflow::relaydesk::PermissionState::Granted, deskflow::relaydesk::PermissionState::NeedsAction
+  ));
+  QTRY_VERIFY(!pair->isEnabled());
+  QCOMPARE(permissionTitle->text(), QStringLiteral("Permission needed"));
+  QCOMPARE(
+      permissionMessage->text(),
+      QStringLiteral("RelayDesk cannot listen on its local network port. Review firewall and port settings.")
+  );
+  QVERIFY(publishSnapshot(deskflow::relaydesk::PermissionState::Granted));
+  QTRY_VERIFY(pair->isEnabled());
+#endif
+  QCOMPARE(permissionTitle->text(), QStringLiteral("Permissions ready"));
+  QCOMPARE(permissionMessage->text(), QStringLiteral("All required system permissions are ready."));
+
+  QSignalSpy pairingRequested(&dock, &deskflow::relaydesk::widgets::DevicesDock::pairingRequested);
+  QTest::mouseClick(pair, Qt::LeftButton);
+  QCOMPARE(pairingRequested.count(), 1);
+#endif
 }
 
 QTEST_MAIN(MainWindowLayoutTests)
