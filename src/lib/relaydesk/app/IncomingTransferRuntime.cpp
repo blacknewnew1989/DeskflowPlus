@@ -996,6 +996,9 @@ private:
         return;
       }
       snapshot.state = ::relaydesk::transfer::TransferState::Transferring;
+      snapshot.canPause = true;
+      snapshot.canResume = false;
+      snapshot.canCancel = true;
       snapshot.progress.completedBytes = bytes;
       snapshot.progress.completedFiles = files;
       snapshot.currentRelativeDisplayPath = path;
@@ -1034,6 +1037,8 @@ private:
       snapshot.progress.completedBytes = snapshot.progress.totalBytes;
       snapshot.progress.completedFiles = snapshot.progress.totalFiles;
       snapshot.currentRelativeDisplayPath = completedRelativePath;
+      snapshot.canPause = false;
+      snapshot.canResume = false;
       snapshot.canCancel = false;
       snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
       session->pipelineSnapshot = snapshot;
@@ -1057,6 +1062,8 @@ private:
       }
       snapshot.state = ::relaydesk::transfer::TransferState::Failed;
       snapshot.errorCode = code;
+      snapshot.canPause = false;
+      snapshot.canResume = false;
       snapshot.canCancel = false;
       snapshot.canRetry = false;
       snapshot.finishedUtc = QDateTime::currentDateTimeUtc();
@@ -1966,6 +1973,9 @@ bool IncomingTransferRuntime::receiveResumeQuery(
 
   session->lastResumeResponse = *built.response;
   session->pipelineSnapshot.state = TransferState::Resuming;
+  session->pipelineSnapshot.canPause = false;
+  session->pipelineSnapshot.canResume = false;
+  session->pipelineSnapshot.canCancel = true;
   session->pipeline = std::make_shared<ReceivePipeline>(
       *this, session->peer, session->offer, session->receiveOptions, m_fileSafety,
       m_workerPool, *loaded.state, session->pipelineGeneration, std::nullopt, m_recoveryStore
@@ -1991,6 +2001,8 @@ void IncomingTransferRuntime::peerDisconnected(const DeviceId &peerDeviceId)
     session->pipeline.reset();
     session->lastResumeResponse.reset();
     session->pipelineSnapshot.state = ::relaydesk::transfer::TransferState::Interrupted;
+    session->pipelineSnapshot.canPause = false;
+    session->pipelineSnapshot.canResume = true;
     session->pipelineSnapshot.canCancel = true;
     Q_EMIT transferChanged(session->pipelineSnapshot);
   }

@@ -16,6 +16,7 @@
 #include "relaydesk/transfer/IFileTransferService.h"
 #include "relaydesk/trust/TlsIdentityAdapter.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
+#include "relaydesk/transfer/TransferRecoveryStore.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
 
@@ -29,11 +30,14 @@
 #include <QLabel>
 #include <QListView>
 #include <QPushButton>
+#include <QToolButton>
 #include <QTest>
 #include <QTemporaryDir>
 #include <QSignalSpy>
 #include <QFileInfo>
 #include <QDir>
+#include <QMenu>
+#include <QTimer>
 
 using namespace deskflow::relaydesk;
 using namespace deskflow::relaydesk::model;
@@ -121,6 +125,14 @@ bool hasPartFile(const QString &root)
   return iterator.hasNext();
 }
 
+std::optional<qint64> partFileSize(const QString &root)
+{
+  QDirIterator iterator(root, {QStringLiteral("*.part")}, QDir::Files, QDirIterator::Subdirectories);
+  if (!iterator.hasNext())
+    return std::nullopt;
+  return QFileInfo(iterator.next()).size();
+}
+
 } // namespace
 
 class TransferRuntimeCompositionTests final : public QObject
@@ -137,6 +149,7 @@ private Q_SLOTS:
   void rejectedCompletedOpenShowsNonModalFeedbackWithoutChangingHistory();
   void asyncHistoryLoadAndPersistErrorsShowNonModalFeedbackWithoutDiagnostic();
   void productionIncomingOfferButtonsDriveLoopbackTransferAndTypedRejection();
+  void productionTransferCenterButtonsPauseResumeAndCancelLoopbackTransfers();
 };
 
 void TransferRuntimeCompositionTests::ownsTypedServiceBindingAndLifecycle()
@@ -650,6 +663,294 @@ void TransferRuntimeCompositionTests::productionIncomingOfferButtonsDriveLoopbac
   QCOMPARE(fixture.transfers.snapshot(*acceptedStart.transferId), acceptedSnapshot);
   QCOMPARE(fixture.transfers.rowCount(), rowCountBeforeReject);
   QCOMPARE(transferList->currentIndex(), selectedBeforeReject);
+
+  composition.stop();
+  sender.stop();
+}
+
+void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResumeAndCancelLoopbackTransfers()
+{
+  QTemporaryDir temporary(QDir::tempPath() + QStringLiteral("/relaydesk-r4-controls-XXXXXX"));
+  QVERIFY2(temporary.isValid(), qPrintable(temporary.errorString()));
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(temporary);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+
+  const QByteArray sourceBytes(32 * 1024 * 1024 + 37, '\x5a');
+  const auto pausedSourcePath = temporary.filePath(QStringLiteral("paused-source.bin"));
+  const auto cancelledSourcePath = temporary.filePath(QStringLiteral("cancelled-source.bin"));
+  for (const auto &path : {pausedSourcePath, cancelledSourcePath}) {
+    QFile source(path);
+    QVERIFY2(source.open(QIODevice::WriteOnly), qPrintable(source.errorString()));
+    QCOMPARE(source.write(sourceBytes), static_cast<qint64>(sourceBytes.size()));
+  }
+  const auto receiveRoot = temporary.filePath(QStringLiteral("received"));
+  const auto recoveryRoot = temporary.filePath(QStringLiteral("recovery"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+
+  Fixture fixture;
+  fixture.devicesDock.resize(480, 720);
+  fixture.devicesDock.show();
+  fixture.transferDock.resize(560, 480);
+  fixture.transferDock.show();
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(temporary.filePath(QStringLiteral("sender-trust.json")));
+  TrustedDeviceStore receiverTrust(temporary.filePath(QStringLiteral("receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(loopbackTrustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(loopbackTrustedDevice(senderId, identity.fingerprintSha256)));
+  DeviceHomeModel senderDevices;
+  DeviceDiscoveryRuntime senderDiscovery(
+      loopbackDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender")), senderDevices
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      loopbackDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver")), fixture.devices
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  options.recoveryStateRoot = recoveryRoot;
+  options.tlsSettings.maxQueuedWriteBytes = 64U * 1024U;
+  options.localCapabilities.preferredChunkBytes = 4U * 1024U;
+  options.localCapabilities.maxPayloadBytes = 16U * 1024U;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  auto receiver = std::make_unique<FileTransferRuntime>(
+      receiverId, receiverTrust, receiverDiscovery, identityPath, options
+  );
+  auto *receiverRuntime = receiver.get();
+  TransferRuntimeComposition composition(
+      std::move(receiver),
+      {
+          .start = [receiverRuntime](QString *diagnostic) { return receiverRuntime->start(diagnostic); },
+          .stop = [receiverRuntime] { receiverRuntime->stop(); },
+      },
+      fixture.devicesDock, fixture.transferDock,
+      {.destinationRoot = receiveRoot, .availableBytes = 128U * 1024U * 1024U}
+  );
+  TransferRecoveryStore recoveryStore(recoveryRoot);
+
+  auto *offerPanel = fixture.devicesDock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingOfferPanel"));
+  auto *accept = fixture.devicesDock.findChild<QPushButton *>(QStringLiteral("relaydeskAcceptIncomingOfferButton"));
+  auto *transferList = fixture.transferDock.findChild<QListView *>(QStringLiteral("relaydeskTransfersView"));
+  auto *pause = fixture.transferDock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferPauseButton"));
+  auto *resume = fixture.transferDock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferResumeButton"));
+  auto *more = fixture.transferDock.findChild<QToolButton *>(QStringLiteral("relaydeskTransferMoreButton"));
+  auto *cancel = fixture.transferDock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferCancelButton"));
+  auto *cancelAction = fixture.transferDock.findChild<QAction *>(QStringLiteral("relaydeskTransferCancelMenuAction"));
+  QVERIFY(offerPanel != nullptr);
+  QVERIFY(accept != nullptr);
+  QVERIFY(transferList != nullptr);
+  QVERIFY(pause != nullptr);
+  QVERIFY(resume != nullptr);
+  QVERIFY(more != nullptr);
+  QVERIFY(cancel != nullptr);
+  QVERIFY(cancelAction != nullptr);
+
+  std::optional<TransferSnapshot> senderPauseSnapshot;
+  std::optional<TransferSnapshot> receiverPauseSnapshot;
+  std::optional<TransferSnapshot> senderCancelSnapshot;
+  std::optional<TransferSnapshot> receiverCancelSnapshot;
+  QList<TransferState> receiverCancelStates;
+  QStringList errors;
+  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("sender: ") + message);
+  });
+  connect(receiverRuntime, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("receiver: ") + message);
+  });
+
+  std::optional<TransferId> pausedTransfer;
+  std::optional<TransferId> cancelledTransfer;
+  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction != TransferDirection::Sending)
+      return;
+    if (pausedTransfer.has_value() && snapshot.id == *pausedTransfer)
+      senderPauseSnapshot = snapshot;
+    if (cancelledTransfer.has_value() && snapshot.id == *cancelledTransfer)
+      senderCancelSnapshot = snapshot;
+  });
+  connect(receiverRuntime, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction != TransferDirection::Receiving)
+      return;
+    if (pausedTransfer.has_value() && snapshot.id == *pausedTransfer)
+      receiverPauseSnapshot = snapshot;
+    if (cancelledTransfer.has_value() && snapshot.id == *cancelledTransfer) {
+      receiverCancelSnapshot = snapshot;
+      receiverCancelStates.append(snapshot.state);
+    }
+  });
+  const auto snapshotEvidence = [&](const std::optional<TransferSnapshot> &runtime, const TransferId &transferId) {
+    const auto model = fixture.transfers.snapshot(transferId);
+    const auto describe = [](const std::optional<TransferSnapshot> &snapshot) {
+      return snapshot.has_value()
+                 ? QStringLiteral("state=%1 bytes=%2/%3")
+                       .arg(static_cast<int>(snapshot->state))
+                       .arg(snapshot->progress.completedBytes)
+                       .arg(snapshot->progress.totalBytes)
+                 : QStringLiteral("none");
+    };
+    const auto part = partFileSize(receiveRoot);
+    return QStringLiteral("runtime=[%1] model=[%2] part=%3")
+        .arg(describe(runtime), describe(model), part.has_value() ? QString::number(*part) : QStringLiteral("none"));
+  };
+  bool pauseClickQueued = false;
+  bool pauseClicked = false;
+  bool cancelClickQueued = false;
+  bool cancelClicked = false;
+  const auto queuePauseClick = [&] {
+    if (!pausedTransfer.has_value() || pauseClickQueued) {
+      return;
+    }
+    const auto snapshot = fixture.transfers.snapshot(*pausedTransfer);
+    if (!snapshot.has_value() || snapshot->state != TransferState::Transferring || !snapshot->canPause) {
+      return;
+    }
+    const auto row = fixture.transfers.indexOf(*pausedTransfer);
+    if (row < 0) {
+      return;
+    }
+    pauseClickQueued = true;
+    transferList->setCurrentIndex(fixture.transfers.index(row, 0));
+    QTimer::singleShot(0, &fixture.transferDock, [&] {
+      const auto current = fixture.transfers.snapshot(*pausedTransfer);
+      if (current.has_value() && current->state == TransferState::Transferring && current->canPause &&
+          pause->isVisible() && pause->isEnabled()) {
+        pauseClicked = true;
+        QTest::mouseClick(pause, Qt::LeftButton);
+      }
+    });
+  };
+  const auto queueCancelClick = [&] {
+    if (!cancelledTransfer.has_value() || cancelClickQueued) {
+      return;
+    }
+    const auto snapshot = fixture.transfers.snapshot(*cancelledTransfer);
+    if (!snapshot.has_value() || snapshot->state != TransferState::Transferring || !snapshot->canCancel) {
+      return;
+    }
+    const auto row = fixture.transfers.indexOf(*cancelledTransfer);
+    if (row < 0) {
+      return;
+    }
+    cancelClickQueued = true;
+    transferList->setCurrentIndex(fixture.transfers.index(row, 0));
+    QTimer::singleShot(0, &fixture.transferDock, [&] {
+      const auto current = fixture.transfers.snapshot(*cancelledTransfer);
+      if (!current.has_value() || current->state != TransferState::Transferring || !current->canCancel ||
+          !more->isVisible() || !cancelAction->isVisible() || !cancelAction->isEnabled()) {
+        return;
+      }
+      auto *menu = more->menu();
+      if (menu == nullptr) {
+        return;
+      }
+      QTimer::singleShot(0, menu, [&, menu] {
+        if (!menu->isVisible()) {
+          return;
+        }
+        const auto actionRect = menu->actionGeometry(cancelAction);
+        if (!actionRect.isValid()) {
+          return;
+        }
+        cancelClicked = true;
+        QTest::mouseClick(menu, Qt::LeftButton, Qt::NoModifier, actionRect.center());
+      });
+      QTest::mouseClick(more, Qt::LeftButton);
+    });
+  };
+  connect(
+      &fixture.transfers, &QAbstractItemModel::rowsInserted, this,
+      [&](const QModelIndex &, int, int) {
+        queuePauseClick();
+        queueCancelClick();
+      }
+  );
+  connect(
+      &fixture.transfers, &QAbstractItemModel::dataChanged, this,
+      [&](const QModelIndex &, const QModelIndex &, const QList<int> &) {
+        queuePauseClick();
+        queueCancelClick();
+      }
+  );
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(composition.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+
+  const auto pausedStart = sender.send(receiverId, {QUrl::fromLocalFile(pausedSourcePath)}, {});
+  QVERIFY2(pausedStart.ok(), qPrintable(pausedStart.diagnostic));
+  QVERIFY(pausedStart.transferId.has_value());
+  pausedTransfer = *pausedStart.transferId;
+  QTRY_VERIFY_WITH_TIMEOUT(offerPanel->isVisible() && accept->isVisible() && accept->isEnabled(), 10'000);
+  QTest::mouseClick(accept, Qt::LeftButton);
+  QTRY_VERIFY2_WITH_TIMEOUT(
+      pauseClicked,
+      qPrintable(snapshotEvidence(receiverPauseSnapshot, *pausedTransfer)),
+      20'000
+  );
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderPauseSnapshot.has_value() && receiverPauseSnapshot.has_value() &&
+          senderPauseSnapshot->state == TransferState::Paused && receiverPauseSnapshot->state == TransferState::Paused,
+      15'000
+  );
+  const auto pausedSenderBytes = senderPauseSnapshot->progress.completedBytes;
+  const auto pausedReceiverBytes = receiverPauseSnapshot->progress.completedBytes;
+  const auto pausedPartSize = partFileSize(receiveRoot);
+  QVERIFY(pausedPartSize.has_value());
+  QTest::qWait(400);
+  QCOMPARE(senderPauseSnapshot->state, TransferState::Paused);
+  QCOMPARE(receiverPauseSnapshot->state, TransferState::Paused);
+  QCOMPARE(senderPauseSnapshot->progress.completedBytes, pausedSenderBytes);
+  QCOMPARE(receiverPauseSnapshot->progress.completedBytes, pausedReceiverBytes);
+  QCOMPARE(partFileSize(receiveRoot), pausedPartSize);
+  QTRY_VERIFY_WITH_TIMEOUT(resume->isVisible() && resume->isEnabled(), 5'000);
+  QTest::mouseClick(resume, Qt::LeftButton);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderPauseSnapshot.has_value() && receiverPauseSnapshot.has_value() &&
+          senderPauseSnapshot->state == TransferState::Completed && receiverPauseSnapshot->state == TransferState::Completed,
+      90'000
+  );
+  const auto pausedTargetPath = QDir(receiveRoot).filePath(QStringLiteral("paused-source.bin"));
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(pausedTargetPath), 10'000);
+  QFile pausedTarget(pausedTargetPath);
+  QVERIFY(pausedTarget.open(QIODevice::ReadOnly));
+  QCOMPARE(
+      QCryptographicHash::hash(pausedTarget.readAll(), QCryptographicHash::Sha256),
+      QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256)
+  );
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !QFileInfo::exists(recoveryStore.outgoingStatePath(*pausedTransfer)) &&
+          !QFileInfo::exists(recoveryStore.incomingStatePath(*pausedTransfer)),
+      5'000
+  );
+  QVERIFY(!hasPartFile(receiveRoot));
+
+  const auto cancelledStart = sender.send(receiverId, {QUrl::fromLocalFile(cancelledSourcePath)}, {});
+  QVERIFY2(cancelledStart.ok(), qPrintable(cancelledStart.diagnostic));
+  QVERIFY(cancelledStart.transferId.has_value());
+  cancelledTransfer = *cancelledStart.transferId;
+  QTRY_VERIFY_WITH_TIMEOUT(offerPanel->isVisible() && accept->isVisible() && accept->isEnabled(), 10'000);
+  QTest::mouseClick(accept, Qt::LeftButton);
+  QTRY_VERIFY2_WITH_TIMEOUT(
+      cancelClicked,
+      qPrintable(snapshotEvidence(receiverCancelSnapshot, *cancelledTransfer)),
+      20'000
+  );
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderCancelSnapshot.has_value() && receiverCancelSnapshot.has_value() &&
+          senderCancelSnapshot->state == TransferState::Cancelled && receiverCancelSnapshot->state == TransferState::Cancelled,
+      15'000
+  );
+  QVERIFY(receiverCancelStates.indexOf(TransferState::Cancelling) >= 0);
+  QVERIFY(receiverCancelStates.indexOf(TransferState::Cancelling) <
+          receiverCancelStates.lastIndexOf(TransferState::Cancelled));
+  QVERIFY(!QFileInfo::exists(QDir(receiveRoot).filePath(QStringLiteral("cancelled-source.bin"))));
+  QVERIFY(hasPartFile(receiveRoot));
+  QVERIFY(QFileInfo::exists(recoveryStore.incomingStatePath(*cancelledTransfer)));
+  QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(recoveryStore.outgoingStatePath(*cancelledTransfer)), 5'000);
+  QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
 
   composition.stop();
   sender.stop();
