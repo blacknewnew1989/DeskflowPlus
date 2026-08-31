@@ -83,9 +83,11 @@ private Q_SLOTS:
   void cancelUsesTwoIndependentProcesses();
   void fileTreeUsesTwoIndependentProcesses();
   void listenerResumeUsesTwoIndependentProcesses();
+  void receiverRelaunchResumesInTwoIndependentProcesses();
 
 private:
   void runScenario(const QString &scenario);
+  void runReceiverRelaunchScenario();
 };
 
 void TwoProcessRelayDeskRuntimeTests::discoveryPairingAndFileTransferUseTwoIndependentProcesses()
@@ -111,6 +113,152 @@ void TwoProcessRelayDeskRuntimeTests::fileTreeUsesTwoIndependentProcesses()
 void TwoProcessRelayDeskRuntimeTests::listenerResumeUsesTwoIndependentProcesses()
 {
   runScenario(QStringLiteral("listener-resume"));
+}
+
+void TwoProcessRelayDeskRuntimeTests::receiverRelaunchResumesInTwoIndependentProcesses()
+{
+  runReceiverRelaunchScenario();
+}
+
+void TwoProcessRelayDeskRuntimeTests::runReceiverRelaunchScenario()
+{
+  const QString scenario = QStringLiteral("receiver-process-recovery");
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  const QByteArray sourceBytes(20 * 1024 * 1024 + 113, '\x6d');
+  const QString sourcePath = temporary.filePath(QStringLiteral("process-recovery.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(sourceBytes), qint64(sourceBytes.size()));
+  source.close();
+  const QByteArray expectedSha = QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256).toHex();
+
+  QUdpSocket senderReservation;
+  QUdpSocket receiverReservation;
+  QVERIFY(senderReservation.bind(QHostAddress::LocalHost, 0));
+  QVERIFY(receiverReservation.bind(QHostAddress::LocalHost, 0));
+  const quint16 senderPort = senderReservation.localPort();
+  const quint16 receiverPort = receiverReservation.localPort();
+  QVERIFY(senderPort != 0 && receiverPort != 0 && senderPort != receiverPort);
+  senderReservation.close();
+  receiverReservation.close();
+
+  const QString senderRoot = temporary.filePath(QStringLiteral("sender"));
+  const QString receiverRoot = temporary.filePath(QStringLiteral("receiver"));
+  const QString senderResult = temporary.filePath(QStringLiteral("sender-result.json"));
+  const QString receiverStageResult = temporary.filePath(QStringLiteral("receiver-stage.json"));
+  const QString receiverFinalResult = temporary.filePath(QStringLiteral("receiver-final.json"));
+  const QString peer = QString::fromUtf8(RELAYDESK_TWO_PROCESS_PEER_PATH);
+  const auto arguments = [&](const QString &role, const QString &root, quint16 localPort, quint16 remotePort,
+                             const QString &result, int generation) {
+    return QStringList{
+        QStringLiteral("--role"), role,
+        QStringLiteral("--root"), root,
+        QStringLiteral("--scenario"), scenario,
+        QStringLiteral("--discovery-port"), QString::number(localPort),
+        QStringLiteral("--peer-discovery-port"), QString::number(remotePort),
+        QStringLiteral("--source"), sourcePath,
+        QStringLiteral("--expected-sha256"), QString::fromLatin1(expectedSha),
+        QStringLiteral("--result"), result,
+        QStringLiteral("--restart-generation"), QString::number(generation),
+    };
+  };
+
+  QProcess receiverFirst;
+  receiverFirst.setProgram(peer);
+  receiverFirst.setArguments(arguments(
+      QStringLiteral("receiver"), receiverRoot, receiverPort, senderPort, receiverStageResult, 0
+  ));
+  QProcess receiverSecond;
+  receiverSecond.setProgram(peer);
+  receiverSecond.setArguments(arguments(
+      QStringLiteral("receiver"), receiverRoot, receiverPort, senderPort, receiverFinalResult, 1
+  ));
+  QProcess sender;
+  sender.setProgram(peer);
+  sender.setArguments(arguments(QStringLiteral("sender"), senderRoot, senderPort, receiverPort, senderResult, 0));
+  const auto stopAll = qScopeGuard([&] {
+    (void)stopProcess(sender);
+    (void)stopProcess(receiverFirst);
+    (void)stopProcess(receiverSecond);
+  });
+  const auto preserveFailure = qScopeGuard([&] {
+    if (QTest::currentTestFailed()) {
+      temporary.setAutoRemove(false);
+      qCritical().noquote() << processEvidence(
+          scenario, temporary.path(), QStringLiteral("sender"), sender, senderResult
+      );
+      qCritical().noquote() << processEvidence(
+          scenario, temporary.path(), QStringLiteral("receiver-first"), receiverFirst, receiverStageResult
+      );
+      qCritical().noquote() << processEvidence(
+          scenario, temporary.path(), QStringLiteral("receiver-second"), receiverSecond, receiverFinalResult
+      );
+    }
+  });
+  QElapsedTimer deadline;
+  deadline.start();
+  const auto remaining = [&] { return qMax(0, 45'000 - static_cast<int>(deadline.elapsed())); };
+
+  receiverFirst.start();
+  QVERIFY2(receiverFirst.waitForStarted(qMin(5'000, remaining())), qPrintable(receiverFirst.errorString()));
+  sender.start();
+  QVERIFY2(sender.waitForStarted(qMin(5'000, remaining())), qPrintable(sender.errorString()));
+  QVERIFY2(receiverFirst.waitForFinished(remaining()), qPrintable(processOutput(receiverFirst)));
+  QCOMPARE(receiverFirst.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(receiverFirst.exitCode(), 0);
+  const auto stageJson = readResult(receiverStageResult);
+  QVERIFY(!stageJson.isEmpty());
+  QVERIFY2(stageJson.value(QStringLiteral("passed")).toBool(), qPrintable(stageJson.value(QStringLiteral("error")).toString()));
+  QCOMPARE(stageJson.value(QStringLiteral("phase")).toString(), QStringLiteral("checkpoint_ready"));
+  QVERIFY(stageJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong() > 0);
+  QVERIFY(stageJson.value(QStringLiteral("partBytesBeforeRestart")).toVariant().toULongLong() >=
+          stageJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong());
+  QVERIFY(stageJson.value(QStringLiteral("resumeStateExisted")).toBool());
+  QVERIFY(!stageJson.value(QStringLiteral("transferId")).toString().isEmpty());
+
+  receiverSecond.start();
+  QVERIFY2(receiverSecond.waitForStarted(qMin(5'000, remaining())), qPrintable(receiverSecond.errorString()));
+  QVERIFY2(receiverSecond.waitForFinished(remaining()), qPrintable(processOutput(receiverSecond)));
+  QVERIFY2(sender.waitForFinished(remaining()), qPrintable(processOutput(sender)));
+  QCOMPARE(receiverSecond.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(sender.exitStatus(), QProcess::NormalExit);
+  QCOMPARE(receiverSecond.exitCode(), 0);
+  QCOMPARE(sender.exitCode(), 0);
+  const auto senderJson = readResult(senderResult);
+  const auto receiverJson = readResult(receiverFinalResult);
+  QVERIFY(senderJson.value(QStringLiteral("passed")).toBool());
+  QVERIFY(receiverJson.value(QStringLiteral("passed")).toBool());
+  QCOMPARE(senderJson.value(QStringLiteral("error")).toString(), QString{});
+  QCOMPARE(receiverJson.value(QStringLiteral("error")).toString(), QString{});
+  QCOMPARE(receiverJson.value(QStringLiteral("phase")).toString(), QStringLiteral("completed"));
+  QCOMPARE(receiverJson.value(QStringLiteral("deviceId")).toString(), stageJson.value(QStringLiteral("deviceId")).toString());
+  QCOMPARE(receiverJson.value(QStringLiteral("fingerprint")).toString(), stageJson.value(QStringLiteral("fingerprint")).toString());
+  QCOMPARE(receiverJson.value(QStringLiteral("settingsFile")).toString(), stageJson.value(QStringLiteral("settingsFile")).toString());
+  QCOMPARE(senderJson.value(QStringLiteral("transferId")).toString(), stageJson.value(QStringLiteral("transferId")).toString());
+  QCOMPARE(receiverJson.value(QStringLiteral("transferId")).toString(), stageJson.value(QStringLiteral("transferId")).toString());
+  QVERIFY(receiverJson.value(QStringLiteral("resumedFromNonZero")).toBool());
+  QVERIFY(receiverJson.value(QStringLiteral("receiverFirstTransferringAfterInterruptCaptured")).toBool());
+  QVERIFY(receiverJson.value(QStringLiteral("firstReceiverResumingBytes")).toVariant().toULongLong() >=
+          stageJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong());
+  QCOMPARE(receiverJson.value(QStringLiteral("actualSha")).toString(), QString::fromLatin1(expectedSha));
+  QVERIFY(!receiverJson.value(QStringLiteral("partFilesRemaining")).toBool());
+  QVERIFY(!receiverJson.value(QStringLiteral("resumeStateRemaining")).toBool());
+  QVERIFY(containsOrderedStates(
+      senderJson.value(QStringLiteral("states")).toArray(),
+      {static_cast<int>(::relaydesk::transfer::TransferState::Interrupted),
+       static_cast<int>(::relaydesk::transfer::TransferState::Resuming),
+       static_cast<int>(::relaydesk::transfer::TransferState::Completed)}
+  ));
+  QVERIFY(containsOrderedStates(
+      receiverJson.value(QStringLiteral("states")).toArray(),
+      {static_cast<int>(::relaydesk::transfer::TransferState::Interrupted),
+       static_cast<int>(::relaydesk::transfer::TransferState::Completed)}
+  ));
+  QVERIFY(senderJson.value(QStringLiteral("senderFirstResumingCaptured")).toBool());
+  QVERIFY(senderJson.value(QStringLiteral("firstResumingBytes")).toVariant().toULongLong() >=
+          stageJson.value(QStringLiteral("durableOffset")).toVariant().toULongLong());
+  QVERIFY(senderJson.value(QStringLiteral("expectedTransportErrorCount")).toInt() <= 1);
 }
 
 void TwoProcessRelayDeskRuntimeTests::runScenario(const QString &scenario)
