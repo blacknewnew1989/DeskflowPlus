@@ -22,8 +22,9 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | banner/detail model 存在；TCC/系统往返未运行 | `NOT_RUN` |
 | R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
 | R4-UI-005 | Incoming Offer / Ask | accept/reject/conflict decision | IncomingOfferModel / TransferUiRuntime -> FileTransferRuntime | 真实 TLS offer 经 production widget accept/reject 完成或拒绝 | `PASS` |
-| R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | pause/resume/cancel 已由 006A 验证；retry 未运行 | `IN_PROGRESS` |
+| R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | 006A 控制与 006B history retry 均已验证 | `PASS` |
 | R4-UI-006A | 传输中心控制 | pause/resume/cancel | TransferCenterDock -> TransferCenterModel -> FileTransferRuntime | 真实 widget 手势、双端状态与文件状态已验证 | `PASS` |
+| R4-UI-006B | 历史重试 | retry failed outgoing | TransferCenterDock -> TransferCenterModel -> FileTransferRuntime::retry | 真实 history row 产生新 transfer/offer 并完成 | `PASS` |
 | R4-UI-007 | 迷你条 | primary action、details | TransferCenterModel typed intents；details 打开 TransferCenterDock | 真实后台传输刷新未运行 | `NOT_RUN` |
 | R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | opener 拒绝与 history load/persist error 写入本地化非模态反馈 | `PASS` |
 | R4-UI-009 | 设置 | transferSettingsSaved | TransferSettingsStore -> MainWindow composition snapshot | 保存失败有 QMessageBox；原生交互未运行 | `NOT_RUN` |
@@ -47,7 +48,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | 权限 | PermissionStatusModel、DevicesDock、MainWindowLayout | 门控、文案、控件绑定 | TCC、Windows/macOS 系统设置往返 |
 | 拖放发送 | DevicesDock、TransferUiRuntime | local URL 过滤、immutable intent、fake service adapter | Explorer/Finder DnD、真实 service 失败反馈 |
 | Incoming Offer | IncomingOfferModel、DevicesDock、TransferRuntimeComposition、FileTransferRuntime | localhost TLS offer、widget accept/reject、文件 SHA/row/清理 | Ask、原生窗口系统、物理双机 |
-| 传输中心/迷你条 | TransferCenterModel/Dock、TransferMiniBar、FileTransferRuntime | localhost 真实传输期间 pause/resume/cancel widget intent | retry、原生窗口与物理交互 |
+| 传输中心/迷你条 | TransferCenterModel/Dock、TransferMiniBar、FileTransferRuntime | localhost 真实传输期间 pause/resume/cancel/retry widget intent | 原生窗口与物理交互 |
 | 历史/打开 | TransferUiRuntime、TransferRuntimeComposition | receive-root 路径校验、可注入 opener、失败反馈与交错状态 | OS shell 实际打开 |
 | 设置/托盘 | MainWindowLayout、BackgroundLifecycle、QuitRegression | 保存绑定、close/minimize/quit policy | OS tray/menu bar、系统后台行为 |
 
@@ -233,10 +234,50 @@ Explorer/Finder、macOS TCC、物理 Win↔Mac 双机、Ask 冲突或正式发�
   `relaydesk-a0-ui006a-composition-full.log`（01:45:51，64.585s）为 12/0/0、退出 0。
 
 `R4-UI-006A` 的 `PASS` 只覆盖 Windows 同机 localhost TLS、真实临时文件系统和 offscreen Qt
-Transfer Center widget intent。retry 仍为 `NOT_RUN`，因此 `R4-UI-006` 保持 `IN_PROGRESS`；native
-Windows/macOS window system、TCC、物理 Win↔Mac 和正式发布也不由本证据证明。
+Transfer Center widget intent。native Windows/macOS window system、TCC、物理 Win↔Mac 和正式发布
+不由本证据证明。
 
-## 8. 证据边界
+## 8. 第五个纵向证据切片
+
+选择 `R4-UI-006B`，范围只包含真实 Failed outgoing history row 的 retry。
+
+实现与验收结果：
+
+- owner：`agent/a7/r4-history-retry-ui@52fd8341aaa3ec3770703c32c7367f721657c715`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@2483319805ba1c3b7002e8bfc346f53ead8f9b0e`。两提交
+  parent 均为 `9a03ad52625ee6c25d0ec29927bfc6ecad3cd8a9`、tree 均为
+  `67ec839bebfc56f170596dcec11ba423b4498e90`，由 cherry-pick 产生不同 commit id；
+- sender/receiver 均由真实 `TransferRuntimeComposition` 持有 FileTransferRuntime；sender 绑定真实
+  TransferCenterDock/history runtime，receiver 绑定真实 DevicesDock/IncomingOfferModel，TLS identity、
+  双向 trust、discovery、localhost socket 和临时文件系统均为 production 实现；
+- sender 生成首个 manifest/offer 后、receiver 点击真实 Accept 前，以同长度不同内容替换源文件；
+  TransferSender 在首块前检测 SourceChanged，使旧 outgoing 成为 typed `Failed + canRetry` 并异步进入历史；
+- 选中旧 Failed history row 后只点击可见 Retry QPushButton。model 立即清除旧 retry availability，
+  service 发布绑定旧 ID 的 Retry Applied，并通过正常 `send()` 产生不同的新 transfer ID 与第二个真实 offer；
+  旧 row 不能重复点击；
+- receiver 再次点击真实 Accept 后，新 transfer 完成，目标 SHA-256 与当前源一致；旧 Failed history
+  不被改写，新 row/history 为 Completed；
+- SourceChanged 发生在首块前，因此旧 transfer 从未创建 `.part`。测试在 Retry 前等待旧 incoming
+  recovery sidecar 持久化，并在 Applied、新 transfer 和最终完成后逐次比较其原始字节与解码状态保持
+  不变，同时断言 old no-part 状态保持；没有伪造 partial，也没有把无 `.part` 误写成 retry 清理；
+- owner C 盘日志根为 `C:\Users\52323\AppData\Local\Temp\relaydesk-a7-ui006b\logs`。最终新增槽
+  `ui006b-final-slot-1.txt`、`ui006b-final-slot-2.txt`、`ui006b-final-slot-3.txt` 均为 3/0/0、退出 0，
+  bounded 3/3；完整 Composition `composition-full-final.txt` 为 13/0/0，Dock
+  `transfer-center-dock-full-final.txt` 为 4/0/0，FileTransferRuntime
+  `file-transfer-runtime-full-final.txt` 为 56 passed、0 failed、4 skipped，HistoryStore
+  `history-store-full-final.txt` 为 11/0/0，均退出 0；
+- UI 与 transfer reviewer 均复核 GO，未发现 P0/P1；
+- A0 fresh build `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui006b` 使用 VS 2022、Ninja、
+  Qt 6.10.1 与现有 x64-windows Debug vcpkg 安装树，Composition 106/106 构建退出 0，日志
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui006b-build.log`（2026-09-01 02:23:19）；新增槽
+  `relaydesk-a0-ui006b-slot.log`（02:23:50，3.933s）为 3/0/0、退出 0，完整 Composition
+  `relaydesk-a0-ui006b-composition-full.log`（02:25:00，69.112s）为 13/0/0、退出 0。
+
+`R4-UI-006B` 关闭了 history retry 缺口，因此 `R4-UI-006` 在 Windows 同机 localhost/offscreen
+production composition 范围内为 `PASS`。该状态不证明 native Windows/macOS window system、TCC、
+物理 Win↔Mac 或正式发布行为。
+
+## 9. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；

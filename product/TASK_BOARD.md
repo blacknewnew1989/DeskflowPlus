@@ -35,8 +35,9 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R4-UI-003 | NOT_RUN | A3/A4/A5/A7/A0 | 当前 SHA 运行权限卡、能力门控和原生系统设置往返；TCC 留物理验收 |
 | R4-UI-004 | PASS | A3/A7/A0 | owner `b036e1f7b` / A0 `5aa0bfc4b`；typed NotRunning/PeerUnavailable 显示本地化反馈，失败保留设备/路径选择且不创建 transfer row；红测与两完整目标退出 0 |
 | R4-UI-005 | PASS | A3/A6/A7/A0 | owner `5ac175f90` / A0 内容等价提交 `36d83e77c`；真实 TLS localhost offer 经 production widget accept/reject 完成 SHA/row/清理与 typed rejection 验收，双 reviewer GO，A0 fresh Composition 11/11。证据见 R4 基线报告第 6 节；Ask、原生窗口系统和物理双机仍 `NOT_RUN` |
-| R4-UI-006 | IN_PROGRESS | A3/A6/A7/A0 | `R4-UI-006A` 已覆盖真实 widget pause/resume/cancel；retry 另切片 `NOT_RUN`，总项不提前 PASS |
+| R4-UI-006 | PASS | A3/A6/A7/A0 | `R4-UI-006A` pause/resume/cancel 与 `R4-UI-006B` history retry 均已通过真实 localhost/offscreen widget/runtime 验收；原生与物理交互不由该 PASS 证明 |
 | R4-UI-006A | PASS | A3/A6/A7/A0 | owner `361b3ba2e` / A0 内容等价提交 `9c38f79e9`；receiver action flags 修复后，真实按钮 Pause/Resume 与 More/Cancel 通过 TLS localhost 双端状态、稳定 bytes/part、SHA、Keep partial/恢复状态验收。owner 3/3、三完整目标与 A0 fresh Composition 全绿，双 reviewer GO；详见 R4 基线报告第 7 节 |
+| R4-UI-006B | PASS | A3/A6/A7/A0 | owner `52fd8341a` / A0 内容等价提交 `248331980`；真实 Failed history row 的 Retry 按钮清 availability、产生 Applied/新 ID/第二 offer，二次 Accept 完成当前源 SHA；旧 history/sidecar不被改写。owner 3/3、四完整目标与 A0 fresh Composition 全绿，双 reviewer GO；详见第 8 节 |
 | R4-UI-007 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行迷你条与真实后台传输状态同步 |
 | R4-UI-008 | PASS | A3/A7/A0 | owner `258d7aa6e` / A0 内容等价提交 `941149532`；打开文件/位置被拒绝及 history load/persist error 显示本地化非模态反馈，交错状态保留选择、按钮和历史记录。owner 四完整目标退出 0，A0 四目标构建退出 0；命令与日志见 R4 基线报告第 5 节，真实 OS shell 打开仍 `NOT_RUN` |
 | R4-UI-009 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行设置保存、重开和 runtime 更新 |
