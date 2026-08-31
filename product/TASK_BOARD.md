@@ -37,7 +37,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R4-UI-005 | NOT_RUN | A3/A6/A7/A0 | 当前 SHA 运行真实 Incoming Offer/Ask 到接收与失败反馈 |
 | R4-UI-006 | NOT_RUN | A3/A6/A7/A0 | 当前 SHA 运行传输中心 pause/resume/cancel/retry 到真实 runtime |
 | R4-UI-007 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行迷你条与真实后台传输状态同步 |
-| R4-UI-008 | FAIL | A3/A7/A0 | 为历史打开/存储失败增加 production 可见反馈并做安全路径红测 |
+| R4-UI-008 | PASS | A3/A7/A0 | owner `258d7aa6e` / A0 内容等价提交 `941149532`；打开文件/位置被拒绝及 history load/persist error 显示本地化非模态反馈，交错状态保留选择、按钮和历史记录。owner 四完整目标退出 0，A0 四目标构建退出 0；命令与日志见 R4 基线报告第 5 节，真实 OS shell 打开仍 `NOT_RUN` |
 | R4-UI-009 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行设置保存、重开和 runtime 更新 |
 | R4-UI-010 | NOT_RUN | A3/A4/A5/A7/A0 | 当前 SHA 运行 Windows tray/macOS menu bar；物理交互不由 hosted 证明 |
 

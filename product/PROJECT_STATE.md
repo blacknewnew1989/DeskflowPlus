@@ -65,7 +65,7 @@
 | R4-UI-005 | NOT_RUN | Incoming Offer/Ask 已接 typed service intent；当前 SHA 未运行真实 TLS offer 到可视面板 |
 | R4-UI-006 | NOT_RUN | 传输中心控制已接 FileTransferRuntime；当前 SHA 未运行原生 UI 控制真实传输 |
 | R4-UI-007 | NOT_RUN | 迷你条复用 TransferCenterModel typed intent；当前 SHA 未运行真实后台传输刷新 |
-| R4-UI-008 | FAIL | 历史打开文件/位置与 history error 只发内部 signal，production MainWindow 没有用户可见失败 receiver |
+| R4-UI-008 | PASS | owner `258d7aa6e` / A0 内容等价提交 `941149532`：validated opener 拒绝与 history load/persist error 已接入 Transfer Center 本地化非模态反馈；打开成功只清打开失败，不覆盖仍有效的历史错误。owner 四完整目标退出 0，A0 四目标构建退出 0；命令与日志见 `product/docs/reports/R4_UI_PLATFORM_BASELINE.md` 第 5 节，fake opener 不证明 Explorer/Finder/OS shell 实际打开 |
 | R4-UI-009 | NOT_RUN | 传输设置保存与 runtime snapshot 接线存在；当前 SHA 未运行原生设置交互 |
 | R4-UI-010 | NOT_RUN | 托盘/menu bar action 与 shutdown 接线存在；当前 SHA 未运行 OS 托盘、macOS menu bar 或物理交互 |
 

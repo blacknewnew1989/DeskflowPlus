@@ -24,7 +24,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-005 | Incoming Offer / Ask | accept/reject/conflict decision | IncomingOfferModel / TransferUiRuntime -> FileTransferRuntime | safety/prompt 有反馈；真实 TLS 组合未运行 | `NOT_RUN` |
 | R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | snapshot 可显示；一般 operation rejection 未运行 | `NOT_RUN` |
 | R4-UI-007 | 迷你条 | primary action、details | TransferCenterModel typed intents；details 打开 TransferCenterDock | 真实后台传输刷新未运行 | `NOT_RUN` |
-| R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | completionOpenRejected、historyError 无 production UI receiver | `FAIL` |
+| R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | opener 拒绝与 history load/persist error 写入本地化非模态反馈 | `PASS` |
 | R4-UI-009 | 设置 | transferSettingsSaved | TransferSettingsStore -> MainWindow composition snapshot | 保存失败有 QMessageBox；原生交互未运行 | `NOT_RUN` |
 | R4-UI-010 | 托盘/menu bar | restore/pause/settings/quit | BackgroundLifecycleController -> core/transfer/discovery shutdown | 接线存在；OS tray/menu bar 未运行 | `NOT_RUN` |
 
@@ -47,7 +47,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | 拖放发送 | DevicesDock、TransferUiRuntime | local URL 过滤、immutable intent、fake service adapter | Explorer/Finder DnD、真实 service 失败反馈 |
 | Incoming Offer | IncomingOfferModel、DevicesDock、IncomingTransferRuntime | accept/reject/Ask typed flow | 真实 TLS offer 到可视面板 |
 | 传输中心/迷你条 | TransferCenterModel/Dock、TransferMiniBar | 控制 intent、状态/ETA 映射 | 真实传输期间原生交互 |
-| 历史/打开 | TransferUiRuntime、TransferRuntimeComposition | receive-root 路径校验、可注入 opener | OS shell 实际打开与用户失败提示 |
+| 历史/打开 | TransferUiRuntime、TransferRuntimeComposition | receive-root 路径校验、可注入 opener、失败反馈与交错状态 | OS shell 实际打开 |
 | 设置/托盘 | MainWindowLayout、BackgroundLifecycle、QuitRegression | 保存绑定、close/minimize/quit policy | OS tray/menu bar、系统后台行为 |
 
 Hosted CI、offscreen Qt 和 fake service 测试均不能替代物理 Win↔Mac、TCC 或原生文件拖放。
@@ -81,10 +81,65 @@ Hosted CI、offscreen Qt 和 fake service 测试均不能替代物理 Win↔Mac�
   RelayDeskDevicesDockTests 均退出 0；A0 两完整目标复验退出 0；
 - 独立 transfer reviewer 给出 GO，未发现 P0/P1、UAF、同步覆盖或 service 接口越界。
 
-未新增视觉组件、翻译键、协议或 service API。`R4-UI-008` 保留为下一独立 FAIL；托盘、权限、
-七语言和打包没有在本切片展开。
+未新增视觉组件、翻译键、协议或 service API。托盘、权限、七语言和打包没有在本切片展开。
 
-## 5. 证据边界
+## 5. 第二个纵向修复切片
+
+选择 `R4-UI-008`，范围只包含历史打开失败与历史存储失败反馈。
+
+实现结果：
+
+- owner：`agent/a3/r4-history-failure-feedback@258d7aa6e7419b9037c93b54aa072cd64f13e2e0`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@941149532447907c95dcca677bc9e82b2f7e1476`。两提交
+  parent 均为 `b97f51271992fb71379c34b49d584abb255dc9ba`、tree 均为
+  `2760d6a2e9c03653912383b23297a16b2a188561`，由 cherry-pick
+  产生不同 commit id，不构成 owner -> A0 的 ancestry；
+- `completionOpenRejected` 与 `TransferHistoryRuntime::historyError` 接入现有 Transfer Center 非模态状态面；
+- 用户文案只使用固定翻译键，不显示 opener URL、receive root、completed path 或内部 diagnostic；
+- 打开失败与历史错误使用独立状态；打开成功只清打开失败，仍有效的历史错误继续显示；
+- 失败及后续成功均保留当前选择、打开按钮状态和历史记录；
+- 新增两条翻译键，并同步 `en/es/it/ja/ko/ru/zh_CN` 七份 catalog；
+- 原始两条红测均退出 1，失败点为 production UI 中不存在反馈 receiver；状态交错红测在旧单一状态实现下
+  退出 1。日志分别为
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a3-r4-red\open-red.log`（21:55:25）、
+  `history-red.log`（21:55:59）和 `interleaving-red.log`（22:19:25）；
+- owner 源码目录为 `F:\github\DeskflowPlus\working\relaydesk-a3-r4-history-failure-feedback`，fresh build 为
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a3-r4-ui-debug`。先加载
+  `Launch-VsDevShell.ps1 -Arch amd64 -HostArch amd64 -SkipAutomaticLocation`，再执行：
+
+  ```powershell
+  cmake --build 'C:\Users\52323\AppData\Local\Temp\relaydesk-a3-r4-ui-debug' --target RelayDeskTransferRuntimeCompositionTests RelayDeskTransferCenterDockTests RelayDeskI18NTests RelayDeskTransferUiRuntimeTests --parallel 2
+  ```
+
+  测试使用该 build 的对应 EXE、Qt/vcpkg Debug DLL `PATH`；三个 GUI 目标设置
+  `QT_QPA_PLATFORM=offscreen`，均以 `-o <log>,txt` 输出。2026-08-31 22:22 的 receipts 为：
+
+  | 目标 | Totals / exit | 日志 |
+  |---|---|---|
+  | RelayDeskTransferRuntimeCompositionTests | 10 passed, 0 failed, 0 skipped / 0 | `C:\Users\52323\AppData\Local\Temp\relaydesk-a3-r4-red\composition-green.log` |
+  | RelayDeskTransferCenterDockTests | 4 passed, 0 failed, 0 skipped / 0 | `C:\Users\52323\AppData\Local\Temp\relaydesk-a3-r4-red\dock-green.log` |
+  | RelayDeskI18NTests | 7 passed, 0 failed, 0 skipped / 0 | `C:\Users\52323\AppData\Local\Temp\relaydesk-a3-r4-red\i18n-green.log` |
+  | RelayDeskTransferUiRuntimeTests | 8 passed, 0 failed, 0 skipped / 0 | `C:\Users\52323\AppData\Local\Temp\relaydesk-a3-r4-red\ui-runtime-green.log` |
+- 独立 UI reviewer 首轮因 history/open 状态互相覆盖给出 NO-GO；修复并补交错测试后复核 GO，
+  未发现新的 P0/P1 或范围扩张；
+- A0 在 `F:\github\DeskflowPlus\working\relaydesk-redevelop-p0` 加载同一 VS 环境后执行：
+
+  ```powershell
+  cmake --build 'F:\github\DeskflowPlus\working\relaydesk-redevelop-p0\build\windows\r0-debug-fresh' --target RelayDeskTransferRuntimeCompositionTests RelayDeskTransferCenterDockTests RelayDeskI18NTests RelayDeskTransferUiRuntimeTests --parallel 2
+  ```
+
+  首次构建 43/43 完成、退出 0；2026-08-31 22:46:57 在相同 SHA 再执行为 `ninja: no work to do.`、
+  退出 0，receipt 为
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-r4-ui008-build-941149532.log`。该旧 build 的 QtTest
+  进程在进入测试输出前超时，A0 本机动态复验记 `NOT_RUN`，不把超时写成测试失败，也不覆盖 owner
+  fresh build 的通过证据。
+
+`R4-UI-008` 的 `PASS` 只表示 production signal 已有本地化、非模态、脱敏的 UI receiver，并且相关
+状态契约已由 fake opener/fixture 自动测试覆盖。fake opener、offscreen Qt 或 hosted runner 都不能证明
+Explorer/Finder/QDesktopServices 在真实操作系统中实际打开文件或目录；该项仍为平台运行/最终验收
+`NOT_RUN`。
+
+## 6. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
