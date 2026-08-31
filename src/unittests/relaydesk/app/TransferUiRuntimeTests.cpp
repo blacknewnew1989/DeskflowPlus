@@ -21,6 +21,7 @@
 #include <QFile>
 #include <QFrame>
 #include <QLabel>
+#include <QListView>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -37,6 +38,21 @@ using namespace relaydesk::transfer;
 namespace {
 
 const auto kBaseUtc = QDateTime::fromMSecsSinceEpoch(1'780'000'000'000LL, Qt::UTC);
+
+DeviceSnapshot sendablePeer()
+{
+  return {
+      .id = DeviceId::generate(),
+      .displayName = QStringLiteral("Studio Mac"),
+      .alias = QStringLiteral("Design Mac"),
+      .platform = QStringLiteral("macos"),
+      .architecture = QStringLiteral("arm64"),
+      .presence = DevicePresence::Online,
+      .trusted = true,
+      .latencyMs = 3,
+      .capabilities = {.input = true, .clipboardText = true, .fileV1 = true},
+  };
+}
 
 IncomingOffer incomingOffer()
 {
@@ -123,7 +139,7 @@ public:
     sentTarget = target;
     sentItems = localItems;
     sentOptions = options;
-    return {.transferId = TransferId::generate()};
+    return sendResult;
   }
 
   void accept(const TransferId &transferId, const ReceiveOptions &options) override
@@ -191,6 +207,7 @@ public:
   std::optional<DeviceId> sentTarget;
   QList<QUrl> sentItems;
   std::optional<SendOptions> sentOptions;
+  TransferStartResult sendResult{.transferId = TransferId::generate()};
   std::optional<TransferId> acceptedId;
   std::optional<ReceiveOptions> acceptedOptions;
   std::optional<TransferId> rejectedId;
@@ -241,6 +258,7 @@ class TransferUiRuntimeTests final : public QObject
 
 private Q_SLOTS:
   void composesTypedUiIntentsThroughOneServiceBoundary();
+  void showsTypedSendFailureWithoutClearingSelection();
   void opensResolvedCompletionOnlyInsideExistingReceiveRoot();
   void rejectsUntrustedCompletionPathsBeforeCallingOpener();
   void rejectsUnavailableCompositionDependencies();
@@ -332,6 +350,60 @@ void TransferUiRuntimeTests::composesTypedUiIntentsThroughOneServiceBoundary()
   Q_EMIT fixture.service.transferRemoved(active.id);
   QCOMPARE(removed.count(), 1);
   QVERIFY(!fixture.transfers.snapshot(active.id).has_value());
+}
+
+void TransferUiRuntimeTests::showsTypedSendFailureWithoutClearingSelection()
+{
+  Fixture fixture;
+  const auto peer = sendablePeer();
+  fixture.devices.upsertRemoteDevice(peer);
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto sourcePath = directory.filePath(QStringLiteral("report.txt"));
+  writeFile(sourcePath);
+  const QList<QUrl> items{QUrl::fromLocalFile(sourcePath)};
+  fixture.devicesDock.setFileChooser([items](QWidget &) { return items; });
+  fixture.service.sendResult = {
+      .error = TransferStartError::NotRunning,
+      .diagnostic = QStringLiteral("file transfer runtime is not running"),
+  };
+  TransferUiRuntime runtime(fixture.service, fixture.devicesDock, fixture.transferDock, fixture.incoming);
+  fixture.devicesDock.resize(420, 700);
+  fixture.devicesDock.show();
+
+  auto *list = fixture.devicesDock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *sendFiles = fixture.devicesDock.findChild<QPushButton *>(QStringLiteral("relaydeskSendFilesButton"));
+  auto *feedback = fixture.devicesDock.findChild<QLabel *>(QStringLiteral("relaydeskSendFeedback"));
+  QVERIFY(list != nullptr);
+  QVERIFY(sendFiles != nullptr);
+  QVERIFY(feedback != nullptr);
+  list->setCurrentIndex(fixture.devices.index(0, 0));
+  QTRY_VERIFY(sendFiles->isEnabled());
+
+  QTest::mouseClick(sendFiles, Qt::LeftButton);
+
+  QCOMPARE(fixture.service.sendCalls, 1);
+  QCOMPARE(fixture.service.sentTarget, std::optional<DeviceId>{peer.id});
+  QCOMPARE(fixture.service.sentItems, items);
+  QCOMPARE(fixture.transfers.rowCount(), 0);
+  QCOMPARE(list->currentIndex().data(DeviceHomeModel::DeviceIdRole).toString(), peer.id.toString());
+  QCOMPARE(feedback->text(), QStringLiteral("Transfer failed"));
+  QVERIFY(feedback->isVisible());
+
+  fixture.service.sendResult = {
+      .error = TransferStartError::PeerUnavailable,
+      .diagnostic = QStringLiteral("peer left the discovery registry"),
+  };
+  QTest::mouseClick(sendFiles, Qt::LeftButton);
+  QCOMPARE(fixture.service.sendCalls, 2);
+  QCOMPARE(feedback->text(), QStringLiteral("Files can be sent only to a trusted device that is online"));
+  QVERIFY(feedback->isVisible());
+
+  fixture.service.sendResult = {.transferId = TransferId::generate()};
+  QTest::mouseClick(sendFiles, Qt::LeftButton);
+  QCOMPARE(fixture.service.sendCalls, 3);
+  QVERIFY(feedback->text().isEmpty());
+  QVERIFY(!feedback->isVisible());
 }
 
 void TransferUiRuntimeTests::bridgesIncomingConflictDecisionsThroughTypedUiIntent()

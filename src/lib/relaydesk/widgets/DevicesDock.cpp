@@ -1027,6 +1027,15 @@ void DevicesDock::showSendFeedback(const QString &message)
   m_sendFeedback->setVisible(!message.isEmpty());
 }
 
+void DevicesDock::showSendFailure(::relaydesk::transfer::TransferStartError error)
+{
+  const auto message = error == ::relaydesk::transfer::TransferStartError::PeerUnavailable
+                         ? i18n::translate(Text::DevicesSendUnavailable)
+                         : i18n::translate(Text::TransferNotificationFailed);
+  showSendFeedback(message);
+  Q_EMIT sendItemsRejected(message);
+}
+
 bool DevicesDock::publishSendIntent(const QModelIndex &index, const QList<QUrl> &items)
 {
   const auto peer = sendTarget(index);
@@ -1044,8 +1053,8 @@ bool DevicesDock::publishSendIntent(const QModelIndex &index, const QList<QUrl> 
     return false;
   }
 
-  Q_EMIT sendItemsRequested(*peer, items, ::relaydesk::transfer::SendOptions{});
   showSendFeedback({});
+  Q_EMIT sendItemsRequested(*peer, items, ::relaydesk::transfer::SendOptions{});
   return true;
 }
 
