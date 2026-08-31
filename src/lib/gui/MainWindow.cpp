@@ -389,10 +389,7 @@ void MainWindow::setupRelayDeskDiscovery()
         const auto result = m_relayDeskPairing->setAutoAcceptFiles(peerDeviceId, enabled);
         if (!result.ok()) {
           qWarning().noquote() << "RelayDesk trusted-device auto accept update failed:" << result.diagnostic;
-          QMessageBox::warning(
-              this, relayDeskI18n::translate(relayDeskI18n::Text::SettingsFileTransfer),
-              relayDeskI18n::translate(relayDeskI18n::Text::SettingsTransferSaveFailed).arg(result.diagnostic)
-          );
+          m_devicesDock->showTrustActionFailure();
         } else {
           m_devicesDock->clearTrustActionFeedback();
         }

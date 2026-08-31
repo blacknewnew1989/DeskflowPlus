@@ -130,6 +130,7 @@ private Q_SLOTS:
   void manualAddressesPersistAndStartTargetedDiscovery();
   void trustedDeviceCardActionsPersistAndRevoke();
   void trustCardPersistenceFailureShowsNonModalFeedback();
+  void autoAcceptPrimaryWriteFailureShowsNonModalFeedback();
 
 private:
   std::unique_ptr<QTemporaryDir> m_directory;
@@ -973,6 +974,95 @@ void MainWindowLayoutTests::trustCardPersistenceFailureShowsNonModalFeedback()
   QTest::mouseClick(more, Qt::LeftButton);
   QTRY_VERIFY(autoAcceptClicked);
   QTRY_VERIFY(!feedback->isVisible());
+  QVERIFY(!pairing->trustedDevices().find(peerId)->autoAcceptFiles);
+  QVERIFY(reloaded.load().ok);
+  QVERIFY(!reloaded.find(peerId)->autoAcceptFiles);
+}
+
+void MainWindowLayoutTests::autoAcceptPrimaryWriteFailureShowsNonModalFeedback()
+{
+  const auto peerId = deskflow::relaydesk::DeviceId::generate();
+  const QByteArray fingerprint(32, '\x6c');
+  const auto trustPath = m_directory->filePath(QStringLiteral("relaydesk/trusted-devices.json"));
+  deskflow::relaydesk::TrustedDeviceStore seeded(trustPath);
+  QVERIFY(seeded.upsert(
+      {.deviceId = peerId,
+       .alias = QStringLiteral("Loopback peer"),
+       .platform = QStringLiteral("windows"),
+       .fingerprintSha256 = fingerprint,
+       .autoAcceptFiles = true}
+  ));
+  QVERIFY(seeded.save().ok);
+  const auto portableSettings = Settings::portableSettingsFile();
+  QVERIFY(QDir().mkpath(QFileInfo(portableSettings).absolutePath()));
+  QFile portableMarker(portableSettings);
+  QVERIFY(portableMarker.open(QIODevice::WriteOnly));
+  portableMarker.close();
+  const auto removePortableMarker = qScopeGuard([portableSettings] { QFile::remove(portableSettings); });
+  MainWindow window;
+  auto *discovery = window.findChild<deskflow::relaydesk::DeviceDiscoveryRuntime *>();
+  auto *pairing = window.findChild<deskflow::relaydesk::PairingTrustRuntime *>();
+  QVERIFY(discovery != nullptr);
+  QVERIFY(pairing != nullptr);
+  QVERIFY(discovery->registry().observeAdvertisement(
+      {.deviceId = peerId,
+       .displayName = QStringLiteral("Loopback peer"),
+       .platform = QStringLiteral("windows"),
+       .architecture = QStringLiteral("x86_64"),
+       .appVersion = QStringLiteral("1.26.0"),
+       .inputPort = 24800,
+       .filePort = 24801,
+       .capabilities = {.input = true, .clipboardText = true, .fileV1 = true},
+       .certificateFingerprintSha256 = fingerprint},
+      QHostAddress::LocalHost
+  ));
+  window.open(false);
+  auto &dock = window.relayDeskDevicesDock();
+  auto *list = dock.findChild<QListView *>(QStringLiteral("relaydeskDevicesView"));
+  auto *more = dock.findChild<QToolButton *>(QStringLiteral("relaydeskDeviceMoreButton"));
+  auto *menu = dock.findChild<QMenu *>(QStringLiteral("relaydeskDeviceMoreMenu"));
+  auto *action = dock.findChild<QAction *>(QStringLiteral("relaydeskAutoAcceptFilesMenuAction"));
+  auto *feedback = dock.findChild<QLabel *>(QStringLiteral("relaydeskSendFeedback"));
+  QVERIFY(list != nullptr && more != nullptr && menu != nullptr && action != nullptr && feedback != nullptr);
+  list->setCurrentIndex(window.relayDeskDeviceModel().index(window.relayDeskDeviceModel().indexOf(peerId), 0));
+  QTRY_VERIFY(more->isVisible() && action->isChecked());
+  QVERIFY(QFile::remove(trustPath));
+  QVERIFY(QDir().mkpath(trustPath));
+  bool modalSeen = false;
+  NextDialogInteractor modalWatcher(window, [&modalSeen](QDialog *dialog) {
+    modalSeen = true;
+    dialog->reject();
+  });
+  bool clicked = false;
+  QTimer::singleShot(0, menu, [&] {
+    clicked = menu->isVisible() && menu->actionGeometry(action).isValid();
+    if (clicked)
+      QTest::mouseClick(menu, Qt::LeftButton, Qt::NoModifier, menu->actionGeometry(action).center());
+  });
+  QTest::mouseClick(more, Qt::LeftButton);
+  QTRY_VERIFY(clicked);
+  QVERIFY2(
+      !modalSeen && feedback->isVisible(), qPrintable(QStringLiteral("modalSeen=%1 feedbackVisible=%2 feedbackText=%3")
+                                                          .arg(modalSeen)
+                                                          .arg(feedback->isVisible())
+                                                          .arg(feedback->text()))
+  );
+  QCOMPARE(feedback->text(), QStringLiteral("Could not update device trust. Try again."));
+  QVERIFY(!feedback->text().contains(trustPath));
+  QVERIFY(pairing->trustedDevices().find(peerId)->autoAcceptFiles);
+  QVERIFY(window.relayDeskDeviceModel().snapshot(peerId)->autoAcceptFiles);
+  deskflow::relaydesk::TrustedDeviceStore reloaded(trustPath);
+  QVERIFY(reloaded.load().ok);
+  QVERIFY(reloaded.find(peerId)->autoAcceptFiles);
+  QVERIFY(QDir(trustPath).removeRecursively());
+  clicked = false;
+  QTimer::singleShot(0, menu, [&] {
+    clicked = menu->isVisible() && menu->actionGeometry(action).isValid();
+    if (clicked)
+      QTest::mouseClick(menu, Qt::LeftButton, Qt::NoModifier, menu->actionGeometry(action).center());
+  });
+  QTest::mouseClick(more, Qt::LeftButton);
+  QTRY_VERIFY(clicked && !feedback->isVisible());
   QVERIFY(!pairing->trustedDevices().find(peerId)->autoAcceptFiles);
   QVERIFY(reloaded.load().ok);
   QVERIFY(!reloaded.find(peerId)->autoAcceptFiles);
