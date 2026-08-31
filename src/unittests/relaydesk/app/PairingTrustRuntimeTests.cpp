@@ -126,7 +126,7 @@ private Q_SLOTS:
   void wrongCodeNeverPinsAdvertisedFingerprint();
   void cancelAndExpiryReturnDevicesToDiscovered();
   void revokePersistsAndPinningPolicyRejectsPeer();
-  void autoAcceptUpdateRollsBackPrimaryWhenBackupWriteFails();
+  void autoAcceptUpdateCommitsPrimaryWhenBackupWriteFails();
   void unusableTrustStoreBlocksPairing();
   void rejectsMissingFreshDiscoveryIdentityAndEndpoint();
   void productionPairingWidgetsConfirmAndPersistIndependentTrust();
@@ -268,7 +268,7 @@ void PairingTrustRuntimeTests::revokePersistsAndPinningPolicyRejectsPeer()
   );
 }
 
-void PairingTrustRuntimeTests::autoAcceptUpdateRollsBackPrimaryWhenBackupWriteFails()
+void PairingTrustRuntimeTests::autoAcceptUpdateCommitsPrimaryWhenBackupWriteFails()
 {
   QTemporaryDir directory;
   RuntimePair pair(directory, {.sasGenerator = []() { return 123456U; }});
@@ -286,12 +286,12 @@ void PairingTrustRuntimeTests::autoAcceptUpdateRollsBackPrimaryWhenBackupWriteFa
   QVERIFY(QDir().mkpath(backupPath));
 
   const auto result = pair.first->setAutoAcceptFiles(pair.secondInfo.deviceId, true);
-  QCOMPARE(result.error, PairingOperationError::PersistenceFailed);
-  QVERIFY(!pair.first->trustedDevices().find(pair.secondInfo.deviceId)->autoAcceptFiles);
+  QVERIFY(result.ok());
+  QVERIFY(pair.first->trustedDevices().find(pair.secondInfo.deviceId)->autoAcceptFiles);
 
   TrustedDeviceStore reloaded(storePath);
   QVERIFY(reloaded.load().ok);
-  QVERIFY(!reloaded.find(pair.secondInfo.deviceId)->autoAcceptFiles);
+  QVERIFY(reloaded.find(pair.secondInfo.deviceId)->autoAcceptFiles);
 }
 
 void PairingTrustRuntimeTests::unusableTrustStoreBlocksPairing()

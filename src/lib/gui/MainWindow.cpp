@@ -377,6 +377,9 @@ void MainWindow::setupRelayDeskDiscovery()
         const auto result = m_relayDeskPairing->revoke(peerDeviceId);
         if (!result.ok()) {
           qWarning().noquote() << "RelayDesk trust revocation failed:" << result.diagnostic;
+          m_devicesDock->showTrustActionFailure();
+        } else {
+          m_devicesDock->clearTrustActionFeedback();
         }
       }
   );
@@ -390,6 +393,8 @@ void MainWindow::setupRelayDeskDiscovery()
               this, relayDeskI18n::translate(relayDeskI18n::Text::SettingsFileTransfer),
               relayDeskI18n::translate(relayDeskI18n::Text::SettingsTransferSaveFailed).arg(result.diagnostic)
           );
+        } else {
+          m_devicesDock->clearTrustActionFeedback();
         }
       }
   );

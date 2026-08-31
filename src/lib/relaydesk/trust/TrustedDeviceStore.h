@@ -50,6 +50,7 @@ enum class TrustedDeviceLoadSource
 
 struct TrustedDeviceStoreResult
 {
+  // ok means the authoritative primary store was committed; diagnostic may describe backup degradation.
   bool ok = false;
   TrustedDeviceLoadSource source = TrustedDeviceLoadSource::Empty;
   QString diagnostic;
@@ -61,6 +62,7 @@ public:
   explicit TrustedDeviceStore(QString path);
 
   [[nodiscard]] TrustedDeviceStoreResult load();
+  // Saves primary first; a backup-only failure preserves a successful primary result.
   [[nodiscard]] TrustedDeviceStoreResult save() const;
 
   [[nodiscard]] QList<TrustedDevice> devices() const;

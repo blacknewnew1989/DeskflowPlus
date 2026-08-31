@@ -50,6 +50,8 @@ constexpr std::array<Entry, static_cast<std::size_t>(Text::Count)> kEntries{{
     {Text::DevicesRevokeTrustTitle, QT_TRANSLATE_NOOP("RelayDesk", "devices.revoke_trust.title"), "Revoke trust?"},
     {Text::DevicesRevokeTrustConfirmation, QT_TRANSLATE_NOOP("RelayDesk", "devices.revoke_trust.confirmation"),
      "Remove trust for %1? Its file connection will close and automatic reconnect will stop."},
+    {Text::DevicesTrustUpdateFailed, QT_TRANSLATE_NOOP("RelayDesk", "devices.trust.update_failed"),
+     "Could not update device trust. Try again."},
     {Text::DevicesActionMore, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.more"), "More"},
     {Text::DevicesActionAutoArrange, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.auto_arrange"), "Auto arrange"},
     {Text::DevicesActionConfigureInput, QT_TRANSLATE_NOOP("RelayDesk", "devices.action.configure_input"),

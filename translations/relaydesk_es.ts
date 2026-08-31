@@ -22,6 +22,7 @@
     <message><source>devices.action.revoke_trust</source><translation>Revocar confianza</translation></message>
     <message><source>devices.revoke_trust.title</source><translation>¿Revocar la confianza?</translation></message>
     <message><source>devices.revoke_trust.confirmation</source><translation>¿Quitar la confianza de %1? Se cerrará su conexión de archivos y se detendrá la reconexión automática.</translation></message>
+    <message><source>devices.trust.update_failed</source><translation>No se pudo actualizar la confianza del dispositivo. Inténtalo de nuevo.</translation></message>
     <message><source>devices.action.more</source><translation>Más</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>Organizar automáticamente</translation></message>
     <message><source>devices.action.configure_input</source><translation>Organizar entrada</translation></message>

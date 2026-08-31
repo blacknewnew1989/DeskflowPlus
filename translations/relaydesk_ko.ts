@@ -22,6 +22,7 @@
     <message><source>devices.action.revoke_trust</source><translation>신뢰 취소</translation></message>
     <message><source>devices.revoke_trust.title</source><translation>신뢰를 취소할까요?</translation></message>
     <message><source>devices.revoke_trust.confirmation</source><translation>%1의 신뢰를 해제할까요? 파일 연결이 닫히고 자동 재연결이 중지됩니다.</translation></message>
+    <message><source>devices.trust.update_failed</source><translation>기기 신뢰 설정을 업데이트할 수 없습니다. 다시 시도하세요.</translation></message>
     <message><source>devices.action.more</source><translation>더 보기</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>자동 정렬</translation></message>
     <message><source>devices.action.configure_input</source><translation>입력 배치</translation></message>

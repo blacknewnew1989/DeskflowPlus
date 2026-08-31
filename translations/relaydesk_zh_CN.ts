@@ -22,6 +22,7 @@
     <message><source>devices.action.revoke_trust</source><translation>撤销信任</translation></message>
     <message><source>devices.revoke_trust.title</source><translation>撤销信任？</translation></message>
     <message><source>devices.revoke_trust.confirmation</source><translation>要撤销对 %1 的信任吗？其文件连接将关闭，自动重连将停止。</translation></message>
+    <message><source>devices.trust.update_failed</source><translation>无法更新设备信任设置，请重试。</translation></message>
     <message><source>devices.action.more</source><translation>更多</translation></message>
     <message><source>devices.action.auto_arrange</source><translation>自动排列</translation></message>
     <message><source>devices.action.configure_input</source><translation>配置输入布局</translation></message>

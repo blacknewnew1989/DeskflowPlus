@@ -6,6 +6,7 @@
 
 #include "relaydesk/trust/TrustedDeviceStore.h"
 
+#include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -51,6 +52,7 @@ private Q_SLOTS:
   void rejectsCorruptPrimaryAndBackup();
   void rejectsInvalidRecords();
   void rejectsDuplicateDeviceIds();
+  void keepsPrimaryCommitWhenBackupWriteFails();
 };
 
 void TrustedDeviceStoreTests::missingStoreLoadsEmpty()
@@ -205,6 +207,30 @@ void TrustedDeviceStoreTests::rejectsDuplicateDeviceIds()
 
   QVERIFY(!result.ok);
   QVERIFY(result.diagnostic.contains(QStringLiteral("duplicate")));
+}
+
+void TrustedDeviceStoreTests::keepsPrimaryCommitWhenBackupWriteFails()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto path = directory.filePath(QStringLiteral("trusted.json"));
+  const auto id = DeviceId::generate();
+  TrustedDeviceStore store(path);
+  QVERIFY(store.upsert(makeDevice(id)));
+  QVERIFY(store.save().ok);
+  QVERIFY(QFile::remove(store.backupPath()));
+  QVERIFY(QDir().mkpath(store.backupPath()));
+
+  auto updated = *store.find(id);
+  updated.autoAcceptFiles = false;
+  QVERIFY(store.upsert(updated));
+  const auto result = store.save();
+  QVERIFY(result.ok);
+  QCOMPARE(result.source, TrustedDeviceLoadSource::Primary);
+  QVERIFY(!result.diagnostic.isEmpty());
+  TrustedDeviceStore reloaded(path);
+  QVERIFY(reloaded.load().ok);
+  QVERIFY(!reloaded.find(id)->autoAcceptFiles);
 }
 
 QTEST_MAIN(TrustedDeviceStoreTests)
