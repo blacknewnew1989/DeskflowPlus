@@ -150,6 +150,7 @@ private Q_SLOTS:
   void asyncHistoryLoadAndPersistErrorsShowNonModalFeedbackWithoutDiagnostic();
   void productionIncomingOfferButtonsDriveLoopbackTransferAndTypedRejection();
   void productionTransferCenterButtonsPauseResumeAndCancelLoopbackTransfers();
+  void productionHistoryRetryButtonReoffersChangedSource();
 };
 
 void TransferRuntimeCompositionTests::ownsTypedServiceBindingAndLifecycle()
@@ -954,6 +955,204 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
 
   composition.stop();
   sender.stop();
+}
+
+void TransferRuntimeCompositionTests::productionHistoryRetryButtonReoffersChangedSource()
+{
+  QTemporaryDir temporary(QDir::tempPath() + QStringLiteral("/relaydesk-r4-history-retry-XXXXXX"));
+  QVERIFY2(temporary.isValid(), qPrintable(temporary.errorString()));
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(temporary);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+
+  const QByteArray originalContents(2 * 1024 * 1024 + 17, '\x5a');
+  const QByteArray replacementContents(2 * 1024 * 1024 + 17, '\x3c');
+  const auto sourcePath = temporary.filePath(QStringLiteral("retry-source.bin"));
+  QFile source(sourcePath);
+  QVERIFY2(source.open(QIODevice::WriteOnly), qPrintable(source.errorString()));
+  QCOMPARE(source.write(originalContents), static_cast<qint64>(originalContents.size()));
+  source.close();
+  const auto receiveRoot = temporary.filePath(QStringLiteral("received"));
+  const auto recoveryRoot = temporary.filePath(QStringLiteral("recovery"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+
+  Fixture senderFixture;
+  Fixture receiverFixture;
+  senderFixture.transferDock.resize(560, 480);
+  senderFixture.transferDock.show();
+  receiverFixture.devicesDock.resize(480, 720);
+  receiverFixture.devicesDock.show();
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(temporary.filePath(QStringLiteral("sender-trust.json")));
+  TrustedDeviceStore receiverTrust(temporary.filePath(QStringLiteral("receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(loopbackTrustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(loopbackTrustedDevice(senderId, identity.fingerprintSha256)));
+  DeviceDiscoveryRuntime senderDiscovery(
+      loopbackDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender")), senderFixture.devices
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      loopbackDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver")), receiverFixture.devices
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  options.recoveryStateRoot = recoveryRoot;
+  options.tlsSettings.maxQueuedWriteBytes = 64U * 1024U;
+  options.localCapabilities.preferredChunkBytes = 4U * 1024U;
+  options.localCapabilities.maxPayloadBytes = 16U * 1024U;
+  auto sender = std::make_unique<FileTransferRuntime>(senderId, senderTrust, senderDiscovery, identityPath, options);
+  auto receiver = std::make_unique<FileTransferRuntime>(
+      receiverId, receiverTrust, receiverDiscovery, identityPath, options
+  );
+  auto *senderRuntime = sender.get();
+  auto *receiverRuntime = receiver.get();
+  TransferRuntimeComposition senderComposition(
+      std::move(sender),
+      {.start = [senderRuntime](QString *diagnostic) { return senderRuntime->start(diagnostic); },
+       .stop = [senderRuntime] { senderRuntime->stop(); }},
+      senderFixture.devicesDock, senderFixture.transferDock,
+      {.destinationRoot = temporary.filePath(QStringLiteral("sender-history")), .availableBytes = 0},
+      temporary.filePath(QStringLiteral("sender-history/transfers.jsonl"))
+  );
+  TransferRuntimeComposition receiverComposition(
+      std::move(receiver),
+      {.start = [receiverRuntime](QString *diagnostic) { return receiverRuntime->start(diagnostic); },
+       .stop = [receiverRuntime] { receiverRuntime->stop(); }},
+      receiverFixture.devicesDock, receiverFixture.transferDock,
+      {.destinationRoot = receiveRoot, .availableBytes = 128U * 1024U * 1024U}
+  );
+  TransferRecoveryStore recoveryStore(recoveryRoot);
+
+  auto *offerPanel = receiverFixture.devicesDock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingOfferPanel"));
+  auto *accept = receiverFixture.devicesDock.findChild<QPushButton *>(QStringLiteral("relaydeskAcceptIncomingOfferButton"));
+  auto *senderList = senderFixture.transferDock.findChild<QListView *>(QStringLiteral("relaydeskTransfersView"));
+  auto *retry = senderFixture.transferDock.findChild<QPushButton *>(QStringLiteral("relaydeskTransferRetryButton"));
+  QVERIFY(offerPanel != nullptr);
+  QVERIFY(accept != nullptr);
+  QVERIFY(senderList != nullptr);
+  QVERIFY(retry != nullptr);
+
+  std::optional<TransferSnapshot> failedSnapshot;
+  std::optional<TransferSnapshot> completedSnapshot;
+  QList<TransferOperationResult> retryOperations;
+  connect(senderRuntime, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction != TransferDirection::Sending)
+      return;
+    if (snapshot.state == TransferState::Failed)
+      failedSnapshot = snapshot;
+    if (snapshot.state == TransferState::Completed)
+      completedSnapshot = snapshot;
+  });
+  connect(
+      senderRuntime, &IFileTransferService::transferOperationFinished, this,
+      [&](const TransferOperationResult &result) {
+        if (result.operation == TransferOperation::Retry)
+          retryOperations.append(result);
+      }
+  );
+
+  QString diagnostic;
+  QVERIFY2(senderComposition.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiverComposition.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+
+  const auto initialStart = senderRuntime->send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(initialStart.ok(), qPrintable(initialStart.diagnostic));
+  QVERIFY(initialStart.transferId.has_value());
+  const auto initialId = *initialStart.transferId;
+  QTRY_VERIFY_WITH_TIMEOUT(offerPanel->isVisible() && accept->isVisible() && accept->isEnabled(), 10'000);
+  QFile changedSource(sourcePath);
+  QVERIFY2(changedSource.open(QIODevice::WriteOnly | QIODevice::Truncate), qPrintable(changedSource.errorString()));
+  QCOMPARE(changedSource.write(replacementContents), static_cast<qint64>(replacementContents.size()));
+  changedSource.close();
+  QTest::mouseClick(accept, Qt::LeftButton);
+
+  QTRY_VERIFY_WITH_TIMEOUT(
+      failedSnapshot.has_value() && failedSnapshot->id == initialId && failedSnapshot->state == TransferState::Failed &&
+          failedSnapshot->canRetry,
+      20'000
+  );
+  QVERIFY(failedSnapshot->errorCode != TransferErrorCode::None);
+  QTRY_VERIFY_WITH_TIMEOUT(senderFixture.transfers.historyRecord(initialId).has_value(), 10'000);
+  const auto failedHistory = senderFixture.transfers.historyRecord(initialId);
+  QVERIFY(failedHistory.has_value());
+  QCOMPARE(failedHistory->status, HistoryStatus::Failed);
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(recoveryStore.incomingStatePath(initialId)), 5'000);
+  const auto initialIncomingRecovery = recoveryStore.loadIncoming(initialId);
+  QVERIFY2(initialIncomingRecovery.ok(), qPrintable(initialIncomingRecovery.diagnostic));
+  const auto initialSidecarPath = recoveryStore.incomingStatePath(initialId);
+  QFile initialSidecar(initialSidecarPath);
+  QVERIFY2(initialSidecar.open(QIODevice::ReadOnly), qPrintable(initialSidecar.errorString()));
+  const auto initialSidecarContents = initialSidecar.readAll();
+  QVERIFY(!initialSidecarContents.isEmpty());
+  QVERIFY(!hasPartFile(receiveRoot));
+  const bool initialOutgoingRecoveryExists = QFileInfo::exists(recoveryStore.outgoingStatePath(initialId));
+  const auto failedRow = senderFixture.transfers.indexOf(initialId);
+  QVERIFY(failedRow >= 0);
+  senderList->setCurrentIndex(senderFixture.transfers.index(failedRow, 0));
+  QTRY_VERIFY_WITH_TIMEOUT(retry->isVisible() && retry->isEnabled(), 5'000);
+  QTest::mouseClick(retry, Qt::LeftButton);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !senderFixture.transfers.data(
+          senderFixture.transfers.index(failedRow, 0), TransferCenterModel::CanRetryRole
+      ).toBool(),
+      5'000
+  );
+  QVERIFY(!retry->isVisible() || !retry->isEnabled());
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !retryOperations.isEmpty() && retryOperations.last().outcome == TransferOperationOutcome::Applied,
+      10'000
+  );
+  QTRY_VERIFY_WITH_TIMEOUT(
+      offerPanel->isVisible() && accept->isVisible() && accept->isEnabled() &&
+          receiverComposition.incomingOffers().offer().has_value() &&
+          receiverComposition.incomingOffers().offer()->offer.transferId != initialId,
+      10'000
+  );
+  const auto retriedOfferId = receiverComposition.incomingOffers().offer()->offer.transferId;
+  QVERIFY(senderFixture.transfers.historyRecord(initialId).has_value());
+  QCOMPARE(senderFixture.transfers.historyRecord(initialId)->status, HistoryStatus::Failed);
+  QCOMPARE(QFileInfo::exists(recoveryStore.outgoingStatePath(initialId)), initialOutgoingRecoveryExists);
+  QVERIFY(QFileInfo::exists(initialSidecarPath));
+  QFile retrySidecar(initialSidecarPath);
+  QVERIFY2(retrySidecar.open(QIODevice::ReadOnly), qPrintable(retrySidecar.errorString()));
+  QCOMPARE(retrySidecar.readAll(), initialSidecarContents);
+  const auto retryIncomingRecovery = recoveryStore.loadIncoming(initialId);
+  QVERIFY2(retryIncomingRecovery.ok(), qPrintable(retryIncomingRecovery.diagnostic));
+  QCOMPARE(*retryIncomingRecovery.state, *initialIncomingRecovery.state);
+  QVERIFY(!hasPartFile(receiveRoot));
+
+  QTest::mouseClick(accept, Qt::LeftButton);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      completedSnapshot.has_value() && completedSnapshot->id == retriedOfferId &&
+          completedSnapshot->state == TransferState::Completed,
+      30'000
+  );
+  const auto retriedId = completedSnapshot->id;
+  const auto targetPath = QDir(receiveRoot).filePath(QStringLiteral("retry-source.bin"));
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(targetPath), 10'000);
+  QFile target(targetPath);
+  QVERIFY(target.open(QIODevice::ReadOnly));
+  QCOMPARE(
+      QCryptographicHash::hash(target.readAll(), QCryptographicHash::Sha256),
+      QCryptographicHash::hash(replacementContents, QCryptographicHash::Sha256)
+  );
+  QTRY_VERIFY_WITH_TIMEOUT(senderFixture.transfers.historyRecord(retriedId).has_value(), 10'000);
+  QCOMPARE(senderFixture.transfers.historyRecord(retriedId)->status, HistoryStatus::Completed);
+  QCOMPARE(senderFixture.transfers.historyRecord(initialId)->status, HistoryStatus::Failed);
+  QVERIFY(QFileInfo::exists(initialSidecarPath));
+  QFile completedSidecar(initialSidecarPath);
+  QVERIFY2(completedSidecar.open(QIODevice::ReadOnly), qPrintable(completedSidecar.errorString()));
+  QCOMPARE(completedSidecar.readAll(), initialSidecarContents);
+  const auto completedIncomingRecovery = recoveryStore.loadIncoming(initialId);
+  QVERIFY2(completedIncomingRecovery.ok(), qPrintable(completedIncomingRecovery.diagnostic));
+  QCOMPARE(*completedIncomingRecovery.state, *initialIncomingRecovery.state);
+  QVERIFY(!hasPartFile(receiveRoot));
+
+  receiverComposition.stop();
+  senderComposition.stop();
 }
 
 QTEST_MAIN(TransferRuntimeCompositionTests)
