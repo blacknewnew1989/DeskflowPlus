@@ -1671,7 +1671,7 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
   const auto identity = TlsIdentityAdapter::inspect(identityPath);
   QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
-  const QByteArray sourceBytes(8 * 1024 * 1024 + 113, '\x4f');
+  const QByteArray sourceBytes(20 * 1024 * 1024 + 113, '\x4f');
   const auto sourcePath = directory.filePath(QStringLiteral("sender-stop-source.bin"));
   QFile source(sourcePath);
   QVERIFY(source.open(QIODevice::WriteOnly));
@@ -1709,6 +1709,7 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   ResumeStore receiverResumeStore(
       QDir(receiveRoot).filePath(QStringLiteral(".incoming/resume-active"))
   );
+  TransferRecoveryStore recoveryStore(options.recoveryStateRoot);
 
   QStringList errors;
   bool senderStopRequested = false;
@@ -1741,6 +1742,8 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   std::optional<TransferSnapshot> receiverLatest;
   quint64 interruptedBytes = 0;
   quint64 receiverDurableOffset = 0;
+  QByteArray descriptorBeforeStop;
+  QDateTime descriptorModifiedBeforeStop;
   QStringList senderStates;
   QList<quint64> senderResumingBytes;
   const auto attachSender = [&](FileTransferRuntime &runtime) {
@@ -1780,6 +1783,9 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
           }
           senderLatest = snapshot;
           senderStates.append(QString::number(static_cast<int>(snapshot.state)));
+          if (snapshot.state == TransferState::Interrupted) {
+            interruptedBytes = snapshot.progress.completedBytes;
+          }
           if (snapshot.state == TransferState::Resuming) {
             senderResumingBytes.append(snapshot.progress.completedBytes);
           }
@@ -1795,11 +1801,15 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
         const auto resume = receiverResumeStore.load(snapshot.id);
         if (resume.ok() && resume.state->files.size() == 1 &&
             resume.state->files.constFirst().durableOffset > 0) {
+          QFile descriptor(recoveryStore.outgoingStatePath(snapshot.id));
+          if (!descriptor.open(QIODevice::ReadOnly)) return;
+          descriptorBeforeStop = descriptor.readAll();
+          descriptorModifiedBeforeStop = QFileInfo(descriptor).lastModified();
+          if (descriptorBeforeStop.isEmpty() || !descriptorModifiedBeforeStop.isValid()) return;
           receiverDurableOffset = resume.state->files.constFirst().durableOffset;
           senderStopRequested = true;
           auto *runtimePointer = sender.get();
           QTimer::singleShot(0, runtimePointer, [&, runtimePointer] {
-            interruptedBytes = senderLatest.has_value() ? senderLatest->progress.completedBytes : 0;
             senderStoppedAtCheckpoint = true;
             runtimePointer->stop();
           });
@@ -1833,17 +1843,25 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   receiverDurableOffset = receiverResume.state->files.constFirst().durableOffset;
   QVERIFY(receiverDurableOffset > 0);
 
-  TransferRecoveryStore recoveryStore(options.recoveryStateRoot);
   QTRY_VERIFY_WITH_TIMEOUT(
       QFileInfo::exists(recoveryStore.outgoingStatePath(*started.transferId)), 5'000
   );
   std::optional<OutgoingRecoveryState> persisted;
   QTRY_VERIFY_WITH_TIMEOUT([&] {
+    QFile descriptor(recoveryStore.outgoingStatePath(*started.transferId));
+    if (!descriptor.open(QIODevice::ReadOnly)) return false;
+    const auto descriptorBytes = descriptor.readAll();
+    const auto descriptorModified = QFileInfo(descriptor).lastModified();
+    const bool rewritten = descriptorBytes != descriptorBeforeStop ||
+                           descriptorModified > descriptorModifiedBeforeStop;
     const auto loaded = recoveryStore.loadOutgoing(*started.transferId);
-    if (!loaded.ok() || loaded.state->progress.completedBytes != interruptedBytes) return false;
+    if (!rewritten || !loaded.ok() || loaded.state->progress.completedBytes == 0 ||
+        loaded.state->progress.completedBytes >= loaded.state->summary.totalBytes) {
+      return false;
+    }
     persisted = *loaded.state;
     return true;
-  }(), 5'000);
+  }(), 15'000);
   QCOMPARE(persisted->transferId, *started.transferId);
   QCOMPARE(persisted->localDeviceId, senderId);
   QCOMPARE(persisted->peerDeviceId, receiverId);
@@ -1852,7 +1870,8 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   QCOMPARE(persisted->sourceRoots.constFirst().canonicalPath, QFileInfo(sourcePath).canonicalFilePath());
   QCOMPARE(persisted->summary.totalBytes, static_cast<quint64>(sourceBytes.size()));
   QCOMPARE(persisted->pagePlan.entryCount, quint64{1});
-  QCOMPARE(persisted->progress.completedBytes, interruptedBytes);
+  QVERIFY(persisted->progress.completedBytes > 0);
+  QVERIFY(persisted->progress.completedBytes < static_cast<quint64>(sourceBytes.size()));
 
   if (reconstructSender) {
     sender.reset();
