@@ -21,7 +21,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-002 | 配对 | pairingRequested、SAS confirm/cancel | PairingTrustRuntime -> DiscoveryService datagram -> trust store | 状态模型存在；组合根原生手势未运行 | `NOT_RUN` |
 | R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | banner/detail model 存在；TCC/系统往返未运行 | `NOT_RUN` |
 | R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
-| R4-UI-005 | Incoming Offer / Ask | accept/reject/conflict decision | IncomingOfferModel / TransferUiRuntime -> FileTransferRuntime | safety/prompt 有反馈；真实 TLS 组合未运行 | `NOT_RUN` |
+| R4-UI-005 | Incoming Offer / Ask | accept/reject/conflict decision | IncomingOfferModel / TransferUiRuntime -> FileTransferRuntime | 真实 TLS offer 经 production widget accept/reject 完成或拒绝 | `PASS` |
 | R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | snapshot 可显示；一般 operation rejection 未运行 | `NOT_RUN` |
 | R4-UI-007 | 迷你条 | primary action、details | TransferCenterModel typed intents；details 打开 TransferCenterDock | 真实后台传输刷新未运行 | `NOT_RUN` |
 | R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | opener 拒绝与 history load/persist error 写入本地化非模态反馈 | `PASS` |
@@ -45,7 +45,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | 设备卡/配对 | DeviceHomeModel、DevicesDock、PairingWizardModel、PairingTrustRuntime | model、typed intent、UDP/trust 组件 | MainWindow 原生手势、物理配对 |
 | 权限 | PermissionStatusModel、DevicesDock、MainWindowLayout | 门控、文案、控件绑定 | TCC、Windows/macOS 系统设置往返 |
 | 拖放发送 | DevicesDock、TransferUiRuntime | local URL 过滤、immutable intent、fake service adapter | Explorer/Finder DnD、真实 service 失败反馈 |
-| Incoming Offer | IncomingOfferModel、DevicesDock、IncomingTransferRuntime | accept/reject/Ask typed flow | 真实 TLS offer 到可视面板 |
+| Incoming Offer | IncomingOfferModel、DevicesDock、TransferRuntimeComposition、FileTransferRuntime | localhost TLS offer、widget accept/reject、文件 SHA/row/清理 | Ask、原生窗口系统、物理双机 |
 | 传输中心/迷你条 | TransferCenterModel/Dock、TransferMiniBar | 控制 intent、状态/ETA 映射 | 真实传输期间原生交互 |
 | 历史/打开 | TransferUiRuntime、TransferRuntimeComposition | receive-root 路径校验、可注入 opener、失败反馈与交错状态 | OS shell 实际打开 |
 | 设置/托盘 | MainWindowLayout、BackgroundLifecycle、QuitRegression | 保存绑定、close/minimize/quit policy | OS tray/menu bar、系统后台行为 |
@@ -139,7 +139,51 @@ Hosted CI、offscreen Qt 和 fake service 测试均不能替代物理 Win↔Mac�
 Explorer/Finder/QDesktopServices 在真实操作系统中实际打开文件或目录；该项仍为平台运行/最终验收
 `NOT_RUN`。
 
-## 6. 证据边界
+## 6. 第三个纵向证据切片
+
+选择 `R4-UI-005`，范围只包含 Incoming Offer 的 production UI 接受与拒绝链路。首次新增动态场景
+直接通过，因此本切片只增加测试证据，没有修改 production 代码。
+
+实现与验收结果：
+
+- owner：`agent/a7/r4-incoming-offer-production-ui@5ac175f900e489323ba8019c9339592723266189`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@36d83e77cddaa49573a10aa15b21bdb7dc7be2d7`。两提交
+  parent 均为 `d8a36cb59e905a9334dde8aace01b6463604de85`、tree 均为
+  `a5a14f142787abbef577441763ce025adbf74dd3`，由 cherry-pick 产生不同 commit id；
+- sender/receiver 均为真实 `FileTransferRuntime`，使用 TLS identity、双向 trusted fingerprint store、
+  discovery registry advertisement、localhost 动态监听和真实临时文件系统；
+- receiver 由 production `TransferRuntimeComposition` 持有 service，offer 进入 `IncomingOfferModel` 并驱动
+  `DevicesDock` 可见面板；测试使用 `QTest::mouseClick` 点击真实 Accept/Reject 按钮，没有直接调用
+  service 或 model；
+- Accept 后 sender 为 `Completed`，接收文件 SHA-256 与源文件一致，receiver transfer row 为
+  `Completed`，offer panel 隐藏且无 `.part`；
+- Reject 后 sender 为 typed `Rejected`，目标文件和 `.part` 均不存在，receiver 不新增 rejected row；
+  既有 accepted row 的 snapshot、row count 和当前选择均保持不变；
+- owner C 盘 build 为 `C:\Users\52323\AppData\Local\Temp\relaydesk-a7-ui005`。新增槽、完整
+  RelayDeskTransferRuntimeCompositionTests、完整 RelayDeskDevicesDockTests 均退出 0；完整
+  RelayDeskFileTransferRuntimeTests 为 56 passed、0 failed、4 skipped、退出 0，日志为
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a7-ui005-file-runtime.txt`（2026-08-31 23:27:28）；
+- transfer reviewer 首轮 GO。UI reviewer 首轮因 reject 后 receiver row/selection 缺少断言给出 NO-GO；
+  补齐后复核 GO，未发现新的 P0/P1 或范围扩张；
+- A0 在 fresh C 盘 build `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui005` 使用 VS 2022、
+  Ninja、Qt 6.10.1 与现有 x64-windows Debug vcpkg 安装树，执行：
+
+  ```powershell
+  cmake --build 'C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui005' --target RelayDeskTransferRuntimeCompositionTests --parallel 8
+  ```
+
+  106/106 完成、退出 0，日志为
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui005-build.log`（2026-08-31 23:46:55）。随后设置
+  Qt/vcpkg Debug `PATH` 与 `QT_QPA_PLATFORM=offscreen`，新增槽为 3 passed、0 failed、0 skipped、
+  退出 0，日志为 `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui005-new-slot.log`；完整 Composition
+  为 11 passed、0 failed、0 skipped、退出 0，日志为
+  `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui005-composition-full.log`（2026-08-31 23:47:32）。
+
+`R4-UI-005` 的 `PASS` 只覆盖 Windows 同机 localhost TLS socket、真实临时文件系统、production
+composition/model 和 offscreen Qt widget typed intent。它不证明 native Windows/macOS window system、
+Explorer/Finder、macOS TCC、物理 Win↔Mac 双机、Ask 冲突或正式发布行为；这些仍为 `NOT_RUN`。
+
+## 7. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
