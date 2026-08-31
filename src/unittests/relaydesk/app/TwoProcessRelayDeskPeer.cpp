@@ -158,7 +158,7 @@ public:
 
     FileTransferRuntimeOptions transferOptions;
     transferOptions.listenAddress = QHostAddress::LocalHost;
-    if (m_scenario == Scenario::ReceiverProcessRecovery) {
+    if (m_scenario == Scenario::ReceiverProcessRecovery || m_scenario == Scenario::FileTree) {
       transferOptions.recoveryStateRoot = QDir(m_root).filePath(QStringLiteral("state/transfer-recovery"));
     }
     transferOptions.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;

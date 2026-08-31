@@ -20,6 +20,7 @@ const auto kTransfer = *TransferId::fromString(QStringLiteral("11111111-2222-433
 const auto kLocal = *deskflow::relaydesk::DeviceId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"));
 const auto kPeer = *deskflow::relaydesk::DeviceId::fromString(QStringLiteral("bbbbbbbb-cccc-4ddd-8eee-ffffffffffff"));
 const auto kFile = *FileId::fromString(QStringLiteral("12345678-1234-4234-8234-1234567890ab"));
+const auto kDirectory = *FileId::fromString(QStringLiteral("87654321-4321-4321-8321-ba0987654321"));
 
 ManifestEntry entry()
 {
@@ -30,6 +31,63 @@ ManifestEntry entry()
       .size = 7,
       .modifiedUtc = QDateTime::fromMSecsSinceEpoch(1'780'000'000'000LL, Qt::UTC),
       .sha256 = QByteArray(32, '\x21')
+  };
+}
+
+ManifestEntry directoryEntry()
+{
+  return {
+      .id = kDirectory,
+      .relativeProtocolPath = QStringLiteral("folder/z-empty"),
+      .type = ManifestEntryType::Directory,
+      .size = 0,
+      .modifiedUtc = QDateTime::fromMSecsSinceEpoch(1'780'000'000'000LL, Qt::UTC),
+      .sha256 = {}
+  };
+}
+
+void refreshOutgoingPlan(OutgoingRecoveryState &state)
+{
+  QList<ManifestEntry> entries;
+  entries.reserve(state.entries.size());
+  for (const auto &prepared : state.entries)
+    entries.append(prepared.entry);
+  state.summary.canonicalSha256 = ManifestPageCodec::canonicalSha256(entries);
+  const auto plan = ManifestPageCodec::plan({.entries = state.entries, .summary = state.summary});
+  Q_ASSERT(plan.ok());
+  state.pagePlan = {
+      .entryCount = plan.plan->entryCount,
+      .pageCount = plan.plan->pageCount(),
+      .totalMetadataBytes = plan.plan->totalMetadataBytes
+  };
+}
+
+void refreshIncomingPlan(IncomingRecoveryState &state)
+{
+  state.offer.manifestSha256 = ManifestPageCodec::canonicalSha256(state.entries);
+  QList<PreparedManifestEntry> prepared;
+  prepared.reserve(state.entries.size());
+  for (const auto &wire : state.entries) {
+    prepared.append(
+        {.canonicalSourcePath = QDir::rootPath(),
+         .protocolCollisionKey = PathPolicy::validateRelative(wire.relativeProtocolPath).collisionKey,
+         .entry = wire}
+    );
+  }
+  const TransferManifestSummary summary{
+      .id = state.transferId,
+      .displayName = state.offer.displayName,
+      .totalBytes = state.offer.totalBytes,
+      .fileCount = state.offer.fileCount,
+      .directoryCount = state.offer.directoryCount,
+      .canonicalSha256 = state.offer.manifestSha256
+  };
+  const auto plan = ManifestPageCodec::plan({.entries = prepared, .summary = summary});
+  Q_ASSERT(plan.ok());
+  state.pagePlan = {
+      .entryCount = plan.plan->entryCount,
+      .pageCount = plan.plan->pageCount(),
+      .totalMetadataBytes = plan.plan->totalMetadataBytes
   };
 }
 
@@ -144,6 +202,8 @@ class TransferRecoveryStoreTests final : public QObject
 
 private Q_SLOTS:
   void roundTripsBothDirections();
+  void validatesOutgoingEntryDigestByType();
+  void validatesIncomingEntryDigestByType();
   void replacesValidStateAndRejectsInvalidWithoutClobbering();
   void scanIsolatesCorruptAndUnknownSchema();
   void scanBoundsDecodedStateCount();
@@ -154,6 +214,61 @@ private Q_SLOTS:
   void isolatesTamperedIncomingRecords();
   void scanReportsSymbolicLinkWithoutFollowingTarget();
 };
+
+void TransferRecoveryStoreTests::validatesOutgoingEntryDigestByType()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  TransferRecoveryStore store(temporary.path());
+
+  auto state = outgoing();
+  const auto directory = directoryEntry();
+  state.entries.append(
+      {.canonicalSourcePath = QDir::rootPath() + QStringLiteral("source/z-empty"),
+       .protocolCollisionKey = QStringLiteral("folder/z-empty"),
+       .entry = directory}
+  );
+  state.summary.directoryCount = 1;
+  refreshOutgoingPlan(state);
+  const auto saved = store.saveOutgoing(state);
+  QVERIFY2(saved.ok(), qPrintable(saved.diagnostic));
+  const auto loaded = store.loadOutgoing(state.transferId);
+  QVERIFY2(loaded.ok(), qPrintable(loaded.diagnostic));
+  QCOMPARE(*loaded.state, state);
+  const auto scan = store.scanOutgoing();
+  QVERIFY(scan.ok());
+  QCOMPARE(scan.states, QList<OutgoingRecoveryState>{state});
+
+  state = outgoing();
+  state.entries[0].entry.sha256.clear();
+  refreshOutgoingPlan(state);
+  QVERIFY(!store.saveOutgoing(state).ok());
+}
+
+void TransferRecoveryStoreTests::validatesIncomingEntryDigestByType()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  TransferRecoveryStore store(temporary.path());
+
+  auto state = incoming();
+  state.entries.append(directoryEntry());
+  state.offer.directoryCount = 1;
+  refreshIncomingPlan(state);
+  const auto saved = store.saveIncoming(state);
+  QVERIFY2(saved.ok(), qPrintable(saved.diagnostic));
+  const auto loaded = store.loadIncoming(state.transferId);
+  QVERIFY2(loaded.ok(), qPrintable(loaded.diagnostic));
+  QCOMPARE(*loaded.state, state);
+  const auto scan = store.scanIncoming();
+  QVERIFY(scan.ok());
+  QCOMPARE(scan.states, QList<IncomingRecoveryState>{state});
+
+  state = incoming();
+  state.entries[0].sha256.clear();
+  refreshIncomingPlan(state);
+  QVERIFY(!store.saveIncoming(state).ok());
+}
 
 void TransferRecoveryStoreTests::roundTripsBothDirections()
 {

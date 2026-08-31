@@ -89,6 +89,13 @@ bool validEntryType(ManifestEntryType value)
   return value == ManifestEntryType::File || value == ManifestEntryType::Directory;
 }
 
+bool validRecoveryDigest(const ManifestEntry &entry)
+{
+  if (entry.type == ManifestEntryType::Directory)
+    return entry.sha256.isEmpty();
+  return entry.type == ManifestEntryType::File && entry.sha256.size() == kSha256Bytes;
+}
+
 std::optional<ManifestEntryType> entryType(qint64 value)
 {
   if (value < static_cast<qint64>(ManifestEntryType::File) ||
@@ -148,9 +155,9 @@ std::optional<ManifestEntry> decodeEntry(const QCborValue &encoded, const PathLi
   const auto parsedId = FileId::fromBytes(id.toByteArray());
   const auto parsedType = entryType(type.toInteger());
   if (!parsedId || !parsedType || !validRelativePath(path.toString(), limits) ||
-      hash.toByteArray().size() != kSha256Bytes || !validCount(static_cast<quint64>(size.toInteger())))
+      !validCount(static_cast<quint64>(size.toInteger())))
     return std::nullopt;
-  return ManifestEntry{
+  ManifestEntry entry{
       .id = *parsedId,
       .relativeProtocolPath = path.toString(),
       .type = *parsedType,
@@ -159,6 +166,9 @@ std::optional<ManifestEntry> decodeEntry(const QCborValue &encoded, const PathLi
       .sha256 = hash.toByteArray(),
       .flags = static_cast<quint32>(flags.toInteger())
   };
+  if (!validRecoveryDigest(entry))
+    return std::nullopt;
+  return entry;
 }
 
 QCborMap encodePlan(const ManifestPagePlanBinding &value)
@@ -643,7 +653,7 @@ bool validateManifest(
     const auto checked = PathPolicy::validateRelative(item.entry.relativeProtocolPath, limits);
     if (!validAbsolutePath(item.canonicalSourcePath) || !checked.ok ||
         checked.normalized != item.entry.relativeProtocolPath || item.protocolCollisionKey != checked.collisionKey ||
-        item.entry.sha256.size() != kSha256Bytes || !validCount(item.entry.size) ||
+        !validRecoveryDigest(item.entry) || !validCount(item.entry.size) ||
         ids.contains(item.entry.id.toBytes()) || paths.contains(checked.collisionKey))
       return false;
     ids.insert(item.entry.id.toBytes());
@@ -717,7 +727,7 @@ TransferRecoveryStoreOperationResult TransferRecoveryStore::saveOutgoing(const O
   for (const auto &entry : state.entries)
     if (!validAbsolutePath(entry.canonicalSourcePath) ||
         !validRelativePath(entry.entry.relativeProtocolPath, m_limits.pathLimits) ||
-        entry.entry.sha256.size() != kSha256Bytes)
+        !validRecoveryDigest(entry.entry))
       return fail(TransferRecoveryStoreError::InvalidPath, QStringLiteral("outgoing recovery entry is invalid"));
   if (!validateManifest(state.entries, state.summary, state.pagePlan, m_limits.pathLimits))
     return fail(TransferRecoveryStoreError::InvalidState, QStringLiteral("outgoing recovery manifest is inconsistent"));
@@ -763,7 +773,7 @@ TransferRecoveryStoreOperationResult TransferRecoveryStore::saveIncoming(const I
       !validateNegotiatedCapabilities(state.negotiatedCapabilities))
     return fail(TransferRecoveryStoreError::InvalidState, QStringLiteral("incoming recovery state is invalid"));
   for (const auto &entry : state.entries)
-    if (!validRelativePath(entry.relativeProtocolPath, m_limits.pathLimits) || entry.sha256.size() != kSha256Bytes)
+    if (!validRelativePath(entry.relativeProtocolPath, m_limits.pathLimits) || !validRecoveryDigest(entry))
       return fail(TransferRecoveryStoreError::InvalidPath, QStringLiteral("incoming recovery entry is invalid"));
   QCborArray entries;
   for (const auto &entry : state.entries)
