@@ -11,9 +11,24 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
+#include <QScopeGuard>
 #include <QSet>
 
+#if defined(Q_OS_WIN)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
+#include <algorithm>
+#include <cerrno>
+#include <cstring>
 #include <limits>
+#include <string>
 #include <utility>
 
 namespace relaydesk::transfer {
@@ -28,6 +43,16 @@ enum StateKey : qint64
   DirectionKey = 5,
   FilesKey = 6,
   UpdatedAtKey = 7,
+  ResolvedTargetsKey = 8,
+};
+
+enum ResolvedTargetKey : qint64
+{
+  TargetFileIdKey = 1,
+  TargetRelativePathKey = 2,
+  TargetSizeKey = 3,
+  TargetSha256Key = 4,
+  TargetDecisionKey = 5,
 };
 
 enum FileKey : qint64
@@ -72,6 +97,95 @@ ResumeStoreLoadResult loadFailure(ResumeStoreError error, QString diagnostic)
   return {.error = error, .diagnostic = std::move(diagnostic)};
 }
 
+struct NoFollowReadResult
+{
+  QByteArray bytes;
+  ResumeStoreError error = ResumeStoreError::None;
+  QString diagnostic;
+
+  [[nodiscard]] bool ok() const noexcept
+  {
+    return error == ResumeStoreError::None;
+  }
+};
+
+NoFollowReadResult readStateNoFollow(const QString &path, quint64 maximumBytes)
+{
+  if (maximumBytes == 0) {
+    return {{}, ResumeStoreError::StateTooLarge, QStringLiteral("resume state size limit is zero")};
+  }
+#if defined(Q_OS_WIN)
+  const std::wstring nativePath = QDir::toNativeSeparators(path).toStdWString();
+  HANDLE handle = CreateFileW(
+      nativePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr
+  );
+  if (handle == INVALID_HANDLE_VALUE) {
+    const DWORD error = GetLastError();
+    return {
+        {}, error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? ResumeStoreError::NotFound
+                                                                           : ResumeStoreError::OpenFailed,
+        QStringLiteral("could not open resume state without following links (Windows error %1)").arg(error)
+    };
+  }
+  const auto closeHandle = qScopeGuard([handle] { CloseHandle(handle); });
+  FILE_ATTRIBUTE_TAG_INFO attributes{};
+  if (!GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &attributes, sizeof(attributes)) ||
+      (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 ||
+      (attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+    return {{}, ResumeStoreError::InvalidPath, QStringLiteral("resume state is a link or non-regular file")};
+  }
+  LARGE_INTEGER size{};
+  if (!GetFileSizeEx(handle, &size) || size.QuadPart < 0 ||
+      static_cast<quint64>(size.QuadPart) > maximumBytes ||
+      static_cast<quint64>(size.QuadPart) > static_cast<quint64>(std::numeric_limits<qsizetype>::max())) {
+    return {{}, ResumeStoreError::StateTooLarge, QStringLiteral("resume state exceeds the limit")};
+  }
+  QByteArray bytes(static_cast<qsizetype>(size.QuadPart), Qt::Uninitialized);
+  qsizetype offset = 0;
+  while (offset < bytes.size()) {
+    const DWORD requested = static_cast<DWORD>(
+        std::min<quint64>(static_cast<quint64>(bytes.size() - offset), std::numeric_limits<DWORD>::max())
+    );
+    DWORD read = 0;
+    if (!ReadFile(handle, bytes.data() + offset, requested, &read, nullptr) || read == 0) {
+      return {{}, ResumeStoreError::ReadFailed, QStringLiteral("could not read resume state")};
+    }
+    offset += static_cast<qsizetype>(read);
+  }
+  return {.bytes = std::move(bytes)};
+#else
+  const QByteArray nativePath = QFile::encodeName(path);
+  const int descriptor = ::open(nativePath.constData(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+  if (descriptor < 0) {
+    return {
+        {}, errno == ENOENT ? ResumeStoreError::NotFound
+                            : errno == ELOOP ? ResumeStoreError::InvalidPath : ResumeStoreError::OpenFailed,
+        QString::fromLocal8Bit(std::strerror(errno))
+    };
+  }
+  const auto closeDescriptor = qScopeGuard([descriptor] { ::close(descriptor); });
+  struct stat status {};
+  if (::fstat(descriptor, &status) != 0 || !S_ISREG(status.st_mode)) {
+    return {{}, ResumeStoreError::InvalidPath, QStringLiteral("resume state is not a regular file")};
+  }
+  if (status.st_size < 0 || static_cast<quint64>(status.st_size) > maximumBytes ||
+      static_cast<quint64>(status.st_size) > static_cast<quint64>(std::numeric_limits<qsizetype>::max())) {
+    return {{}, ResumeStoreError::StateTooLarge, QStringLiteral("resume state exceeds the limit")};
+  }
+  QByteArray bytes(static_cast<qsizetype>(status.st_size), Qt::Uninitialized);
+  qsizetype offset = 0;
+  while (offset < bytes.size()) {
+    const auto read = ::read(descriptor, bytes.data() + offset, static_cast<size_t>(bytes.size() - offset));
+    if (read <= 0) {
+      return {{}, ResumeStoreError::ReadFailed, QString::fromLocal8Bit(std::strerror(errno))};
+    }
+    offset += static_cast<qsizetype>(read);
+  }
+  return {.bytes = std::move(bytes)};
+#endif
+}
+
 QString directionName(ResumeDirection direction)
 {
   switch (direction) {
@@ -99,6 +213,12 @@ bool isSupportedUnsignedInteger(quint64 value)
   return value <= static_cast<quint64>(std::numeric_limits<qint64>::max());
 }
 
+bool isResolvedDecision(IncomingConflictDecision decision)
+{
+  return decision == IncomingConflictDecision::AutoRename || decision == IncomingConflictDecision::Overwrite ||
+         decision == IncomingConflictDecision::Skip;
+}
+
 ResumeStoreOperationResult validateState(const ResumeState &state, const ResumeStoreLimits &limits)
 {
   if (state.peerDeviceId.value().isNull()) {
@@ -113,13 +233,15 @@ ResumeStoreOperationResult validateState(const ResumeState &state, const ResumeS
   if (!state.updatedUtc.isValid() || state.updatedUtc.toMSecsSinceEpoch() <= 0) {
     return operationFailure(ResumeStoreError::InvalidState, QStringLiteral("resume update timestamp is invalid"));
   }
-  if (limits.maximumFiles == 0 || static_cast<quint64>(state.files.size()) > limits.maximumFiles) {
+  if (limits.maximumFiles == 0 ||
+      static_cast<quint64>(state.files.size() + state.resolvedTargets.size()) > limits.maximumFiles) {
     return operationFailure(ResumeStoreError::TooManyFiles, QStringLiteral("resume file count exceeds the limit"));
   }
 
   QSet<QByteArray> fileIds;
   QSet<QString> protocolPaths;
   QSet<QString> partPaths;
+  QSet<QString> resolvedPaths;
   for (const auto &file : state.files) {
     const QByteArray fileId = file.fileId.toBytes();
     if (fileIds.contains(fileId)) {
@@ -160,6 +282,37 @@ ResumeStoreOperationResult validateState(const ResumeState &state, const ResumeS
       );
     }
   }
+  for (const auto &target : state.resolvedTargets) {
+    const QByteArray fileId = target.fileId.toBytes();
+    if (fileIds.contains(fileId) || !isSupportedUnsignedInteger(target.size) || target.sha256.size() != kSha256Bytes ||
+        !isResolvedDecision(target.decision)) {
+      return operationFailure(
+          ResumeStoreError::InvalidState, QStringLiteral("resolved target identity or content binding is invalid")
+      );
+    }
+    fileIds.insert(fileId);
+    if (target.decision == IncomingConflictDecision::Skip) {
+      if (!target.relativeTargetPath.isEmpty()) {
+        return operationFailure(
+            ResumeStoreError::InvalidPath, QStringLiteral("skipped target must not contain a path")
+        );
+      }
+      continue;
+    }
+    const auto targetPath = PathPolicy::validateRelative(target.relativeTargetPath, limits.pathLimits);
+    if (!targetPath.ok || targetPath.normalized != target.relativeTargetPath) {
+      return operationFailure(
+          ResumeStoreError::InvalidPath,
+          targetPath.ok ? QStringLiteral("resolved target path is not NFC-normalized") : targetPath.diagnostic
+      );
+    }
+    if (resolvedPaths.contains(targetPath.collisionKey)) {
+      return operationFailure(
+          ResumeStoreError::InvalidPath, QStringLiteral("resume contains colliding resolved target paths")
+      );
+    }
+    resolvedPaths.insert(targetPath.collisionKey);
+  }
   return {};
 }
 
@@ -175,6 +328,16 @@ QByteArray encodeState(const ResumeState &state)
         {key(PartRelativePathKey), file.partRelativePath},
     });
   }
+  QCborArray resolvedTargets;
+  for (const auto &target : state.resolvedTargets) {
+    resolvedTargets.append(QCborMap{
+        {key(TargetFileIdKey), target.fileId.toBytes()},
+        {key(TargetRelativePathKey), target.relativeTargetPath},
+        {key(TargetSizeKey), static_cast<qint64>(target.size)},
+        {key(TargetSha256Key), target.sha256},
+        {key(TargetDecisionKey), static_cast<qint64>(target.decision)},
+    });
+  }
 
   const QCborMap map = {
       {key(SchemaVersionKey), static_cast<qint64>(kResumeStateSchemaVersion)},
@@ -184,6 +347,7 @@ QByteArray encodeState(const ResumeState &state)
       {key(DirectionKey), directionName(state.direction)},
       {key(FilesKey), files},
       {key(UpdatedAtKey), state.updatedUtc.toMSecsSinceEpoch()},
+      {key(ResolvedTargetsKey), resolvedTargets},
   };
   return QCborValue(map).toCbor(QCborValue::EncodingOption::SortKeysInMaps);
 }
@@ -200,17 +364,31 @@ ResumeStoreLoadResult decodeState(QByteArrayView encoded, const ResumeStoreLimit
     return loadFailure(ResumeStoreError::MalformedCbor, QStringLiteral("resume state is not exactly one CBOR map"));
   }
   const auto map = value.toMap();
-  if (!hasExactIntegerKeys(
-          map, {SchemaVersionKey, TransferIdKey, PeerDeviceIdKey, ManifestHashKey, DirectionKey, FilesKey, UpdatedAtKey}
-      )) {
+  const auto schemaVersion = valueFor(map, SchemaVersionKey);
+  if (!schemaVersion.isInteger()) {
+    return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resume state schema field is invalid"));
+  }
+  const qint64 schema = schemaVersion.toInteger();
+  if (schema != static_cast<qint64>(kLegacyResumeStateSchemaVersion) &&
+      schema != static_cast<qint64>(kResumeStateSchemaVersion)) {
+    return loadFailure(ResumeStoreError::UnsupportedSchema, QStringLiteral("resume state schema is unsupported"));
+  }
+  const bool legacy = schema == static_cast<qint64>(kLegacyResumeStateSchemaVersion);
+  const bool exactFields = legacy
+                               ? hasExactIntegerKeys(
+                                     map,
+                                     {SchemaVersionKey, TransferIdKey, PeerDeviceIdKey, ManifestHashKey, DirectionKey,
+                                      FilesKey, UpdatedAtKey}
+                                 )
+                               : hasExactIntegerKeys(
+                                     map,
+                                     {SchemaVersionKey, TransferIdKey, PeerDeviceIdKey, ManifestHashKey, DirectionKey,
+                                      FilesKey, UpdatedAtKey, ResolvedTargetsKey}
+                                 );
+  if (!exactFields) {
     return loadFailure(
         ResumeStoreError::InvalidFields, QStringLiteral("resume state contains missing, duplicate, or unknown fields")
     );
-  }
-
-  const auto schemaVersion = valueFor(map, SchemaVersionKey);
-  if (!schemaVersion.isInteger() || schemaVersion.toInteger() != static_cast<qint64>(kResumeStateSchemaVersion)) {
-    return loadFailure(ResumeStoreError::UnsupportedSchema, QStringLiteral("resume state schema is unsupported"));
   }
 
   const auto transferBytes = valueFor(map, TransferIdKey);
@@ -219,9 +397,11 @@ ResumeStoreLoadResult decodeState(QByteArrayView encoded, const ResumeStoreLimit
   const auto directionValue = valueFor(map, DirectionKey);
   const auto filesValue = valueFor(map, FilesKey);
   const auto updatedAtValue = valueFor(map, UpdatedAtKey);
+  const auto targetsValue = legacy ? QCborValue(QCborArray{}) : valueFor(map, ResolvedTargetsKey);
   if (!transferBytes.isByteArray() || transferBytes.toByteArray().size() != kUuidBytes || !peerBytes.isByteArray() ||
       !manifestHash.isByteArray() || manifestHash.toByteArray().size() != kSha256Bytes || !directionValue.isString() ||
-      !filesValue.isArray() || !updatedAtValue.isInteger() || updatedAtValue.toInteger() <= 0) {
+      !filesValue.isArray() || !updatedAtValue.isInteger() || updatedAtValue.toInteger() <= 0 ||
+      !targetsValue.isArray()) {
     return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resume state contains invalid field types"));
   }
 
@@ -233,7 +413,9 @@ ResumeStoreLoadResult decodeState(QByteArrayView encoded, const ResumeStoreLimit
   }
 
   const auto encodedFiles = filesValue.toArray();
-  if (limits.maximumFiles == 0 || static_cast<quint64>(encodedFiles.size()) > limits.maximumFiles) {
+  const auto encodedTargets = targetsValue.toArray();
+  if (limits.maximumFiles == 0 ||
+      static_cast<quint64>(encodedFiles.size() + encodedTargets.size()) > limits.maximumFiles) {
     return loadFailure(ResumeStoreError::TooManyFiles, QStringLiteral("resume file count exceeds the limit"));
   }
   QList<ResumeFileState> files;
@@ -271,19 +453,58 @@ ResumeStoreLoadResult decodeState(QByteArrayView encoded, const ResumeStoreLimit
     });
   }
 
+  QList<ResolvedTargetState> resolvedTargets;
+  resolvedTargets.reserve(encodedTargets.size());
+  for (const auto &encodedTarget : encodedTargets) {
+    if (!encodedTarget.isMap()) {
+      return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resolved target entry is not a map"));
+    }
+    const auto targetMap = encodedTarget.toMap();
+    if (!hasExactIntegerKeys(
+            targetMap,
+            {TargetFileIdKey, TargetRelativePathKey, TargetSizeKey, TargetSha256Key, TargetDecisionKey}
+        )) {
+      return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resolved target fields are invalid"));
+    }
+    const auto fileBytes = valueFor(targetMap, TargetFileIdKey);
+    const auto relativePath = valueFor(targetMap, TargetRelativePathKey);
+    const auto size = valueFor(targetMap, TargetSizeKey);
+    const auto sha256 = valueFor(targetMap, TargetSha256Key);
+    const auto decision = valueFor(targetMap, TargetDecisionKey);
+    if (!fileBytes.isByteArray() || fileBytes.toByteArray().size() != kUuidBytes || !relativePath.isString() ||
+        !size.isInteger() || size.toInteger() < 0 || !sha256.isByteArray() ||
+        sha256.toByteArray().size() != kSha256Bytes || !decision.isInteger() ||
+        decision.toInteger() < static_cast<qint64>(IncomingConflictDecision::Overwrite) ||
+        decision.toInteger() > static_cast<qint64>(IncomingConflictDecision::CancelTransfer)) {
+      return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resolved target types are invalid"));
+    }
+    const auto fileId = FileId::fromBytes(fileBytes.toByteArray());
+    if (!fileId.has_value()) {
+      return loadFailure(ResumeStoreError::InvalidFields, QStringLiteral("resolved target file ID is invalid"));
+    }
+    resolvedTargets.append({
+        .fileId = *fileId,
+        .relativeTargetPath = relativePath.toString(),
+        .size = static_cast<quint64>(size.toInteger()),
+        .sha256 = sha256.toByteArray(),
+        .decision = static_cast<IncomingConflictDecision>(decision.toInteger()),
+    });
+  }
+
   ResumeState state{
       .transferId = *transferId,
       .peerDeviceId = *peerDeviceId,
       .manifestSha256 = manifestHash.toByteArray(),
       .direction = *direction,
       .files = std::move(files),
+      .resolvedTargets = std::move(resolvedTargets),
       .updatedUtc = QDateTime::fromMSecsSinceEpoch(updatedAtValue.toInteger(), Qt::UTC),
   };
   const auto validation = validateState(state, limits);
   if (!validation.ok()) {
     return loadFailure(validation.error, validation.diagnostic);
   }
-  return {.state = std::move(state)};
+  return {.state = std::move(state), .schemaVersion = static_cast<quint64>(schema)};
 }
 
 } // namespace
@@ -337,22 +558,11 @@ ResumeStoreLoadResult ResumeStore::load(const TransferId &transferId) const
         ResumeStoreError::InvalidStoreDirectory, QStringLiteral("resume store path or transfer ID is invalid")
     );
   }
-  QFile input(statePath(transferId));
-  if (!input.exists()) {
-    return loadFailure(ResumeStoreError::NotFound, QStringLiteral("resume state does not exist"));
+  auto read = readStateNoFollow(statePath(transferId), m_limits.maximumEncodedBytes);
+  if (!read.ok()) {
+    return loadFailure(read.error, std::move(read.diagnostic));
   }
-  if (!input.open(QIODevice::ReadOnly)) {
-    return loadFailure(ResumeStoreError::OpenFailed, input.errorString());
-  }
-  if (m_limits.maximumEncodedBytes == 0 || input.size() < 0 ||
-      static_cast<quint64>(input.size()) > m_limits.maximumEncodedBytes) {
-    return loadFailure(ResumeStoreError::StateTooLarge, QStringLiteral("resume state exceeds the limit"));
-  }
-  const QByteArray encoded = input.readAll();
-  if (input.error() != QFileDevice::NoError) {
-    return loadFailure(ResumeStoreError::ReadFailed, input.errorString());
-  }
-  auto decoded = decodeState(encoded, m_limits);
+  auto decoded = decodeState(read.bytes, m_limits);
   if (decoded.ok() && decoded.state->transferId != transferId) {
     return loadFailure(
         ResumeStoreError::TransferIdMismatch, QStringLiteral("resume state does not match its requested transfer ID")

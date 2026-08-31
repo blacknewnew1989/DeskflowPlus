@@ -17,7 +17,8 @@
 
 namespace relaydesk::transfer {
 
-inline constexpr quint64 kResumeStateSchemaVersion = 1;
+inline constexpr quint64 kLegacyResumeStateSchemaVersion = 1;
+inline constexpr quint64 kResumeStateSchemaVersion = 2;
 inline constexpr quint64 kDefaultMaximumResumeStateBytes = 64U * 1024U * 1024U;
 inline constexpr quint64 kDefaultMaximumResumeFiles = 100'000;
 
@@ -38,6 +39,17 @@ struct ResumeFileState
   [[nodiscard]] bool operator==(const ResumeFileState &) const = default;
 };
 
+struct ResolvedTargetState
+{
+  FileId fileId;
+  QString relativeTargetPath;
+  quint64 size = 0;
+  QByteArray sha256;
+  IncomingConflictDecision decision = IncomingConflictDecision::Overwrite;
+
+  [[nodiscard]] bool operator==(const ResolvedTargetState &) const = default;
+};
+
 struct ResumeState
 {
   TransferId transferId;
@@ -45,6 +57,7 @@ struct ResumeState
   QByteArray manifestSha256;
   ResumeDirection direction = ResumeDirection::Receiving;
   QList<ResumeFileState> files;
+  QList<ResolvedTargetState> resolvedTargets;
   QDateTime updatedUtc;
 
   [[nodiscard]] bool operator==(const ResumeState &) const = default;
@@ -92,6 +105,7 @@ struct ResumeStoreOperationResult
 struct ResumeStoreLoadResult
 {
   std::optional<ResumeState> state;
+  quint64 schemaVersion = 0;
   ResumeStoreError error = ResumeStoreError::None;
   QString diagnostic;
 

@@ -13,13 +13,19 @@
 #include "relaydesk/transfer/TransferControlStateMachine.h"
 #include "relaydesk/transfer/TransferOfferStateMachine.h"
 
+#include <QByteArray>
 #include <QHash>
 #include <QObject>
 
 #include <functional>
 #include <memory>
+#include <optional>
 
 class QThreadPool;
+
+namespace relaydesk::transfer {
+class TransferRecoveryStore;
+}
 
 namespace deskflow::relaydesk {
 
@@ -33,6 +39,7 @@ class IncomingTransferRuntime final : public QObject
 
 public:
   using TrustChecker = std::function<bool(const DeviceId &)>;
+  using PeerFingerprintProvider = std::function<std::optional<QByteArray>(const DeviceId &)>;
 
   IncomingTransferRuntime(
       IPlatformFileSafety &fileSafety, QThreadPool &workerPool, TrustChecker trustChecker = {},
@@ -41,6 +48,13 @@ public:
   ~IncomingTransferRuntime() override;
 
   Q_DISABLE_COPY_MOVE(IncomingTransferRuntime)
+
+  void configureRecovery(
+      DeviceId localDeviceId, PeerFingerprintProvider peerFingerprintProvider,
+      ::relaydesk::transfer::TransferRecoveryStore *recoveryStore
+  );
+  void startRecoveryScan();
+  void stopRecoveryScan();
 
   [[nodiscard]] bool receiveOffer(
       const DeviceId &peerDeviceId, QString peerDisplayName, bool peerTrusted,
@@ -114,16 +128,19 @@ Q_SIGNALS:
       ::relaydesk::transfer::TransferId transferId,
       ::relaydesk::transfer::TransferErrorCode errorCode, QString diagnostic
   );
+  void recoveryIssue(QString diagnostic);
 
 private:
   struct Session;
   struct AcceptPreflightResult;
+  struct RecoveryHydrationState;
   class ReceivePipeline;
 
   void finishAcceptPreflight(
       const ::relaydesk::transfer::TransferId &transferId,
       ::relaydesk::transfer::ReceiveOptions options, AcceptPreflightResult result
   );
+  void hydrateNextRecoveryState();
   void publishOperation(
       const ::relaydesk::transfer::TransferId &transferId,
       ::relaydesk::transfer::TransferOperation operation,
@@ -137,6 +154,10 @@ private:
   IPlatformFileSafety &m_fileSafety;
   QThreadPool &m_workerPool;
   TrustChecker m_trustChecker;
+  std::optional<DeviceId> m_localDeviceId;
+  PeerFingerprintProvider m_peerFingerprintProvider;
+  ::relaydesk::transfer::TransferRecoveryStore *m_recoveryStore = nullptr;
+  std::unique_ptr<RecoveryHydrationState> m_recoveryHydration;
   QHash<::relaydesk::transfer::TransferId, Session *> m_sessions;
 };
 

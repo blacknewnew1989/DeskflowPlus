@@ -3,6 +3,7 @@
 
 #include "relaydesk/transfer/ResumeStore.h"
 
+#include <QCborArray>
 #include <QCborMap>
 #include <QCborValue>
 #include <QFile>
@@ -38,6 +39,14 @@ ResumeState makeState(const QString &suffix = QStringLiteral("alpha"))
                   .partRelativePath = QStringLiteral("87654321-4321-4321-8321-ba0987654321.part"),
               },
           },
+      .resolvedTargets =
+          {{
+              .fileId = *FileId::fromString(QStringLiteral("aaaaaaaa-1234-4234-8234-1234567890ab")),
+              .relativeTargetPath = QStringLiteral("资料/resolved.bin"),
+              .size = 7,
+              .sha256 = QByteArray(32, '\x3c'),
+              .decision = IncomingConflictDecision::AutoRename,
+          }},
       .updatedUtc = QDateTime::fromMSecsSinceEpoch(1'780'000'000'123LL, Qt::UTC),
   };
 }
@@ -57,6 +66,7 @@ class ResumeStoreTests : public QObject
 
 private Q_SLOTS:
   void roundTripsAndScansStates();
+  void loadsLegacyV1WithoutResolvedTargets();
   void replacesAtomicallyWithoutClobberingValidState();
   void rejectsMalformedAndUnknownSchema();
   void rejectsInvalidStateBeforeWriting();
@@ -75,6 +85,7 @@ void ResumeStoreTests::roundTripsAndScansStates()
   QVERIFY2(saved.ok(), qPrintable(saved.diagnostic));
   const auto loaded = store.load(expected.transferId);
   QVERIFY2(loaded.ok(), qPrintable(loaded.diagnostic));
+  QCOMPARE(loaded.schemaVersion, kResumeStateSchemaVersion);
   QCOMPARE(*loaded.state, expected);
 
   const auto scanned = store.scan();
@@ -82,6 +93,42 @@ void ResumeStoreTests::roundTripsAndScansStates()
   QCOMPARE(scanned.issues.size(), 0);
   QCOMPARE(scanned.states, QList<ResumeState>{expected});
   QCOMPARE(QFileInfo(store.statePath(expected.transferId)).size() > 0, true);
+}
+
+void ResumeStoreTests::loadsLegacyV1WithoutResolvedTargets()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  ResumeStore store(temporary.path());
+  auto expected = makeState();
+  expected.resolvedTargets.clear();
+  QCborArray files;
+  for (const auto &file : expected.files) {
+    files.append(QCborMap{
+        {QCborValue(1), file.fileId.toBytes()},
+        {QCborValue(2), file.relativeProtocolPath},
+        {QCborValue(3), static_cast<qint64>(file.durableOffset)},
+        {QCborValue(4), static_cast<qint64>(file.totalBytes)},
+        {QCborValue(5), file.partRelativePath},
+    });
+  }
+  const QCborMap legacy{
+      {QCborValue(1), static_cast<qint64>(kLegacyResumeStateSchemaVersion)},
+      {QCborValue(2), expected.transferId.toBytes()},
+      {QCborValue(3), expected.peerDeviceId.toBytes()},
+      {QCborValue(4), expected.manifestSha256},
+      {QCborValue(5), QStringLiteral("receiving")},
+      {QCborValue(6), files},
+      {QCborValue(7), expected.updatedUtc.toMSecsSinceEpoch()},
+  };
+  writeBytes(
+      store.statePath(expected.transferId),
+      QCborValue(legacy).toCbor(QCborValue::EncodingOption::SortKeysInMaps)
+  );
+  const auto loaded = store.load(expected.transferId);
+  QVERIFY2(loaded.ok(), qPrintable(loaded.diagnostic));
+  QCOMPARE(loaded.schemaVersion, kLegacyResumeStateSchemaVersion);
+  QCOMPARE(*loaded.state, expected);
 }
 
 void ResumeStoreTests::replacesAtomicallyWithoutClobberingValidState()
@@ -160,6 +207,18 @@ void ResumeStoreTests::rejectsInvalidStateBeforeWriting()
   auto duplicateId = makeState();
   duplicateId.files[1].fileId = duplicateId.files[0].fileId;
   QCOMPARE(store.save(duplicateId).error, ResumeStoreError::InvalidState);
+
+  auto resolvedDuplicate = makeState();
+  resolvedDuplicate.resolvedTargets[0].fileId = resolvedDuplicate.files[0].fileId;
+  QCOMPARE(store.save(resolvedDuplicate).error, ResumeStoreError::InvalidState);
+
+  auto cancelledDecision = makeState();
+  cancelledDecision.resolvedTargets[0].decision = IncomingConflictDecision::CancelTransfer;
+  QCOMPARE(store.save(cancelledDecision).error, ResumeStoreError::InvalidState);
+
+  auto skippedWithPath = makeState();
+  skippedWithPath.resolvedTargets[0].decision = IncomingConflictDecision::Skip;
+  QCOMPARE(store.save(skippedWithPath).error, ResumeStoreError::InvalidPath);
 
   ResumeStore limited(temporary.filePath(QStringLiteral("limited")), {.maximumFiles = 1});
   QCOMPARE(limited.save(makeState()).error, ResumeStoreError::TooManyFiles);

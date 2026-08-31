@@ -20,6 +20,9 @@
 
 #include <QSignalSpy>
 #include <QCryptographicHash>
+#include <QCborArray>
+#include <QCborMap>
+#include <QCborValue>
 #include <QDir>
 #include <QDirIterator>
 #include <QElapsedTimer>
@@ -122,6 +125,8 @@ class FileTransferRuntimeTests final : public QObject
 
 private Q_SLOTS:
   void listenerLifecycleIsOwnedAndRestartable();
+  void activeTransferDestructionIsSafe_data();
+  void activeTransferDestructionIsSafe();
   void stoppingWhilePreparingPublishesRetryableFailure();
   void stoppingBeforeStreamingPublishesRetryableFailure_data();
   void stoppingBeforeStreamingPublishesRetryableFailure();
@@ -130,7 +135,10 @@ private Q_SLOTS:
   void incomingSingleFileCommitsThroughPlatformReceiver();
   void incomingConflictPolicies_data();
   void incomingConflictPolicies();
+  void interruptedIncomingFileResumesFromDurableCheckpoint_data();
   void interruptedIncomingFileResumesFromDurableCheckpoint();
+  void incomingHydrationValidatesResolvedTargets_data();
+  void incomingHydrationValidatesResolvedTargets();
   void stoppingSenderLeavesOutgoingAtResumableCheckpoint_data();
   void stoppingSenderLeavesOutgoingAtResumableCheckpoint();
   void outgoingRecoverySaveFailureStopsBeforeStreaming();
@@ -209,6 +217,98 @@ void FileTransferRuntimeTests::listenerLifecycleIsOwnedAndRestartable()
   QVERIFY(discovery.service().localDevice().capabilities.resumeV1);
   QCOMPARE(started.count(), 2);
   QCOMPARE(errors.count(), 0);
+}
+
+void FileTransferRuntimeTests::activeTransferDestructionIsSafe_data()
+{
+  QTest::addColumn<bool>("explicitStop");
+  QTest::addColumn<bool>("exerciseSymlinkSkip");
+  QTest::newRow("explicit-stop") << true << false;
+  QTest::newRow("direct-destruction") << false << false;
+  QTest::newRow("explicit-stop-symlink-skip") << true << true;
+  QTest::newRow("direct-symlink-skip") << false << true;
+}
+
+void FileTransferRuntimeTests::activeTransferDestructionIsSafe()
+{
+  using namespace ::relaydesk::transfer;
+  QFETCH(bool, explicitStop);
+  QFETCH(bool, exerciseSymlinkSkip);
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY(identity.ok());
+  const auto sourcePath = directory.filePath(QStringLiteral("destruction-source.bin"));
+  QFile source(sourcePath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(QByteArray(4 * 1024 * 1024 + 113, '\x41')), qint64{4 * 1024 * 1024 + 113});
+  source.close();
+  const auto receiveRoot = directory.filePath(QStringLiteral("received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(directory.filePath(QStringLiteral("sender-trust.json")));
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(trustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  model::DeviceHomeModel senderModel;
+  model::DeviceHomeModel receiverModel;
+  DeviceDiscoveryRuntime senderDiscovery(
+      localDevice(senderId, identity.fingerprintSha256, QStringLiteral("Destruction sender")), senderModel
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Destruction receiver")), receiverModel
+  );
+  FileTransferRuntimeOptions senderOptions;
+  senderOptions.listenAddress = QHostAddress::LocalHost;
+  senderOptions.recoveryStateRoot = directory.filePath(QStringLiteral("sender-recovery"));
+  senderOptions.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
+  auto receiverOptions = senderOptions;
+  receiverOptions.recoveryStateRoot = directory.filePath(QStringLiteral("receiver-recovery"));
+  auto sender = std::make_unique<FileTransferRuntime>(
+      senderId, senderTrust, senderDiscovery, identityPath, senderOptions
+  );
+  auto receiver = std::make_unique<FileTransferRuntime>(
+      receiverId, receiverTrust, receiverDiscovery, identityPath, receiverOptions
+  );
+  connect(receiver.get(), &IFileTransferService::incomingOffer, this, [&, runtime = receiver.get()](const IncomingOffer &offer) {
+    runtime->accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
+  });
+  bool active = false;
+  connect(receiver.get(), &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+    active = active || (snapshot.direction == TransferDirection::Receiving &&
+                        snapshot.state == TransferState::Transferring && snapshot.progress.completedBytes > 0);
+  });
+  QString diagnostic;
+  QVERIFY2(sender->start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiver->start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+  const auto started = sender->send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY(started.ok());
+  QTRY_VERIFY_WITH_TIMEOUT(active, 15'000);
+  if (explicitStop) {
+    receiver->stop();
+    sender->stop();
+  }
+  if (exerciseSymlinkSkip) {
+    ResumeStore resumeStore(QDir(receiveRoot).filePath(QStringLiteral(".incoming/resume-active")));
+    const QString linkPath = resumeStore.statePath(*started.transferId);
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(linkPath), 5'000);
+    const QString targetPath = linkPath + QStringLiteral(".target");
+    QVERIFY(QFile::rename(linkPath, targetPath));
+    if (!QFile::link(targetPath, linkPath)) {
+      QSKIP("the current Windows token cannot create a symbolic link");
+    }
+    if (!QFileInfo(linkPath).isSymLink()) {
+      QFile::remove(linkPath);
+      QSKIP("platform did not create a symbolic link");
+    }
+  }
+  receiver.reset();
+  sender.reset();
 }
 
 void FileTransferRuntimeTests::stoppingWhilePreparingPublishesRetryableFailure()
@@ -1064,9 +1164,29 @@ void FileTransferRuntimeTests::incomingConflictPolicies()
   QCOMPARE(prompts.count(), policy == ConflictPolicy::Ask ? 1 : 0);
 }
 
+void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoint_data()
+{
+  QTest::addColumn<bool>("reconstructReceiver");
+  QTest::addColumn<QString>("recoveryMutation");
+  QTest::addColumn<QString>("expectedDiagnostic");
+  QTest::newRow("listener-restart") << false << QString{} << QString{};
+  QTest::newRow("runtime-reconstruction") << true << QString{} << QString{};
+  QTest::newRow("trust-revoked")
+      << true << QStringLiteral("trust-revoked") << QStringLiteral("trust validation");
+  QTest::newRow("fingerprint-changed")
+      << true << QStringLiteral("fingerprint") << QStringLiteral("trust validation");
+  QTest::newRow("descriptor-corrupt")
+      << true << QStringLiteral("descriptor") << QStringLiteral("was skipped");
+  QTest::newRow("part-length-mismatch")
+      << true << QStringLiteral("part-length") << QStringLiteral("not hydrated");
+}
+
 void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoint()
 {
   using namespace ::relaydesk::transfer;
+  QFETCH(bool, reconstructReceiver);
+  QFETCH(QString, recoveryMutation);
+  QFETCH(QString, expectedDiagnostic);
 
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -1096,52 +1216,67 @@ void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoi
   DeviceDiscoveryRuntime receiverDiscovery(
       localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Resume receiver")), receiverModel
   );
-  FileTransferRuntimeOptions options;
-  options.listenAddress = QHostAddress::LocalHost;
-  options.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
-  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
-  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  FileTransferRuntimeOptions senderOptions;
+  senderOptions.listenAddress = QHostAddress::LocalHost;
+  senderOptions.recoveryStateRoot = directory.filePath(QStringLiteral("sender-recovery"));
+  senderOptions.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
+  auto receiverOptions = senderOptions;
+  receiverOptions.recoveryStateRoot = directory.filePath(QStringLiteral("receiver-recovery"));
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, senderOptions);
+  auto receiver = std::make_unique<FileTransferRuntime>(
+      receiverId, receiverTrust, receiverDiscovery, identityPath, receiverOptions
+  );
   QStringList errors;
   bool receiverStoppedAtCheckpoint = false;
-  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto error, auto, const QString &message) {
-    if (!receiverStoppedAtCheckpoint || error != FileTransferRuntimeError::TransportFailed) {
-      errors.append(QStringLiteral("sender: ") + message);
-    }
-  });
-  connect(&receiver, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
-    errors.append(QStringLiteral("receiver: ") + message);
-  });
-  connect(&receiver, &IFileTransferService::incomingOffer, this, [&](const IncomingOffer &offer) {
-    receiver.accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
-  });
   std::optional<TransferSnapshot> senderLatest;
   std::optional<TransferSnapshot> receiverLatest;
   quint64 interruptedBytes = 0;
   QStringList senderStates;
-  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+  QObject connectionContext;
+  connect(&sender, &FileTransferRuntime::errorOccurred, &connectionContext, [&](auto error, auto, const QString &message) {
+    if (!receiverStoppedAtCheckpoint || error != FileTransferRuntimeError::TransportFailed) {
+      errors.append(QStringLiteral("sender: ") + message);
+    }
+  });
+  connect(&sender, &IFileTransferService::transferChanged, &connectionContext, [&](const TransferSnapshot &snapshot) {
     if (snapshot.direction != TransferDirection::Sending) {
       return;
     }
     senderLatest = snapshot;
     senderStates.append(QString::number(static_cast<int>(snapshot.state)));
   });
-  connect(&receiver, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
-    if (snapshot.direction != TransferDirection::Receiving) {
-      return;
-    }
-    receiverLatest = snapshot;
-    if (!receiverStoppedAtCheckpoint && snapshot.state == TransferState::Transferring &&
-        snapshot.progress.completedBytes >= 1024U * 1024U &&
-        snapshot.progress.completedBytes < snapshot.progress.totalBytes) {
-      receiverStoppedAtCheckpoint = true;
-      interruptedBytes = snapshot.progress.completedBytes;
-      receiver.stop();
-    }
-  });
+  const auto attachReceiver = [&](FileTransferRuntime &runtime) {
+    auto *runtimePointer = &runtime;
+    connect(runtimePointer, &FileTransferRuntime::errorOccurred, &connectionContext, [&](auto, auto, const QString &message) {
+      errors.append(QStringLiteral("receiver: ") + message);
+    });
+    connect(runtimePointer, &IFileTransferService::incomingOffer, &connectionContext, [&, runtimePointer](const IncomingOffer &offer) {
+      runtimePointer->accept(offer.offer.transferId, {.destinationRoot = receiveRoot});
+    });
+    connect(runtimePointer, &IFileTransferService::transferAdded, &connectionContext, [&](const TransferSnapshot &snapshot) {
+      if (snapshot.direction == TransferDirection::Receiving) {
+        receiverLatest = snapshot;
+      }
+    });
+    connect(runtimePointer, &IFileTransferService::transferChanged, &connectionContext, [&, runtimePointer](const TransferSnapshot &snapshot) {
+      if (snapshot.direction != TransferDirection::Receiving) {
+        return;
+      }
+      receiverLatest = snapshot;
+      if (!receiverStoppedAtCheckpoint && snapshot.state == TransferState::Transferring &&
+          snapshot.progress.completedBytes >= 1024U * 1024U &&
+          snapshot.progress.completedBytes < snapshot.progress.totalBytes) {
+        receiverStoppedAtCheckpoint = true;
+        interruptedBytes = snapshot.progress.completedBytes;
+        runtimePointer->stop();
+      }
+    });
+  };
+  attachReceiver(*receiver);
 
   QString diagnostic;
   QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
-  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(receiver->start(&diagnostic), qPrintable(diagnostic));
   QVERIFY(senderDiscovery.registry().observeAdvertisement(
       receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
   ));
@@ -1159,7 +1294,59 @@ void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoi
   );
   QVERIFY(QDir(partPath).exists());
 
-  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  TransferRecoveryStore recoveryStore(receiverOptions.recoveryStateRoot);
+  const auto persistedIncoming = recoveryStore.loadIncoming(*started.transferId);
+  QVERIFY2(persistedIncoming.ok(), qPrintable(persistedIncoming.diagnostic));
+  QCOMPARE(persistedIncoming.state->transferId, *started.transferId);
+  QCOMPARE(persistedIncoming.state->localDeviceId, receiverId);
+  QCOMPARE(persistedIncoming.state->peerDeviceId, senderId);
+
+  if (reconstructReceiver) {
+    receiver.reset();
+    receiverLatest.reset();
+    errors.clear();
+    if (recoveryMutation == QStringLiteral("trust-revoked")) {
+      QVERIFY(receiverTrust.revoke(senderId));
+    } else if (recoveryMutation == QStringLiteral("fingerprint")) {
+      auto changedTrust = receiverTrust.find(senderId);
+      QVERIFY(changedTrust.has_value());
+      changedTrust->fingerprintSha256 = QByteArray(32, '\x72');
+      QVERIFY(receiverTrust.upsert(*changedTrust));
+    } else if (recoveryMutation == QStringLiteral("descriptor")) {
+      QFile descriptor(recoveryStore.incomingStatePath(*started.transferId));
+      QVERIFY(descriptor.open(QIODevice::WriteOnly | QIODevice::Truncate));
+      QCOMPARE(descriptor.write("corrupt"), qint64{7});
+    } else if (recoveryMutation == QStringLiteral("part-length")) {
+      QDirIterator parts(
+          partPath, QStringList{QStringLiteral("*.part")}, QDir::Files, QDirIterator::Subdirectories
+      );
+      QVERIFY(parts.hasNext());
+      QFile part(parts.next());
+      QVERIFY(part.open(QIODevice::Append));
+      QCOMPARE(part.write("x"), qint64{1});
+    }
+    receiver = std::make_unique<FileTransferRuntime>(
+        receiverId, receiverTrust, receiverDiscovery, identityPath, receiverOptions
+    );
+    attachReceiver(*receiver);
+    QVERIFY2(receiver->start(&diagnostic), qPrintable(diagnostic));
+    const auto hasHydratedTransfer = [&] {
+      for (const auto &snapshot : receiver->activeTransfers()) {
+        if (snapshot.id == *started.transferId && snapshot.state == TransferState::Interrupted) {
+          return true;
+        }
+      }
+      return false;
+    };
+    if (!expectedDiagnostic.isEmpty()) {
+      QTRY_VERIFY_WITH_TIMEOUT(errors.join(QLatin1Char(';')).contains(expectedDiagnostic), 10'000);
+      QVERIFY(receiver->activeTransfers().isEmpty());
+      return;
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(hasHydratedTransfer(), 10'000);
+  } else {
+    QVERIFY2(receiver->start(&diagnostic), qPrintable(diagnostic));
+  }
   const auto restartedInfo = receiverDiscovery.service().localDevice();
   QVERIFY(restartedInfo.capabilities.resumeV1);
   QVERIFY(senderDiscovery.registry().observeAdvertisement(restartedInfo, QHostAddress::LocalHost));
@@ -1191,7 +1378,258 @@ void FileTransferRuntimeTests::interruptedIncomingFileResumesFromDurableCheckpoi
       QStringLiteral(".incoming/resume-active/%1.resume.cbor").arg(started.transferId->toString())
   );
   QVERIFY(!QFileInfo::exists(resumeStatePath));
+  QVERIFY(!QFileInfo::exists(recoveryStore.incomingStatePath(*started.transferId)));
   QVERIFY2(errors.isEmpty(), qPrintable(evidence));
+}
+
+void FileTransferRuntimeTests::incomingHydrationValidatesResolvedTargets_data()
+{
+  QTest::addColumn<QString>("mutation");
+  QTest::addColumn<QString>("expectedDiagnostic");
+  QTest::newRow("auto-rename-and-zero-byte") << QString{} << QString{};
+  QTest::newRow("committed-target-deleted")
+      << QStringLiteral("delete") << QStringLiteral("not hydrated");
+  QTest::newRow("committed-target-tampered")
+      << QStringLiteral("tamper") << QStringLiteral("not hydrated");
+  QTest::newRow("zero-byte-target-deleted")
+      << QStringLiteral("zero-delete") << QStringLiteral("not hydrated");
+  QTest::newRow("legacy-v1-rejected")
+      << QStringLiteral("legacy-v1") << QStringLiteral("legacy v1");
+  QTest::newRow("resume-sidecar-symlink")
+      << QStringLiteral("resume-symlink") << QStringLiteral("not hydrated");
+  QTest::newRow("part-parent-symlink")
+      << QStringLiteral("part-parent-symlink") << QStringLiteral("not hydrated");
+}
+
+void FileTransferRuntimeTests::incomingHydrationValidatesResolvedTargets()
+{
+  using namespace ::relaydesk::transfer;
+  QFETCH(QString, mutation);
+  QFETCH(QString, expectedDiagnostic);
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(directory);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+  const auto receiveRoot = directory.filePath(QStringLiteral("receive"));
+  const auto recoveryRoot = directory.filePath(QStringLiteral("recovery"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+  const auto receiverId = DeviceId::generate();
+  const auto senderId = DeviceId::generate();
+  const auto transferId = TransferId::generate();
+  const auto emptyId = FileId::generate();
+  const auto incompleteId = FileId::generate();
+  const auto resolvedId = FileId::generate();
+  const QByteArray incompleteContents("more");
+  const QByteArray resolvedContents("done");
+  const auto modifiedUtc = QDateTime::currentDateTimeUtc();
+  QList<ManifestEntry> entries{
+      {.id = emptyId,
+       .relativeProtocolPath = QStringLiteral("empty.bin"),
+       .type = ManifestEntryType::File,
+       .modifiedUtc = modifiedUtc,
+       .sha256 = QCryptographicHash::hash({}, QCryptographicHash::Sha256)},
+      {.id = incompleteId,
+       .relativeProtocolPath = QStringLiteral("incomplete.bin"),
+       .type = ManifestEntryType::File,
+       .size = static_cast<quint64>(incompleteContents.size()),
+       .modifiedUtc = modifiedUtc,
+       .sha256 = QCryptographicHash::hash(incompleteContents, QCryptographicHash::Sha256)},
+      {.id = resolvedId,
+       .relativeProtocolPath = QStringLiteral("resolved.bin"),
+       .type = ManifestEntryType::File,
+       .size = static_cast<quint64>(resolvedContents.size()),
+       .modifiedUtc = modifiedUtc,
+       .sha256 = QCryptographicHash::hash(resolvedContents, QCryptographicHash::Sha256)},
+  };
+  QList<PreparedManifestEntry> prepared;
+  for (const auto &entry : std::as_const(entries)) {
+    prepared.append({
+        .canonicalSourcePath = QDir::rootPath(),
+        .protocolCollisionKey = PathPolicy::validateRelative(entry.relativeProtocolPath).collisionKey,
+        .entry = entry,
+    });
+  }
+  const auto manifestSha = ManifestPageCodec::canonicalSha256(entries);
+  TransferManifestSummary summary{
+      .id = transferId,
+      .displayName = QStringLiteral("resolved-targets"),
+      .totalBytes = static_cast<quint64>(incompleteContents.size() + resolvedContents.size()),
+      .fileCount = 3,
+      .canonicalSha256 = manifestSha,
+  };
+  const auto plan = ManifestPageCodec::plan({.entries = prepared, .summary = summary});
+  QVERIFY(plan.ok());
+  const TransferOffer offer{
+      .transferId = transferId,
+      .displayName = summary.displayName,
+      .totalBytes = summary.totalBytes,
+      .fileCount = summary.fileCount,
+      .manifestSha256 = manifestSha,
+      .manifestPageCount = plan.plan->pageCount(),
+      .requestedConflictPolicy = ConflictPolicy::AutoRename,
+      .createdAtMs = static_cast<quint64>(QDateTime::currentMSecsSinceEpoch()),
+  };
+  const NegotiatedCapabilities capabilities{
+      .protocolMajorVersion = 1,
+      .features = {QStringLiteral("file.v1"), QStringLiteral("resume.v1")},
+      .chunkBytes = 1024 * 1024,
+      .maxPayloadBytes = 4 * 1024 * 1024,
+      .maxConcurrentTransfers = 2,
+      .maxConcurrentFiles = 2,
+      .maxManifestEntries = 100,
+      .conflictPolicies = {ConflictPolicy::AutoRename, ConflictPolicy::Overwrite, ConflictPolicy::Skip},
+      .localCanReceiveFiles = true,
+      .peerCanReceiveFiles = true,
+  };
+  TransferRecoveryStore recoveryStore(recoveryRoot);
+  QVERIFY(recoveryStore.saveIncoming({
+      .transferId = transferId,
+      .localDeviceId = receiverId,
+      .peerDeviceId = senderId,
+      .peerFingerprintSha256 = identity.fingerprintSha256,
+      .peerDisplayName = QStringLiteral("Sender"),
+      .offer = offer,
+      .receiveOptions = {.destinationRoot = receiveRoot, .conflictPolicy = ConflictPolicy::AutoRename},
+      .entries = entries,
+      .pagePlan =
+          {.entryCount = plan.plan->entryCount,
+           .pageCount = plan.plan->pageCount(),
+           .totalMetadataBytes = plan.plan->totalMetadataBytes},
+      .negotiatedCapabilities = capabilities,
+  }).ok());
+
+  const QString resolvedTarget = QDir(receiveRoot).filePath(QStringLiteral("resolved (1).bin"));
+  const QString emptyTarget = QDir(receiveRoot).filePath(QStringLiteral("empty.bin"));
+  const QString partRelative = QStringLiteral(".incoming/%1/%2.part")
+                                   .arg(transferId.toString(), incompleteId.toString());
+  const QString partPath = QDir(receiveRoot).filePath(partRelative);
+  QVERIFY(QDir().mkpath(QFileInfo(partPath).absolutePath()));
+  for (const auto &file : QList<QPair<QString, QByteArray>>{
+           {resolvedTarget, resolvedContents}, {emptyTarget, {}}, {partPath, incompleteContents.left(1)}}) {
+    QFile output(file.first);
+    QVERIFY(output.open(QIODevice::WriteOnly));
+    QCOMPARE(output.write(file.second), file.second.size());
+  }
+  ResumeStore resumeStore(QDir(receiveRoot).filePath(QStringLiteral(".incoming/resume-active")));
+  ResumeState resume{
+      .transferId = transferId,
+      .peerDeviceId = senderId,
+      .manifestSha256 = manifestSha,
+      .direction = ResumeDirection::Receiving,
+      .files =
+          {{.fileId = incompleteId,
+            .relativeProtocolPath = QStringLiteral("incomplete.bin"),
+            .durableOffset = 1,
+            .totalBytes = static_cast<quint64>(incompleteContents.size()),
+            .partRelativePath = partRelative}},
+      .resolvedTargets =
+          {{.fileId = resolvedId,
+            .relativeTargetPath = QStringLiteral("resolved (1).bin"),
+            .size = static_cast<quint64>(resolvedContents.size()),
+            .sha256 = QCryptographicHash::hash(resolvedContents, QCryptographicHash::Sha256),
+            .decision = IncomingConflictDecision::AutoRename},
+           {.fileId = emptyId,
+            .relativeTargetPath = QStringLiteral("empty.bin"),
+            .size = 0,
+            .sha256 = QCryptographicHash::hash({}, QCryptographicHash::Sha256),
+            .decision = IncomingConflictDecision::Overwrite}},
+      .updatedUtc = QDateTime::currentDateTimeUtc(),
+  };
+  QVERIFY(resumeStore.save(resume).ok());
+  if (mutation == QStringLiteral("delete")) {
+    QVERIFY(QFile::remove(resolvedTarget));
+  } else if (mutation == QStringLiteral("tamper")) {
+    QFile changed(resolvedTarget);
+    QVERIFY(changed.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QCOMPARE(changed.write("evil"), qint64{4});
+  } else if (mutation == QStringLiteral("zero-delete")) {
+    QVERIFY(QFile::remove(emptyTarget));
+  } else if (mutation == QStringLiteral("legacy-v1")) {
+    QCborArray files;
+    for (const auto &file : std::as_const(resume.files)) {
+      files.append(QCborMap{
+          {QCborValue(1), file.fileId.toBytes()},
+          {QCborValue(2), file.relativeProtocolPath},
+          {QCborValue(3), static_cast<qint64>(file.durableOffset)},
+          {QCborValue(4), static_cast<qint64>(file.totalBytes)},
+          {QCborValue(5), file.partRelativePath},
+      });
+    }
+    const QCborMap legacy{
+        {QCborValue(1), static_cast<qint64>(kLegacyResumeStateSchemaVersion)},
+        {QCborValue(2), transferId.toBytes()},
+        {QCborValue(3), senderId.toBytes()},
+        {QCborValue(4), manifestSha},
+        {QCborValue(5), QStringLiteral("receiving")},
+        {QCborValue(6), files},
+        {QCborValue(7), QDateTime::currentMSecsSinceEpoch()},
+    };
+    QFile legacyFile(resumeStore.statePath(transferId));
+    QVERIFY(legacyFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    const auto encoded = QCborValue(legacy).toCbor(QCborValue::EncodingOption::SortKeysInMaps);
+    QCOMPARE(legacyFile.write(encoded), encoded.size());
+    legacyFile.close();
+    const auto loadedLegacy = resumeStore.load(transferId);
+    QVERIFY(loadedLegacy.ok());
+    QCOMPARE(loadedLegacy.schemaVersion, kLegacyResumeStateSchemaVersion);
+  } else if (mutation == QStringLiteral("resume-symlink")) {
+    const QString statePath = resumeStore.statePath(transferId);
+    const QString targetPath = statePath + QStringLiteral(".target");
+    QVERIFY(QFile::rename(statePath, targetPath));
+    if (!QFile::link(targetPath, statePath)) {
+      QSKIP("the current Windows token cannot create a symbolic link");
+    }
+    if (!QFileInfo(statePath).isSymLink()) {
+      QFile::remove(statePath);
+      QSKIP("platform did not create a symbolic link");
+    }
+  } else if (mutation == QStringLiteral("part-parent-symlink")) {
+    const QString partParent = QFileInfo(partPath).absolutePath();
+    const QString targetParent = partParent + QStringLiteral(".target");
+    QVERIFY(QDir().rename(partParent, targetParent));
+    if (!QFile::link(targetParent, partParent)) {
+      QSKIP("the current Windows token cannot create a directory symbolic link");
+    }
+    if (!QFileInfo(partParent).isSymLink()) {
+      QFile::remove(partParent);
+      QSKIP("platform did not create a directory symbolic link");
+    }
+  }
+
+  TrustedDeviceStore receiverTrust(directory.filePath(QStringLiteral("trust.json")));
+  QVERIFY(receiverTrust.upsert(trustedDevice(senderId, identity.fingerprintSha256)));
+  model::DeviceHomeModel receiverModel;
+  DeviceDiscoveryRuntime receiverDiscovery(
+      localDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver")), receiverModel
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  options.recoveryStateRoot = recoveryRoot;
+  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  QStringList errors;
+  connect(&receiver, &FileTransferRuntime::errorOccurred, this, [&](auto error, auto, const QString &message) {
+    if (error != FileTransferRuntimeError::PeerUnavailable) {
+      errors.append(message);
+    }
+  });
+  QString diagnostic;
+  QVERIFY2(receiver.start(&diagnostic), qPrintable(diagnostic));
+  const auto isHydrated = [&] {
+    for (const auto &snapshot : receiver.activeTransfers()) {
+      if (snapshot.id == transferId && snapshot.state == TransferState::Interrupted) {
+        return true;
+      }
+    }
+    return false;
+  };
+  if (expectedDiagnostic.isEmpty()) {
+    QTRY_VERIFY_WITH_TIMEOUT(isHydrated(), 10'000);
+  } else {
+    QTRY_VERIFY_WITH_TIMEOUT(errors.join(QLatin1Char(';')).contains(expectedDiagnostic), 10'000);
+    QVERIFY(!isHydrated());
+  }
 }
 
 void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint_data()
@@ -1260,12 +1698,14 @@ void FileTransferRuntimeTests::stoppingSenderLeavesOutgoingAtResumableCheckpoint
   options.listenAddress = QHostAddress::LocalHost;
   options.recoveryStateRoot = directory.filePath(QStringLiteral("sender-stop-recovery"));
   options.tlsSettings.maxQueuedWriteBytes = 2U * 1024U * 1024U;
+  auto receiverOptions = options;
+  receiverOptions.recoveryStateRoot = directory.filePath(QStringLiteral("receiver-stop-recovery"));
   std::unique_ptr<model::DeviceHomeModel> reconstructedSenderModel;
   std::unique_ptr<DeviceDiscoveryRuntime> reconstructedDiscovery;
   auto sender = std::make_unique<FileTransferRuntime>(
       senderId, senderTrust, senderDiscovery, identityPath, options
   );
-  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, options);
+  FileTransferRuntime receiver(receiverId, receiverTrust, receiverDiscovery, identityPath, receiverOptions);
 
   QStringList errors;
   bool senderStopRequested = false;
@@ -2019,6 +2459,9 @@ void FileTransferRuntimeTests::commandsSynchronizeTransfer(
   QTRY_VERIFY_WITH_TIMEOUT(
       !QFileInfo::exists(recoveryStore.outgoingStatePath(*pausedTransfer)), 5'000
   );
+  QTRY_VERIFY_WITH_TIMEOUT(
+      !QFileInfo::exists(recoveryStore.incomingStatePath(*pausedTransfer)), 5'000
+  );
 
   const auto cancelled = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
   QVERIFY2(cancelled.ok(), qPrintable(cancelled.diagnostic));
@@ -2044,6 +2487,10 @@ void FileTransferRuntimeTests::commandsSynchronizeTransfer(
   QCOMPARE(QFileInfo::exists(resumeState), partialDisposition == PartialDisposition::Keep);
   QTRY_VERIFY_WITH_TIMEOUT(
       !QFileInfo::exists(recoveryStore.outgoingStatePath(*cancelledTransfer)), 5'000
+  );
+  QCOMPARE(
+      QFileInfo::exists(recoveryStore.incomingStatePath(*cancelledTransfer)),
+      partialDisposition == PartialDisposition::Keep
   );
   const auto &controllerOperations = receiverControls ? receiverOperations : senderOperations;
   std::optional<TransferOperationResult> lastCancelOperation;

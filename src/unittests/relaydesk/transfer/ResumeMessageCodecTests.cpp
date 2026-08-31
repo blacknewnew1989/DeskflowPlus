@@ -92,6 +92,7 @@ private Q_SLOTS:
   void decodeRejectsEnvelopeAndFieldErrors();
   void decodeRejectsDuplicateAndUnorderedFiles();
   void buildsResponseOnlyFromMatchingReceiverState();
+  void buildsResponseFromLegacyV1State();
   void validatesResponseAgainstQueryAndManifest();
 };
 
@@ -242,6 +243,24 @@ void ResumeMessageCodecTests::buildsResponseOnlyFromMatchingReceiverState()
   QVERIFY2(built.ok(), qPrintable(built.diagnostic));
   QCOMPARE(built.response->files, response().files);
 
+  auto resolved = storedState();
+  resolved.files.removeLast();
+  resolved.resolvedTargets.append({
+      .fileId = kFirstFileId,
+      .relativeTargetPath = QStringLiteral("first.bin"),
+      .size = 20,
+      .sha256 = QByteArray(32, '\x4a'),
+      .decision = IncomingConflictDecision::Overwrite,
+  });
+  QVERIFY(store.save(resolved).ok());
+  const auto resolvedResponse = ResumeNegotiator::buildResponse(store, query());
+  QVERIFY(resolvedResponse.ok());
+  const QList<ResumeFileOffset> expectedResolvedOffsets{
+      {.fileId = kFirstFileId, .durableOffset = 20},
+      {.fileId = kSecondFileId, .durableOffset = 34},
+  };
+  QCOMPARE(resolvedResponse.response->files, expectedResolvedOffsets);
+
   auto unknown = query();
   unknown.transferId = TransferId::generate();
   QCOMPARE(ResumeNegotiator::buildResponse(store, unknown).error, ResumeNegotiationError::StateNotFound);
@@ -261,6 +280,44 @@ void ResumeMessageCodecTests::buildsResponseOnlyFromMatchingReceiverState()
   QCOMPARE(corrupt.write("bad"), qint64{3});
   corrupt.close();
   QCOMPARE(ResumeNegotiator::buildResponse(store, query()).error, ResumeNegotiationError::StoredStateInvalid);
+}
+
+void ResumeMessageCodecTests::buildsResponseFromLegacyV1State()
+{
+  QTemporaryDir temporary;
+  QVERIFY(temporary.isValid());
+  ResumeStore store(temporary.path());
+  const auto state = storedState();
+  QCborArray files;
+  for (const auto &file : state.files) {
+    files.append(QCborMap{
+        {QCborValue(1), file.fileId.toBytes()},
+        {QCborValue(2), file.relativeProtocolPath},
+        {QCborValue(3), static_cast<qint64>(file.durableOffset)},
+        {QCborValue(4), static_cast<qint64>(file.totalBytes)},
+        {QCborValue(5), file.partRelativePath},
+    });
+  }
+  const QCborMap legacy{
+      {QCborValue(1), static_cast<qint64>(kLegacyResumeStateSchemaVersion)},
+      {QCborValue(2), state.transferId.toBytes()},
+      {QCborValue(3), state.peerDeviceId.toBytes()},
+      {QCborValue(4), state.manifestSha256},
+      {QCborValue(5), QStringLiteral("receiving")},
+      {QCborValue(6), files},
+      {QCborValue(7), state.updatedUtc.toMSecsSinceEpoch()},
+  };
+  QFile output(store.statePath(state.transferId));
+  QVERIFY(output.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  const auto encoded = encodeRaw(legacy);
+  QCOMPARE(output.write(encoded), encoded.size());
+  output.close();
+  const auto loaded = store.load(state.transferId);
+  QVERIFY(loaded.ok());
+  QCOMPARE(loaded.schemaVersion, kLegacyResumeStateSchemaVersion);
+  const auto built = ResumeNegotiator::buildResponse(store, query());
+  QVERIFY2(built.ok(), qPrintable(built.diagnostic));
+  QCOMPARE(built.response->files, response().files);
 }
 
 void ResumeMessageCodecTests::validatesResponseAgainstQueryAndManifest()
