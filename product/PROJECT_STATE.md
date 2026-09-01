@@ -22,6 +22,7 @@
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `agent/a0/redevelop-p0`
 - Current product branch tip: `caeccb8c62ce19d98474dad21c74f39128324f5d`
+- Windows evidence documentation base: `19ee167e6b9dc10f4c25419e65a802611cf24e17`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
 - Current verified redevelopment implementation tip: `63fa60736d4bede6b3711dc486d9d02bf45d2741`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
