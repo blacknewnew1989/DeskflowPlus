@@ -35,7 +35,8 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-007B | 迷你条详情路由 | details body gesture | MainWindow -> TransferMiniBar -> TransferCenterDock | 无active不可操作、dock前置与对应row已验证 | `PASS` |
 | R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | opener 拒绝与 history load/persist error 写入本地化非模态反馈 | `PASS` |
 | R4-UI-009 | 设置 | Save / incomingOfferSettingsRequested | SettingsDialog -> TransferSettingsStore -> MainWindow composition snapshot | Qt localhost/offscreen 动态证据已覆盖保存、重开与同窗口更新；原生 OS 窗口交互未运行 | `PASS` |
-| R4-UI-010 | 托盘/menu bar | restore/pause/settings/quit | BackgroundLifecycleController -> core/transfer/discovery shutdown | 接线存在；OS tray/menu bar 未运行 | `NOT_RUN` |
+| R4-UI-010 | 托盘/menu bar | restore/pause/settings/quit | BackgroundLifecycleController -> core/transfer/discovery shutdown | 010A 已验证 Windows native close/minimize/quit lifecycle；tray menu 与 macOS menu bar 未运行 | `IN_PROGRESS` |
+| R4-UI-010A | Windows 生命周期 | WM_CLOSE、SW_MINIMIZE、close-to-quit | MainWindow -> BackgroundLifecycleController -> shutdown | 真实窗口隐藏后进程存活，关闭策略为 quit 时自然终止；tray 菜单未可靠观测 | `PASS` |
 
 关键 production 入口：
 
@@ -568,7 +569,32 @@ offscreen 的 visible region 不证明 native Windows/macOS 窗口管理层级�
 
 详见 `product/docs/reports/R4_SETTINGS_RUNTIME.md`。
 
-## 18. 证据边界
+## 18. 第十五个纵向证据切片
+
+`R4-UI-010A` 只记录当前 SHA 的 Windows native 窗口生命周期，不继承旧 `TRAY-001` 或 `WIN-020`
+的结论，也不验证 macOS menu bar、安装包或物理设备。
+
+- 验证 SHA：`agent/a4/r4-windows-tray-lifecycle@8ef6461ea1bf92fff948242d586d7a86dce4cf5b`；
+- 临时 C 盘构建 `C:\Users\52323\AppData\Local\Temp\relaydesk-a4-r4-ui010a`：先构建 GUI 与既有
+  quit harness 为 269/269，再单次增量补齐同目录 `deskflow-core.exe` 为 55/55。首次缺少该 core
+  binary 导致 `CoreProcess.cpp` 的启动前置条件失败；这是构建闭包问题，不是 tray production red；
+- receipt `C:\Users\52323\AppData\Local\Temp\relaydesk-a4-r4-ui010a\ui010a-native-lifecycle.json`
+  记录真实 `deskflow.exe` 的三个独立进程：
+  `closeToTray` 场景 WM_CLOSE 后 `hiddenAfterAction=true`、`aliveAfterAction=true`；
+  `minimizeToTray` 场景 SW_MINIMIZE 后 `hiddenAfterAction=true`、`aliveAfterAction=true`；
+  `closeToQuit` 场景设置 `closeToTray=false` 后 `naturalExit=true`；
+- 此切片 source diff 为零。验收仅创建了 build 目录内临时 portable config，结束后已删除；用户
+  `RelayDesk.conf` 未改写，验收期间未写 HKCU Run，结束时无 `deskflow`、`deskflow-core` 或
+  `MainWindowQuitRegression` 进程残留；
+- 两次 `MainWindowQuitRegression` 尝试均在 Qt platform plugin/QStyleHints 初始化前失败，未进入
+  production QAction contract，因而既不构成 product red，也不构成 PASS；
+- Windows tray 图标/context menu 无可靠 UIA 归因，未合成或伪造 tray action。因此 native tray
+  menu Show/Hide/Quit、整个 Windows tray menu interaction、macOS menu bar、物理交互和发布仍为
+  `NOT_RUN`。
+
+详细 receipt 与清理边界见 `product/docs/reports/R4_WINDOWS_TRAY_LIFECYCLE.md`。
+
+## 19. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
