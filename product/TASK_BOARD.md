@@ -13,7 +13,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R0-002 | PASS | A2/A5/A0 | ASan 确认并修复两处测试回调 `stack-use-after-scope`；settings-only/ordered 各 50/50，ASan 101/101；clean run `33330456697` Win 100/100、Mac 101/101 |
 | R0-003 | PASS | A6/A7/A0 | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS，旧 debug 卡住未复现且不定性源码 |
 | R0-004 | PASS | A2/A5/A6/A7/A0 | E4 单向同机双进程：真实 discovery/pair/trust/TLS 1 MiB+ 文件；Win Debug/Release 10/10，run `33326619207` 双平台目标 PASS |
-| R0-005 | IN_PROGRESS | A4/A5/A7/A0 | `-05@83c92d34e` run `33484722108` 的 Windows 为109/110：唯一失败 #95 mini-bar 300008ms/`0xC0000409`；#94 controls 96.46s PASS，#101-#108 eight-scenario 全部 hosted PASS。`e4957e027` / A0 `63fa60736` 仅给 mini-bar 增加 stage evidence 与 failure-only stop guard，断言/timeout/production不变；2核 staged 3/3、完整110/110、逐项守卫0、review GO只允许一次hosted诊断，不能写根因已修。前五次失败均保留不重跑；下一候选 `relaydesk-phase4-20260901-06` 未占用，同SHA Windows package/log/artifact/digest/draft Release齐全后关闭Windows门槛 |
+| R0-005 | IN_PROGRESS | A4/A5/A7/A0 | Windows 子门槛已在 `-06@caeccb8c6` run `33488670032` 关闭：job `99794677509` SUCCESS、CTest110/110、#94/#95与#101-#108逐项PASS、安装回归/翻译PASS；artifact `9793399071` API/local ZIP digest一致，4项包内SUMS与draft Release Windows资产一致。`-01`至`-05`失败保留。总项等待 A5 对同 SHA macOS artifact 本地 digest/lifecycle 做独立复核后再转PASS；物理/TCC/人工安装仍属于R0-006 |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | A0/用户 | 最终包完成后执行物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互 |
 | R0-007 | PASS | A0/A5 | clean-run macOS ACK `0661191ae` 已普通推送；重开发 ref `b6a8852d0` 与未合入产品 ref `c544dc76f` 分列闭环 |
 

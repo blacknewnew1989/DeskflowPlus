@@ -6,7 +6,7 @@
 - product 起点：`product/relaydesk-v1@c544dc76fb4f29aefb6ef30c8acc4475b6778e07`；
 - product 起点是 A0 基线祖先；集成只允许 clean worktree 的 `git merge --ff-only`，禁止 merge commit、
   force push 或历史重写；
-- 当前唯一候选标签：`relaydesk-phase4-20260901-06`。远端 tag 与 draft Release 均已确认未占用；
+- 当前精确候选标签：`relaydesk-phase4-20260901-06`，指向 `caeccb8c62ce19d98474dad21c74f39128324f5d`；
 - 本文件所在候选提交形成后，product、tag 与最终 workflow 必须指向该同一精确 SHA。
 
 ## 唯一工作流
@@ -125,6 +125,37 @@ staged guard 后2核三轮均完整到 `stopped`（64.5s、68.4s、54.4s），�
 逐项守卫退出0。A7 reviewer GO 的含义仅为允许提交并触发一次新的 hosted 诊断；它不证明 #95 根因已修。
 下一唯一候选 `relaydesk-phase4-20260901-06` 必须绑定包含该 guard 与本报告的同一精确 SHA；若仍失败，
 按最后 stage/guard errors 继续定位，不得再把300秒黑箱当成绿色或重复同 SHA。
+
+## 第六候选 Windows 终态
+
+第六候选 `relaydesk-phase4-20260901-06@caeccb8c62ce19d98474dad21c74f39128324f5d` 的 tag run
+`33488670032` 已终态 `success`。annotated tag object `b57ef0426514b17b002e77e5758035eb40eff367`
+指向该精确 commit，`product/relaydesk-v1` 远端复读也为同一 SHA。Windows job `99794677509`：
+
+- build、package、translation、CTest、artifact 与安装/repair/major-upgrade/uninstall 全部 SUCCESS；
+- CTest `110/110`、总耗时196.14s；#94 controls 69.40s、#95 mini-bar 69.04s；
+- #101-#108 eight-scenario TwoProcess 全部逐项 PASS；
+- Windows translation JSON 与 `test005-windows-install-regression.json` 均为 `PASS`。
+
+Windows artifact `9793399071` 名称为
+`relaydesk-windows-x64-caeccb8c62ce19d98474dad21c74f39128324f5d`，API size 36,614,412字节，API digest
+`sha256:2fefb4273959562b41ed756ffd32faf691b88d8e54c1fdb350256a5773f9ef0b`；本地下载 ZIP 大小与
+SHA-256 完全一致。解压后 `artifact-manifest.json` 的 commit/platform 为精确 SHA / `windows-x64`，
+`SHA256SUMS.txt` 四项全部本地复算通过：
+
+- Windows portable 7z：`87e85918bb9f50727874721ce68f2fabee68c9e7acfdf3b39a94da82f74ce917`；
+- Windows unsigned MSI：`f406bffd22dabb611f8f44826f97554953ea469b9777bc91ba2e938f755deed8`；
+- source portable 7z：`3e85af1779fd9a01551f5688f32be44234fdb14546214105db3a17855a93a6bd`；
+- source portable zip：`bd48168aa38e2359604f2a58c9c4e9b2f5f3ec86cffc531e16cb6af08ba7c96d`。
+
+草稿 Release `380350411`（`draft=true`，tag `relaydesk-phase4-20260901-06`）已存在；Windows portable、
+MSI 与两份 source portable 资产的名称、大小、digest 与本地 artifact 清单一致。Release API 的
+`target_commitish=product/relaydesk-v1`，同时 tag object 与该 branch 均已复读到精确候选 SHA，未依赖
+可变分支名推断候选身份。
+
+本报告当前只关闭 Windows 子门槛。R0-005 总项仍为 `IN_PROGRESS`，等待 macOS owner 对同一 SHA 的
+package artifact 本地 digest、包内清单和 lifecycle evidence 做独立复核；本线程不把 hosted run 的
+macOS success 外推为该复核已完成。
 
 ## PASS 门槛
 

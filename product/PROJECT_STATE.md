@@ -21,11 +21,11 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `agent/a0/redevelop-p0`
-- Current product branch tip: `83c92d34ea5b395c8415738ceb5ab121d1157fbd`
+- Current product branch tip: `caeccb8c62ce19d98474dad21c74f39128324f5d`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
 - Current verified redevelopment implementation tip: `63fa60736d4bede6b3711dc486d9d02bf45d2741`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
-- Current verified redevelopment stage tag: none
+- Current verified redevelopment stage tag: `relaydesk-phase4-20260901-06`（Windows 自动证据已复核；macOS 本地证据由 A5 闭环）
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
 - Current implementation: 既有实现正在按 `KEEP_UPSTREAM`、`REUSE_AFTER_AUDIT`、`REWRITE`
   和 `REMOVE` 重新审计。静态调用图不能转为本轮 PASS，详见
@@ -40,7 +40,7 @@
 | R0-002 | PASS | macOS ASan 定位两处测试回调 `stack-use-after-scope`；局部连接 context 按逆序析构先断开。修复后 settings-only 50/50、ordered 50/50、ASan CTest 101/101，clean run `33330456697` 双平台全绿 |
 | R0-003 | PASS | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS；旧 debug 目录卡住未复现，不认定源码缺陷 |
 | R0-004 | PASS | E4 限定：同机双进程 discovery/pair/trust/TLS 单向 1 MiB+ 文件；Windows Debug/Release 10/10，run `33326619207` Win #98、Mac #99 PASS |
-| R0-005 | IN_PROGRESS | `-01`至`-04`失败均保留；`-05@83c92d34e` run `33484722108` 已把 Windows 收敛为 `109/110`，唯一失败 #95 mini-bar 300008ms/`0xC0000409`；#94 controls hosted 96.46s PASS，拆分后的 #101-#108 全部 hosted PASS，旧 #101 不可定位问题已关闭。`e4957e027` / A0 `63fa60736` 只为 mini-bar 增加 staged failure evidence 与 failure-only stop guard，不改断言/timeout/production，不能宣称根因已修。2核 A/B 修复前3/3仍绿；修复后3/3完整到 stopped，完整 CTest 110/110、逐项守卫0，review GO 仅允许一次 hosted 诊断。下一唯一候选为未占用 `relaydesk-phase4-20260901-06`；同SHA Windows package/log/artifact/digest/draft Release齐全后才可关闭 Windows 发布门槛 |
+| R0-005 | IN_PROGRESS | Windows 子门槛 PASS：`relaydesk-phase4-20260901-06@caeccb8c6` run `33488670032` / job `99794677509` SUCCESS，CTest 110/110（#94 69.40s、#95 69.04s、#101-#108逐项PASS），安装/repair/major-upgrade/uninstall 与翻译校验 PASS。artifact `9793399071` API/local ZIP digest 同为 `2fefb427…`，包内4项 SHA256SUMS 全匹配；draft Release `380350411` 的 Windows MSI/portable/source 资产 digest 与本地清单一致。`-01`至`-05`失败均保留不重跑。总项仍等待 A5 完成同 SHA macOS artifact 本地 digest/lifecycle 复核后再决定 PASS；R0-006 物理/系统交互边界不变 |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互留最终验收 |
 | R0-007 | PASS | A5 已在 `coord/platform-sync` 推送 clean-run ACK `0661191ae` 和 lifecycle 终态附录 `a8eb7e7eb`；准确分列重开发 ref 与未合入产品 ref，R0-002 跨平台闭环 |
 | NET-001 | PASS | 普通 Git push 已恢复并推送 `30593b53e`、`72008201e` 和 coordination commits；保留间歇风险记录 |
