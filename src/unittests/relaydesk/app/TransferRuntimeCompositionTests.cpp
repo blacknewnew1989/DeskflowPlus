@@ -31,6 +31,7 @@
 #include <QLabel>
 #include <QListView>
 #include <QPushButton>
+#include <QScopeGuard>
 #include <QToolButton>
 #include <QTest>
 #include <QTemporaryDir>
@@ -923,16 +924,35 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
   std::optional<TransferSnapshot> receiverCancelSnapshot;
   QList<TransferState> receiverCancelStates;
   QStringList errors;
-  connect(&sender, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+  std::optional<TransferId> pausedTransfer;
+  std::optional<TransferId> cancelledTransfer;
+  bool pauseClickQueued = false;
+  bool pauseClicked = false;
+  bool cancelClickQueued = false;
+  bool cancelClicked = false;
+  QString stage = QStringLiteral("setup");
+  QObject connectionContext;
+  const auto stopOnFailure = qScopeGuard([&] {
+    if (!QTest::currentTestFailed()) {
+      return;
+    }
+    qWarning().noquote() << QStringLiteral("controls-stage=%1 errors=%2")
+                                .arg(stage, errors.join(QStringLiteral("; ")));
+    composition.stop();
+    sender.stop();
+  });
+  const auto advanceStage = [&](QStringView next) {
+    stage = next.toString();
+    qInfo().noquote() << QStringLiteral("controls-stage=%1").arg(stage);
+  };
+  connect(&sender, &FileTransferRuntime::errorOccurred, &connectionContext, [&](auto, auto, const QString &message) {
     errors.append(QStringLiteral("sender: ") + message);
   });
-  connect(receiverRuntime, &FileTransferRuntime::errorOccurred, this, [&](auto, auto, const QString &message) {
+  connect(receiverRuntime, &FileTransferRuntime::errorOccurred, &connectionContext, [&](auto, auto, const QString &message) {
     errors.append(QStringLiteral("receiver: ") + message);
   });
 
-  std::optional<TransferId> pausedTransfer;
-  std::optional<TransferId> cancelledTransfer;
-  connect(&sender, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+  connect(&sender, &IFileTransferService::transferChanged, &connectionContext, [&](const TransferSnapshot &snapshot) {
     if (snapshot.direction != TransferDirection::Sending)
       return;
     if (pausedTransfer.has_value() && snapshot.id == *pausedTransfer)
@@ -940,7 +960,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
     if (cancelledTransfer.has_value() && snapshot.id == *cancelledTransfer)
       senderCancelSnapshot = snapshot;
   });
-  connect(receiverRuntime, &IFileTransferService::transferChanged, this, [&](const TransferSnapshot &snapshot) {
+  connect(receiverRuntime, &IFileTransferService::transferChanged, &connectionContext, [&](const TransferSnapshot &snapshot) {
     if (snapshot.direction != TransferDirection::Receiving)
       return;
     if (pausedTransfer.has_value() && snapshot.id == *pausedTransfer)
@@ -964,10 +984,6 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
     return QStringLiteral("runtime=[%1] model=[%2] part=%3")
         .arg(describe(runtime), describe(model), part.has_value() ? QString::number(*part) : QStringLiteral("none"));
   };
-  bool pauseClickQueued = false;
-  bool pauseClicked = false;
-  bool cancelClickQueued = false;
-  bool cancelClicked = false;
   const auto queuePauseClick = [&] {
     if (!pausedTransfer.has_value() || pauseClickQueued) {
       return;
@@ -982,10 +998,11 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
     }
     pauseClickQueued = true;
     transferList->setCurrentIndex(fixture.transfers.index(row, 0));
-    QTimer::singleShot(0, &fixture.transferDock, [&] {
+    QTimer::singleShot(0, &connectionContext, [&] {
       const auto current = fixture.transfers.snapshot(*pausedTransfer);
       if (current.has_value() && current->state == TransferState::Transferring && current->canPause &&
           pause->isVisible() && pause->isEnabled()) {
+        advanceStage(u"pause-click");
         pauseClicked = true;
         QTest::mouseClick(pause, Qt::LeftButton);
       }
@@ -1005,7 +1022,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
     }
     cancelClickQueued = true;
     transferList->setCurrentIndex(fixture.transfers.index(row, 0));
-    QTimer::singleShot(0, &fixture.transferDock, [&] {
+    QTimer::singleShot(0, &connectionContext, [&] {
       const auto current = fixture.transfers.snapshot(*cancelledTransfer);
       if (!current.has_value() || current->state != TransferState::Transferring || !current->canCancel ||
           !more->isVisible() || !cancelAction->isVisible() || !cancelAction->isEnabled()) {
@@ -1015,7 +1032,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
       if (menu == nullptr) {
         return;
       }
-      QTimer::singleShot(0, menu, [&, menu] {
+      QTimer::singleShot(0, &connectionContext, [&, menu] {
         if (!menu->isVisible()) {
           return;
         }
@@ -1023,6 +1040,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
         if (!actionRect.isValid()) {
           return;
         }
+        advanceStage(u"cancel-click");
         cancelClicked = true;
         QTest::mouseClick(menu, Qt::LeftButton, Qt::NoModifier, actionRect.center());
       });
@@ -1030,14 +1048,14 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
     });
   };
   connect(
-      &fixture.transfers, &QAbstractItemModel::rowsInserted, this,
+      &fixture.transfers, &QAbstractItemModel::rowsInserted, &connectionContext,
       [&](const QModelIndex &, int, int) {
         queuePauseClick();
         queueCancelClick();
       }
   );
   connect(
-      &fixture.transfers, &QAbstractItemModel::dataChanged, this,
+      &fixture.transfers, &QAbstractItemModel::dataChanged, &connectionContext,
       [&](const QModelIndex &, const QModelIndex &, const QList<int> &) {
         queuePauseClick();
         queueCancelClick();
@@ -1045,6 +1063,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
   );
 
   QString diagnostic;
+  advanceStage(u"start");
   QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY2(composition.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY(senderDiscovery.registry().observeAdvertisement(
@@ -1067,6 +1086,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
           senderPauseSnapshot->state == TransferState::Paused && receiverPauseSnapshot->state == TransferState::Paused,
       15'000
   );
+  advanceStage(u"paused");
   const auto pausedSenderBytes = senderPauseSnapshot->progress.completedBytes;
   const auto pausedReceiverBytes = receiverPauseSnapshot->progress.completedBytes;
   const auto pausedPartSize = partFileSize(receiveRoot);
@@ -1078,12 +1098,14 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
   QCOMPARE(receiverPauseSnapshot->progress.completedBytes, pausedReceiverBytes);
   QCOMPARE(partFileSize(receiveRoot), pausedPartSize);
   QTRY_VERIFY_WITH_TIMEOUT(resume->isVisible() && resume->isEnabled(), 5'000);
+  advanceStage(u"resume");
   QTest::mouseClick(resume, Qt::LeftButton);
   QTRY_VERIFY_WITH_TIMEOUT(
       senderPauseSnapshot.has_value() && receiverPauseSnapshot.has_value() &&
           senderPauseSnapshot->state == TransferState::Completed && receiverPauseSnapshot->state == TransferState::Completed,
       90'000
   );
+  advanceStage(u"completed");
   const auto pausedTargetPath = QDir(receiveRoot).filePath(QStringLiteral("paused-source.bin"));
   QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(pausedTargetPath), 10'000);
   QFile pausedTarget(pausedTargetPath);
@@ -1115,6 +1137,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
           senderCancelSnapshot->state == TransferState::Cancelled && receiverCancelSnapshot->state == TransferState::Cancelled,
       15'000
   );
+  advanceStage(u"cancelled");
   QVERIFY(receiverCancelStates.indexOf(TransferState::Cancelling) >= 0);
   QVERIFY(receiverCancelStates.indexOf(TransferState::Cancelling) <
           receiverCancelStates.lastIndexOf(TransferState::Cancelled));
@@ -1124,6 +1147,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
   QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(recoveryStore.outgoingStatePath(*cancelledTransfer)), 5'000);
   QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
 
+  advanceStage(u"teardown");
   composition.stop();
   sender.stop();
 }
