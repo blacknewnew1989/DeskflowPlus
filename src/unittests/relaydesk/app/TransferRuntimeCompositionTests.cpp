@@ -747,7 +747,21 @@ void TransferRuntimeCompositionTests::productionTransferMiniBarReflectsAndContro
   std::optional<TransferSnapshot> senderSnapshot;
   std::optional<TransferSnapshot> receiverSnapshot;
   QStringList errors;
+  QString stage = QStringLiteral("setup");
   QObject connectionContext;
+  const auto stopOnFailure = qScopeGuard([&] {
+    if (!QTest::currentTestFailed()) {
+      return;
+    }
+    qWarning().noquote() << QStringLiteral("mini-bar-stage=%1 errors=%2")
+                                .arg(stage, errors.join(QStringLiteral("; ")));
+    composition.stop();
+    sender.stop();
+  });
+  const auto advanceStage = [&](QStringView next) {
+    stage = next.toString();
+    qInfo().noquote() << QStringLiteral("mini-bar-stage=%1").arg(stage);
+  };
   connect(&sender, &IFileTransferService::transferChanged, &connectionContext, [&](const TransferSnapshot &snapshot) {
     if (snapshot.direction == TransferDirection::Sending)
       senderSnapshot = snapshot;
@@ -767,16 +781,19 @@ void TransferRuntimeCompositionTests::productionTransferMiniBarReflectsAndContro
   });
 
   QString diagnostic;
+  advanceStage(u"start");
   QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY2(composition.start(&diagnostic), qPrintable(diagnostic));
   QVERIFY(senderDiscovery.registry().observeAdvertisement(
       receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
   ));
 
+  advanceStage(u"offer");
   const auto started = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
   QVERIFY2(started.ok(), qPrintable(started.diagnostic));
   QVERIFY(started.transferId.has_value());
   QTRY_VERIFY_WITH_TIMEOUT(offerPanel->isVisible() && accept->isVisible() && accept->isEnabled(), 10'000);
+  advanceStage(u"accept");
   QTest::mouseClick(accept, Qt::LeftButton);
   QTRY_VERIFY_WITH_TIMEOUT(
       fixture.transfers.snapshot(*started.transferId).has_value() && fixture.transferMiniBar.isVisible() &&
@@ -784,6 +801,7 @@ void TransferRuntimeCompositionTests::productionTransferMiniBarReflectsAndContro
           primary->text() == QStringLiteral("Pause"),
       20'000
   );
+  advanceStage(u"active");
   const auto miniBarMatchesModel = [&] {
     const auto row = fixture.transfers.indexOf(*started.transferId);
     if (row < 0)
@@ -801,18 +819,21 @@ void TransferRuntimeCompositionTests::productionTransferMiniBarReflectsAndContro
   };
   QTRY_VERIFY_WITH_TIMEOUT(miniBarMatchesModel(), 5'000);
 
+  advanceStage(u"details");
   QSignalSpy details(&fixture.transferMiniBar, &TransferMiniBar::detailsRequested);
   QTest::mouseClick(&fixture.transferMiniBar, Qt::LeftButton, Qt::NoModifier, QPoint(4, 4));
   fixture.transferMiniBar.setFocus();
   QTest::keyClick(&fixture.transferMiniBar, Qt::Key_Return);
   QCOMPARE(details.count(), 2);
 
+  advanceStage(u"pause");
   QTest::mouseClick(primary, Qt::LeftButton);
   QTRY_VERIFY_WITH_TIMEOUT(
       senderSnapshot.has_value() && receiverSnapshot.has_value() && senderSnapshot->state == TransferState::Paused &&
           receiverSnapshot->state == TransferState::Paused && primary->text() == QStringLiteral("Resume"),
       15'000
   );
+  advanceStage(u"paused");
   const auto senderPausedBytes = senderSnapshot->progress.completedBytes;
   const auto receiverPausedBytes = receiverSnapshot->progress.completedBytes;
   QVERIFY(senderPausedBytes > 0);
@@ -821,12 +842,14 @@ void TransferRuntimeCompositionTests::productionTransferMiniBarReflectsAndContro
   QCOMPARE(senderSnapshot->progress.completedBytes, senderPausedBytes);
   QCOMPARE(receiverSnapshot->progress.completedBytes, receiverPausedBytes);
 
+  advanceStage(u"resume");
   QTest::mouseClick(primary, Qt::LeftButton);
   QTRY_VERIFY_WITH_TIMEOUT(
       senderSnapshot.has_value() && receiverSnapshot.has_value() && senderSnapshot->state == TransferState::Completed &&
           receiverSnapshot->state == TransferState::Completed,
       90'000
   );
+  advanceStage(u"completed");
   const auto targetPath = QDir(receiveRoot).filePath(QStringLiteral("mini-bar-source.bin"));
   QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(targetPath), 10'000);
   QFile target(targetPath);
@@ -837,8 +860,10 @@ void TransferRuntimeCompositionTests::productionTransferMiniBarReflectsAndContro
   );
   QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
 
+  advanceStage(u"teardown");
   composition.stop();
   sender.stop();
+  advanceStage(u"stopped");
 }
 
 void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResumeAndCancelLoopbackTransfers()
