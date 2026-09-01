@@ -13,7 +13,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R0-002 | PASS | A2/A5/A0 | ASan 确认并修复两处测试回调 `stack-use-after-scope`；settings-only/ordered 各 50/50，ASan 101/101；clean run `33330456697` Win 100/100、Mac 101/101 |
 | R0-003 | PASS | A6/A7/A0 | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS，旧 debug 卡住未复现且不定性源码 |
 | R0-004 | PASS | A2/A5/A6/A7/A0 | E4 单向同机双进程：真实 discovery/pair/trust/TLS 1 MiB+ 文件；Win Debug/Release 10/10，run `33326619207` 双平台目标 PASS |
-| R0-005 | NOT_RUN | A4/A5/A7/A0 | 重建同 SHA Windows/macOS 平台证据、精确阶段标签、artifact 和草稿 Release |
+| R0-005 | IN_PROGRESS | A4/A5/A7/A0 | 候选 tag `relaydesk-phase4-20260901-01` 未占用；以 clean product worktree `git merge --ff-only` 对齐本候选提交，普通推送 product/tag，并仅监控一次 tag workflow。双平台 package/log/artifact/digest、macOS lifecycle 与 draft Release 同 SHA 齐全后才 PASS；run `33464083567` 不是最终标签证据 |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | A0/用户 | 最终包完成后执行物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互 |
 | R0-007 | PASS | A0/A5 | clean-run macOS ACK `0661191ae` 已普通推送；重开发 ref `b6a8852d0` 与未合入产品 ref `c544dc76f` 分列闭环 |
 

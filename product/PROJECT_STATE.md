@@ -40,7 +40,7 @@
 | R0-002 | PASS | macOS ASan 定位两处测试回调 `stack-use-after-scope`；局部连接 context 按逆序析构先断开。修复后 settings-only 50/50、ordered 50/50、ASan CTest 101/101，clean run `33330456697` 双平台全绿 |
 | R0-003 | PASS | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS；旧 debug 目录卡住未复现，不认定源码缺陷 |
 | R0-004 | PASS | E4 限定：同机双进程 discovery/pair/trust/TLS 单向 1 MiB+ 文件；Windows Debug/Release 10/10，run `33326619207` Win #98、Mac #99 PASS |
-| R0-005 | NOT_RUN | Windows/macOS 同 SHA 的精确阶段标签、artifact 和 Release 尚未执行 |
+| R0-005 | IN_PROGRESS | 候选标签 `relaydesk-phase4-20260901-01` 已确认未占用；先将本候选文档提交 fast-forward 到 product，再仅触发一次该 tag/SHA workflow。只有双平台包、日志、artifact/API+本地 digest、macOS lifecycle 与 draft Release 全部同 SHA 齐全后才转 PASS；分支 run `33464083567` 不替代标签证据 |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互留最终验收 |
 | R0-007 | PASS | A5 已在 `coord/platform-sync` 推送 clean-run ACK `0661191ae` 和 lifecycle 终态附录 `a8eb7e7eb`；准确分列重开发 ref 与未合入产品 ref，R0-002 跨平台闭环 |
 | NET-001 | PASS | 普通 Git push 已恢复并推送 `30593b53e`、`72008201e` 和 coordination commits；保留间歇风险记录 |
