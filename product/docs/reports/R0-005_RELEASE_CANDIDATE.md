@@ -6,7 +6,7 @@
 - product 起点：`product/relaydesk-v1@c544dc76fb4f29aefb6ef30c8acc4475b6778e07`；
 - product 起点是 A0 基线祖先；集成只允许 clean worktree 的 `git merge --ff-only`，禁止 merge commit、
   force push 或历史重写；
-- 当前唯一候选标签：`relaydesk-phase4-20260901-05`。远端 tag 与 draft Release 均已确认未占用；
+- 当前唯一候选标签：`relaydesk-phase4-20260901-06`。远端 tag 与 draft Release 均已确认未占用；
 - 本文件所在候选提交形成后，product、tag 与最终 workflow 必须指向该同一精确 SHA。
 
 ## 唯一工作流
@@ -99,6 +99,32 @@ QProcess→临时目录。
 #101-#108 均逐项 PASS；汇总守卫逐名校验这10项、总数、退出码和无 FAILED 列表，退出0。纠偏后的
 A7 reviewer GO。下一唯一候选 `relaydesk-phase4-20260901-05` 只允许在包含两项 CMake 修复及本报告的
 同一精确 SHA 上触发一次；hosted 结果仍是最终判断，不能用本地绿色覆盖。
+
+第五候选 `relaydesk-phase4-20260901-05@83c92d34ea5b395c8415738ceb5ab121d1157fbd` 的 tag run
+`33484722108` 已终态 `failure`。Windows job `99782026128` 的 CTest 为 `109/110`，唯一失败是
+`#95 RelayDeskTransferRuntimeCompositionMiniBarTests`：300008ms、`0xC0000409`。同一 run 中：
+
+- `#94 RelayDeskTransferRuntimeCompositionControlsTests` hosted 96.46s PASS；
+- 新的 `#101-#108` eight-scenario TwoProcess 测试全部逐项 PASS；
+- build、package、translation、Windows install/repair/major-upgrade/uninstall 与 artifact 上传成功；
+- 汇总守卫因 Test outcome failure 退出1，draft Release 跳过。
+
+因此 Composition 进程隔离、offscreen 与 TwoProcess 可定位性都已得到 hosted 证据，但不能解释 mini-bar
+单槽仍在300秒终止。Windows artifact `9791979762` 名称为
+`relaydesk-windows-x64-83c92d34ea5b395c8415738ceb5ab121d1157fbd`，API 大小 36,615,919 字节，API
+digest 为 `sha256:885faaed926262eb18e0d5c4522750ec9dcb8f1baf7231f0040996d124c06fe1`；本轮未下载，
+不写本地 digest 一致结论。
+
+本地把 mini-bar 测试进程限制为2核后，修复前连续3轮仍 PASS（60.5s、71.6s、71.5s），所以不能把
+hosted 失败简化为算力不足。A7 `e4957e0271344719b470261d1dcefb88fed4b9ea` / A0 `63fa60736`
+只增加 `start→offer→accept→active→details→pause→paused→resume→completed→teardown→stopped` 阶段日志，
+并在 `QTest::currentTestFailed()` 时于所有 runtime、connection context 与局部状态仍存活时输出 stage/errors，
+随后停止 composition/sender。所有业务断言、timeout、文件大小和 production 均未改变。
+
+staged guard 后2核三轮均完整到 `stopped`（64.5s、68.4s、54.4s），完整 Release CTest `110/110`、
+逐项守卫退出0。A7 reviewer GO 的含义仅为允许提交并触发一次新的 hosted 诊断；它不证明 #95 根因已修。
+下一唯一候选 `relaydesk-phase4-20260901-06` 必须绑定包含该 guard 与本报告的同一精确 SHA；若仍失败，
+按最后 stage/guard errors 继续定位，不得再把300秒黑箱当成绿色或重复同 SHA。
 
 ## PASS 门槛
 

@@ -21,9 +21,9 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `agent/a0/redevelop-p0`
-- Current product branch tip: `522793bf3832b7088435f906e50378e2f372f5fa`
+- Current product branch tip: `83c92d34ea5b395c8415738ceb5ab121d1157fbd`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
-- Current verified redevelopment implementation tip: `df844142c4b5272e6f7419a381f510890cbf78a3`
+- Current verified redevelopment implementation tip: `63fa60736d4bede6b3711dc486d9d02bf45d2741`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
 - Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
@@ -40,7 +40,7 @@
 | R0-002 | PASS | macOS ASan 定位两处测试回调 `stack-use-after-scope`；局部连接 context 按逆序析构先断开。修复后 settings-only 50/50、ordered 50/50、ASan CTest 101/101，clean run `33330456697` 双平台全绿 |
 | R0-003 | PASS | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS；旧 debug 目录卡住未复现，不认定源码缺陷 |
 | R0-004 | PASS | E4 限定：同机双进程 discovery/pair/trust/TLS 单向 1 MiB+ 文件；Windows Debug/Release 10/10，run `33326619207` Win #98、Mac #99 PASS |
-| R0-005 | IN_PROGRESS | `-01`/`-02` Windows controls 失败，`-03` mini-bar 失败；`-04@522793bf3` run `33478646382` 又精确失败 #94 controls、#95 mini-bar（各300s/`0xC0000409`）及旧聚合 #101 TwoProcess（58.52s、无函数级输出），四次失败均保留且不重跑。`4335ac5d7` / A0 `619ad34ff` 仅给 #93/#94/#95 固定 CTest `offscreen`；`8dc19127a` / A0 `df844142c` 将 TwoProcess 8个函数拆为同一 EXE 的8个独立必跑测试名，未把 QPA 结论外推给旧 #101。Windows fresh Release：controls/mini-bar 各3/3，TwoProcess 固定顺序3轮各8/8，完整 CTest 110/110、逐项汇总守卫0，纠偏后review GO。下一唯一候选为未占用 `relaydesk-phase4-20260901-05`；同SHA Windows package/log/artifact/digest/draft Release齐全后才可关闭 Windows 发布门槛 |
+| R0-005 | IN_PROGRESS | `-01`至`-04`失败均保留；`-05@83c92d34e` run `33484722108` 已把 Windows 收敛为 `109/110`，唯一失败 #95 mini-bar 300008ms/`0xC0000409`；#94 controls hosted 96.46s PASS，拆分后的 #101-#108 全部 hosted PASS，旧 #101 不可定位问题已关闭。`e4957e027` / A0 `63fa60736` 只为 mini-bar 增加 staged failure evidence 与 failure-only stop guard，不改断言/timeout/production，不能宣称根因已修。2核 A/B 修复前3/3仍绿；修复后3/3完整到 stopped，完整 CTest 110/110、逐项守卫0，review GO 仅允许一次 hosted 诊断。下一唯一候选为未占用 `relaydesk-phase4-20260901-06`；同SHA Windows package/log/artifact/digest/draft Release齐全后才可关闭 Windows 发布门槛 |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互留最终验收 |
 | R0-007 | PASS | A5 已在 `coord/platform-sync` 推送 clean-run ACK `0661191ae` 和 lifecycle 终态附录 `a8eb7e7eb`；准确分列重开发 ref 与未合入产品 ref，R0-002 跨平台闭环 |
 | NET-001 | PASS | 普通 Git push 已恢复并推送 `30593b53e`、`72008201e` 和 coordination commits；保留间歇风险记录 |
