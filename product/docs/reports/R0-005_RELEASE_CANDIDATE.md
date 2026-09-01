@@ -6,7 +6,7 @@
 - product 起点：`product/relaydesk-v1@c544dc76fb4f29aefb6ef30c8acc4475b6778e07`；
 - product 起点是 A0 基线祖先；集成只允许 clean worktree 的 `git merge --ff-only`，禁止 merge commit、
   force push 或历史重写；
-- 当前唯一候选标签：`relaydesk-phase4-20260901-04`。远端 tag 与 draft Release 均已确认未占用；
+- 当前唯一候选标签：`relaydesk-phase4-20260901-05`。远端 tag 与 draft Release 均已确认未占用；
 - 本文件所在候选提交形成后，product、tag 与最终 workflow 必须指向该同一精确 SHA。
 
 ## 唯一工作流
@@ -67,6 +67,38 @@ Windows fresh Release 中 controls 与 mini-bar 隔离槽各 3/3，轻量聚合 
 守卫退出0。独立 A7 reviewer GO、无未关闭问题。下一唯一候选
 `relaydesk-phase4-20260901-04` 必须指向包含该隔离提交与本候选文档的同一新 SHA；第四个 workflow
 只能在该 SHA/tag 形成后触发一次，不得先试跑或重跑前三个失败 SHA/tag。
+
+第四候选 `relaydesk-phase4-20260901-04@522793bf3832b7088435f906e50378e2f372f5fa` 的 tag run
+`33478646382` 已终态 `failure`。Windows job `99763152526` 的完整 CTest 为 `100/103`，失败项只有：
+
+- `#94 RelayDeskTransferRuntimeCompositionControlsTests`：300008ms，`0xC0000409`；
+- `#95 RelayDeskTransferRuntimeCompositionMiniBarTests`：300006ms，`0xC0000409`；
+- `#101 RelayDeskTwoProcessRuntimeTests`：58.52s，聚合目标失败但 job 日志与 artifact `ctest.log` 均未
+  输出内部函数或 JSON，不能归因为任一具体 two-process 场景。
+
+该 job 的 build、package、Windows translation、安装/repair/major-upgrade/uninstall 与 artifact 上传均
+成功，测试 outcome 为 failure，draft Release 因此跳过。Windows artifact `9789710222` 名称为
+`relaydesk-windows-x64-522793bf3832b7088435f906e50378e2f372f5fa`，大小 36,607,985 字节；API digest 与
+本地下载 ZIP SHA-256 均为 `c7642acc1dce8cf71f32ffa1f48f7e280adaedbc9b4284b909762c7ba3cdd7dd`。
+该 run 保留，不在同 SHA 重跑。
+
+A7 `4335ac5d7211c2fe7e6e54c4c3de08da3576fe33` / A0 `619ad34ff` 只给 Composition 的 #93/#94/#95
+CTest 注册固定 `QT_QPA_PLATFORM=offscreen`。hosted `-04` 环境已有 `QT_PLUGIN_PATH` 但没有
+`QT_QPA_PLATFORM`，而本地此前绿色命令显式使用 offscreen；该修复没有修改 timeout、断言或 production，
+也不用于解释旧 #101。
+
+A7 `8dc19127a0bb31264346aeb59bc4d160025960b2` / A0 `df844142c` 将旧聚合
+`RelayDeskTwoProcessRuntimeTests` 的8个函数按原顺序注册为同一 EXE 的8个独立 CTest 进程：Complete、
+PauseResume、Cancel、FileTree、ListenerResume、ReceiverRelaunch、ReceiverFileTreeRelaunch 与
+SenderRelaunch。失败将由独立测试名定位并继续输出既有 process evidence；没有增加场景、跳过或 deadline。
+生命周期复核确认普通场景在业务断言前停止双方子进程，三类 relaunch 以逆序析构执行 evidence→stop→
+QProcess→临时目录。
+
+父环境清除 QPA 后，controls 与 mini-bar 各 3/3；TwoProcess 8个独立测试按固定顺序连续3轮均为
+`8/8`（15.32s、16.67s、14.68s）。最终完整 Release CTest 为 `110/110`、退出0：#94/#95 与新的
+#101-#108 均逐项 PASS；汇总守卫逐名校验这10项、总数、退出码和无 FAILED 列表，退出0。纠偏后的
+A7 reviewer GO。下一唯一候选 `relaydesk-phase4-20260901-05` 只允许在包含两项 CMake 修复及本报告的
+同一精确 SHA 上触发一次；hosted 结果仍是最终判断，不能用本地绿色覆盖。
 
 ## PASS 门槛
 

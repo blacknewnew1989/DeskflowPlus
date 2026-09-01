@@ -13,7 +13,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R0-002 | PASS | A2/A5/A0 | ASan 确认并修复两处测试回调 `stack-use-after-scope`；settings-only/ordered 各 50/50，ASan 101/101；clean run `33330456697` Win 100/100、Mac 101/101 |
 | R0-003 | PASS | A6/A7/A0 | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS，旧 debug 卡住未复现且不定性源码 |
 | R0-004 | PASS | A2/A5/A6/A7/A0 | E4 单向同机双进程：真实 discovery/pair/trust/TLS 1 MiB+ 文件；Win Debug/Release 10/10，run `33326619207` 双平台目标 PASS |
-| R0-005 | IN_PROGRESS | A4/A5/A7/A0 | `-01@9905434d0` run `33466625278`、`-02@21c454c1d` run `33470396960` 在 Windows controls 槽失败；`-03@23940663a` run `33473271512` 的 controls 已通过，但 mini-bar 槽 300s timeout。三次失败均保留。`211b8eb08`、`5694d8b0c` 关闭生命周期与 cancel menu 门闩后，`5a3b81e3b` / A0 `7b17b81b7` 将 controls、mini-bar 隔离为同一 EXE 的两个独立必跑 CTest，轻量聚合保留其余10槽；Windows fresh Release 重型槽各3/3、完整103/103、汇总守卫0、独立review GO。下一候选 `relaydesk-phase4-20260901-04` 未占用；同SHA Windows package/log/artifact/digest/draft Release齐全后关闭Windows门槛 |
+| R0-005 | IN_PROGRESS | A4/A5/A7/A0 | `-01`/`-02` Windows controls 失败、`-03` mini-bar 失败；`-04@522793bf3` run `33478646382` 失败 #94 controls、#95 mini-bar（各300s）和旧聚合 #101 TwoProcess（58.52s且无函数级输出）。`4335ac5d7` / A0 `619ad34ff` 只固定 Composition 三项的 CTest offscreen；`8dc19127a` / A0 `df844142c` 将 TwoProcess 8函数拆为8个独立必跑测试名。Windows fresh Release controls/mini-bar各3/3、TwoProcess顺序3轮各8/8、完整110/110、逐项守卫0、纠偏后review GO；不宣称 QPA 修复旧 #101 根因。下一候选 `relaydesk-phase4-20260901-05` 未占用；同SHA Windows package/log/artifact/digest/draft Release齐全后关闭Windows门槛 |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | A0/用户 | 最终包完成后执行物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互 |
 | R0-007 | PASS | A0/A5 | clean-run macOS ACK `0661191ae` 已普通推送；重开发 ref `b6a8852d0` 与未合入产品 ref `c544dc76f` 分列闭环 |
 
