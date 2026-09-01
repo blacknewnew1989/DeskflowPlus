@@ -75,7 +75,7 @@
 | R4-UI-007A | PASS | owner `da3497e69` / A0 内容等价提交 `6a0664575`：真实 FileTransferRuntime/TLS/trust/discovery 经 production TransferRuntimeComposition/TransferCenterModel 驱动 TransferMiniBar 从隐藏到非零进度，标题、metrics、percent 与 model 精确一致；真实主按钮 Pause 双端稳定、Resume 后完成且 SHA 一致，body/键盘发出 details intent。UI/transfer 双review GO；owner-worktree A0 槽3/3，集成 A0 构建4/4、槽3/3。证据见第15节，仅限 localhost/offscreen |
 | R4-UI-007B | PASS | owner `1a61ab239` / A0 内容等价提交 `678695f1c`：真实 MainWindow 自身 model/MiniBar/Dock 在无 active row 时均不可操作；注入 active UI row 后 MiniBar 自动显示，真实 body 点击经 production connect 使 dock 可见且前置，真实 list 可访问对应 TransferId。owner 槽3/3、MainWindow19/19、MiniBar4/4、Dock4/4，UI/transfer 双review GO；A0 构建4/4、槽3/3。证据见第16节，仅限 offscreen |
 | R4-UI-008 | PASS | owner `258d7aa6e` / A0 内容等价提交 `941149532`：validated opener 拒绝与 history load/persist error 已接入 Transfer Center 本地化非模态反馈；打开成功只清打开失败，不覆盖仍有效的历史错误。owner 四完整目标退出 0，A0 四目标构建退出 0；命令与日志见 `product/docs/reports/R4_UI_PLATFORM_BASELINE.md` 第 5 节，fake opener 不证明 Explorer/Finder/OS shell 实际打开 |
-| R4-UI-009 | NOT_RUN | 传输设置保存与 runtime snapshot 接线存在；当前 SHA 未运行原生设置交互 |
+| R4-UI-009 | PASS | owner `8aa690359` / A0 内容等价提交 `d015027e9`：真实 Save 持久化三字段并重开精确回显；同一 MainWindow 出现 pending offer 后，真实 DevicesDock 设置按钮打开专用 dialog，Save 后 incoming-offer runtime 无需重启更新且 store 复读一致。owner fresh 282/282、两槽各3/3、MainWindow19/19、TransferSettings10/10；A7 GO，A0构建4/4、两槽各3/3。仅限 Qt localhost/offscreen，详见 `product/docs/reports/R4_SETTINGS_RUNTIME.md` |
 | R4-UI-010 | NOT_RUN | 托盘/menu bar action 与 shutdown 接线存在；当前 SHA 未运行 OS 托盘、macOS menu bar 或物理交互 |
 
 完整调用链、自动证据边界和首个修复切片见 `product/docs/reports/R4_UI_PLATFORM_BASELINE.md`。
