@@ -47,7 +47,7 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R4-UI-007A | PASS | A3/A7/A0 | owner `da3497e69` / A0 `6a0664575`；真实 TLS/runtime/composition snapshot 驱动 production MiniBar hidden→visible、非零进度与精确 model 文本/percent，真实主按钮 Pause稳定/Resume完成SHA；UI/transfer 双review GO，A0集成槽3/3。详见第15节 |
 | R4-UI-007B | PASS | A3/A7/A0 | owner `1a61ab239` / A0 `678695f1c`；真实 MainWindow 自身 model/MiniBar/Dock 在 active row 前不可操作，真实 bar body 点击经 production route 打开并前置 dock，对应 TransferId row 可达。owner相关目标全绿、双review GO，A0槽3/3；详见第16节 |
 | R4-UI-008 | PASS | A3/A7/A0 | owner `258d7aa6e` / A0 内容等价提交 `941149532`；打开文件/位置被拒绝及 history load/persist error 显示本地化非模态反馈，交错状态保留选择、按钮和历史记录。owner 四完整目标退出 0，A0 四目标构建退出 0；命令与日志见 R4 基线报告第 5 节，真实 OS shell 打开仍 `NOT_RUN` |
-| R4-UI-009 | NOT_RUN | A3/A7/A0 | 当前 SHA 运行设置保存、重开和 runtime 更新 |
+| R4-UI-009 | PASS | A3/A7/A0 | owner `8aa690359` / A0 `d015027e9`；真实 Save、三字段持久化/重开回显、pending offer 下真实 DevicesDock 设置按钮及同窗 runtime 热更新均通过。owner 两槽各3/3、完整MainWindow19/19、TransferSettings10/10，A7 GO；A0两槽各3/3。仅限Qt localhost/offscreen，详见 `R4_SETTINGS_RUNTIME.md` |
 | R4-UI-010 | NOT_RUN | A3/A4/A5/A7/A0 | 当前 SHA 运行 Windows tray/macOS menu bar；物理交互不由 hosted 证明 |
 
 ## 重开发前历史看板

@@ -34,7 +34,7 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-007A | 迷你条后台同步 | pause/resume、details intent | FileTransferRuntime -> TransferRuntimeComposition -> TransferCenterModel -> TransferMiniBar | 非零进度、精确指标与暂停恢复已验证 | `PASS` |
 | R4-UI-007B | 迷你条详情路由 | details body gesture | MainWindow -> TransferMiniBar -> TransferCenterDock | 无active不可操作、dock前置与对应row已验证 | `PASS` |
 | R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | opener 拒绝与 history load/persist error 写入本地化非模态反馈 | `PASS` |
-| R4-UI-009 | 设置 | transferSettingsSaved | TransferSettingsStore -> MainWindow composition snapshot | 保存失败有 QMessageBox；原生交互未运行 | `NOT_RUN` |
+| R4-UI-009 | 设置 | Save / incomingOfferSettingsRequested | SettingsDialog -> TransferSettingsStore -> MainWindow composition snapshot | Qt localhost/offscreen 动态证据已覆盖保存、重开与同窗口更新；原生 OS 窗口交互未运行 | `PASS` |
 | R4-UI-010 | 托盘/menu bar | restore/pause/settings/quit | BackgroundLifecycleController -> core/transfer/discovery shutdown | 接线存在；OS tray/menu bar 未运行 | `NOT_RUN` |
 
 关键 production 入口：
@@ -553,7 +553,22 @@ TransferCenterDock 的路由；不重复真实 TLS、Pause/Resume 或 SHA 传输
 因此 `R4-UI-007B` 为 `PASS`，`R4-UI-007` 在 localhost/offscreen production UI 范围内恢复为 `PASS`。
 offscreen 的 visible region 不证明 native Windows/macOS 窗口管理层级；TCC、物理 Win↔Mac 与发布仍不由本证据证明。
 
-## 17. 证据边界
+## 17. 第十四个纵向证据切片
+
+选择 `R4-UI-009`，只验证当前 SHA 的 production 文件传输设置保存、重开与运行时应用；不展开 tray、权限、自动启动或视觉设计。
+
+- owner：`agent/a3/r4-settings-runtime-evidence@8aa690359c38096f155c3883647612ac5a1eb7ee`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@d015027e9470ff26d532ddbef80b03912bc18a52`。两提交 parent 均为 `675146944e5be92730e044907f451f25f624cca2`、tree 均为 `4790e3a7067a1c8dc9fc3e436df2187836c26f35`；
+- production 零改动；只把既有 runtime 槽从直接发射 signal 改为先显示 pending offer，再点击真实 DevicesDock 设置按钮；
+- `MainWindowLayoutTests::fileTransferSettingsPersistAndReopen` 只通过真实 SettingsDialog Save 按钮写入 receive root、incoming policy 与 conflict policy；随后重新构造 dialog，逐项精确回显已保存值；
+- `MainWindowLayoutTests::fileTransferSettingsEntryAppliesToRuntime` 从真实 DevicesDock 的 incoming-offer settings 入口打开专用设置对话框，通过 Save 按钮应用同一 MainWindow 的 `TransferRuntimeComposition::incomingOffers()`；destination root、trusted auto-accept 和 default conflict policy 均无需重启即时更新，并从持久化 store 复读；
+- A0 作为 owner build 唯一执行者在 `C:\Users\52323\AppData\Local\Temp\relaydesk-a3-r4-settings-runtime-evidence-a0` fresh 构建 282/282、退出 0；`ui009-logs` 中两个槽各三份日志均 3/0/0，完整 MainWindowLayout 19/0、TransferSettings 10/0，均退出 0；
+- A7 最终只读复核 GO；A0 集成 fresh 构建 4/4，`ui009-integration-logs` 中两个槽分别 3/0/0、退出 0；
+- `R4-UI-009` 因此只在 Qt localhost/offscreen production UI 范围为 `PASS`。该验证不证明 native Windows/macOS 窗口、系统文件选择器、TCC、物理 Win↔Mac 或发布行为。
+
+详见 `product/docs/reports/R4_SETTINGS_RUNTIME.md`。
+
+## 18. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
