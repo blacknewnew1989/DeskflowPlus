@@ -2,11 +2,11 @@
 
 ## 候选范围
 
-- A0 基线：`agent/a0/redevelop-p0@f2656459eb97939407374c57f7e74edc2e52ef46`；
+- 初始 A0 基线：`agent/a0/redevelop-p0@f2656459eb97939407374c57f7e74edc2e52ef46`；
 - product 起点：`product/relaydesk-v1@c544dc76fb4f29aefb6ef30c8acc4475b6778e07`；
 - product 起点是 A0 基线祖先；集成只允许 clean worktree 的 `git merge --ff-only`，禁止 merge commit、
   force push 或历史重写；
-- 唯一候选标签：`relaydesk-phase4-20260901-01`。远端 tag 与 draft Release 均已确认未占用；
+- 当前唯一候选标签：`relaydesk-phase4-20260901-02`。远端 tag 与 draft Release 均已确认未占用；
 - 本文件所在候选提交形成后，product、tag 与最终 workflow 必须指向该同一精确 SHA。
 
 ## 唯一工作流
@@ -17,6 +17,27 @@ macOS arm64 package matrix、macOS install lifecycle，并由 `Publish unsigned 
 
 分支 run `33464083567@38247729b3916ecc0c21d39a2fef8e85fab3dda4` 只证明当时分支状态，既不是本候选
 product/tag SHA，也不会执行标签专属 draft Release，因此不作为 R0-005 最终证据。
+
+## 首次标签诊断
+
+首次 product fast-forward 与标签 `relaydesk-phase4-20260901-01@9905434d0c8c42e833339294fc4209ff626dce8d`
+保留不重写。tag run `33466625278` 的材料诊断与 macOS 102/102 成功；Windows build、package、100/101
+CTest、安装/repair/major-upgrade/uninstall 与 artifact 上传完成，但
+`RelayDeskTransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResumeAndCancelLoopbackTransfers`
+达到 300 秒 timeout 并以 `0xC0000409` 退出。Windows package artifact `9785480151` 与 macOS package
+artifact `9785274312` 保留；因 package matrix 终态失败，macOS lifecycle 与 draft Release jobs 被跳过，
+该标签不满足 R0-005。
+
+`38247729b..9905434d0` 只有文档变化；同实现的 branch run `33464083567` 曾成功，本机同槽 Release
+复现也在 52.997 秒通过，因此不能把失败归因于候选文档或直接外推为 production 缺陷。独立 A7 审阅确认
+该槽的捕获连接和 0ms timers 错用长寿命测试对象 `this` 为 context，失败早退/析构时存在访问局部状态的
+生命周期风险，与 `0xC0000409` 一致。
+
+A7 owner `211b8eb08bccf8e2e33a3e0b1f3952e8bb73c363` 只修复该测试槽：所有捕获连接和 timers 改用
+局部 connection context，失败 scope guard 在局部状态仍存活时停止 runtimes，并增加阶段 receipt；
+production、业务断言和 timeout 均未改变。fresh Windows Release 定向槽 3/3（每轮约53秒）、完整
+Composition 14/14，独立 release reviewer GO。当前 `relaydesk-phase4-20260901-02` 必须指向包含该修复与
+本次候选文档的同一新 SHA，不重跑失败 SHA/tag。
 
 ## PASS 门槛
 
