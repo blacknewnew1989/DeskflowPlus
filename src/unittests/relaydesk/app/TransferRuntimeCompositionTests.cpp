@@ -19,6 +19,7 @@
 #include "relaydesk/transfer/TransferRecoveryStore.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/TransferCenterDock.h"
+#include "relaydesk/widgets/TransferMiniBar.h"
 
 #include "../FakePairingService.h"
 #include "../TestTlsIdentity.h"
@@ -37,6 +38,8 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QMenu>
+#include <QProgressBar>
+#include <QStringList>
 #include <QTimer>
 
 using namespace deskflow::relaydesk;
@@ -93,6 +96,7 @@ struct Fixture
   DevicesDock devicesDock{devices, pairing, permissions};
   TransferCenterModel transfers;
   TransferCenterDock transferDock{transfers};
+  TransferMiniBar transferMiniBar{transfers};
 };
 
 DeviceInfo loopbackDevice(DeviceId id, QByteArray fingerprint, QString name)
@@ -150,6 +154,7 @@ private Q_SLOTS:
   void asyncHistoryLoadAndPersistErrorsShowNonModalFeedbackWithoutDiagnostic();
   void productionIncomingOfferButtonsDriveLoopbackTransferAndTypedRejection();
   void productionTransferCenterButtonsPauseResumeAndCancelLoopbackTransfers();
+  void productionTransferMiniBarReflectsAndControlsLoopbackTransfer();
   void productionHistoryRetryButtonReoffersChangedSource();
 };
 
@@ -664,6 +669,172 @@ void TransferRuntimeCompositionTests::productionIncomingOfferButtonsDriveLoopbac
   QCOMPARE(fixture.transfers.snapshot(*acceptedStart.transferId), acceptedSnapshot);
   QCOMPARE(fixture.transfers.rowCount(), rowCountBeforeReject);
   QCOMPARE(transferList->currentIndex(), selectedBeforeReject);
+
+  composition.stop();
+  sender.stop();
+}
+
+void TransferRuntimeCompositionTests::productionTransferMiniBarReflectsAndControlsLoopbackTransfer()
+{
+  QTemporaryDir temporary(QDir::tempPath() + QStringLiteral("/relaydesk-r4-mini-bar-XXXXXX"));
+  QVERIFY2(temporary.isValid(), qPrintable(temporary.errorString()));
+  const auto identityPath = ::relaydesk::test::writeTlsIdentity(temporary);
+  const auto identity = TlsIdentityAdapter::inspect(identityPath);
+  QVERIFY2(identity.ok(), qPrintable(identity.diagnostic));
+
+  const QByteArray sourceBytes(32 * 1024 * 1024 + 37, '\x5a');
+  const auto sourcePath = temporary.filePath(QStringLiteral("mini-bar-source.bin"));
+  QFile source(sourcePath);
+  QVERIFY2(source.open(QIODevice::WriteOnly), qPrintable(source.errorString()));
+  QCOMPARE(source.write(sourceBytes), static_cast<qint64>(sourceBytes.size()));
+  source.close();
+  const auto receiveRoot = temporary.filePath(QStringLiteral("received"));
+  QVERIFY(QDir().mkpath(receiveRoot));
+
+  Fixture fixture;
+  fixture.devicesDock.resize(480, 720);
+  fixture.devicesDock.show();
+  fixture.transferMiniBar.resize(560, 52);
+  QVERIFY(fixture.transferMiniBar.isHidden());
+  const auto senderId = DeviceId::generate();
+  const auto receiverId = DeviceId::generate();
+  TrustedDeviceStore senderTrust(temporary.filePath(QStringLiteral("sender-trust.json")));
+  TrustedDeviceStore receiverTrust(temporary.filePath(QStringLiteral("receiver-trust.json")));
+  QVERIFY(senderTrust.upsert(loopbackTrustedDevice(receiverId, identity.fingerprintSha256)));
+  QVERIFY(receiverTrust.upsert(loopbackTrustedDevice(senderId, identity.fingerprintSha256)));
+  DeviceHomeModel senderDevices;
+  DeviceDiscoveryRuntime senderDiscovery(
+      loopbackDevice(senderId, identity.fingerprintSha256, QStringLiteral("Sender")), senderDevices
+  );
+  DeviceDiscoveryRuntime receiverDiscovery(
+      loopbackDevice(receiverId, identity.fingerprintSha256, QStringLiteral("Receiver")), fixture.devices
+  );
+  FileTransferRuntimeOptions options;
+  options.listenAddress = QHostAddress::LocalHost;
+  options.tlsSettings.maxQueuedWriteBytes = 64U * 1024U;
+  options.localCapabilities.preferredChunkBytes = 4U * 1024U;
+  options.localCapabilities.maxPayloadBytes = 16U * 1024U;
+  FileTransferRuntime sender(senderId, senderTrust, senderDiscovery, identityPath, options);
+  auto receiver = std::make_unique<FileTransferRuntime>(
+      receiverId, receiverTrust, receiverDiscovery, identityPath, options
+  );
+  auto *receiverRuntime = receiver.get();
+  TransferRuntimeComposition composition(
+      std::move(receiver),
+      {
+          .start = [receiverRuntime](QString *diagnostic) { return receiverRuntime->start(diagnostic); },
+          .stop = [receiverRuntime] { receiverRuntime->stop(); },
+      },
+      fixture.devicesDock, fixture.transferDock,
+      {.destinationRoot = receiveRoot, .availableBytes = 128U * 1024U * 1024U}
+  );
+
+  auto *offerPanel = fixture.devicesDock.findChild<QFrame *>(QStringLiteral("relaydeskIncomingOfferPanel"));
+  auto *accept = fixture.devicesDock.findChild<QPushButton *>(QStringLiteral("relaydeskAcceptIncomingOfferButton"));
+  auto *title = fixture.transferMiniBar.findChild<QLabel *>(QStringLiteral("relaydeskTransferMiniBarTitle"));
+  auto *metrics = fixture.transferMiniBar.findChild<QLabel *>(QStringLiteral("relaydeskTransferMiniBarMetrics"));
+  auto *progress = fixture.transferMiniBar.findChild<QProgressBar *>(QStringLiteral("relaydeskTransferMiniBarProgress"));
+  auto *primary =
+      fixture.transferMiniBar.findChild<QPushButton *>(QStringLiteral("relaydeskTransferMiniBarPrimaryAction"));
+  QVERIFY(offerPanel != nullptr);
+  QVERIFY(accept != nullptr);
+  QVERIFY(title != nullptr);
+  QVERIFY(metrics != nullptr);
+  QVERIFY(progress != nullptr);
+  QVERIFY(primary != nullptr);
+
+  std::optional<TransferSnapshot> senderSnapshot;
+  std::optional<TransferSnapshot> receiverSnapshot;
+  QStringList errors;
+  QObject connectionContext;
+  connect(&sender, &IFileTransferService::transferChanged, &connectionContext, [&](const TransferSnapshot &snapshot) {
+    if (snapshot.direction == TransferDirection::Sending)
+      senderSnapshot = snapshot;
+  });
+  connect(
+      receiverRuntime, &IFileTransferService::transferChanged, &connectionContext,
+      [&](const TransferSnapshot &snapshot) {
+        if (snapshot.direction == TransferDirection::Receiving)
+          receiverSnapshot = snapshot;
+      }
+  );
+  connect(&sender, &FileTransferRuntime::errorOccurred, &connectionContext, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("sender: ") + message);
+  });
+  connect(receiverRuntime, &FileTransferRuntime::errorOccurred, &connectionContext, [&](auto, auto, const QString &message) {
+    errors.append(QStringLiteral("receiver: ") + message);
+  });
+
+  QString diagnostic;
+  QVERIFY2(sender.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY2(composition.start(&diagnostic), qPrintable(diagnostic));
+  QVERIFY(senderDiscovery.registry().observeAdvertisement(
+      receiverDiscovery.service().localDevice(), QHostAddress::LocalHost
+  ));
+
+  const auto started = sender.send(receiverId, {QUrl::fromLocalFile(sourcePath)}, {});
+  QVERIFY2(started.ok(), qPrintable(started.diagnostic));
+  QVERIFY(started.transferId.has_value());
+  QTRY_VERIFY_WITH_TIMEOUT(offerPanel->isVisible() && accept->isVisible() && accept->isEnabled(), 10'000);
+  QTest::mouseClick(accept, Qt::LeftButton);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      fixture.transfers.snapshot(*started.transferId).has_value() && fixture.transferMiniBar.isVisible() &&
+          progress->value() > 0 && primary->isVisible() && primary->isEnabled() &&
+          primary->text() == QStringLiteral("Pause"),
+      20'000
+  );
+  const auto miniBarMatchesModel = [&] {
+    const auto row = fixture.transfers.indexOf(*started.transferId);
+    if (row < 0)
+      return false;
+    const auto index = fixture.transfers.index(row, 0);
+    QStringList expectedMetrics{index.data(TransferCenterModel::ProgressTextRole).toString()};
+    const auto speed = index.data(TransferCenterModel::SpeedTextRole).toString();
+    expectedMetrics.append(
+        speed.isEmpty() ? index.data(TransferCenterModel::StateTextRole).toString() : speed
+    );
+    expectedMetrics.removeAll({});
+    return title->text() == index.data(TransferCenterModel::DisplayNameRole).toString() &&
+           progress->value() == index.data(TransferCenterModel::ProgressPercentRole).toInt() &&
+           metrics->text() == expectedMetrics.join(QStringLiteral(" · "));
+  };
+  QTRY_VERIFY_WITH_TIMEOUT(miniBarMatchesModel(), 5'000);
+
+  QSignalSpy details(&fixture.transferMiniBar, &TransferMiniBar::detailsRequested);
+  QTest::mouseClick(&fixture.transferMiniBar, Qt::LeftButton, Qt::NoModifier, QPoint(4, 4));
+  fixture.transferMiniBar.setFocus();
+  QTest::keyClick(&fixture.transferMiniBar, Qt::Key_Return);
+  QCOMPARE(details.count(), 2);
+
+  QTest::mouseClick(primary, Qt::LeftButton);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderSnapshot.has_value() && receiverSnapshot.has_value() && senderSnapshot->state == TransferState::Paused &&
+          receiverSnapshot->state == TransferState::Paused && primary->text() == QStringLiteral("Resume"),
+      15'000
+  );
+  const auto senderPausedBytes = senderSnapshot->progress.completedBytes;
+  const auto receiverPausedBytes = receiverSnapshot->progress.completedBytes;
+  QVERIFY(senderPausedBytes > 0);
+  QVERIFY(receiverPausedBytes > 0);
+  QTest::qWait(400);
+  QCOMPARE(senderSnapshot->progress.completedBytes, senderPausedBytes);
+  QCOMPARE(receiverSnapshot->progress.completedBytes, receiverPausedBytes);
+
+  QTest::mouseClick(primary, Qt::LeftButton);
+  QTRY_VERIFY_WITH_TIMEOUT(
+      senderSnapshot.has_value() && receiverSnapshot.has_value() && senderSnapshot->state == TransferState::Completed &&
+          receiverSnapshot->state == TransferState::Completed,
+      90'000
+  );
+  const auto targetPath = QDir(receiveRoot).filePath(QStringLiteral("mini-bar-source.bin"));
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(targetPath), 10'000);
+  QFile target(targetPath);
+  QVERIFY(target.open(QIODevice::ReadOnly));
+  QCOMPARE(
+      QCryptographicHash::hash(target.readAll(), QCryptographicHash::Sha256),
+      QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256)
+  );
+  QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QStringLiteral("; "))));
 
   composition.stop();
   sender.stop();
