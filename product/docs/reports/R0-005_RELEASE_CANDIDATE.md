@@ -6,7 +6,7 @@
 - product 起点：`product/relaydesk-v1@c544dc76fb4f29aefb6ef30c8acc4475b6778e07`；
 - product 起点是 A0 基线祖先；集成只允许 clean worktree 的 `git merge --ff-only`，禁止 merge commit、
   force push 或历史重写；
-- 当前唯一候选标签：`relaydesk-phase4-20260901-02`。远端 tag 与 draft Release 均已确认未占用；
+- 当前唯一候选标签：`relaydesk-phase4-20260901-03`。远端 tag 与 draft Release 均已确认未占用；
 - 本文件所在候选提交形成后，product、tag 与最终 workflow 必须指向该同一精确 SHA。
 
 ## 唯一工作流
@@ -36,8 +36,21 @@ artifact `9785274312` 保留；因 package matrix 终态失败，macOS lifecycle
 A7 owner `211b8eb08bccf8e2e33a3e0b1f3952e8bb73c363` 只修复该测试槽：所有捕获连接和 timers 改用
 局部 connection context，失败 scope guard 在局部状态仍存活时停止 runtimes，并增加阶段 receipt；
 production、业务断言和 timeout 均未改变。fresh Windows Release 定向槽 3/3（每轮约53秒）、完整
-Composition 14/14，独立 release reviewer GO。当前 `relaydesk-phase4-20260901-02` 必须指向包含该修复与
-本次候选文档的同一新 SHA，不重跑失败 SHA/tag。
+Composition 14/14，独立 release reviewer GO。
+
+第二候选 `relaydesk-phase4-20260901-02@21c454c1d57039873cb5af2fb1e50371baa16c33` 的 tag run
+`33470396960` 仍在同一槽达到 300 秒并以 `0xC0000409` 退出；Windows package/install 与 artifact
+`9786722273`、macOS artifact `9786539148` 完成，但 lifecycle/Release 被跳过。阶段 receipt 未进入
+artifact，代码复核定位到 cancel menu 的一次性 `cancelClickQueued`：第一次 queued callback 若在
+More/menu/action geometry 尚未就绪时返回，门闩永久保持 true，真实 cancel 手势不再尝试；随后失败 guard
+在半完成传输上 stop，最终拖到函数 timeout。
+
+A7 `5694d8b0c19bb714b02c65926caef9e9bcf0cc17` 只把该测试手势改为局部 10ms 有界探测：仅当
+model、More、cancel action、menu 与 action geometry 全部就绪后停止 timer，并通过真实鼠标点击菜单取消；
+所有 callbacks 继续绑定 local connection context，production、业务断言和 timeout 不变。fresh Release
+三轮分别 58.294/72.935/61.508 秒，均记录 `cancel-wait→menu-ready→cancel-click` 且 3/0；完整
+Composition 14/0、111.887秒，独立 review GO。当前 `relaydesk-phase4-20260901-03` 必须指向包含两个测试
+修复及本候选文档的同一新 SHA，不重跑前两个失败 SHA/tag。
 
 ## PASS 门槛
 
