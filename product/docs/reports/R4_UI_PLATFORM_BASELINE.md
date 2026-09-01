@@ -30,8 +30,9 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | 006A 控制与 006B history retry 均已验证 | `PASS` |
 | R4-UI-006A | 传输中心控制 | pause/resume/cancel | TransferCenterDock -> TransferCenterModel -> FileTransferRuntime | 真实 widget 手势、双端状态与文件状态已验证 | `PASS` |
 | R4-UI-006B | 历史重试 | retry failed outgoing | TransferCenterDock -> TransferCenterModel -> FileTransferRuntime::retry | 真实 history row 产生新 transfer/offer 并完成 | `PASS` |
-| R4-UI-007 | 迷你条 | primary action、details | TransferCenterModel typed intents；details 打开 TransferCenterDock | 007A 真实传输刷新/主操作已验证；dock打开未运行 | `IN_PROGRESS` |
+| R4-UI-007 | 迷你条 | primary action、details | TransferCenterModel typed intents；details 打开 TransferCenterDock | 007A 真实传输刷新/主操作与007B dock路由已验证 | `PASS` |
 | R4-UI-007A | 迷你条后台同步 | pause/resume、details intent | FileTransferRuntime -> TransferRuntimeComposition -> TransferCenterModel -> TransferMiniBar | 非零进度、精确指标与暂停恢复已验证 | `PASS` |
+| R4-UI-007B | 迷你条详情路由 | details body gesture | MainWindow -> TransferMiniBar -> TransferCenterDock | 无active不可操作、dock前置与对应row已验证 | `PASS` |
 | R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | opener 拒绝与 history load/persist error 写入本地化非模态反馈 | `PASS` |
 | R4-UI-009 | 设置 | transferSettingsSaved | TransferSettingsStore -> MainWindow composition snapshot | 保存失败有 QMessageBox；原生交互未运行 | `NOT_RUN` |
 | R4-UI-010 | 托盘/menu bar | restore/pause/settings/quit | BackgroundLifecycleController -> core/transfer/discovery shutdown | 接线存在；OS tray/menu bar 未运行 | `NOT_RUN` |
@@ -527,7 +528,32 @@ production 或视觉，也不把 details intent 外推为 MainWindow 已打开 T
 `R4-UI-007` 改为 `IN_PROGRESS`。MainWindow details→TransferCenterDock、native Windows/macOS、TCC、
 物理 Win↔Mac 与发布仍未证明。
 
-## 16. 证据边界
+## 16. 第十三个纵向证据切片
+
+选择 `R4-UI-007B`，只验证 production MainWindow 的 `TransferMiniBar::detailsRequested` 到自身
+TransferCenterDock 的路由；不重复真实 TLS、Pause/Resume 或 SHA 传输。
+
+- owner：`agent/a3/r4-mini-bar-details@1a61ab239bf1d834533f3f05673746cfd4bb5fd2`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@678695f1ce04f4572e76d62bd90526a4bad36203`。两提交
+  parent 均为 `0e1526671a43f16910079cc3ddf41768a8231763`、tree 均为
+  `5ad4bddb7d724d219f43db264a6f9096da2a31ea`；
+- 只新增 MainWindowLayout 动态测试，production 现有接线直接通过；
+- 使用 MainWindow 自身的 TransferCenterModel、TransferMiniBar 与 TransferCenterDock。无 active row 时
+  mini bar 和 dock 均隐藏，不制造可见、可操作的 details；
+- 注入一个仅用于 UI 路由的 active TransferSnapshot 后，mini bar 由自身 model 自动显示，dock 仍隐藏；
+  测试未把该 snapshot 表述为真实传输证据，007A 单独证明真实 runtime 链；
+- 真实 mini bar body 鼠标点击经 MainWindow 既有 production connect 使同一个 dock 可见，且
+  `visibleRegion()` 非空；dock 的真实 `relaydeskTransfersView` 可按 TransferIdRole 访问对应 row。测试未直接
+  show dock、复制 lambda 或打开 history details dialog；
+- owner 新增槽三轮均 3/0/0；完整 MainWindowLayout 19/0、TransferMiniBar 4/0、TransferCenterDock 4/0，
+  均退出 0；UI 与 transfer reviewer 均 GO；
+- A0 fresh 目录 `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui001b` 单次增量构建 4/4、退出 0，
+  `ui007b-integration-slot.txt` 为 3/0/0、641ms、退出 0。
+
+因此 `R4-UI-007B` 为 `PASS`，`R4-UI-007` 在 localhost/offscreen production UI 范围内恢复为 `PASS`。
+offscreen 的 visible region 不证明 native Windows/macOS 窗口管理层级；TCC、物理 Win↔Mac 与发布仍不由本证据证明。
+
+## 17. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
