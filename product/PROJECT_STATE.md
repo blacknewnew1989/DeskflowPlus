@@ -76,7 +76,8 @@
 | R4-UI-007B | PASS | owner `1a61ab239` / A0 内容等价提交 `678695f1c`：真实 MainWindow 自身 model/MiniBar/Dock 在无 active row 时均不可操作；注入 active UI row 后 MiniBar 自动显示，真实 body 点击经 production connect 使 dock 可见且前置，真实 list 可访问对应 TransferId。owner 槽3/3、MainWindow19/19、MiniBar4/4、Dock4/4，UI/transfer 双review GO；A0 构建4/4、槽3/3。证据见第16节，仅限 offscreen |
 | R4-UI-008 | PASS | owner `258d7aa6e` / A0 内容等价提交 `941149532`：validated opener 拒绝与 history load/persist error 已接入 Transfer Center 本地化非模态反馈；打开成功只清打开失败，不覆盖仍有效的历史错误。owner 四完整目标退出 0，A0 四目标构建退出 0；命令与日志见 `product/docs/reports/R4_UI_PLATFORM_BASELINE.md` 第 5 节，fake opener 不证明 Explorer/Finder/OS shell 实际打开 |
 | R4-UI-009 | PASS | owner `8aa690359` / A0 内容等价提交 `d015027e9`：真实 Save 持久化三字段并重开精确回显；同一 MainWindow 出现 pending offer 后，真实 DevicesDock 设置按钮打开专用 dialog，Save 后 incoming-offer runtime 无需重启更新且 store 复读一致。owner fresh 282/282、两槽各3/3、MainWindow19/19、TransferSettings10/10；A7 GO，A0构建4/4、两槽各3/3。仅限 Qt localhost/offscreen，详见 `product/docs/reports/R4_SETTINGS_RUNTIME.md` |
-| R4-UI-010 | NOT_RUN | 托盘/menu bar action 与 shutdown 接线存在；当前 SHA 未运行 OS 托盘、macOS menu bar 或物理交互 |
+| R4-UI-010 | IN_PROGRESS | `R4-UI-010A` 已在 Windows native 当前 SHA 验证 WM_CLOSE close-to-tray、SW_MINIMIZE minimize-to-tray 和 close-to-quit 生命周期；native tray 图标/菜单 Show/Hide/Quit、macOS menu bar、物理交互和发布仍为 `NOT_RUN` |
+| R4-UI-010A | PASS | Windows native 有界生命周期证据：真实 `deskflow.exe` 的 WM_CLOSE 在 closeToTray 时隐藏并保持进程存活，SW_MINIMIZE 在 minimizeToTray 时隐藏并保持进程存活，closeToTray=false 时自然退出。仅此子范围为 `PASS`；tray 图标/菜单交互未可靠观测，详见 `product/docs/reports/R4_WINDOWS_TRAY_LIFECYCLE.md` |
 
 完整调用链、自动证据边界和首个修复切片见 `product/docs/reports/R4_UI_PLATFORM_BASELINE.md`。
 
