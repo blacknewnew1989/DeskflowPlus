@@ -30,7 +30,8 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | 006A 控制与 006B history retry 均已验证 | `PASS` |
 | R4-UI-006A | 传输中心控制 | pause/resume/cancel | TransferCenterDock -> TransferCenterModel -> FileTransferRuntime | 真实 widget 手势、双端状态与文件状态已验证 | `PASS` |
 | R4-UI-006B | 历史重试 | retry failed outgoing | TransferCenterDock -> TransferCenterModel -> FileTransferRuntime::retry | 真实 history row 产生新 transfer/offer 并完成 | `PASS` |
-| R4-UI-007 | 迷你条 | primary action、details | TransferCenterModel typed intents；details 打开 TransferCenterDock | 真实后台传输刷新未运行 | `NOT_RUN` |
+| R4-UI-007 | 迷你条 | primary action、details | TransferCenterModel typed intents；details 打开 TransferCenterDock | 007A 真实传输刷新/主操作已验证；dock打开未运行 | `IN_PROGRESS` |
+| R4-UI-007A | 迷你条后台同步 | pause/resume、details intent | FileTransferRuntime -> TransferRuntimeComposition -> TransferCenterModel -> TransferMiniBar | 非零进度、精确指标与暂停恢复已验证 | `PASS` |
 | R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | opener 拒绝与 history load/persist error 写入本地化非模态反馈 | `PASS` |
 | R4-UI-009 | 设置 | transferSettingsSaved | TransferSettingsStore -> MainWindow composition snapshot | 保存失败有 QMessageBox；原生交互未运行 | `NOT_RUN` |
 | R4-UI-010 | 托盘/menu bar | restore/pause/settings/quit | BackgroundLifecycleController -> core/transfer/discovery shutdown | 接线存在；OS tray/menu bar 未运行 | `NOT_RUN` |
@@ -497,7 +498,36 @@ Firewall 规则，也不展开 macOS、tray、设置页或视觉改版。
 后续 R4 默认采用单构建执行者：每个 owner/A0 工作树只由明确执行者启动并持有构建进程到退出；
 状态轮询只读取 PID、进程状态和日志，不用重复 `cmake --build` 轮询。
 
-## 15. 证据边界
+## 15. 第十二个纵向证据切片
+
+选择 `R4-UI-007A`，范围只包含真实后台传输驱动 production `TransferMiniBar` 刷新和主操作；不修改
+production 或视觉，也不把 details intent 外推为 MainWindow 已打开 TransferCenterDock。
+
+- owner：`agent/a7/r4-mini-bar-runtime@da3497e69e2932f40497f034c3095015322cbfcd`；
+- A0 内容等价集成：`agent/a0/redevelop-p0@6a06645752d4dcc1265be55bf304f04b29080bc8`。两提交
+  parent 均为 `21e6f5c88f0564c8eade9f88eeea3f8d13b94b9a`、tree 均为
+  `c737eeeb200a31c5485e3c9ccfbaf6bc89bd1f87`；
+- 只新增 TransferRuntimeComposition 动态测试。真实 sender/receiver FileTransferRuntime、TLS identity、
+  双向 trust、discovery 与 production composition/model 驱动迷你条，不注入手工 transfer snapshot；
+- 迷你条初始隐藏；真实接收按钮 Accept 后从 production snapshot 自动显示，进度大于 0，标题、
+  ProgressPercentRole、ProgressText 与 SpeedText/StateText 均和同一 TransferCenterModel 行精确一致；
+- 真实 primary QPushButton 发出 Pause，sender/receiver 均进入 Paused，400ms 稳定窗口内两端 completedBytes
+  不前进；同一按钮 Resume 后双方 Completed，目标 SHA-256 与源一致，运行期 error 列表为空；
+- 鼠标点击 bar body 与 Enter 键均发出 details intent；本切片未证明 MainWindow 把该 intent 打开真实
+  TransferCenterDock，因此该子点仍 `NOT_RUN`；
+- 局部 connection context 在捕获变量后声明，结束时显式 `composition.stop()` 再 `sender.stop()`，未引入
+  悬空捕获或依赖析构顺序回退；
+- transfer reviewer 与 UI reviewer 最终均 GO；UI reviewer 的 metrics/progress 精确性 P1 已关闭；
+- owner worktree 的有效 A0 receipt `ui007-a0-p1-slot.txt` 为 3/0/0、48.034s、退出 0；A7 早期 full
+  receipt 丢失，不作为证据；
+- A0 集成 fresh 目录 `C:\Users\52323\AppData\Local\Temp\relaydesk-a0-ui001b` 单次增量构建 4/4、
+  `ui007-integration-slot.txt` 为 3/0/0、49.504s、退出 0。
+
+因此 `R4-UI-007A` 在 Windows localhost/offscreen production widget/runtime 范围内为 `PASS`，总项
+`R4-UI-007` 改为 `IN_PROGRESS`。MainWindow details→TransferCenterDock、native Windows/macOS、TCC、
+物理 Win↔Mac 与发布仍未证明。
+
+## 16. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
