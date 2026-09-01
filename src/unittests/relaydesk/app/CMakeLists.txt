@@ -70,6 +70,13 @@ add_test(
 )
 set_tests_properties(RelayDeskTransferRuntimeCompositionMiniBarTests PROPERTIES DEPENDS relaydesk_app)
 
+set_tests_properties(
+  RelayDeskTransferRuntimeCompositionTests
+  RelayDeskTransferRuntimeCompositionControlsTests
+  RelayDeskTransferRuntimeCompositionMiniBarTests
+  PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 create_test(
   NAME RelayDeskFileTransferRuntimeTests
   DEPENDS relaydesk_app
