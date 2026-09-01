@@ -165,10 +165,12 @@ endif()
 
 create_test(
   NAME RelayDeskTwoProcessRuntimeTests
+  TEST_NAME RelayDeskTwoProcessCompleteTests
   DEPENDS relaydesk_app
   LIBS Qt6::Network
   SOURCE TwoProcessRelayDeskRuntimeTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+  ARGS discoveryPairingAndFileTransferUseTwoIndependentProcesses
 )
 add_dependencies(RelayDeskTwoProcessRuntimeTests RelayDeskTwoProcessPeer)
 target_compile_definitions(
@@ -178,3 +180,41 @@ target_compile_definitions(
 if(WIN32)
   relaydesk_copy_qt_runtime(RelayDeskTwoProcessRuntimeTests)
 endif()
+
+function(relaydesk_add_two_process_runtime_test test_name function_name)
+  add_test(
+    NAME ${test_name}
+    COMMAND $<TARGET_FILE:RelayDeskTwoProcessRuntimeTests> ${function_name}
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+  )
+  set_tests_properties(${test_name} PROPERTIES DEPENDS relaydesk_app)
+endfunction()
+
+relaydesk_add_two_process_runtime_test(
+  RelayDeskTwoProcessPauseResumeTests
+  pauseAndResumeUseTwoIndependentProcesses
+)
+relaydesk_add_two_process_runtime_test(
+  RelayDeskTwoProcessCancelTests
+  cancelUsesTwoIndependentProcesses
+)
+relaydesk_add_two_process_runtime_test(
+  RelayDeskTwoProcessFileTreeTests
+  fileTreeUsesTwoIndependentProcesses
+)
+relaydesk_add_two_process_runtime_test(
+  RelayDeskTwoProcessListenerResumeTests
+  listenerResumeUsesTwoIndependentProcesses
+)
+relaydesk_add_two_process_runtime_test(
+  RelayDeskTwoProcessReceiverRelaunchTests
+  receiverRelaunchResumesInTwoIndependentProcesses
+)
+relaydesk_add_two_process_runtime_test(
+  RelayDeskTwoProcessReceiverFileTreeRelaunchTests
+  receiverFileTreeRelaunchResumesInTwoIndependentProcesses
+)
+relaydesk_add_two_process_runtime_test(
+  RelayDeskTwoProcessSenderRelaunchTests
+  senderRelaunchResumesInTwoIndependentProcesses
+)

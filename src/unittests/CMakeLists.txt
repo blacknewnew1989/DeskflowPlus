@@ -6,6 +6,7 @@ function(create_test)
   set(options)
   set(oneValueArgs
     NAME #NAME of new test
+    TEST_NAME #Optional CTest name when it differs from the executable target
     WORKING_DIRECTORY #Working Dir
     DEPENDS #Library being tested
     SOURCE #Single Source File
@@ -34,13 +35,17 @@ function(create_test)
     message(FATAL_ERROR "create_test, tests require a DEPENDS")
   endif()
 
+  if("${m_TEST_NAME}" STREQUAL "")
+    set(m_TEST_NAME ${m_NAME})
+  endif()
+
   add_executable(${m_NAME} ${m_SOURCE})
   target_link_libraries(${m_NAME} ${m_DEPENDS} ${m_LIBS} Qt::Test)
   if (CMAKE_CXX_BYTE_ORDER STREQUAL "BIG_ENDIAN")
     target_compile_definitions(${m_NAME} PUBLIC WORDS_BIGENDIAN=1)
   endif()
-  add_test(NAME ${m_NAME} COMMAND $<TARGET_FILE:${m_NAME}> ${m_ARGS} WORKING_DIRECTORY ${m_WORKING_DIRECTORY})
-  set_tests_properties(${m_NAME} PROPERTIES DEPENDS ${m_DEPENDS})
+  add_test(NAME ${m_TEST_NAME} COMMAND $<TARGET_FILE:${m_NAME}> ${m_ARGS} WORKING_DIRECTORY ${m_WORKING_DIRECTORY})
+  set_tests_properties(${m_TEST_NAME} PROPERTIES DEPENDS ${m_DEPENDS})
   set_property(GLOBAL APPEND PROPERTY ${CMAKE_PROJECT_NAME}_tests ${m_NAME})
 
   if(ENABLE_COVERAGE)
