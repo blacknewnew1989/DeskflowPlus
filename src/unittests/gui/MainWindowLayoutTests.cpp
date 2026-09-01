@@ -21,7 +21,9 @@
 #include "relaydesk/discovery/DiscoverySettings.h"
 #include "relaydesk/model/DeviceHomeModel.h"
 #include "relaydesk/model/PermissionStatusModel.h"
+#include "relaydesk/model/TransferCenterModel.h"
 #include "relaydesk/transfer/TransferSettings.h"
+#include "relaydesk/transfer/TransferTypes.h"
 #include "relaydesk/trust/TrustedDeviceStore.h"
 #include "relaydesk/widgets/DevicesDock.h"
 #include "relaydesk/widgets/RelayDeskHomeWidget.h"
@@ -34,6 +36,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDateTime>
 #include <QDir>
 #include <QDockWidget>
 #include <QEvent>
@@ -58,6 +61,8 @@
 #include <QTest>
 #include <QTimer>
 #include <QToolButton>
+
+#include <QTimeZone>
 
 #include <functional>
 #include <memory>
@@ -133,6 +138,7 @@ private Q_SLOTS:
   void trustCardPersistenceFailureShowsNonModalFeedback();
   void autoAcceptPrimaryWriteFailureShowsNonModalFeedback();
   void permissionCardGatesPairingAndRefreshesWithoutRestart();
+  void transferMiniBarDetailsOpensTransferCenterForActiveTransfer();
 
 private:
   std::unique_ptr<QTemporaryDir> m_directory;
@@ -1179,6 +1185,53 @@ void MainWindowLayoutTests::permissionCardGatesPairingAndRefreshesWithoutRestart
   QTest::mouseClick(pair, Qt::LeftButton);
   QCOMPARE(pairingRequested.count(), 1);
 #endif
+}
+
+void MainWindowLayoutTests::transferMiniBarDetailsOpensTransferCenterForActiveTransfer()
+{
+  MainWindow window;
+  window.open(false);
+
+  auto &transfers = window.relayDeskTransferModel();
+  auto &transferCenter = window.relayDeskTransferCenterDock();
+  auto *miniBar =
+      window.findChild<deskflow::relaydesk::widgets::TransferMiniBar *>(QStringLiteral("relaydeskTransferMiniBar"));
+  auto *list = transferCenter.findChild<QListView *>(QStringLiteral("relaydeskTransfersView"));
+  QVERIFY(miniBar != nullptr);
+  QVERIFY(list != nullptr);
+  QVERIFY(!miniBar->isVisible());
+  QVERIFY(!transferCenter.isVisible());
+
+  const auto active = ::relaydesk::transfer::TransferSnapshot{
+      .id = *::relaydesk::transfer::TransferId::fromString(QStringLiteral("77777777-7777-4777-8777-777777777777")),
+      .peerId = *deskflow::relaydesk::DeviceId::fromString(QStringLiteral("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")),
+      .peerDisplayName = QStringLiteral("Studio Mac"),
+      .displayName = QStringLiteral("active-details-route.bin"),
+      .direction = ::relaydesk::transfer::TransferDirection::Sending,
+      .state = ::relaydesk::transfer::TransferState::Transferring,
+      .progress =
+          {
+              .completedBytes = 25,
+              .totalBytes = 100,
+              .completedFiles = 1,
+              .totalFiles = 2,
+              .bytesPerSecond = 2048.0,
+          },
+      .canPause = true,
+      .createdUtc = QDateTime::fromMSecsSinceEpoch(1'780'000'000'000LL, QTimeZone::UTC),
+  };
+  QVERIFY(transfers.upsertTransfer(active));
+  QTRY_VERIFY(miniBar->isVisible());
+  QVERIFY(!transferCenter.isVisible());
+
+  QTest::mouseClick(miniBar, Qt::LeftButton, Qt::NoModifier, QPoint(6, 6));
+  QTRY_VERIFY(transferCenter.isVisible());
+  QTRY_VERIFY(!transferCenter.visibleRegion().isEmpty());
+  const auto row = transfers.indexOf(active.id);
+  QVERIFY(row >= 0);
+  const auto index = list->model()->index(row, 0);
+  QVERIFY(index.isValid());
+  QCOMPARE(index.data(deskflow::relaydesk::model::TransferCenterModel::TransferIdRole).toString(), active.id.toString());
 }
 
 QTEST_MAIN(MainWindowLayoutTests)
