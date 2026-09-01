@@ -41,7 +41,34 @@ create_test(
   DEPENDS relaydesk_app
   SOURCE TransferRuntimeCompositionTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+  ARGS
+    ownsTypedServiceBindingAndLifecycle
+    reportsUnavailableOrFailedStartupWithoutStopping
+    loadsAndPersistsHistoryOffTheUiContract
+    updatesIncomingOfferSettingsForSubsequentOffers
+    loadsMoreThanOneHundredHistoryRecordsAtStartup
+    appliesIncomingSettingsAndRefreshesReceiveRootSpaceAsync
+    rejectedCompletedOpenShowsNonModalFeedbackWithoutChangingHistory
+    asyncHistoryLoadAndPersistErrorsShowNonModalFeedbackWithoutDiagnostic
+    productionIncomingOfferButtonsDriveLoopbackTransferAndTypedRejection
+    productionHistoryRetryButtonReoffersChangedSource
 )
+
+add_test(
+  NAME RelayDeskTransferRuntimeCompositionControlsTests
+  COMMAND $<TARGET_FILE:RelayDeskTransferRuntimeCompositionTests>
+    productionTransferCenterButtonsPauseResumeAndCancelLoopbackTransfers
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+)
+set_tests_properties(RelayDeskTransferRuntimeCompositionControlsTests PROPERTIES DEPENDS relaydesk_app)
+
+add_test(
+  NAME RelayDeskTransferRuntimeCompositionMiniBarTests
+  COMMAND $<TARGET_FILE:RelayDeskTransferRuntimeCompositionTests>
+    productionTransferMiniBarReflectsAndControlsLoopbackTransfer
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/relaydesk/app"
+)
+set_tests_properties(RelayDeskTransferRuntimeCompositionMiniBarTests PROPERTIES DEPENDS relaydesk_app)
 
 create_test(
   NAME RelayDeskFileTransferRuntimeTests
