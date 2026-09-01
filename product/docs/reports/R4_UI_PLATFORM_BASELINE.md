@@ -35,8 +35,9 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-007B | 迷你条详情路由 | details body gesture | MainWindow -> TransferMiniBar -> TransferCenterDock | 无active不可操作、dock前置与对应row已验证 | `PASS` |
 | R4-UI-008 | 历史/打开位置 | openFile/openFolder/history retry | TransferHistoryRuntime / TransferUiRuntime validated resolver / QDesktopServices | opener 拒绝与 history load/persist error 写入本地化非模态反馈 | `PASS` |
 | R4-UI-009 | 设置 | Save / incomingOfferSettingsRequested | SettingsDialog -> TransferSettingsStore -> MainWindow composition snapshot | Qt localhost/offscreen 动态证据已覆盖保存、重开与同窗口更新；原生 OS 窗口交互未运行 | `PASS` |
-| R4-UI-010 | 托盘/menu bar | restore/pause/settings/quit | BackgroundLifecycleController -> core/transfer/discovery shutdown | 010A 已验证 Windows native close/minimize/quit lifecycle；tray menu 与 macOS menu bar 未运行 | `IN_PROGRESS` |
+| R4-UI-010 | 托盘/menu bar | restore/pause/settings/quit | BackgroundLifecycleController -> core/transfer/discovery shutdown | 010A 已验证 Windows native close/minimize/quit lifecycle；010B 已验证 hosted macOS offscreen Quit QAction、bundle 与隔离 lifecycle；物理 tray/menu bar 未运行 | `IN_PROGRESS` |
 | R4-UI-010A | Windows 生命周期 | WM_CLOSE、SW_MINIMIZE、close-to-quit | MainWindow -> BackgroundLifecycleController -> shutdown | 真实窗口隐藏后进程存活，关闭策略为 quit 时自然终止；tray 菜单未可靠观测 | `PASS` |
+| R4-UI-010B | hosted macOS menu/lifecycle contract | menu/tray Quit QAction、bundle lifecycle | MainWindow -> QAction -> application exit；package -> isolated install lifecycle | macos-14 CTest、ad-hoc bundle 和 TEST-005 隔离 install lifecycle 已验证；物理 menu bar 未运行 | `PASS` |
 
 关键 production 入口：
 
@@ -594,7 +595,39 @@ offscreen 的 visible region 不证明 native Windows/macOS 窗口管理层级�
 
 详细 receipt 与清理边界见 `product/docs/reports/R4_WINDOWS_TRAY_LIFECYCLE.md`。
 
-## 19. 证据边界
+## 19. 第十六个纵向证据切片
+
+`R4-UI-010B` 只记录 `agent/a0/redevelop-p0@38247729b3916ecc0c21d39a2fef8e85fab3dda4`
+的 hosted macOS 自动 contract，不继承旧 `TRAY-001` 或 `MAC-038` 的物理结论。
+
+- GitHub Actions run [`33464083567`](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/33464083567)
+  终态 `success`。macos-14 package job
+  [`99720205727`](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/33464083567/job/99720205727)
+  的 CTest 为 102/102 PASS；`MainWindowQuitRegression-menu` #14 用时 0.23 s，
+  `MainWindowQuitRegression-tray` #15 用时 0.21 s。两项通过 `QT_QPA_PLATFORM=offscreen`
+  的 production QAction 路由，不观测物理菜单栏图标或鼠标点击。
+- 同一 job 完成 staged app 的 `codesign --verify --deep --strict` 与七语言 translation bundle
+  校验。macOS artifact 为 `9784406288`，名称
+  `relaydesk-macos-arm64-38247729b3916ecc0c21d39a2fef8e85fab3dda4`，大小 66,338,026 bytes，
+  API digest `sha256:031a5f73b794b57f5e4328433faaa396e33bec0ede6fcb198f2fbbe90f483687`。
+- macOS install lifecycle job
+  [`99723079671`](https://github.com/blacknewnew1989/DeskflowPlus/actions/runs/33464083567/job/99723079671)
+  下载上述 artifact 时复核同一 digest；其 evidence artifact 为 `9784543016`，名称
+  `relaydesk-macos-install-regression-38247729b3916ecc0c21d39a2fef8e85fab3dda4`，大小 12,591 bytes，
+  digest `sha256:536634d4ce19f9e0e4785b9029145ec5efeec217928ceb5d9aeeef9ac2dfe935`。
+- TEST-005 的 artifact/translation、App ZIP/DMG structure、ad-hoc codesign、DMG verify/attach、
+  clean install and launch、same-bundle upgrade and launch、app-only uninstall、user data preservation、
+  detach 和 sandbox cleanup 均为 `PASS`。内部包 SHA-256：App ZIP
+  `c92ddc26f3b7fa1225be738dbea7c141e62916efd8632543ebe2c6cb1796acd1`；DMG
+  `a557283e8581e7e701f195148611e2cb3b6d4bc0a8a33ca467c2acb988bde386`。
+- Windows job 是该单一 workflow 的附带 matrix 结果，不作为本切片的 macOS UI 结论。
+- 因此 `R4-UI-010B` 只在 hosted macOS build/CTest、offscreen QAction contract、ad-hoc bundle 和
+  isolated lifecycle 的范围为 `PASS`。物理 menu bar 图标/点击/Show-Hide、TCC 和 System Settings 往返、
+  Dock/Finder、人工安装、Developer ID、notarization、物理 Win↔Mac 和正式发布均为 `NOT_RUN`。
+
+详见 `product/docs/reports/R4_MACOS_MENU_CONTRACT.md`。
+
+## 20. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；

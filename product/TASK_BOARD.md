@@ -48,8 +48,9 @@ A0 维护本表；用户不参与任务移动和 Git 操作。
 | R4-UI-007B | PASS | A3/A7/A0 | owner `1a61ab239` / A0 `678695f1c`；真实 MainWindow 自身 model/MiniBar/Dock 在 active row 前不可操作，真实 bar body 点击经 production route 打开并前置 dock，对应 TransferId row 可达。owner相关目标全绿、双review GO，A0槽3/3；详见第16节 |
 | R4-UI-008 | PASS | A3/A7/A0 | owner `258d7aa6e` / A0 内容等价提交 `941149532`；打开文件/位置被拒绝及 history load/persist error 显示本地化非模态反馈，交错状态保留选择、按钮和历史记录。owner 四完整目标退出 0，A0 四目标构建退出 0；命令与日志见 R4 基线报告第 5 节，真实 OS shell 打开仍 `NOT_RUN` |
 | R4-UI-009 | PASS | A3/A7/A0 | owner `8aa690359` / A0 `d015027e9`；真实 Save、三字段持久化/重开回显、pending offer 下真实 DevicesDock 设置按钮及同窗 runtime 热更新均通过。owner 两槽各3/3、完整MainWindow19/19、TransferSettings10/10，A7 GO；A0两槽各3/3。仅限Qt localhost/offscreen，详见 `R4_SETTINGS_RUNTIME.md` |
-| R4-UI-010 | IN_PROGRESS | A3/A4/A5/A7/A0 | `R4-UI-010A` 已验证 Windows native close/minimize-to-tray 与 close-to-quit 生命周期；native tray 图标/菜单 Show/Hide/Quit、macOS menu bar、物理交互和发布仍 `NOT_RUN` |
+| R4-UI-010 | IN_PROGRESS | A3/A4/A5/A7/A0 | `R4-UI-010A` 已验证 Windows native close/minimize-to-tray 与 close-to-quit 生命周期；`R4-UI-010B` 已验证 hosted macOS 当前 SHA 的 offscreen Quit QAction、ad-hoc bundle 和隔离 install lifecycle。native tray 图标/菜单 Show/Hide/Quit、物理 macOS menu bar、物理交互和发布仍 `NOT_RUN` |
 | R4-UI-010A | PASS | A4/A7/A0 | 当前 SHA `8ef6461ea` 的真实 `deskflow.exe`：WM_CLOSE closeToTray 隐藏存活、SW_MINIMIZE minimizeToTray 隐藏存活、closeToTray=false 自然退出。tray 图标/context menu 未可靠观测，不能外推其 Show/Hide/Quit；详见 `R4_WINDOWS_TRAY_LIFECYCLE.md` |
+| R4-UI-010B | PASS | A5/A7/A0 | run `33464083567@38247729b` 的 macos-14 package #`99720205727`：CTest 102/102，MainWindowQuitRegression menu #14 0.23 s、tray #15 0.21 s 均 PASS；codesign 与七语言 translation bundle PASS。install lifecycle #`99723079671` 的 TEST-005 PASS，artifact 下载摘要匹配。范围仅 hosted/offscreen/隔离 lifecycle；物理 menu bar、TCC、Dock/Finder、人工安装、Developer ID/notarization、物理 Win↔Mac 和发布均 `NOT_RUN`；详见 `R4_MACOS_MENU_CONTRACT.md` |
 
 ## 重开发前历史看板
 
