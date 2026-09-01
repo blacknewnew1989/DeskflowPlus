@@ -22,8 +22,9 @@ A3 曾尝试重建最小 UI 目标，但未加载有效 MSVC STL 环境，编译
 | R4-UI-001B | 手动地址 | add/save/remove | DevicesDock -> DiscoverySettingsStore -> DeviceDiscoveryRuntime | 持久化与listener启动/刷新入口已验证 | `PASS` |
 | R4-UI-001C | 信任卡片失败反馈 | auto-accept | DevicesDock -> PairingTrustRuntime -> TrustedDeviceStore | primary 写失败改为固定脱敏非模态反馈 | `PASS` |
 | R4-UI-002 | 配对 | pairingRequested、SAS confirm/cancel | DevicesDock -> PairingTrustRuntime -> UDP pairing -> trust store | localhost production widget/UDP/trust 已验证 | `PASS` |
-| R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | 003A 权限卡/门控已验证；原生往返未运行 | `IN_PROGRESS` |
+| R4-UI-003 | 权限 | PermissionStatusModel openSettingsRequested | Windows/Mac permission probe 与原生 settings opener | 003A 权限卡/门控、003B Windows current-host probe 已验证；原生往返未运行 | `IN_PROGRESS` |
 | R4-UI-003A | 权限卡与能力门控 | PermissionSnapshot refresh | MainWindow -> PermissionStatusModel -> DevicesDock | 分项禁用、固定文案与同窗口恢复已验证 | `PASS` |
+| R4-UI-003B | Windows probe/current-host 卡片 | WindowsFirewallProbe refresh | MainWindow -> WindowsFirewallProbe -> PermissionStatusModel -> DevicesDock | 受控端口转换、当前主机 snapshot 与权限卡逐项一致 | `PASS` |
 | R4-UI-004 | 拖放/选择发送 | DevicesDock sendItemsRequested | TransferUiRuntime -> IFileTransferService::send -> FileTransferRuntime | typed start failure 写回现有本地化反馈 | `PASS` |
 | R4-UI-005 | Incoming Offer / Ask | accept/reject/conflict decision | IncomingOfferModel / TransferUiRuntime -> FileTransferRuntime | 真实 TLS offer 经 production widget accept/reject 完成或拒绝 | `PASS` |
 | R4-UI-006 | 传输中心 | pause/resume/cancel/retry | TransferCenterModel -> TransferUiRuntime -> FileTransferRuntime | 006A 控制与 006B history retry 均已验证 | `PASS` |
@@ -474,10 +475,29 @@ RED/GREEN 与复审：
 `R4-UI-003` 改为 `IN_PROGRESS`。真实 Windows Firewall probe、macOS TCC、系统设置往返、native
 Windows/macOS window system、物理 Win↔Mac 与正式发布仍为 `NOT_RUN` 或最终验收项。
 
+## 14. 第十一个纵向证据切片
+
+`R4-UI-003B` 只验证当前 Windows 主机的 production `WindowsFirewallProbe` 与权限卡，不修改
+Firewall 规则，也不展开 macOS、tray、设置页或视觉改版。
+
+- A0 fresh2 构建为 282/282、退出 0；临时 `controlled-listener` 与 `current-host-mainwindow` 槽均为
+  3/0/0；
+- 受控、本进程 loopback 临时端口从未监听到监听时，真实 probe 得到 `NotListening` 后得到
+  `Listening`；
+- 真实 MainWindow 读取 production probe current snapshot，PermissionStatusModel 的两项 kind/state/error
+  code 与其逐项一致，DevicesDock 权限卡标题和文案一致；没有注入 fake snapshot；
+- Firewall 规则 canonical 投影前后 SHA-256 均为
+  `30EFF3C905815B4A06D4042340C5776BAC5E19DC4B398BE098C0D09DD5DC5626`，规则数均为 899；
+- `SystemSettings` 在验收前已存在，且 production launcher 没有可观察的返回契约，所以 Windows 系统设置
+  打开/返回仍为 `NOT_RUN`。
+
+详见 `product/docs/reports/R4_WINDOWS_PERMISSION_RUNTIME.md`。本切片只令 `R4-UI-003B` 为 `PASS`，总项
+`R4-UI-003` 继续为 `IN_PROGRESS`；macOS TCC、native 窗口、真实 LAN/多网卡、物理设备和发布不在范围内。
+
 后续 R4 默认采用单构建执行者：每个 owner/A0 工作树只由明确执行者启动并持有构建进程到退出；
 状态轮询只读取 PID、进程状态和日志，不用重复 `cmake --build` 轮询。
 
-## 14. 证据边界
+## 15. 证据边界
 
 - `PASS` 只可来自当前 SHA 的定向测试或明确的运行证据；
 - `NOT_RUN` 不阻断继续修复已确认的 `FAIL`；
