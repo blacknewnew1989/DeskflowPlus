@@ -21,9 +21,9 @@
 - origin URL: `https://github.com/blacknewnew1989/DeskflowPlus.git`
 - upstream URL: `https://github.com/deskflow/deskflow.git`
 - Current branch: `agent/a0/redevelop-p0`
-- Current product branch tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
+- Current product branch tip: `23940663abe959dab213454bf04a50049878ac81`
 - Redevelopment starting tip: `c544dc76fb4f29aefb6ef30c8acc4475b6778e07`
-- Current verified redevelopment implementation tip: `5aa0bfc4bc53a2532c6be99629e8a839902fb32e`
+- Current verified redevelopment implementation tip: `7b17b81b745af74382c931e61e89b1455e5fb588`
 - Redevelopment anchor: `relaydesk-pre-redevelop-20260830-01`
 - Current verified redevelopment stage tag: none
 - Last frozen protocol commit: `0d091d301aea2140387fdd615150984dfed5bc08`
@@ -40,7 +40,7 @@
 | R0-002 | PASS | macOS ASan 定位两处测试回调 `stack-use-after-scope`；局部连接 context 按逆序析构先断开。修复后 settings-only 50/50、ordered 50/50、ASan CTest 101/101，clean run `33330456697` 双平台全绿 |
 | R0-003 | PASS | fresh build 的 `RelayDeskConflictResolverTests` 连续 50/50 PASS；旧 debug 目录卡住未复现，不认定源码缺陷 |
 | R0-004 | PASS | E4 限定：同机双进程 discovery/pair/trust/TLS 单向 1 MiB+ 文件；Windows Debug/Release 10/10，run `33326619207` Win #98、Mac #99 PASS |
-| R0-005 | IN_PROGRESS | `-01@9905434d0` run `33466625278` 与 `-02@21c454c1d` run `33470396960` 均因 Windows Composition 控制槽 300s/`0xC0000409` 失败，保留诊断且不重跑。`211b8eb08` 已关闭捕获生命周期风险；`5694d8b0c` 将一次性 cancel menu 门闩改为真实鼠标有界重试，Release 定向3/3、完整14/14及独立review GO。下一唯一候选为未占用 `relaydesk-phase4-20260901-03`；同SHA Windows package/log/artifact/digest/draft Release齐全后才可关闭 Windows 发布门槛 |
+| R0-005 | IN_PROGRESS | `-01@9905434d0` run `33466625278` 与 `-02@21c454c1d` run `33470396960` 均因 Windows Composition 控制槽 300s/`0xC0000409` 失败；`-03@23940663a` run `33473271512` 中 controls 已通过，但 mini-bar 槽 300s timeout，三次失败均保留且不重跑。`211b8eb08`、`5694d8b0c` 已关闭测试生命周期与 cancel menu 门闩问题；`5a3b81e3b` / A0 `7b17b81b7` 再将 controls、mini-bar 作为同一 EXE 的独立 CTest 进程，轻量聚合保留其余10槽。Windows fresh Release 两个重型槽各3/3、轻量聚合 PASS、完整 CTest 103/103、汇总守卫退出0，独立review GO。下一唯一候选为未占用 `relaydesk-phase4-20260901-04`；同SHA Windows package/log/artifact/digest/draft Release齐全后才可关闭 Windows 发布门槛 |
 | R0-006 | FINAL_ACCEPTANCE_REQUIRED | 物理 Win↔Mac、macOS TCC/menu bar 和 unsigned 系统交互留最终验收 |
 | R0-007 | PASS | A5 已在 `coord/platform-sync` 推送 clean-run ACK `0661191ae` 和 lifecycle 终态附录 `a8eb7e7eb`；准确分列重开发 ref 与未合入产品 ref，R0-002 跨平台闭环 |
 | NET-001 | PASS | 普通 Git push 已恢复并推送 `30593b53e`、`72008201e` 和 coordination commits；保留间歇风险记录 |

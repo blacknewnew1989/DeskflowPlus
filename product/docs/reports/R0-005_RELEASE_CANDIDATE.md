@@ -6,7 +6,7 @@
 - product 起点：`product/relaydesk-v1@c544dc76fb4f29aefb6ef30c8acc4475b6778e07`；
 - product 起点是 A0 基线祖先；集成只允许 clean worktree 的 `git merge --ff-only`，禁止 merge commit、
   force push 或历史重写；
-- 当前唯一候选标签：`relaydesk-phase4-20260901-03`。远端 tag 与 draft Release 均已确认未占用；
+- 当前唯一候选标签：`relaydesk-phase4-20260901-04`。远端 tag 与 draft Release 均已确认未占用；
 - 本文件所在候选提交形成后，product、tag 与最终 workflow 必须指向该同一精确 SHA。
 
 ## 唯一工作流
@@ -49,8 +49,24 @@ A7 `5694d8b0c19bb714b02c65926caef9e9bcf0cc17` 只把该测试手势改为局部 
 model、More、cancel action、menu 与 action geometry 全部就绪后停止 timer，并通过真实鼠标点击菜单取消；
 所有 callbacks 继续绑定 local connection context，production、业务断言和 timeout 不变。fresh Release
 三轮分别 58.294/72.935/61.508 秒，均记录 `cancel-wait→menu-ready→cancel-click` 且 3/0；完整
-Composition 14/0、111.887秒，独立 review GO。当前 `relaydesk-phase4-20260901-03` 必须指向包含两个测试
-修复及本候选文档的同一新 SHA，不重跑前两个失败 SHA/tag。
+Composition 14/0、111.887秒，独立 review GO。第二次修复形成 `-03` 候选，不重跑前两个失败 SHA/tag。
+
+第三候选 `relaydesk-phase4-20260901-03@23940663abe959dab213454bf04a50049878ac81` 的 tag run
+`33473271512` 中，Windows controls 槽已经通过，但
+`productionTransferMiniBarReflectsAndControlsLoopbackTransfer` 达到 300 秒 timeout；Windows job
+`99747185841` 失败，run 终态为 `failure`。该 run 与前两次失败一并保留，不删除、不在同 SHA 重跑，
+也不能由此前本机 Composition 14/14 覆盖。
+
+A7 `5a3b81e3b70b30df5abecf93141cff33f092563a` / A0 `7b17b81b745af74382c931e61e89b1455e5fb588`
+只调整 CTest 注册：复用同一 `RelayDeskTransferRuntimeCompositionTests` EXE，原聚合项显式运行其余10个
+轻量函数，controls 与 mini-bar 各由函数参数启动独立进程。两个重型槽仍为必跑项、可单独失败且日志名称
+可定位；没有提高 timeout、QSKIP/条件跳过、删除断言或修改 production。
+
+Windows fresh Release 中 controls 与 mini-bar 隔离槽各 3/3，轻量聚合 PASS；最终完整 CTest
+`103/103`、退出0，`#93/#94/#95` 分别为轻量聚合、controls、mini-bar 且均 PASS，工作流等价汇总
+守卫退出0。独立 A7 reviewer GO、无未关闭问题。下一唯一候选
+`relaydesk-phase4-20260901-04` 必须指向包含该隔离提交与本候选文档的同一新 SHA；第四个 workflow
+只能在该 SHA/tag 形成后触发一次，不得先试跑或重跑前三个失败 SHA/tag。
 
 ## PASS 门槛
 
