@@ -511,6 +511,28 @@ void MainWindowLayoutTests::fileTransferSettingsEntryAppliesToRuntime()
   MainWindow window;
   auto *runtime = window.findChild<deskflow::relaydesk::TransferRuntimeComposition *>();
   QVERIFY(runtime != nullptr);
+  window.open(false);
+  QVERIFY(runtime->incomingOffers().receiveOffer({
+      .peerDeviceId = deskflow::relaydesk::DeviceId::generate(),
+      .peerDisplayName = QStringLiteral("Settings peer"),
+      .offer =
+          {
+              .transferId = ::relaydesk::transfer::TransferId::generate(),
+              .displayName = QStringLiteral("Settings offer"),
+              .totalBytes = 4096,
+              .fileCount = 1,
+              .manifestSha256 = QByteArray(32, '\x2a'),
+              .manifestPageCount = 1,
+              .requestedConflictPolicy = ::relaydesk::transfer::ConflictPolicy::AutoRename,
+          },
+      .peerTrusted = true,
+  }));
+  auto *offerPanel = window.findChild<QFrame *>(QStringLiteral("relaydeskIncomingOfferPanel"));
+  auto *changeSettings =
+      window.findChild<QPushButton *>(QStringLiteral("relaydeskChangeIncomingOfferSettingsButton"));
+  QVERIFY(offerPanel != nullptr);
+  QVERIFY(changeSettings != nullptr);
+  QTRY_VERIFY(offerPanel->isVisible() && changeSettings->isVisible() && changeSettings->isEnabled());
   const auto receiveRoot = m_directory->filePath(QStringLiteral("runtime-incoming"));
   bool dedicatedDialog = false;
   bool accepted = false;
@@ -538,7 +560,7 @@ void MainWindowLayoutTests::fileTransferSettingsEntryAppliesToRuntime()
     if (!accepted)
       dialog->reject();
   });
-  Q_EMIT window.relayDeskDevicesDock().incomingOfferSettingsRequested();
+  QTest::mouseClick(changeSettings, Qt::LeftButton);
 
   QVERIFY(dedicatedDialog);
   QVERIFY(accepted);
