@@ -928,7 +928,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
   std::optional<TransferId> cancelledTransfer;
   bool pauseClickQueued = false;
   bool pauseClicked = false;
-  bool cancelClickQueued = false;
+  bool cancelMenuOpenPending = false;
   bool cancelClicked = false;
   QString stage = QStringLiteral("setup");
   QObject connectionContext;
@@ -945,6 +945,8 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
     stage = next.toString();
     qInfo().noquote() << QStringLiteral("controls-stage=%1").arg(stage);
   };
+  QTimer cancelClickRetry;
+  cancelClickRetry.setInterval(10);
   connect(&sender, &FileTransferRuntime::errorOccurred, &connectionContext, [&](auto, auto, const QString &message) {
     errors.append(QStringLiteral("sender: ") + message);
   });
@@ -1009,44 +1011,62 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
     });
   };
   const auto queueCancelClick = [&] {
-    if (!cancelledTransfer.has_value() || cancelClickQueued) {
+    if (!cancelledTransfer.has_value() || cancelClicked || cancelClickRetry.isActive()) {
       return;
     }
-    const auto snapshot = fixture.transfers.snapshot(*cancelledTransfer);
-    if (!snapshot.has_value() || snapshot->state != TransferState::Transferring || !snapshot->canCancel) {
+    advanceStage(u"cancel-wait");
+    cancelClickRetry.start();
+  };
+  connect(&cancelClickRetry, &QTimer::timeout, &connectionContext, [&] {
+    if (!cancelledTransfer.has_value() || cancelClicked || cancelMenuOpenPending) {
+      return;
+    }
+    const auto current = fixture.transfers.snapshot(*cancelledTransfer);
+    if (!current.has_value() || current->state != TransferState::Transferring || !current->canCancel) {
       return;
     }
     const auto row = fixture.transfers.indexOf(*cancelledTransfer);
     if (row < 0) {
       return;
     }
-    cancelClickQueued = true;
     transferList->setCurrentIndex(fixture.transfers.index(row, 0));
+    if (!more->isVisible() || !more->isEnabled() || !cancelAction->isVisible() || !cancelAction->isEnabled() ||
+        more->menu() == nullptr) {
+      return;
+    }
+    cancelMenuOpenPending = true;
     QTimer::singleShot(0, &connectionContext, [&] {
       const auto current = fixture.transfers.snapshot(*cancelledTransfer);
       if (!current.has_value() || current->state != TransferState::Transferring || !current->canCancel ||
           !more->isVisible() || !cancelAction->isVisible() || !cancelAction->isEnabled()) {
+        cancelMenuOpenPending = false;
         return;
       }
       auto *menu = more->menu();
       if (menu == nullptr) {
+        cancelMenuOpenPending = false;
         return;
       }
       QTimer::singleShot(0, &connectionContext, [&, menu] {
         if (!menu->isVisible()) {
+          cancelMenuOpenPending = false;
           return;
         }
         const auto actionRect = menu->actionGeometry(cancelAction);
         if (!actionRect.isValid()) {
+          cancelMenuOpenPending = false;
           return;
         }
+        cancelClickRetry.stop();
+        cancelMenuOpenPending = false;
+        advanceStage(u"menu-ready");
         advanceStage(u"cancel-click");
         cancelClicked = true;
         QTest::mouseClick(menu, Qt::LeftButton, Qt::NoModifier, actionRect.center());
       });
       QTest::mouseClick(more, Qt::LeftButton);
     });
-  };
+  });
   connect(
       &fixture.transfers, &QAbstractItemModel::rowsInserted, &connectionContext,
       [&](const QModelIndex &, int, int) {
@@ -1127,6 +1147,7 @@ void TransferRuntimeCompositionTests::productionTransferCenterButtonsPauseResume
   cancelledTransfer = *cancelledStart.transferId;
   QTRY_VERIFY_WITH_TIMEOUT(offerPanel->isVisible() && accept->isVisible() && accept->isEnabled(), 10'000);
   QTest::mouseClick(accept, Qt::LeftButton);
+  queueCancelClick();
   QTRY_VERIFY2_WITH_TIMEOUT(
       cancelClicked,
       qPrintable(snapshotEvidence(receiverCancelSnapshot, *cancelledTransfer)),
